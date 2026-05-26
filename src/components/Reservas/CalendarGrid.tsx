@@ -46,19 +46,8 @@ export function CalendarGrid({
         <Box className="calendar-grid__inner">
       {/* Header fijo de fechas */}
       <Box className="calendar-grid__header">
-        {/* Esquina superior izquierda: Botón Editar Zonas */}
-        <UnstyledButton
-          onClick={() => {
-            setConfigView('pisos');
-            setReservaView('none');
-          }}
-          className="calendar-grid__zones-btn"
-        >
-          <Group gap={6}>
-            <PencilSimpleLine size={14} weight="bold" color="var(--pos-text)" />
-            <Text size="xs" fw={800} tt="uppercase" c="var(--pos-text)" className="calendar-grid__caps">Zonas</Text>
-          </Group>
-        </UnstyledButton>
+        {/* Esquina superior izquierda vacía */}
+        <Box className="calendar-grid__zones-btn" />
 
         {/* Días */}
         {visibleDates.map(date => {

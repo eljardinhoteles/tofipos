@@ -1,4 +1,5 @@
-import { Box, Group, ActionIcon, Popover, UnstyledButton, Button, TextInput, Stack, Text, Badge } from '@mantine/core';
+import { useState } from 'react';
+import { Box, Group, ActionIcon, UnstyledButton, Button, TextInput, Stack, Text, Badge, Modal } from '@mantine/core';
 import { DatePicker } from '@mantine/dates';
 import { CaretLeft, CaretRight, Plus, MagnifyingGlass, XCircle } from '@phosphor-icons/react';
 import { type Reserva } from '../../db/database';
@@ -34,6 +35,7 @@ export function CalendarToolbar({
   onResultClick,
   onNewReserva
 }: CalendarToolbarProps) {
+  const [calendarOpen, setCalendarOpen] = useState(false);
   return (
     <PageHeader className="calendar-toolbar" px="xl">
       <Group justify="space-between" align="center" wrap="nowrap" w="100%" style={{ minWidth: 'max-content' }}>
@@ -66,18 +68,9 @@ export function CalendarToolbar({
           </ActionIcon>
 
           {/* Selector de mes */}
-          <Popover position="bottom-start" shadow="md" radius="md">
-            <Popover.Target>
-              <UnstyledButton className="calendar-toolbar__month-btn">
-                {visibleDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase())}
-              </UnstyledButton>
-            </Popover.Target>
-            <Popover.Dropdown p={0}>
-              <DatePicker locale="es" value={startDate}
-                onChange={d => { if (d) { const nd = new Date(d); nd.setHours(0, 0, 0, 0); setStartDate(nd); } }}
-              />
-            </Popover.Dropdown>
-          </Popover>
+          <UnstyledButton className="calendar-toolbar__month-btn" onClick={() => setCalendarOpen(true)}>
+            {visibleDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase())}
+          </UnstyledButton>
 
           {/* Botón Hoy */}
           <Button
@@ -171,6 +164,31 @@ export function CalendarToolbar({
           </Box>
         </Group>
       </Group>
+
+      <Modal
+        opened={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        title={<Text fw={900} size="lg">Seleccionar Fecha</Text>}
+        centered
+        radius="lg"
+        size="auto"
+        zIndex={2000}
+      >
+        <Stack align="center" gap="md">
+          <DatePicker
+            locale="es"
+            value={startDate}
+            onChange={d => {
+              if (d) {
+                const nd = new Date(d);
+                nd.setHours(0, 0, 0, 0);
+                setStartDate(nd);
+                setCalendarOpen(false);
+              }
+            }}
+          />
+        </Stack>
+      </Modal>
     </PageHeader>
   );
 }
