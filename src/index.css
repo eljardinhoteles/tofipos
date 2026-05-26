@@ -1439,7 +1439,7 @@ label {
   padding: 16px !important;
 }
 
-.calendar-toolbar { height: 56px; display: flex; align-items: center; border-bottom: 1px solid var(--pos-border); background-color: var(--pos-surface); flex-shrink: 0; }
+.calendar-toolbar { position: relative; z-index: 100; height: 56px; display: flex; align-items: center; border-bottom: 1px solid var(--pos-border); background-color: var(--pos-surface); flex-shrink: 0; }
 .calendar-toolbar__left { flex: 1; }
 .calendar-toolbar__new-btn { background-color: var(--ui-primary); color: var(--ui-on-primary); flex-shrink: 0; }
 .calendar-toolbar__separator { width: 1px; height: 24px; background: var(--pos-border); margin: 0 4px; }
