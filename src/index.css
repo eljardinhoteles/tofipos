@@ -1138,12 +1138,13 @@ label {
 .calendar-grid__zones-btn {
   position: sticky;
   left: 0;
-  z-index: 4;
+  top: 0;
+  z-index: 10;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--mantine-color-gray-2);
+  background-color: var(--pos-surface);
   border-right: 2px solid var(--pos-border);
   transition: background-color 180ms ease;
 }
