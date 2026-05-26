@@ -6,7 +6,6 @@ import {
   Group,
   Button,
   ScrollArea,
-  Checkbox,
   ThemeIcon,
   Divider,
   Badge,

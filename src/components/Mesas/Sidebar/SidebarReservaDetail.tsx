@@ -893,7 +893,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
           zonaNombre={zonas.find(z => z.id === reserva.zona_id)?.nombre || ''}
           comandaItems={comandaItems}
           totalMonto={calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva).total}
-          ivaPercent={ivaPorcentaje}
         />
       )}
 

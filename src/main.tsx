@@ -103,6 +103,10 @@ import './index.css';
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import { diagnoseSyncState } from './db/rxdb';
+import { registerSW } from 'virtual:pwa-register';
+
+registerSW({ immediate: true });
+
 (window as any).__diagnosSync = diagnoseSyncState;
 
 // =============================================================

@@ -11,10 +11,6 @@ import {
   ActionIcon,
   Tooltip,
   ScrollArea,
-  Modal,
-  Drawer,
-  Checkbox,
-  ThemeIcon,
 } from '@mantine/core';
 import { type Comanda, type Piso, type HabitacionCuenta } from '../db/database';
 import { isOperativeComanda } from '../db/comandaState';
@@ -22,11 +18,10 @@ import { TableNode } from '../components/Mesas/TableNode';
 import { MesasControls } from '../components/Mesas/MesasControls';
 import { ProductSelector } from '../components/Mesas/ProductSelector';
 import { initVerticalRxDb } from '../db/rxdb';
-import { Plus, Basket, Bed, ClipboardText, Printer, FileText } from '@phosphor-icons/react';
+import { Plus, Basket, Bed, ClipboardText } from '@phosphor-icons/react';
 import { useUI } from '../context/UIContext';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/Common/PageHeader';
-import { sileo } from 'sileo';
 import { SidebarKitchenReport } from '../components/Mesas/Sidebar/SidebarKitchenReport';
 
 export default function Mesas() {

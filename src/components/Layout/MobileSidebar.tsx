@@ -22,6 +22,7 @@ import {
   SignOut,
   ShoppingCartSimple,
   List,
+  DownloadSimple,
 } from '@phosphor-icons/react';
 import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { useUI } from '../../context/UIContext';
@@ -97,6 +98,31 @@ export function MobileSidebar() {
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncPressed, setSyncPressed] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA install prompt outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setIsInstallable(false);
+  };
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     online: navigator.onLine,
     supabaseOk: null,
@@ -481,6 +507,23 @@ export function MobileSidebar() {
                   </Stack>
                   <span style={{ marginLeft: 'auto', opacity: 0.4, fontSize: 12 }}>→</span>
                 </UnstyledButton>
+
+                {/* Instalar Aplicación */}
+                {isInstallable && (
+                  <UnstyledButton
+                    onClick={() => { setMenuOpen(false); handleInstallClick(); }}
+                    px={16} py={12}
+                    style={{ borderRadius: 14, display: 'flex', alignItems: 'center', gap: 14 }}
+                  >
+                    <div className="mob-sheet__action-icon" style={{ backgroundColor: 'var(--ui-primary-soft)' }}>
+                      <DownloadSimple size={22} weight="bold" color="var(--ui-primary)" />
+                    </div>
+                    <Stack gap={1}>
+                      <Text fw={600} size="md" c="var(--pos-sidebar-atxt)">Instalar Aplicación</Text>
+                      <Text size="xs" c="var(--pos-sidebar-txt)">Descarga la app en tu dispositivo</Text>
+                    </Stack>
+                  </UnstyledButton>
+                )}
 
                 {/* Cerrar sesión */}
                 <UnstyledButton

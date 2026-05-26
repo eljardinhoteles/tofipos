@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import { Box, Paper, Text, Group, Stack, ThemeIcon, Divider } from '@mantine/core';
 import { CalendarBlank, Clock, Users, MapPin, Receipt } from '@phosphor-icons/react';
 import { type Reserva } from '../../../db/database';
@@ -8,11 +8,10 @@ interface ReservaWhatsAppCardProps {
   zonaNombre: string;
   comandaItems: any[];
   totalMonto: number;
-  ivaPercent: number;
 }
 
 export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCardProps>(
-  ({ reserva, zonaNombre, comandaItems, totalMonto, ivaPercent }, ref) => {
+  ({ reserva, zonaNombre, comandaItems, totalMonto }, ref) => {
     return (
       <Box
         style={{

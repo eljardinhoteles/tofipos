@@ -10,6 +10,7 @@ import { generarTicketPago, generarPrecuenta } from '../../../services/printTemp
 import { TicketPreviewModal } from '../../Common/TicketPreviewModal';
 import { initVerticalRxDb } from '../../../db/rxdb';
 import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
+import { useUI } from '../../../context/UIContext';
 
 interface SidebarReceiptViewerProps {
   selectedMesa: Mesa;
@@ -26,6 +27,7 @@ export function SidebarReceiptViewer({
   onClose,
   onAction: _onAction,
 }: SidebarReceiptViewerProps) {
+  const { isPinned, setIsPinned } = useUI();
   const [showPagosModal, setShowPagosModal] = useState(false);
   const [sidebarConciliarOpen, setSidebarConciliarOpen] = useState(false);
   const [previewOpened, setPreviewOpened] = useState(false);

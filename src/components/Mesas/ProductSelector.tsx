@@ -10,7 +10,6 @@ import { type Comanda, type ComandaItem, type MenuItem } from '../../db/database
 
 import { sileo } from 'sileo';
 import { ProductModifiersModal } from '../Products/ProductModifiersModal';
-import { PageHeader } from '../Common/PageHeader';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 
