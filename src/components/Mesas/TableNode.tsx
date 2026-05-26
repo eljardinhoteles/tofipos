@@ -1,6 +1,7 @@
 import { Text, Paper, Group, Stack } from '@mantine/core';
 import type { Mesa, Comanda } from '../../db/database';
 import { UserIcon, ReceiptIcon, ForkKnifeIcon, BedIcon } from '@phosphor-icons/react';
+import { memo } from 'react';
 import type { CSSProperties } from 'react';
 
 interface TableNodeProps {
@@ -14,7 +15,7 @@ interface TableNodeProps {
   roomBadge?: string;
 }
 
-export function TableNode({ mesa, isSelected, onSelect, tiempoActivo, cliente, isHabitacion, activeComanda, roomBadge }: TableNodeProps) {
+export const TableNode = memo(function TableNode({ mesa, isSelected, onSelect, tiempoActivo, cliente, isHabitacion, activeComanda, roomBadge }: TableNodeProps) {
   const isFree = mesa.estado === 'libre' && !activeComanda;
 
   const getStatusMeta = () => {
@@ -197,4 +198,4 @@ export function TableNode({ mesa, isSelected, onSelect, tiempoActivo, cliente, i
       </Stack>
     </Paper>
   );
-}
+});

@@ -1475,19 +1475,17 @@ label {
   border-color: var(--pos-border-dark);
   border-width: 2px;
   background: var(--table-node-bg);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--mantine-color-dark-9), transparent 98%);
+  box-shadow: none;
   z-index: 1;
   transform: scale(1);
-  transition: transform var(--ease-fast), box-shadow var(--ease-fast), border-color var(--ease-fast);
+  transition: transform var(--ease-fast), border-color var(--ease-fast);
   margin: 8px;
   overflow: visible;
+  contain: layout;
 }
 .table-node[data-selected] {
   border-color: var(--table-node-status);
-  box-shadow:
-    0 0 0 1.5px var(--table-node-status),
-    0 20px 25px -5px color-mix(in srgb, var(--mantine-color-dark-9), transparent 90%),
-    0 10px 10px -5px color-mix(in srgb, var(--mantine-color-dark-9), transparent 96%);
+  box-shadow: 0 0 0 1.5px var(--table-node-status);
   z-index: 20;
   transform: scale(1.03);
 }

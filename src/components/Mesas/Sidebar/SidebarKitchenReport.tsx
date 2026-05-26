@@ -289,7 +289,6 @@ export function SidebarKitchenReport({
       {isMobile && (
         <VaulDrawer.Root open={opened} onOpenChange={v => !v && onClose()}>
           <VaulDrawer.Portal>
-            <VaulDrawer.Overlay className="vaul-overlay" />
             <VaulDrawer.Content className="vaul-content">
               <VaulDrawer.Title className="sr-only">Reporte de Cocina</VaulDrawer.Title>
               <VaulDrawer.Description className="sr-only">

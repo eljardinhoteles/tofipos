@@ -100,10 +100,7 @@ export function AppLayout() {
       }}
       padding={0}
       style={{
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        paddingLeft: 'env(safe-area-inset-left, 0px)',
-        paddingRight: 'env(safe-area-inset-right, 0px)',
+        padding: 'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)',
         height: '100dvh',
         overflow: 'hidden',
         boxSizing: 'border-box'
@@ -254,7 +251,6 @@ export function AppLayout() {
           }}
         >
           <VaulDrawer.Portal>
-            <VaulDrawer.Overlay className="vaul-overlay" />
             <VaulDrawer.Content className="vaul-content" style={{ backgroundColor: 'white' }}>
               <VaulDrawer.Title className="sr-only">Panel de mesa</VaulDrawer.Title>
               <VaulDrawer.Description className="sr-only">
