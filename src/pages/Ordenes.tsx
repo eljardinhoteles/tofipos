@@ -71,6 +71,7 @@ export default function Ordenes() {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   // @ts-ignore
   const [invoicingComandaId, setInvoicingComandaId] = useState<string | null>(null);
@@ -328,34 +329,18 @@ export default function Ordenes() {
             gap="md"
             style={{ flexGrow: 1, minWidth: 'max-content' }}
           >
-            {/* Filtro de fecha simplificado con ActionIcon y Popover Calendar (PRIMERO) */}
-            <Popover position="bottom-start" withArrow shadow="md">
-              <Popover.Target>
-                <Tooltip label="Filtrar por rango de fechas" withArrow radius="md">
-                  <ActionIcon
-                    variant="filled"
-                    color="myColor"
-                    size={36}
-                    radius="md"
-                    style={{
-                      flexShrink: 0
-                    }}
-                  >
-                    <Calendar size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              </Popover.Target>
-              <Popover.Dropdown p="xs">
-                <Stack gap="xs">
-                  <DatePicker
-                    type="range"
-                    locale="es"
-                    value={dateRange}
-                    onChange={(val: any) => setDateRange(val)}
-                  />
-                </Stack>
-              </Popover.Dropdown>
-            </Popover>
+            <Tooltip label="Filtrar por rango de fechas" withArrow radius="md">
+              <ActionIcon
+                variant="filled"
+                color="myColor"
+                size={36}
+                radius="md"
+                style={{ flexShrink: 0 }}
+                onClick={() => setCalendarModalOpen(true)}
+              >
+                <Calendar size={18} />
+              </ActionIcon>
+            </Tooltip>
 
             {/* Badge del rango seleccionado */}
             {dateRange[0] && (
@@ -870,6 +855,44 @@ export default function Ordenes() {
               }}
             >
               Confirmar Conciliación
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Modal de Filtro por Fecha */}
+      <Modal
+        opened={calendarModalOpen}
+        onClose={() => setCalendarModalOpen(false)}
+        title={<Text fw={900} size="lg">Filtrar por Rango de Fechas</Text>}
+        centered
+        radius="lg"
+        size="auto"
+        zIndex={2000}
+      >
+        <Stack align="center" gap="md">
+          <DatePicker
+            type="range"
+            locale="es"
+            value={dateRange}
+            onChange={(val: any) => setDateRange(val)}
+          />
+          <Group w="100%" justify="space-between" mt="sm">
+            <Button
+              variant="subtle"
+              color="red"
+              onClick={() => {
+                setDateRange([null, null]);
+                setCalendarModalOpen(false);
+              }}
+            >
+              Limpiar Filtro
+            </Button>
+            <Button
+              color="myColor"
+              onClick={() => setCalendarModalOpen(false)}
+            >
+              Aplicar
             </Button>
           </Group>
         </Stack>
