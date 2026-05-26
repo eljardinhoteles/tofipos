@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useDrag } from '@use-gesture/react';
+
 import {
   Button,
   Stack,
@@ -88,20 +88,33 @@ export default function Mesas() {
     return filtered;
   }, [dbPisos]);
 
-  // Gesto swipe horizontal
-  const bindSwipe = useDrag(({ swipe: [swipeX], active }) => {
-    if (!active && swipeX !== 0) {
+  // Gesto swipe horizontal nativo y de alto rendimiento
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diffX = touchStartX.current - touchEndX.current;
+    if (Math.abs(diffX) > 80) { // Umbral de 80px para evitar falsos positivos
       const currentIndex = allSelectablePisos.findIndex(
         p => p.toLowerCase() === selectedPiso.toLowerCase()
       );
       if (currentIndex !== -1) {
-        if (swipeX === -1) {
+        if (diffX > 0) {
           // Swipe izquierdo -> Siguiente piso (derecha)
           const nextIndex = Math.min(allSelectablePisos.length - 1, currentIndex + 1);
           if (nextIndex !== currentIndex) {
             setSelectedPiso(allSelectablePisos[nextIndex]);
           }
-        } else if (swipeX === 1) {
+        } else {
           // Swipe derecho -> Anterior piso (izquierda)
           const prevIndex = Math.max(0, currentIndex - 1);
           if (prevIndex !== currentIndex) {
@@ -110,13 +123,7 @@ export default function Mesas() {
         }
       }
     }
-  }, {
-    swipe: {
-      distance: 50,
-      velocity: 0.5,
-    },
-    axis: 'x',
-  });
+  };
 
   useEffect(() => {
     let active = true;
@@ -348,7 +355,9 @@ export default function Mesas() {
 
         <Box
           flex={1}
-          {...(mesaView !== 'productos' ? bindSwipe() : {})}
+          onTouchStart={mesaView !== 'productos' ? handleTouchStart : undefined}
+          onTouchMove={mesaView !== 'productos' ? handleTouchMove : undefined}
+          onTouchEnd={mesaView !== 'productos' ? handleTouchEnd : undefined}
           style={{
             position: 'relative',
             overflow: 'hidden',

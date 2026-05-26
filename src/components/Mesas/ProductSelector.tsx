@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useDrag } from '@use-gesture/react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Box, Stack, Group, Text, TextInput, ScrollArea,
   ActionIcon, Badge, Modal, Image, Chip,
@@ -23,21 +22,34 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Gesto swipe horizontal para cambiar entre categorías de productos en móviles
-  const bindSwipe = useDrag(({ swipe: [swipeX], active }) => {
-    if (!active && swipeX !== 0) {
+  // Gesto swipe horizontal nativo y de alto rendimiento para categorías
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diffX = touchStartX.current - touchEndX.current;
+    if (Math.abs(diffX) > 80) { // Umbral de 80px para evitar falsos positivos
       const allCats = ['Todos', 'Favoritos', ...categories];
       const currentVal = selectedCategory ?? 'Todos';
       const currentIndex = allCats.indexOf(currentVal);
       if (currentIndex !== -1) {
-        if (swipeX === -1) {
+        if (diffX > 0) {
           // Swipe izquierdo -> Siguiente categoría (derecha)
           const nextIndex = Math.min(allCats.length - 1, currentIndex + 1);
           if (nextIndex !== currentIndex) {
             const nextVal = allCats[nextIndex];
             setSelectedCategory(nextVal === 'Todos' ? null : nextVal);
           }
-        } else if (swipeX === 1) {
+        } else {
           // Swipe derecho -> Anterior categoría (izquierda)
           const prevIndex = Math.max(0, currentIndex - 1);
           if (prevIndex !== currentIndex) {
@@ -47,13 +59,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         }
       }
     }
-  }, {
-    swipe: {
-      distance: 50,
-      velocity: 0.5,
-    },
-    axis: 'x',
-  });
+  };
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const [modifyingItem, setModifyingItem] = useState<MenuItem | null>(null);
   const [rxComandaItems, setRxComandaItems] = useState<ComandaItem[]>([]);
@@ -309,7 +315,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
       {/* ── GRID DE PRODUCTOS ──────────────────────────────────── */}
       <Box
         flex={1}
-        {...bindSwipe()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           position: 'relative',
           overflow: 'hidden',
