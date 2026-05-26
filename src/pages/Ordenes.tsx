@@ -479,7 +479,16 @@ export default function Ordenes() {
                   </Table.Thead>
                   <Table.Tbody>
                     {paginatedAnuladas.map(item => (
-                      <Table.Tr key={`${item.kind}-${item.id}`} style={{ cursor: 'default' }}>
+                      <Table.Tr
+                        key={`${item.kind}-${item.id}`}
+                        style={{ cursor: item.kind === 'comanda' ? 'pointer' : 'default' }}
+                        onClick={() => {
+                          if (item.kind === 'comanda') {
+                            const original = safeComandas.find(c => c.id === item.id);
+                            if (original) openReadOnlyComanda(original);
+                          }
+                        }}
+                      >
                         <Table.Td>
                           <Stack gap={2}>
                             <Text fw={800} size="sm">{item.title}</Text>
