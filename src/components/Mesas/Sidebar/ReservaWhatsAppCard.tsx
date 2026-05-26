@@ -25,12 +25,14 @@ export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCar
       >
         <Paper ref={ref} radius="lg" p="xl" style={{ backgroundColor: 'white', border: '1px solid #e9ecef', overflow: 'hidden' }}>
           {/* Header */}
-          <Stack align="center" gap="xs" mb="lg">
-            <ThemeIcon size={56} radius="md" color="dark">
-              <CalendarBlank size={32} weight="bold" />
+          <Stack align="center" gap={4} mb="md">
+            <ThemeIcon size={46} radius="md" color="dark">
+              <CalendarBlank size={24} weight="bold" />
             </ThemeIcon>
-            <Text fw={900} size="xl" mt="sm">RESERVA CONFIRMADA</Text>
-            <Text size="sm" c="dimmed" fw={600}>Restaurante El Jardín</Text>
+            <Text fw={900} size="lg" mt="xs">RESERVA CONFIRMADA</Text>
+            <Text size="xs" c="dimmed" fw={700}>
+              {localStorage.getItem('pos_org_name_cached') || 'Restaurante El Jardín'}
+            </Text>
           </Stack>
 
           <Divider variant="dashed" mb="lg" />
@@ -104,7 +106,7 @@ export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCar
           {/* Footer */}
           <Box mt={32}>
             <Text size="xs" c="dimmed" ta="center" style={{ fontStyle: 'italic' }}>
-              ¡Te esperamos! Por favor, sé puntual. La reserva se mantendrá por 15 minutos de tolerancia.
+              ¡Te esperamos! Agradecemos tu puntualidad (espera máxima de 15 minutos).
             </Text>
           </Box>
         </Paper>
