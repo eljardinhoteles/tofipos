@@ -8,10 +8,14 @@ interface ReservaWhatsAppCardProps {
   zonaNombre: string;
   comandaItems: any[];
   totalMonto: number;
+  totalAbonado?: number;
+  codigoReserva?: string;
 }
 
 export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCardProps>(
-  ({ reserva, zonaNombre, comandaItems, totalMonto }, ref) => {
+  ({ reserva, zonaNombre, comandaItems, totalMonto, totalAbonado = 0, codigoReserva = '' }, ref) => {
+    const showBilling = comandaItems.length > 0 || totalAbonado > 0;
+
     return (
       <Box
         style={{
@@ -23,82 +27,107 @@ export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCar
           padding: 20,
         }}
       >
-        <Paper ref={ref} radius="lg" p="xl" style={{ backgroundColor: 'white', border: '1px solid #e9ecef', overflow: 'hidden' }}>
+        <Paper ref={ref} radius="lg" p="md" style={{ backgroundColor: 'white', border: '1px solid #e9ecef', overflow: 'hidden' }}>
           {/* Header */}
-          <Stack align="center" gap={4} mb="md">
-            <ThemeIcon size={46} radius="md" color="dark">
-              <CalendarBlank size={24} weight="bold" />
+          <Group justify="space-between" align="center" mb="xs">
+            <Stack gap={0}>
+              <Text fw={900} size="sm" style={{ letterSpacing: '0.5px' }} c="var(--ui-primary, blue.7)">
+                RESERVA CONFIRMADA {codigoReserva ? ` - ${codigoReserva}` : ''}
+              </Text>
+              <Text size="10px" fw={700} c="dimmed">
+                {localStorage.getItem('pos_org_name_cached') || 'Restaurante El Jardín'}
+              </Text>
+            </Stack>
+            <ThemeIcon size={32} radius="md" color="dark">
+              <CalendarBlank size={16} weight="bold" />
             </ThemeIcon>
-            <Text fw={900} size="lg" mt="xs">RESERVA CONFIRMADA</Text>
-            <Text size="xs" c="dimmed" fw={700}>
-              {localStorage.getItem('pos_org_name_cached') || 'Restaurante El Jardín'}
-            </Text>
-          </Stack>
+          </Group>
 
-          <Divider variant="dashed" mb="lg" />
+          <Divider variant="dashed" mb="xs" />
 
           {/* Datos del Cliente */}
-          <Box mb="xl">
-            <Text fw={800} size="lg" mb="sm">{reserva.nombre || 'Sin nombre'}</Text>
+          <Box mb="md">
+            <Text fw={800} size="md" mb={2}>{reserva.nombre || 'Sin nombre'}</Text>
             {reserva.telefono && (
-              <Text size="sm" c="dimmed" mb="xs">Tel: {reserva.telefono}</Text>
+              <Text size="xs" c="dimmed" mb={4}>Tel: {reserva.telefono}</Text>
             )}
-
-            <Group gap="sm" mt="md">
-              <Group gap={6}>
-                <CalendarBlank size={16} weight="bold" color="var(--mantine-color-blue-6)" />
-                <Text size="sm" fw={600}>{reserva.fecha}</Text>
-              </Group>
-              <Text c="dimmed">·</Text>
-              <Group gap={6}>
-                <Clock size={16} weight="bold" color="var(--mantine-color-orange-6)" />
-                <Text size="sm" fw={600}>{reserva.hora}</Text>
-              </Group>
-            </Group>
 
             <Group gap="sm" mt="xs">
               <Group gap={6}>
-                <Users size={16} weight="bold" color="var(--mantine-color-green-6)" />
-                <Text size="sm" fw={600}>{reserva.personas} personas</Text>
+                <CalendarBlank size={14} weight="bold" color="var(--mantine-color-blue-6)" />
+                <Text size="xs" fw={600}>{reserva.fecha}</Text>
               </Group>
-              <Text c="dimmed">·</Text>
+              <Text c="dimmed" size="xs">·</Text>
               <Group gap={6}>
-                <MapPin size={16} weight="bold" color="var(--mantine-color-red-6)" />
-                <Text size="sm" fw={600}>{zonaNombre || 'Sin zona asignada'}</Text>
+                <Clock size={14} weight="bold" color="var(--mantine-color-orange-6)" />
+                <Text size="xs" fw={600}>{reserva.hora}</Text>
+              </Group>
+            </Group>
+
+            <Group gap="sm" mt={4}>
+              <Group gap={6}>
+                <Users size={14} weight="bold" color="var(--mantine-color-green-6)" />
+                <Text size="xs" fw={600}>{reserva.personas} personas</Text>
+              </Group>
+              <Text c="dimmed" size="xs">·</Text>
+              <Group gap={6}>
+                <MapPin size={14} weight="bold" color="var(--mantine-color-red-6)" />
+                <Text size="xs" fw={600}>{zonaNombre || 'Sin zona asignada'}</Text>
               </Group>
             </Group>
           </Box>
 
-          {/* Pedido anticipado */}
-          {comandaItems.length > 0 && (
+          {/* Pedido / Cuenta */}
+          {showBilling && (
             <>
-              <Divider variant="dashed" mb="lg" />
+              <Divider variant="dashed" mb="sm" />
               <Box>
-                <Group gap="xs" mb="md">
-                  <Receipt size={18} weight="bold" color="gray" />
-                  <Text size="sm" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>Pedido Anticipado</Text>
-                </Group>
-                
-                <Stack gap="xs">
-                  {comandaItems.map((item, idx) => (
-                    <Group key={idx} justify="space-between" align="flex-start" wrap="nowrap">
-                      <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
-                        <Text fw={800} size="sm" c="dimmed">{item.cantidad}x</Text>
-                        <Text fw={600} size="sm" style={{ flex: 1 }}>{item.nombre}</Text>
-                      </Group>
-                      <Text fw={700} size="sm">
-                        ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </Text>
+                {comandaItems.length > 0 && (
+                  <>
+                    <Group gap="xs" mb="md">
+                      <Receipt size={18} weight="bold" color="gray" />
+                      <Text size="sm" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>Pedido Anticipado</Text>
                     </Group>
-                  ))}
-                </Stack>
+                    
+                    <Stack gap="xs" mb="md">
+                      {comandaItems.map((item, idx) => (
+                        <Group key={idx} justify="space-between" align="flex-start" wrap="nowrap">
+                          <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
+                            <Text fw={800} size="sm" c="dimmed">{item.cantidad}x</Text>
+                            <Text fw={600} size="sm" style={{ flex: 1 }}>{item.nombre}</Text>
+                          </Group>
+                          <Text fw={700} size="sm">
+                            ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </Text>
+                        </Group>
+                      ))}
+                    </Stack>
+                  </>
+                )}
                 
                 <Group justify="space-between" mt="lg" pt="sm" style={{ borderTop: '2px solid #f1f3f5' }}>
-                  <Text fw={700} size="sm">TOTAL (Inc. IVA)</Text>
-                  <Text fw={900} size="xl" c="green.8">
+                  <Text fw={700} size="sm">TOTAL</Text>
+                  <Text fw={900} size={totalAbonado > 0 ? 'md' : 'xl'} c={totalAbonado > 0 ? 'dark' : 'green.8'}>
                     ${totalMonto.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </Text>
                 </Group>
+
+                {totalAbonado > 0 && (
+                  <>
+                    <Group justify="space-between" mt="xs">
+                      <Text fw={700} size="sm" c="green.7">ABONADO</Text>
+                      <Text fw={900} size="md" c="green.7">
+                        -${totalAbonado.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </Text>
+                    </Group>
+                    <Group justify="space-between" mt="xs" pt="xs" style={{ borderTop: '1px solid #f1f3f5' }}>
+                      <Text fw={800} size="sm" c="orange.9">PENDIENTE</Text>
+                      <Text fw={900} size="xl" c="orange.9">
+                        ${Math.max(0, totalMonto - totalAbonado).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </Text>
+                    </Group>
+                  </>
+                )}
               </Box>
             </>
           )}

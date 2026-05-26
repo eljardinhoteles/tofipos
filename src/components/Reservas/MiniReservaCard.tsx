@@ -9,13 +9,15 @@ interface MiniReservaCardProps {
   onAssign: () => void;
   onCancel: () => void;
   isHighlighted?: boolean;
+  codigo?: string;
 }
 
 export function MiniReservaCard({
   reserva,
   onClick,
   onAssign,
-  isHighlighted = false
+  isHighlighted = false,
+  codigo = ''
 }: MiniReservaCardProps) {
   const done = reserva.estado === 'completada';
   const canceled = reserva.estado === 'cancelada';
@@ -70,7 +72,9 @@ export function MiniReservaCard({
             </Group>
           </Group>
           {/* Fila 2: nombre */}
-          <Text fw={700} size="sm" lineClamp={1} c="var(--pos-text)">{reserva.nombre}</Text>
+          <Text fw={700} size="sm" lineClamp={1} c="var(--pos-text)">
+            {codigo ? `${codigo} - ` : ''}{reserva.nombre}
+          </Text>
         </Stack>
 
         {!canceled && !done && (

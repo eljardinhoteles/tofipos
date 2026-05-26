@@ -13,6 +13,7 @@ interface CalendarCellProps {
   onCardClick: (id: string) => void;
   onAssign: (r: Reserva) => void;
   onCancel: (id: string) => void;
+  codigoMap?: Record<string, string>;
 }
 
 export function CalendarCell({
@@ -23,7 +24,8 @@ export function CalendarCell({
   onCellClick,
   onCardClick,
   onAssign,
-  onCancel
+  onCancel,
+  codigoMap = {}
 }: CalendarCellProps) {
   const [hovered, setHovered] = useState(false);
 
@@ -45,6 +47,7 @@ export function CalendarCell({
           onClick={() => onCardClick(r.id)}
           onAssign={() => onAssign(r)}
           onCancel={() => onCancel(r.id)}
+          codigo={codigoMap[r.id]}
         />
       ))}
 

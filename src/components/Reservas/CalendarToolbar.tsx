@@ -137,6 +137,17 @@ export function CalendarToolbar({
             <Popover.Dropdown p={0} style={{ zIndex: 3000 }}>
               {searchOpen && (() => {
                 const q = search.trim().toLowerCase();
+                const codigoMap: Record<string, string> = {};
+                const sorted = [...reservas].sort((a, b) => {
+                  if (a.created_at !== b.created_at) {
+                    return a.created_at.localeCompare(b.created_at);
+                  }
+                  return a.id.localeCompare(b.id);
+                });
+                sorted.forEach((r, idx) => {
+                  codigoMap[r.id] = `R${idx + 1}`;
+                });
+
                 const results = reservas
                   .filter(r => r.nombre.toLowerCase().includes(q))
                   .slice(0, 8);
@@ -155,7 +166,7 @@ export function CalendarToolbar({
                         <Group gap={8} wrap="nowrap">
                           <Box className="calendar-toolbar__status-bar" style={{ backgroundColor: STATUS_HEX[r.estado] }} />
                           <Stack gap={1} className="calendar-toolbar__result-content">
-                            <Text size="sm" fw={700} lineClamp={1}>{r.nombre}</Text>
+                            <Text size="sm" fw={700} lineClamp={1}>{codigoMap[r.id] ? `${codigoMap[r.id]} - ` : ''}{r.nombre}</Text>
                             <Group gap={6}>
                               <Text size="xs" c="dimmed">{new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {r.hora}</Text>
                               <Badge size="xs" color={STATUS_COLOR[r.estado]} variant="light">{STATUS_LABEL[r.estado]}</Badge>

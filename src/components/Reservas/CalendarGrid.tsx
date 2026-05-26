@@ -33,6 +33,21 @@ export function CalendarGrid({
   const gridColumns = `140px repeat(${visibleDates.length}, minmax(${DATE_COL_MIN}px, 1fr))`;
   const gridMinWidth = 140 + (visibleDates.length * DATE_COL_MIN);
 
+  const codigoMap = (() => {
+    const map: Record<string, string> = {};
+    if (!reservas) return map;
+    const sorted = [...reservas].sort((a, b) => {
+      if (a.created_at !== b.created_at) {
+        return a.created_at.localeCompare(b.created_at);
+      }
+      return a.id.localeCompare(b.id);
+    });
+    sorted.forEach((r, idx) => {
+      map[r.id] = `R${idx + 1}`;
+    });
+    return map;
+  })();
+
   return (
     <Box
       flex={1}
@@ -142,6 +157,7 @@ export function CalendarGrid({
                     onCardClick={onCardClick}
                     onAssign={onAssign}
                     onCancel={onCancel}
+                    codigoMap={codigoMap}
                   />
                 );
               }),
