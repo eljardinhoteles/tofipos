@@ -240,6 +240,7 @@ export function AppLayout() {
       {/* SIDEBAR MÓVIL (Vaul Drawer / Bottom Sheet) */}
       {isMobile && (
         <VaulDrawer.Root
+          dismissible={false}
           open={(selectedMesaId !== null && mesaView !== 'productos') || configView !== 'none' || menuView === 'producto' || (reservaView !== 'none' && !reservaProductosComandaId)}
           onOpenChange={(open) => {
             if (!open && !reservaProductosComandaId) {

@@ -287,7 +287,7 @@ export function SidebarKitchenReport({
 
       {/* ── Mobile: Vaul Sheet desde abajo ────────────────────────────── */}
       {isMobile && (
-        <VaulDrawer.Root open={opened} onOpenChange={v => !v && onClose()}>
+        <VaulDrawer.Root dismissible={false} open={opened} onOpenChange={v => !v && onClose()}>
           <VaulDrawer.Portal>
             <VaulDrawer.Overlay className="vaul-overlay" />
             <VaulDrawer.Content className="vaul-content">

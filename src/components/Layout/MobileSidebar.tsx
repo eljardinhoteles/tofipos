@@ -434,7 +434,7 @@ export function MobileSidebar() {
       </div>
 
       {/* ── Vaul Sheet del menú (mismo que el resto de sidebars) ───────── */}
-      <VaulDrawer.Root open={menuOpen} onOpenChange={setMenuOpen}>
+      <VaulDrawer.Root dismissible={false} open={menuOpen} onOpenChange={setMenuOpen}>
         <VaulDrawer.Portal>
           <VaulDrawer.Overlay className="vaul-overlay" />
           <VaulDrawer.Content className="vaul-content mob-sheet">

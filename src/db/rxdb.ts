@@ -124,6 +124,46 @@ export interface RxCategoria {
   _modified: string
 }
 
+async function reconciliarMesasDeHabitacion(db: any) {
+  const orgId = localStorage.getItem('pos_active_org_id') || ''
+  if (!orgId) return
+
+  const [cuentasActivas, comandasEnHabitacion] = await Promise.all([
+    db.habitacion_cuentas.find({
+      selector: { organization_id: orgId, estado: 'activa', _deleted: { $ne: true } }
+    }).exec(),
+    db.comandas.find({
+      selector: {
+        organization_id: orgId,
+        habitacion_cuenta_id: { $ne: null },
+        estado: { $nin: ['cerrado', 'facturado', 'anulada'] },
+        _deleted: { $ne: true }
+      }
+    }).exec(),
+  ])
+
+  const mesasAReconciliar = new Set<string>()
+  cuentasActivas.forEach((cuenta: any) => {
+    if (cuenta?.mesa_id) mesasAReconciliar.add(String(cuenta.mesa_id))
+  })
+  comandasEnHabitacion.forEach((comanda: any) => {
+    if (comanda?.mesa_id) mesasAReconciliar.add(String(comanda.mesa_id))
+  })
+
+  await Promise.all([...mesasAReconciliar].map(async (mesaId) => {
+    const mesa = await db.mesas.findOne(mesaId).exec()
+    if (!mesa) return
+    if (mesa.toJSON().estado !== 'libre') {
+      await mesa.update({
+        $set: {
+          estado: 'libre',
+          _modified: new Date().toISOString()
+        }
+      } as any)
+    }
+  }))
+}
+
 export interface RxMenuItem {
   id: string
   nombre: string
@@ -855,8 +895,6 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
 
   const replicaBase = { live: true, waitForLeadership: false }
 
-
-
   const mesas = patchPush(replicateSupabase({
     ...replicaBase,
     tableName: 'mesas',
@@ -1040,6 +1078,9 @@ export async function initVerticalRxDb() {
         if (verticalReplicationState) {
           Object.values(verticalReplicationState).forEach((state: any) => state?.reSync?.())
         }
+        reconciliarMesasDeHabitacion(db).catch((err: unknown) => {
+          console.warn('[RxDB] no se pudo reconciliar mesas de habitación:', err)
+        })
         pingSyncStatus()
       }
       const handleOffline = () => emitSyncStatus({ online: false, supabaseOk: false })
