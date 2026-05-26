@@ -327,11 +327,12 @@ export function SidebarDetails({
     <Box h="100%" className="sidebar-details">
       {/* Header Fijo */}
       <Box 
-        p="md" 
-        pb={0}
         style={{ 
           backgroundColor: isMobile ? 'white' : 'transparent',
-          paddingTop: isMobile ? 'var(--mantine-spacing-md)' : undefined
+          paddingLeft: 'var(--mantine-spacing-md)',
+          paddingRight: 'var(--mantine-spacing-md)',
+          paddingTop: 'var(--mantine-spacing-md)',
+          paddingBottom: 0
         }}
       >
         <Group justify="space-between" mb="xs">

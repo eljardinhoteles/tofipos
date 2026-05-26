@@ -4,6 +4,7 @@
  * SidebarDetails: modo editable (onClick abre modal de edición)
  * SidebarReservaDetail: modo solo lectura (sin onClick, sin badge de pagado)
  */
+import { memo } from 'react';
 import { Box, Stack, Text, Group, Badge, Divider, UnstyledButton } from '@mantine/core';
 
 export interface ComandaItemData {
@@ -24,7 +25,7 @@ interface ComandaItemRowProps {
   showDivider?: boolean;
 }
 
-export function ComandaItemRow({ item, index, total, onClick, showDivider = true }: ComandaItemRowProps) {
+export const ComandaItemRow = memo(function ComandaItemRow({ item, index, total, onClick, showDivider = true }: ComandaItemRowProps) {
   const pagado = item.pagado_cantidad || 0;
   const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
   const isReadOnly = !onClick;
@@ -109,4 +110,4 @@ export function ComandaItemRow({ item, index, total, onClick, showDivider = true
       {showDivider && index < total - 1 && <Divider variant="dashed" opacity={0.6} my={3} />}
     </Box>
   );
-}
+});

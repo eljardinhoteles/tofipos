@@ -315,7 +315,7 @@ export function SidebarKitchenReport({
 
               {/* Body */}
               <div className="vaul-body" style={{ overflowY: 'hidden', flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }} data-vaul-no-drag>
-                {content}
+                {opened && content}
               </div>
             </VaulDrawer.Content>
           </VaulDrawer.Portal>

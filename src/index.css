@@ -1482,6 +1482,7 @@ label {
   margin: 8px;
   overflow: visible;
   contain: layout;
+  will-change: transform;
 }
 .table-node[data-selected] {
   border-color: var(--table-node-status);

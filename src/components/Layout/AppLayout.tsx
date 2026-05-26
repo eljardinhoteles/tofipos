@@ -258,33 +258,35 @@ export function AppLayout() {
               </VaulDrawer.Description>
               <div className="vaul-handle" />
               <div className="vaul-body" data-vaul-no-drag>
-                <TableSidebar
-                  selectedMesa={selectedMesa}
-                  onClose={() => {
-                    setSelectedMesaId(null);
-                    setConfigView('none');
-                    setViewingComandaId(null);
-                    setReservaView('none');
-                    setSelectedReservaId(null);
-                    setMenuView('none');
-                    setSelectedMenuProductId(null);
-                  }}
-                  onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
-                    if (res === 'productos') {
-                      setMesaView('productos');
-                    } else if (res === 'mapa') {
+                {((selectedMesaId !== null && mesaView !== 'productos') || configView !== 'none' || menuView === 'producto' || (reservaView !== 'none' && !reservaProductosComandaId)) && (
+                  <TableSidebar
+                    selectedMesa={selectedMesa}
+                    onClose={() => {
                       setSelectedMesaId(null);
                       setConfigView('none');
                       setViewingComandaId(null);
-                      setMesaView('mapa');
-                    }
-                  }, setCheckoutView)}
-                  configView={configView}
-                  setConfigView={setConfigView}
-                  selectedConfigPiso={selectedConfigPiso}
-                  setSelectedConfigPiso={setSelectedConfigPiso}
-                  mesaEsDeHabitaciones={selectedMesaEsHabitacion}
-                />
+                      setReservaView('none');
+                      setSelectedReservaId(null);
+                      setMenuView('none');
+                      setSelectedMenuProductId(null);
+                    }}
+                    onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
+                      if (res === 'productos') {
+                        setMesaView('productos');
+                      } else if (res === 'mapa') {
+                        setSelectedMesaId(null);
+                        setConfigView('none');
+                        setViewingComandaId(null);
+                        setMesaView('mapa');
+                      }
+                    }, setCheckoutView)}
+                    configView={configView}
+                    setConfigView={setConfigView}
+                    selectedConfigPiso={selectedConfigPiso}
+                    setSelectedConfigPiso={setSelectedConfigPiso}
+                    mesaEsDeHabitaciones={selectedMesaEsHabitacion}
+                  />
+                )}
               </div>
             </VaulDrawer.Content>
           </VaulDrawer.Portal>
