@@ -7,7 +7,7 @@ import {
 import { useForm } from '@mantine/form';
 import {
   CalendarBlank, Clock, Users, MapPin, ArrowLeft,
-  Receipt, Money, Note, HandCoins, PencilSimple,
+  Money, Note, HandCoins, PencilSimple,
   CreditCard, Bank, Calculator, X, ArrowUpRight, CheckCircle,
   Basket, Minus, Plus, Trash, ListPlus, Printer, WhatsappLogo
 } from '@phosphor-icons/react';
@@ -559,10 +559,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
           {/* Pedido anticipado */}
           {comandaItems.length > 0 && (
             <Box>
-              <Group gap="xs" mb={12}>
-                <Receipt size={16} weight="bold" color="var(--ui-primary)" />
-                <Text size="xs" fw={700} c="dimmed" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pedido Anticipado</Text>
-              </Group>
               <Stack gap={2}>
                 {comandaItems.map((item, index) => {
                   const hasPaidQty = item.pagado_cantidad && item.pagado_cantidad > 0;
