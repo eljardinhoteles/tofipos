@@ -135,7 +135,10 @@ export function CalendarToolbar({
                       key={r.id}
                       px={12} py={8}
                       className="calendar-toolbar__result-row"
-                      onClick={() => onResultClick(r)}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        onResultClick(r);
+                      }}
                     >
                       <Group gap={8} wrap="nowrap">
                         <Box className="calendar-toolbar__status-bar" style={{ backgroundColor: STATUS_HEX[r.estado] }} />
