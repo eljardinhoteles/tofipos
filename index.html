@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Favicon e iconos -->
+    <link rel="icon" type="image/webp" href="/Icon-app.webp" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Viewport: sin zoom automático, pantalla completa en dispositivos táctiles -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- iOS: pantalla completa al añadir a inicio -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="POS Food" />
+
+    <!-- Android PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Tema de color (barra del sistema) -->
+    <meta name="theme-color" content="#2f3325" />
+
+    <!-- SEO / descripción -->
+    <meta name="description" content="Sistema de comandas y gestión de mesas para restaurante. Funciona sin conexión." />
+
+    <title>POS Food — Sistema de Comandas</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

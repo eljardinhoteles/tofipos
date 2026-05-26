@@ -1,0 +1,582 @@
+{
+  "/Users/matttite/Visual/POS_food_/skills-lock.json": {
+    "mtime": 1778963745.0764756,
+    "ast_hash": "bdffc173210932f8a5b6211a955a66fa",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/tsconfig.node.json": {
+    "mtime": 1770314731.0252423,
+    "ast_hash": "eec85c9d7c6b599801557f1afd86672c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/vercel.json": {
+    "mtime": 1779322223.0103393,
+    "ast_hash": "e222c0b9a621bbf8116c6263fe0737bd",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/tsconfig.app.json": {
+    "mtime": 1779401816.6146913,
+    "ast_hash": "f3c4f7e100fca5d6f5cdfe8fb21f3158",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/package.json": {
+    "mtime": 1779401776.7305653,
+    "ast_hash": "ca7f970efe4ebe65ef1e0e7070fd2128",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/tsconfig.json": {
+    "mtime": 1770314731.024851,
+    "ast_hash": "a3d39fa780ebff65444de257f291ce6c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/eslint.config.js": {
+    "mtime": 1770314731.017649,
+    "ast_hash": "b8893da386a89dfd3672dad848f4ec7e",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/vite.config.ts": {
+    "mtime": 1779401787.892603,
+    "ast_hash": "d77d3bab24a5a75cbe311df47f5614a0",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.claude/settings.local.json": {
+    "mtime": 1779403991.5954394,
+    "ast_hash": "45c65d4054dea19e798b829529694c38",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/docs/supabase-rxdb-vertical.sql": {
+    "mtime": 1779343449.5905778,
+    "ast_hash": "36917017bc762888f0e4e140df4fa64f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260520000400_usuarios_admin_fields.sql": {
+    "mtime": 1779290271.4554892,
+    "ast_hash": "3744a67ea6cf0306c18831090a0f2d73",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260520000500_sync_coverage_clientes_pagos.sql": {
+    "mtime": 1779306249.775049,
+    "ast_hash": "637b55cfaac0e4430c976b1af155ceac",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260520000300_reservas_last_write_wins.sql": {
+    "mtime": 1779252936.2301939,
+    "ast_hash": "80d0d0f916d835acc4391c917106186b",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260520000100_comanda_item_sync_metadata.sql": {
+    "mtime": 1779248161.8685513,
+    "ast_hash": "528e9bea67b329d459a09e9c298da86a",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260520000200_habitacion_cuentas_sync.sql": {
+    "mtime": 1779252150.6965632,
+    "ast_hash": "49b02d2fb28d56f03611c0cb5a68a89c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260205215048_add_products_table.sql": {
+    "mtime": 1779132051.949304,
+    "ast_hash": "c270707f5dc44eca2d242f5b26aad4e8",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/supabase/migrations/20260205214512_initial_schema.sql": {
+    "mtime": 1779132042.2659526,
+    "ast_hash": "e027a0cebf15d1a75f96c2a0b9bdf58f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/scratch/test_upsert.js": {
+    "mtime": 1779232581.2528043,
+    "ast_hash": "4e3eb9cce32ef31f8a708afd2b2fa4ff",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.codegraph/config.json": {
+    "mtime": 1779129831.021494,
+    "ast_hash": "6732e08b441217b2d9f92d9a5d38f187",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/App.tsx": {
+    "mtime": 1779403066.129043,
+    "ast_hash": "61a2ccaa9c49467cf1d2be194edf4d98",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/main.tsx": {
+    "mtime": 1779398868.8146894,
+    "ast_hash": "6374eb1d0e3dca0ee334c86a25b97368",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/vite-env.d.ts": {
+    "mtime": 1779321836.507959,
+    "ast_hash": "5f1a7d20083a790c58c47a017326b745",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/context/UIContext.tsx": {
+    "mtime": 1779226217.7747717,
+    "ast_hash": "923256bceb7072e973727b75756d81ef",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/context/AuthContext.tsx": {
+    "mtime": 1779343749.638079,
+    "ast_hash": "5529648c02fd3c773c3527041a27c946",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/utils/sileo-adapter.tsx": {
+    "mtime": 1779402869.324241,
+    "ast_hash": "20e10a6c8a43ee27c005a5d2a4e6522b",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Products/ProductList.tsx": {
+    "mtime": 1779138213.8955662,
+    "ast_hash": "9d3ad623d8790b8e4a84dde3c13089f4",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Products/ProductModifiersModal.tsx": {
+    "mtime": 1779138213.8951533,
+    "ast_hash": "abd2bcc24762e480d8edc3eb14753749",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Products/ProductForm.tsx": {
+    "mtime": 1779138213.8944602,
+    "ast_hash": "62bda409d827fc1e425fd1fca3f78fe0",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Layout/MobileSidebar.tsx": {
+    "mtime": 1779403151.5207806,
+    "ast_hash": "1c43025490d3a3fbe434bdf5dbd4851b",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Layout/MainSidebar.tsx": {
+    "mtime": 1779403117.618859,
+    "ast_hash": "f1409ed945b40f3dbc9fb6477e333188",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Layout/FloatingNavbar.tsx": {
+    "mtime": 1779313849.6978168,
+    "ast_hash": "d1d8af95575d3f0c9df22a77d47412bc",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Layout/AppLayout.tsx": {
+    "mtime": 1779427893.433485,
+    "ast_hash": "8e3094294205b216d4f7228c615d2d26",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Ordenes/FacturadasList.tsx": {
+    "mtime": 1779227047.6177542,
+    "ast_hash": "56585be23caaa665c90d098d0b2e3139",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Ordenes/OrdenesControls.tsx": {
+    "mtime": 1779154644.152955,
+    "ast_hash": "58d97aef5602f2c6a1f7a746e9127e29",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Ordenes/OrdenDetailModal.tsx": {
+    "mtime": 1779341735.9939563,
+    "ast_hash": "26de6d76d4e6e289dd489479f5fdd93c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/ReservasControls.tsx": {
+    "mtime": 1779142416.1328483,
+    "ast_hash": "7fa6ce78668c78df3399dd2899718e10",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/CalendarToolbar.tsx": {
+    "mtime": 1779321369.844507,
+    "ast_hash": "7359bd05b2127c8cf7670378d9375408",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/CalendarCell.tsx": {
+    "mtime": 1779138213.8933697,
+    "ast_hash": "cf1ffe42c22c22f03bc21df4b41b19ff",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/CalendarGrid.tsx": {
+    "mtime": 1779154664.1068306,
+    "ast_hash": "8f87cd9f75caa737911890a67d3507d1",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/MiniReservaCard.tsx": {
+    "mtime": 1779154821.0727286,
+    "ast_hash": "4a7a914f98e6c8ebc281b694115dc027",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Reservas/reservaUtils.ts": {
+    "mtime": 1779138213.8922184,
+    "ast_hash": "e16eec9c925560469ffb0da65d5d6c57",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/POSCard.tsx": {
+    "mtime": 1779163751.5672443,
+    "ast_hash": "f90f38b35f3ad46d269a104963b7245f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/PageHeader.tsx": {
+    "mtime": 1779321217.742484,
+    "ast_hash": "6090e2b37e65c503a514901ea1185f10",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/StatCard.tsx": {
+    "mtime": 1779138213.8990386,
+    "ast_hash": "ad1ec87177bada785cb915fd79acb4f6",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/SyncStatusModal.tsx": {
+    "mtime": 1779406120.6742857,
+    "ast_hash": "da1aefe52a14d7139426bd9271850449",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/TicketPreviewModal.tsx": {
+    "mtime": 1779226190.7265255,
+    "ast_hash": "ee90661160fba4a889fded7022790dfc",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Common/PaymentMethodAndCharge.tsx": {
+    "mtime": 1779154822.898376,
+    "ast_hash": "d5d1575869e0c603976b3c56bdaebb62",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Menu/MenuControls.tsx": {
+    "mtime": 1779154797.2759678,
+    "ast_hash": "d947af25ecd6db89542e9b87fc3f11ba",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Menu/SidebarMenuProduct.tsx": {
+    "mtime": 1779340575.35635,
+    "ast_hash": "4ecfdbf6e2e2366ff9fe0c8672bd529d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Clientes/ClienteFormModal.tsx": {
+    "mtime": 1779339145.099338,
+    "ast_hash": "e2eeac92d905e5e1550eaa3dde57a382",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/TableNode.tsx": {
+    "mtime": 1779410842.4966102,
+    "ast_hash": "4f47264dec340a621c9dac95e2143fea",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/MesasControls.tsx": {
+    "mtime": 1779309547.4724655,
+    "ast_hash": "c968f64032da7030964522d3d610fc5b",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/TableSidebar.tsx": {
+    "mtime": 1779427306.613719,
+    "ast_hash": "fad45e73168d042bccd6028bc61fda0e",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/ProductSelector.tsx": {
+    "mtime": 1779429640.2118993,
+    "ast_hash": "cc7547dbf4eb3b633b0001b3b6658eae",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarConfigPisos.tsx": {
+    "mtime": 1779237238.597079,
+    "ast_hash": "6606b1ff09732af886a67461c7d3d93e",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarReservaNew.tsx": {
+    "mtime": 1779408744.6856754,
+    "ast_hash": "47c9f89c3ee79bc04e82bf645fc2c7c4",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarHabitacionCuenta.tsx": {
+    "mtime": 1779339730.9896278,
+    "ast_hash": "c9ed82d8f06343377bfcd39774a193d3",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarCheckout.tsx": {
+    "mtime": 1779342465.741109,
+    "ast_hash": "c10abd56ff0c627291f115e04bbbfa96",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarDetails.tsx": {
+    "mtime": 1779429264.7660146,
+    "ast_hash": "44e7ce47d24187b742e4add18dc6519f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarPagosModal.tsx": {
+    "mtime": 1779138213.8911617,
+    "ast_hash": "6067c929b19648a9dedaf4a2e534dfb8",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarReservaDetail.tsx": {
+    "mtime": 1779409332.306262,
+    "ast_hash": "30e42c6c9e1d59900d1278ecc3e0b30a",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarEnviarHabitacion.tsx": {
+    "mtime": 1779342443.8737442,
+    "ast_hash": "40b50bd9ae4b9e19865b090053a3df72",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/ComandaItemRow.tsx": {
+    "mtime": 1779138213.8870935,
+    "ast_hash": "82cee141f55237690cd595ec87165792",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarAddTable.tsx": {
+    "mtime": 1779138213.8858988,
+    "ast_hash": "9384f64d7b713c6cf19c4072d0a9c0f1",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarWelcome.tsx": {
+    "mtime": 1779138213.8853934,
+    "ast_hash": "b0d8ed3c6bc37107dea8d4c03c3f22d1",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarSeleccionarMesa.tsx": {
+    "mtime": 1779342774.4428308,
+    "ast_hash": "86b914a587b1c5bc8d72b168b5d7b6b6",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/ClienteExpandableHeader.tsx": {
+    "mtime": 1779339168.1270177,
+    "ast_hash": "bed9cbb55573d4d3ce2bb894f53fca4d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarCloseCuentaModal.tsx": {
+    "mtime": 1779138213.883553,
+    "ast_hash": "28768001404ecae450c11f13f2ba4a31",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarSplit.tsx": {
+    "mtime": 1779410329.233755,
+    "ast_hash": "bb933d1566225d7ca3d993010522dd9f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarConfigMesas.tsx": {
+    "mtime": 1779426758.3721051,
+    "ast_hash": "bcbb71e3f4b0bf0004eb7d8b1ec508c3",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarOpenTable.tsx": {
+    "mtime": 1779343964.786053,
+    "ast_hash": "5153881f98d7f5aa6f667a41f9b31865",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarConciliarModal.tsx": {
+    "mtime": 1779426222.4115448,
+    "ast_hash": "817b29def972be8eb5cfc5ef240d54e7",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarReceiptViewer.tsx": {
+    "mtime": 1779427536.8809981,
+    "ast_hash": "512ce0cfc02d6e4a00df9f8daddfe39e",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/habitacion/HabitacionCheckoutView.tsx": {
+    "mtime": 1779411038.0480766,
+    "ast_hash": "d7fff709189d975c21bc0faf43357767",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/habitacion/CheckinForm.tsx": {
+    "mtime": 1779339219.0301042,
+    "ast_hash": "4ea0976f7b2451b8b6343cde91af7721",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/habitacion/CuentaView.tsx": {
+    "mtime": 1779411156.8930678,
+    "ast_hash": "6214330c102432eb61cc3e94feb792ad",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useIvaActivo.ts": {
+    "mtime": 1779341705.410982,
+    "ast_hash": "800a27062d64a0807e0da4805514fbca",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useRxUsuarios.ts": {
+    "mtime": 1779339624.1358087,
+    "ast_hash": "d29b5cbbc744ee2b0237174897f9af0d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useRxAjustesIva.ts": {
+    "mtime": 1779339621.4455214,
+    "ast_hash": "9e04c187bc18793699df649b51ce6291",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useRxMenuCatalog.ts": {
+    "mtime": 1779338894.520168,
+    "ast_hash": "29e5bf99697094abbbd3e00bd07e3ec9",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useTableActions.ts": {
+    "mtime": 1779426572.197467,
+    "ast_hash": "1cc8a5b25be8937ec2fe04a0facbf45d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useRxClientes.ts": {
+    "mtime": 1779339160.3374925,
+    "ast_hash": "7e655ffc665424b7ff8c35bab46c8134",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/hooks/useRxReservas.ts": {
+    "mtime": 1779339381.8921661,
+    "ast_hash": "b551c7dbd35107ed109d7973fe7119a2",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/lib/taxUtils.ts": {
+    "mtime": 1779153536.9289472,
+    "ast_hash": "04d8506d19aaa69995120cf4ee0fcb7c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/lib/paymentSettings.ts": {
+    "mtime": 1779138213.8759134,
+    "ast_hash": "d78201528a4c0f252f435c5c22b6e953",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/lib/supabase.ts": {
+    "mtime": 1779138213.8753138,
+    "ast_hash": "b18db7142b89779412a217a916bb9d45",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/db/comandaState.ts": {
+    "mtime": 1779340713.162991,
+    "ast_hash": "463be1a85eca2909399952b998a4c5be",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/db/rxdb.ts": {
+    "mtime": 1779429393.9331155,
+    "ast_hash": "6ce5511a9ece9ea8103b7ece1902f3c7",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/db/database.ts": {
+    "mtime": 1779342893.0706208,
+    "ast_hash": "48af29d1c8130422de6788751f6efeb5",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/db/sync.ts": {
+    "mtime": 1779342497.6303718,
+    "ast_hash": "754ac172a9ee2c2c38623766e208b70d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/AjustesUsuarios.tsx": {
+    "mtime": 1779428376.8474276,
+    "ast_hash": "270600e6d5e5a0723b5069dbfaf699d5",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Clientes.tsx": {
+    "mtime": 1779341553.5219324,
+    "ast_hash": "d2faafc38de8e2cb5254f29a4bd5045d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx": {
+    "mtime": 1779339423.3592336,
+    "ast_hash": "cf4f0392881b07b3782a03b9cba57ea2",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Mesas.tsx": {
+    "mtime": 1779409623.2554445,
+    "ast_hash": "21953fee31c90d30a4975b438a62c4e4",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Menu.tsx": {
+    "mtime": 1779339000.95167,
+    "ast_hash": "e5d761536b97d320b60d2f32c9e275e3",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Ajustes.tsx": {
+    "mtime": 1779428309.191521,
+    "ast_hash": "9e6fe80749c014e1ea688a0c99bd7e6c",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/pages/Ordenes.tsx": {
+    "mtime": 1779428536.336957,
+    "ast_hash": "410b3e6ba6ef51eaa7bd7c532458dc97",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/services/printTemplateEngine.ts": {
+    "mtime": 1779429238.475215,
+    "ast_hash": "752b5a8fd803e57fd95d394bef3fa614",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/New.md": {
+    "mtime": 1777915025.9831507,
+    "ast_hash": "d4608e80b41809480471059411c66c1b",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/index.html": {
+    "mtime": 1779321791.399547,
+    "ast_hash": "a7ce15cc332b7df315fbe5345e888ed7",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/README.md": {
+    "mtime": 1770314731.0166602,
+    "ast_hash": "cac141da861c855e069a9c32557458ac",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-combobox/SKILL.md": {
+    "mtime": 1778963667.9457707,
+    "ast_hash": "57f22875067cc4b3eea8dbfb7b0cbabe",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-combobox/references/api.md": {
+    "mtime": 1778963667.9460864,
+    "ast_hash": "a0f43c8ae78e0c6f6542fe2972074dac",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-combobox/references/patterns.md": {
+    "mtime": 1778963667.9461598,
+    "ast_hash": "b36944f01040054bb8bf7f93c89bf7a4",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-form/SKILL.md": {
+    "mtime": 1778963675.662925,
+    "ast_hash": "435b518cf99917f57b5f3ccbc2c95afd",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-form/references/api.md": {
+    "mtime": 1778963675.6631596,
+    "ast_hash": "b7711f28ae1672fa9b0ed59823b01ef1",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-form/references/patterns.md": {
+    "mtime": 1778963675.663481,
+    "ast_hash": "6c6ba50bf241088e6f85f713f014acf0",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-custom-components/SKILL.md": {
+    "mtime": 1778963745.066403,
+    "ast_hash": "2d765edce786d9b64e4345865751ce8f",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-custom-components/references/api.md": {
+    "mtime": 1778963745.0664635,
+    "ast_hash": "3093a62ec1452e361f985d8bedf3af70",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/.agents/skills/mantine-custom-components/references/patterns.md": {
+    "mtime": 1778963745.0665255,
+    "ast_hash": "89f7eef797b59acf700d28b1524a636d",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/docs/rxdb-vertical-mesas-comandas.md": {
+    "mtime": 1779336627.966825,
+    "ast_hash": "bf011f74493f075729498101eb9ff771",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/public/apple-touch-icon.png": {
+    "mtime": 1779313032.200324,
+    "ast_hash": "957d41cf8014fc90730a21ed2369b0db",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/public/icon-192.png": {
+    "mtime": 1779313032.1302671,
+    "ast_hash": "df251ab7c86863a572ea2e07f31c5991",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/public/vite.svg": {
+    "mtime": 1770314731.019656,
+    "ast_hash": "8e3a10e157f75ada21ab742c022d5430",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/public/icon-512.png": {
+    "mtime": 1779313032.037273,
+    "ast_hash": "6fdf839436377fd0e2836ec3b25e98c2",
+    "semantic_hash": ""
+  },
+  "/Users/matttite/Visual/POS_food_/src/assets/react.svg": {
+    "mtime": 1770314731.0220346,
+    "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  }
+}

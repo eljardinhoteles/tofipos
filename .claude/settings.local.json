@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"style={{.*fontWeight\\\\|h={54\\\\|size={54\\\\|keyframes\\\\|@keyframes\\\\|hover-bg-gray\\\\|status-active, #\\\\|status-closed, #\\\\|gap={1}\" /Users/matttite/Visual/POS_food_/src/components/Mesas/Sidebar/SidebarDetails.tsx)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react'\\); const k = Object.keys\\(p\\); console.log\\(k.slice\\(0,10\\)\\); console.log\\(k.length\\);\")",
+      "Bash(grep -n \"useLiveQuery.*\\\\[\\\\]$\" /Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx)",
+      "Bash(grep -n \"useLiveQuery.*\\\\[\\\\]$\" /Users/matttite/Visual/POS_food_/src/pages/Clientes.tsx)",
+      "Bash(sed -i '' 's/useLiveQuery\\(\\(\\) => db\\\\.mesas\\\\.toArray\\(\\), \\\\[\\\\], \\\\[\\\\]\\)/useLiveQuery\\(\\(\\) => db.mesas.toArray\\(\\)\\)/g' /Users/matttite/Visual/POS_food_/src/pages/Mesas.tsx /Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx)",
+      "Bash(sed -i '' 's/useLiveQuery\\(\\(\\) => db\\\\.pisos\\\\.orderBy\\('\\\\''orden'\\\\''\\)\\\\.toArray\\(\\), \\\\[\\\\], \\\\[\\\\]\\)/useLiveQuery\\(\\(\\) => db.pisos.orderBy\\('\\\\''orden'\\\\''\\).toArray\\(\\)\\)/g' /Users/matttite/Visual/POS_food_/src/pages/Mesas.tsx /Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx)",
+      "Bash(sed -i '' 's/useLiveQuery\\(\\(\\) => db\\\\.comandas\\\\.toArray\\(\\), \\\\[\\\\], \\\\[\\\\]\\)/useLiveQuery\\(\\(\\) => db.comandas.toArray\\(\\)\\)/g' /Users/matttite/Visual/POS_food_/src/pages/Mesas.tsx /Users/matttite/Visual/POS_food_/src/pages/Clientes.tsx)",
+      "Bash(sed -i '' 's/useLiveQuery\\(\\(\\) => db\\\\.reservas\\\\.orderBy\\('\\\\''fecha'\\\\''\\)\\\\.toArray\\(\\), \\\\[\\\\], \\\\[\\\\]\\)/useLiveQuery\\(\\(\\) => db.reservas.orderBy\\('\\\\''fecha'\\\\''\\).toArray\\(\\)\\)/g' /Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx)",
+      "Bash(sed -i '' 's/useLiveQuery\\(\\(\\) => db\\\\.clientes\\\\.orderBy\\('\\\\''nombre'\\\\''\\)\\\\.toArray\\(\\), \\\\[\\\\], \\\\[\\\\]\\)/useLiveQuery\\(\\(\\) => db.clientes.orderBy\\('\\\\''nombre'\\\\''\\).toArray\\(\\)\\)/g' /Users/matttite/Visual/POS_food_/src/pages/Clientes.tsx)",
+      "Bash(xargs ls)",
+      "Bash(grep -r \"#[0-9a-fA-F]\\\\{3,6\\\\}\" /Users/matttite/Visual/POS_food_/src --include=\"*.tsx\" --include=\"*.css\" --exclude-dir=node_modules -n)",
+      "Bash(grep -r \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgba\\\\|rgb\\(\" /Users/matttite/Visual/POS_food_/src --include=\"*.tsx\" --include=\"*.css\" -n)",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(grep -n \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgba\\\\|rgb\\(\" /Users/matttite/Visual/POS_food_/src/components/Layout/AppLayout.tsx)",
+      "Bash(grep -n \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgba\\\\|rgb\\(\" /Users/matttite/Visual/POS_food_/src/pages/Reservas.tsx)",
+      "Bash(grep -n \"#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgba\\\\|rgb\\(\" /Users/matttite/Visual/POS_food_/src/pages/Ordenes.tsx)",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react'\\); console.log\\(Object.keys\\(p\\).filter\\(k => /squares|receipt|calendar|bag|arrows/i.test\\(k\\)\\).sort\\(\\)\\)\")",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react'\\); const keys = Object.keys\\(p\\); console.log\\(keys.filter\\(k => /Square/i.test\\(k\\)\\).slice\\(0,10\\)\\); console.log\\(keys.filter\\(k => /Receipt|Invoice/i.test\\(k\\)\\).slice\\(0,10\\)\\); console.log\\(keys.filter\\(k => /Calendar/i.test\\(k\\)\\).slice\\(0,10\\)\\); console.log\\(keys.filter\\(k => /^Bag|Tote|Shopping/i.test\\(k\\)\\).slice\\(0,10\\)\\); console.log\\(keys.filter\\(k => /Arrow.*Clock|Refresh|Sync/i.test\\(k\\)\\).slice\\(0,10\\)\\)\")",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react/dist/cjs/index.js'\\); const keys = Object.keys\\(p\\); console.log\\(keys.slice\\(0,20\\)\\); console.log\\(keys.filter\\(k => /Clock|Refresh|Sync/i.test\\(k\\)\\).slice\\(0,10\\)\\)\")",
+      "Bash(node --input-type=module -e \"import * as p from '/Users/matttite/Visual/POS_food_/node_modules/@phosphor-icons/react/dist/index.es.js'; const keys = Object.keys\\(p\\); console.log\\(keys.filter\\(k => /Square/i.test\\(k\\)\\).slice\\(0,8\\)\\); console.log\\(keys.filter\\(k => /Receipt|Invoice/i.test\\(k\\)\\).slice\\(0,8\\)\\); console.log\\(keys.filter\\(k => /Calendar/i.test\\(k\\)\\).slice\\(0,8\\)\\); console.log\\(keys.filter\\(k => /Bag|Tote/i.test\\(k\\)\\).slice\\(0,8\\)\\); console.log\\(keys.filter\\(k => /Clock|Refresh|Arrows/i.test\\(k\\)\\).slice\\(0,8\\)\\)\")",
+      "Bash(node --input-type=module -e \"import * as p from '/Users/matttite/Visual/POS_food_/node_modules/@phosphor-icons/react/dist/index.es.js'; const keys = Object.keys\\(p\\); console.log\\(keys.filter\\(k => /SquaresFour|FourSquares|GridFour|AppWindow|SquareFour/i.test\\(k\\)\\)\\)\")",
+      "Bash(node --input-type=module -e \"import * as p from '/Users/matttite/Visual/POS_food_/node_modules/@phosphor-icons/react/dist/index.es.js'; console.log\\('ArrowsClockwiseIcon' in p\\)\")",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react'\\); ['LockSimple','Lock','ArrowLeft','SignOut','ArrowsClockwise','ArrowCounterClockwise','ArrowUUpLeft','ArrowBendUpLeft'].forEach\\(k => console.log\\(k, !!p[k]\\)\\)\")",
+      "Bash(node -e \"const p = require\\('@phosphor-icons/react'\\); Object.keys\\(p\\).filter\\(k => k.includes\\('Lock'\\) || k.includes\\('Arrow'\\) || k.includes\\('Sign'\\)\\).slice\\(0,30\\).forEach\\(k => console.log\\(k\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(grep -rn \"isStopped\\\\|stopped\\\\|active\\\\b\\\\|active$\" /Users/matttite/Visual/POS_food_/node_modules/rxdb/dist/types/plugins/replication/index.d.ts)",
+      "Bash(grep -n \"active\\\\$\\\\|error\\\\$\" /Users/matttite/Visual/POS_food_/node_modules/rxdb/dist/types/plugins/replication/index.d.ts)"
+    ]
+  }
+}
