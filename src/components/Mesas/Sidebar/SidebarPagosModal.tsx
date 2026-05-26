@@ -14,6 +14,7 @@ export function SidebarPagosModal({ opened, onClose, pagos, totalPagado }: Sideb
       onClose={onClose}
       title={<Text fw={900} size="lg">Historial de Pagos</Text>}
       centered
+      zIndex={2000}
     >
       <Stack gap="md">
         {pagos.length === 0 ? (

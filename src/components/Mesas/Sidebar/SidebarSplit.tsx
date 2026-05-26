@@ -492,6 +492,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                     prefix="$"
                     decimalScale={2}
                     fixedDecimalScale
+                    hideControls
                     value={montoCustom}
                     onChange={(val) => setMontoCustom(val === '' ? '' : Number(val))}
                     max={saldoPendiente}
@@ -755,6 +756,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
         centered
         radius="lg"
         padding="xl"
+        zIndex={2000}
       >
         {cobrarModalState !== null && (
           <Stack gap="md">

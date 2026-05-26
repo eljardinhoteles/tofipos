@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useDrag } from '@use-gesture/react';
 import { Text, Box, Flex, Stack, Group, Badge, Button, UnstyledButton, ActionIcon, Modal, TextInput, Textarea, Table, Pagination, Popover, Tooltip, ScrollArea, Paper } from '@mantine/core';
 import { MagnifyingGlass, User, Clock, BedIcon, ForkKnifeIcon, Calendar } from '@phosphor-icons/react';
 import { DatePicker } from '@mantine/dates';
@@ -34,18 +33,31 @@ export default function Ordenes() {
     }
   }, [status]);
 
-  const bindSwipe = useDrag(({ swipe: [swipeX], active }) => {
-    if (!active && swipeX !== 0) {
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diffX = touchStartX.current - touchEndX.current;
+    if (Math.abs(diffX) > 80) { // Umbral de 80px
       const statuses = ['activas', 'cargadas', 'cobradas', 'conciliadas', 'anuladas'];
       const currentIndex = statuses.indexOf(status);
       if (currentIndex !== -1) {
-        if (swipeX === -1) {
+        if (diffX > 0) {
           // Swipe izquierdo -> Siguiente estado (derecha)
           const nextIndex = Math.min(statuses.length - 1, currentIndex + 1);
           if (nextIndex !== currentIndex) {
             setStatus(statuses[nextIndex]);
           }
-        } else if (swipeX === 1) {
+        } else {
           // Swipe derecho -> Anterior estado (izquierda)
           const prevIndex = Math.max(0, currentIndex - 1);
           if (prevIndex !== currentIndex) {
@@ -54,13 +66,7 @@ export default function Ordenes() {
         }
       }
     }
-  }, {
-    swipe: {
-      distance: 50,
-      velocity: 0.5,
-    },
-    axis: 'x',
-  });
+  };
 
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -436,7 +442,9 @@ export default function Ordenes() {
       {/* Contenido */}
       <Box
         flex={1}
-        {...bindSwipe()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           position: 'relative',
           overflow: 'hidden',

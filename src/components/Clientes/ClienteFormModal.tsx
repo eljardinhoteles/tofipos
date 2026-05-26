@@ -89,6 +89,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
       centered
       radius="xl"
       size="lg"
+      zIndex={2000}
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">

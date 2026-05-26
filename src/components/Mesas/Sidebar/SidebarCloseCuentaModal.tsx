@@ -26,6 +26,7 @@ export function SidebarCloseCuentaModal({
       centered
       radius="lg"
       padding="xl"
+      zIndex={2000}
     >
       <Stack gap="md">
         <Box p="md" style={{ borderRadius: '12px', border: '1px solid var(--pos-border)', backgroundColor: 'rgba(0,0,0,0.02)' }}>
