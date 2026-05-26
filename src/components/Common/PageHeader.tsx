@@ -27,7 +27,8 @@ export function PageHeader({
         display: 'flex',
         alignItems: 'center',
         flexShrink: 0,
-        zIndex: 10,
+        position: 'relative',
+        zIndex: 100,
         ...style,
       }}
     >
