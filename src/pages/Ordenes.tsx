@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Text, Box, Flex, Stack, Group, Badge, Button, UnstyledButton, ActionIcon, Modal, TextInput, Textarea, Table, Pagination, Popover, Tooltip, ScrollArea, Paper } from '@mantine/core';
+import { Text, Box, Flex, Stack, Group, Badge, Button, UnstyledButton, ActionIcon, Modal, TextInput, Textarea, Table, Pagination, Tooltip, ScrollArea, Paper } from '@mantine/core';
 import { MagnifyingGlass, User, Clock, BedIcon, ForkKnifeIcon, Calendar } from '@phosphor-icons/react';
 import { DatePicker } from '@mantine/dates';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from '../db/database';

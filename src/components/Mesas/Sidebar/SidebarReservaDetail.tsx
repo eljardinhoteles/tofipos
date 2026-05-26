@@ -26,7 +26,7 @@ import { initVerticalRxDb, updateRxReserva, updateRxComanda, createRxPago, updat
 import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
 import html2canvas from 'html2canvas';
 import { ReservaWhatsAppCard } from './ReservaWhatsAppCard';
-import { generarTicketReserva } from '../../../services/printTemplateEngine';
+import { generarComandaCocina } from '../../../services/printTemplateEngine';
 import { TicketPreviewModal } from '../../Common/TicketPreviewModal';
 
 interface SidebarReservaDetailProps {
@@ -65,7 +65,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
   const [editClienteModal, setEditClienteModal] = useState(false);
   const [isAddPressed, setIsAddPressed] = useState(false);
   
-  const { setReservaView, openConfirm, openPrompt, openAssignModal, reservaProductosComandaId, setReservaProductosComandaId } = useUI();
+  const { setReservaView, openConfirm, openAssignModal, reservaProductosComandaId, setReservaProductosComandaId } = useUI();
 
   const [reserva, setReserva] = useState<any | null>(null);
   const [comandaItems, setComandaItems] = useState<any[]>([]);
@@ -79,12 +79,22 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
 
   const handlePrint = () => {
     if (!reserva) return;
-    const clientZone = zonas.find(z => z.id === reserva.zona_id)?.nombre || '';
-    const content = generarTicketReserva(reserva, comandaItems as any, clientZone, ivaPorcentaje, pagos);
+    const mockComanda = {
+      id: reserva.comanda_id || '',
+      folio: reserva.folio || 0,
+      cliente: reserva.nombre,
+      created_at: reserva.created_at,
+    };
+    const content = generarComandaCocina(
+      mockComanda as any,
+      comandaItems,
+      `Reserva: ${reserva.nombre}`,
+      false
+    );
     setPreviewContent(content);
-    setPreviewTitle('Ticket de Reserva');
+    setPreviewTitle(`Orden de Cocina - ${reserva.nombre}`);
     setPreviewOpened(true);
-    sileo.success({ title: 'Ticket generado', description: 'Vista previa abierta.' });
+    sileo.success({ title: 'Comanda generada', description: 'Vista previa de cocina abierta.' });
   };
 
   const handleShareWhatsApp = async () => {
@@ -404,19 +414,30 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
               </Text>
             </Stack>
           </Group>
-          <ActionIcon 
-            variant="light" 
-            color="gray" 
-            onClick={onBack} 
-            size="lg" 
-            radius="xl"
-            style={{ 
-              backgroundColor: 'rgba(255,255,255,0.05)', 
-              color: 'var(--pos-text-sub)' 
-            }}
-          >
-            <X size={18} weight="bold" />
-          </ActionIcon>
+          <Group gap="xs">
+            <ActionIcon 
+              variant="light" 
+              color="green" 
+              onClick={handleShareWhatsApp} 
+              size="lg" 
+              radius="xl"
+            >
+              <WhatsappLogo size={18} weight="bold" />
+            </ActionIcon>
+            <ActionIcon 
+              variant="light" 
+              color="gray" 
+              onClick={onBack} 
+              size="lg" 
+              radius="xl"
+              style={{ 
+                backgroundColor: 'rgba(255,255,255,0.05)', 
+                color: 'var(--pos-text-sub)' 
+              }}
+            >
+              <X size={18} weight="bold" />
+            </ActionIcon>
+          </Group>
         </Group>
 
         <ClienteExpandableHeader
@@ -730,10 +751,10 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
               </form>
             ) : (
               <>
-                <Group gap="sm" grow wrap="nowrap" mb="sm">
+                <Group grow gap="sm">
                   <Button 
                     variant="light" 
-                    color="gray" 
+                    color="orange" 
                     size="lg" 
                     radius="md" 
                     onClick={handlePrint}
@@ -742,20 +763,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
                   >
                     Ticket
                   </Button>
-                  <Button 
-                    variant="light" 
-                    color="green" 
-                    size="lg" 
-                    radius="md" 
-                    onClick={handleShareWhatsApp}
-                    leftSection={<WhatsappLogo size={18} />}
-                    fw={800}
-                  >
-                    WhatsApp
-                  </Button>
-                </Group>
-                
-                <Group grow gap="sm">
                   <Button 
                     variant="light" 
                     color="myColor" 
@@ -783,45 +790,17 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
                 </Group>
             
                 {!isReadOnly && (
-                  <Group gap="sm" grow wrap="nowrap">
-                    <Button
-                      color="green"
-                      size="lg"
-                      radius="md"
-                      onClick={() => openAssignModal(reserva.id)}
-                      leftSection={<ArrowUpRight size={18} weight="bold" />}
-                      fw={900}
-                    >
-                      Asignar Mesa
-                    </Button>
-                    <Button 
-                      variant="subtle" 
-                      color="red" 
-                      size="lg" 
-                      radius="md"
-                      onClick={() => {
-                        openConfirm(
-                          'CANCELAR RESERVA',
-                          '¿Estás seguro de que deseas cancelar esta reserva? Podrás verla más tarde en el historial de canceladas.',
-                          async () => {
-                            openPrompt({
-                              title: 'Motivo de cancelación',
-                              label: 'Escriba el motivo',
-                              placeholder: 'Ej: cliente canceló, no llegó, etc.',
-                              defaultValue: 'Reserva cancelada',
-                              onConfirm: async (motivo) => {
-                                await updateRxReserva(reserva.id, { estado: 'cancelada', nota: motivo });
-                                sileo.success({ title: 'Reserva cancelada' });
-                              }
-                            });
-                          }
-                        );
-                      }}
-                      style={{ fontWeight: 800 }}
-                    >
-                      Anular
-                    </Button>
-                  </Group>
+                  <Button
+                    color="green"
+                    size="lg"
+                    radius="md"
+                    onClick={() => openAssignModal(reserva.id)}
+                    leftSection={<ArrowUpRight size={18} weight="bold" />}
+                    fw={900}
+                    fullWidth
+                  >
+                    Asignar Mesa
+                  </Button>
                 )}
 
                 {reserva.estado === 'cancelada' && (

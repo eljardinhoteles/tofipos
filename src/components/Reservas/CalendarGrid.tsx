@@ -1,9 +1,8 @@
-import { Box, Group, Text, UnstyledButton } from '@mantine/core';
-import { CalendarCheck, Users, PencilSimpleLine } from '@phosphor-icons/react';
+import { Box, Group, Text } from '@mantine/core';
+import { CalendarCheck, Users } from '@phosphor-icons/react';
 import { type Reserva, type Piso, type Mesa } from '../../db/database';
 import { isToday, isWeekend, toISO } from './reservaUtils';
 import { CalendarCell } from './CalendarCell';
-import { useUI } from '../../context/UIContext';
 
 interface CalendarGridProps {
   visibleDates: Date[];
@@ -30,7 +29,6 @@ export function CalendarGrid({
   onAssign,
   onCancel
 }: CalendarGridProps) {
-  const { setConfigView, setReservaView } = useUI();
   const DATE_COL_MIN = 200;
   const gridColumns = `140px repeat(${visibleDates.length}, minmax(${DATE_COL_MIN}px, 1fr))`;
   const gridMinWidth = 140 + (visibleDates.length * DATE_COL_MIN);

@@ -52,7 +52,7 @@ function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: s
 }
 
 export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps) {
-  const { selectedReservaId, nuevaReservaPreset, setNuevaReservaPreset } = useUI();
+  const { selectedReservaId, nuevaReservaPreset, setNuevaReservaPreset, openConfirm, openPrompt } = useUI();
   const [isEditMode, setIsEditMode] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
@@ -320,9 +320,45 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
       </ScrollArea>
       <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)', backgroundColor: 'var(--pos-bg)', flexShrink: 0 }}>
         <Group grow gap="sm">
-          <Button size="lg" radius="md" variant="light" color="gray" onClick={onBack} fw={800}>
-            Cancelar
-          </Button>
+          {isEditMode ? (
+            <>
+              <Button
+                size="lg"
+                radius="md"
+                variant="subtle"
+                color="red"
+                fw={800}
+                onClick={() => {
+                  openConfirm(
+                    'CANCELAR RESERVA',
+                    '¿Estás seguro de que deseas cancelar esta reserva? Podrás verla más tarde en el historial de canceladas.',
+                    async () => {
+                      openPrompt({
+                        title: 'Motivo de cancelación',
+                        label: 'Escriba el motivo',
+                        placeholder: 'Ej: cliente canceló, no llegó, etc.',
+                        defaultValue: 'Reserva cancelada',
+                        onConfirm: async (motivo) => {
+                          await updateRxReserva(reservaId, { estado: 'cancelada', nota: motivo });
+                          sileo.success({ title: 'Reserva cancelada' });
+                          onBack();
+                        }
+                      });
+                    }
+                  );
+                }}
+              >
+                Anular
+              </Button>
+              <Button size="lg" radius="md" variant="light" color="gray" onClick={onBack} fw={800}>
+                Atrás
+              </Button>
+            </>
+          ) : (
+            <Button size="lg" radius="md" variant="light" color="gray" onClick={onBack} fw={800}>
+              Cancelar
+            </Button>
+          )}
           <Button
             size="lg"
             radius="md"
