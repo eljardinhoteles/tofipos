@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Group, ActionIcon, UnstyledButton, Button, TextInput, Stack, Text, Badge, Modal } from '@mantine/core';
+import { Box, Group, ActionIcon, UnstyledButton, Button, TextInput, Stack, Text, Badge, Modal, Popover } from '@mantine/core';
 import { DatePicker } from '@mantine/dates';
 import { CaretLeft, CaretRight, Plus, MagnifyingGlass, XCircle } from '@phosphor-icons/react';
 import { type Reserva } from '../../db/database';
@@ -99,72 +99,85 @@ export function CalendarToolbar({
           {/* Separador */}
           <Box className="calendar-toolbar__separator" />
 
-          {/* Buscador con dropdown */}
-          <Box className="calendar-toolbar__search-wrap">
-            <TextInput
-              placeholder="Buscar reserva..."
-              size="sm"
-              radius="md"
-              leftSection={<MagnifyingGlass size={15} color="var(--pos-text-muted)" />}
-              value={search}
-              onChange={e => {
-                setSearch(e.currentTarget.value);
-                setSearchOpen(e.currentTarget.value.trim().length > 1);
-              }}
-              onFocus={() => { if (search.trim().length > 1) setSearchOpen(true); }}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-              rightSection={search ? (
-                <ActionIcon variant="transparent" size="sm" onClick={() => { setSearch(''); setSearchOpen(false); }}>
-                  <XCircle size={14} />
-                </ActionIcon>
-              ) : null}
-              className="calendar-toolbar__search-input"
-              styles={{ input: { height: 36, minHeight: 36, backgroundColor: 'var(--pos-bg)', border: '1px solid var(--pos-border)' } }}
-            />
-
-            {/* Dropdown resultados */}
-            {searchOpen && (() => {
-              const q = search.trim().toLowerCase();
-              const results = reservas
-                .filter(r => r.nombre.toLowerCase().includes(q))
-                .slice(0, 8);
-              return results.length > 0 ? (
-                <Box className="calendar-toolbar__results">
-                  {results.map(r => (
-                    <Box
-                      key={r.id}
-                      px={12} py={8}
-                      className="calendar-toolbar__result-row"
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        onResultClick(r);
-                      }}
-                    >
-                      <Group gap={8} wrap="nowrap">
-                        <Box className="calendar-toolbar__status-bar" style={{ backgroundColor: STATUS_HEX[r.estado] }} />
-                        <Stack gap={1} className="calendar-toolbar__result-content">
-                          <Text size="sm" fw={700} lineClamp={1}>{r.nombre}</Text>
-                          <Group gap={6}>
-                            <Text size="xs" c="dimmed">{new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {r.hora}</Text>
-                            <Badge size="xs" color={STATUS_COLOR[r.estado]} variant="light">{STATUS_LABEL[r.estado]}</Badge>
-                          </Group>
-                        </Stack>
-                      </Group>
-                    </Box>
-                  ))}
-                </Box>
-              ) : (
-                <Box className="calendar-toolbar__results calendar-toolbar__results--empty">
-                  <Stack align="center" gap="xs">
-                    <Box style={{ width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 1 }}>
-                      <img src="/no_resultado.webp" alt="" aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    </Box>
-                    <Text size="sm" c="dimmed" ta="center">Sin resultados</Text>
-                  </Stack>
-                </Box>
-              );
-            })()}
-          </Box>
+          {/* Buscador con Popover dropdown portaleado */}
+          <Popover 
+            opened={searchOpen} 
+            onChange={setSearchOpen}
+            width="target" 
+            position="bottom-start" 
+            shadow="md" 
+            radius="md"
+            withinPortal
+            trapFocus={false}
+          >
+            <Popover.Target>
+              <Box className="calendar-toolbar__search-wrap">
+                <TextInput
+                  placeholder="Buscar reserva..."
+                  size="sm"
+                  radius="md"
+                  leftSection={<MagnifyingGlass size={15} color="var(--pos-text-muted)" />}
+                  value={search}
+                  onChange={e => {
+                    setSearch(e.currentTarget.value);
+                    setSearchOpen(e.currentTarget.value.trim().length > 1);
+                  }}
+                  onFocus={() => { if (search.trim().length > 1) setSearchOpen(true); }}
+                  onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+                  rightSection={search ? (
+                    <ActionIcon variant="transparent" size="sm" onClick={() => { setSearch(''); setSearchOpen(false); }}>
+                      <XCircle size={14} />
+                    </ActionIcon>
+                  ) : null}
+                  className="calendar-toolbar__search-input"
+                  styles={{ input: { height: 36, minHeight: 36, backgroundColor: 'var(--pos-bg)', border: '1px solid var(--pos-border)' } }}
+                />
+              </Box>
+            </Popover.Target>
+            <Popover.Dropdown p={0} style={{ zIndex: 3000 }}>
+              {searchOpen && (() => {
+                const q = search.trim().toLowerCase();
+                const results = reservas
+                  .filter(r => r.nombre.toLowerCase().includes(q))
+                  .slice(0, 8);
+                return results.length > 0 ? (
+                  <Box className="calendar-toolbar__results-portal" style={{ minWidth: 260 }}>
+                    {results.map(r => (
+                      <Box
+                        key={r.id}
+                        px={12} py={8}
+                        className="calendar-toolbar__result-row"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          onResultClick(r);
+                        }}
+                      >
+                        <Group gap={8} wrap="nowrap">
+                          <Box className="calendar-toolbar__status-bar" style={{ backgroundColor: STATUS_HEX[r.estado] }} />
+                          <Stack gap={1} className="calendar-toolbar__result-content">
+                            <Text size="sm" fw={700} lineClamp={1}>{r.nombre}</Text>
+                            <Group gap={6}>
+                              <Text size="xs" c="dimmed">{new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {r.hora}</Text>
+                              <Badge size="xs" color={STATUS_COLOR[r.estado]} variant="light">{STATUS_LABEL[r.estado]}</Badge>
+                            </Group>
+                          </Stack>
+                        </Group>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Box className="calendar-toolbar__results-portal calendar-toolbar__results-portal--empty" p="sm" style={{ minWidth: 260 }}>
+                    <Stack align="center" gap="xs">
+                      <Box style={{ width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 1 }}>
+                        <img src="/no_resultado.webp" alt="" aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      </Box>
+                      <Text size="sm" c="dimmed" ta="center">Sin resultados</Text>
+                    </Stack>
+                  </Box>
+                );
+              })()}
+            </Popover.Dropdown>
+          </Popover>
         </Group>
       </Group>
 
