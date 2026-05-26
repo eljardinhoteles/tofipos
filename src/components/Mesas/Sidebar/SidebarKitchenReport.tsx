@@ -287,7 +287,7 @@ export function SidebarKitchenReport({
 
       {/* ── Mobile: Vaul Sheet desde abajo ────────────────────────────── */}
       {isMobile && (
-        <VaulDrawer.Root dismissible={false} open={opened} onOpenChange={v => !v && onClose()}>
+        <VaulDrawer.Root open={opened} onOpenChange={v => !v && onClose()}>
           <VaulDrawer.Portal>
             <VaulDrawer.Overlay className="vaul-overlay" />
             <VaulDrawer.Content className="vaul-content">
@@ -315,7 +315,7 @@ export function SidebarKitchenReport({
               </Group>
 
               {/* Body */}
-              <div className="vaul-body" style={{ overflowY: 'hidden', flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
+              <div className="vaul-body" style={{ overflowY: 'hidden', flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }} data-vaul-no-drag>
                 {content}
               </div>
             </VaulDrawer.Content>

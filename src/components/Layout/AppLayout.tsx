@@ -240,7 +240,6 @@ export function AppLayout() {
       {/* SIDEBAR MÓVIL (Vaul Drawer / Bottom Sheet) */}
       {isMobile && (
         <VaulDrawer.Root
-          dismissible={false}
           open={(selectedMesaId !== null && mesaView !== 'productos') || configView !== 'none' || menuView === 'producto' || (reservaView !== 'none' && !reservaProductosComandaId)}
           onOpenChange={(open) => {
             if (!open && !reservaProductosComandaId) {
@@ -262,7 +261,7 @@ export function AppLayout() {
                 Acciones y detalles de la mesa seleccionada
               </VaulDrawer.Description>
               <div className="vaul-handle" />
-              <div className="vaul-body">
+              <div className="vaul-body" data-vaul-no-drag>
                 <TableSidebar
                   selectedMesa={selectedMesa}
                   onClose={() => {

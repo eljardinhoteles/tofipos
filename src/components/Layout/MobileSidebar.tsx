@@ -434,7 +434,7 @@ export function MobileSidebar() {
       </div>
 
       {/* ── Vaul Sheet del menú (mismo que el resto de sidebars) ───────── */}
-      <VaulDrawer.Root dismissible={false} open={menuOpen} onOpenChange={setMenuOpen}>
+      <VaulDrawer.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <VaulDrawer.Portal>
           <VaulDrawer.Overlay className="vaul-overlay" />
           <VaulDrawer.Content className="vaul-content mob-sheet">
@@ -458,7 +458,7 @@ export function MobileSidebar() {
             </Group>
 
             {/* Ítems de navegación */}
-            <div className="vaul-body" style={{ overflowY: 'auto', flex: 1 }}>
+            <div className="vaul-body" style={{ overflowY: 'auto', flex: 1 }} data-vaul-no-drag>
               <Stack gap={2} p="sm">
                 {NAV_ITEMS.map((item) => (
                   <SheetNavItem key={item.label} {...item} onClick={() => setMenuOpen(false)} />
