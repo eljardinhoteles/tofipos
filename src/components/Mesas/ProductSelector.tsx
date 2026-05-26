@@ -19,7 +19,16 @@ interface ProductSelectorProps {
 }
 
 export function ProductSelector({ activeComanda, onBack, hideBackButton = false }: ProductSelectorProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQueryInput, setSearchQueryInput] = useState('');
+  const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchQueryDebounced(searchQueryInput);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [searchQueryInput]);
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Gesto swipe horizontal nativo y de alto rendimiento para categorías
@@ -118,8 +127,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   // Filtrar y ordenar productos
   const filteredItems = useMemo(() => {
     const items = safeMenuItems.filter(item => {
-      const matchesSearch = !searchQuery ||
-        item.nombre.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !searchQueryDebounced ||
+        item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
 
       if (selectedCategory === 'Favoritos') {
         return matchesSearch && item.favorito;
@@ -139,7 +148,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
       if (catComp !== 0) return catComp;
       return a.nombre.localeCompare(b.nombre);
     });
-  }, [safeMenuItems, searchQuery, selectedCategory]);
+  }, [safeMenuItems, searchQueryDebounced, selectedCategory]);
 
   const handleAddProduct = async (item: MenuItem) => {
     if (!activeComanda) {
@@ -258,14 +267,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             placeholder="Buscar productos..."
             leftSection={<MagnifyingGlass size={18} color="var(--ui-primary)" />}
             rightSection={
-              searchQuery ? (
-                <ActionIcon radius="xl" variant="subtle" color="gray" onClick={() => setSearchQuery('')}>
+              searchQueryInput ? (
+                <ActionIcon radius="xl" variant="subtle" color="gray" onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}>
                   <X size={16} weight="bold" />
                 </ActionIcon>
               ) : null
             }
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchQueryInput}
+            onChange={(e) => setSearchQueryInput(e.target.value)}
             radius="md"
             size="sm"
             style={{ flex: 1 }}
