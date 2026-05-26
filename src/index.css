@@ -1592,9 +1592,11 @@ label {
 .vaul-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(0, 0, 0, 0.4);
   z-index: 200;
   animation: vaul-fade-in 200ms ease-out;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .vaul-content {
@@ -1613,6 +1615,10 @@ label {
   z-index: 201;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .vaul-handle {

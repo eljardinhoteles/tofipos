@@ -177,7 +177,7 @@ export function AppLayout() {
         title={confirmModal.title}
         centered
         radius="lg"
-        overlayProps={{ backgroundOpacity: 0.4, blur: 4 }}
+        overlayProps={{ backgroundOpacity: 0.4, blur: 0 }}
         zIndex={10000}
       >
         <Stack gap="xl">
@@ -205,7 +205,7 @@ export function AppLayout() {
         title={<Text fw={900} size="lg">{promptModal.title}</Text>}
         centered
         radius="lg"
-        overlayProps={{ backgroundOpacity: 0.4, blur: 4 }}
+        overlayProps={{ backgroundOpacity: 0.4, blur: 0 }}
         zIndex={10000}
       >
         <form onSubmit={(e) => {
