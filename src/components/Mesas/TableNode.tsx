@@ -182,7 +182,7 @@ export const TableNode = memo(function TableNode({ mesa, isSelected, onSelect, t
       <Stack align="center" justify="center" gap={4} h="100%" pt={6}>
         <Text fw={900} size="1.15rem" c="var(--pos-text)" className="table-node__title">{mesa.nombre}</Text>
         {roomBadge && (
-          <Text size="9px" fw={900} c="white" bg="blue" px={6} py={2} style={{ borderRadius: 4, letterSpacing: '0.5px' }}>
+          <Text size="11px" fw={900} c="white" bg="blue" px={9} py={4} style={{ borderRadius: 6, letterSpacing: '0.5px' }}>
             HAB: {roomBadge.match(/\d+/)?.[0] || roomBadge}
           </Text>
         )}

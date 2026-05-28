@@ -79,3 +79,14 @@ This repo includes a Rust print server at `print-server/`.
 - Default endpoint: `http://127.0.0.1:18181`
 - Configure the active printer from `Ajustes > Impresión`
 - The server keeps a local job queue on disk and exposes health/config endpoints
+
+## Desktop Package
+
+The app is now scaffolded as a Tauri desktop application.
+
+- Development:
+  - `npm run tauri:dev`
+- Production build:
+  - `npm run tauri:build`
+- The desktop shell uses the Vite app as frontend and loads it from `http://localhost:5173` in development.
+- The generated desktop config lives in `src-tauri/`.

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
-import { Box, Stack, Text, Group, ActionIcon, Autocomplete, Button, Chip, SegmentedControl, SimpleGrid } from '@mantine/core';
+import { Box, Stack, Text, Group, ActionIcon, Autocomplete, Button, Chip, SegmentedControl, SimpleGrid, UnstyledButton } from '@mantine/core';
 import { X, Users, UserPlus, Minus, Plus, PushPin, Bed } from '@phosphor-icons/react';
 import type { Mesa } from '../../../db/database';
 import { useRxClientes } from '../../../hooks/useRxClientes';
