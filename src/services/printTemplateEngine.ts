@@ -88,6 +88,7 @@ interface PrintableItem extends Partial<ComandaItem> {
   precio: number;
   cantidad: number;
   qtyToPay?: number;
+  es_bebida?: boolean;
 }
 
 /**
@@ -95,7 +96,7 @@ interface PrintableItem extends Partial<ComandaItem> {
  * Diseño ultra compacto, tipografía gigante simulada, sin precios ni totales.
  */
 export function generarComandaCocina(
-  _comanda: Comanda,
+  comanda: Comanda,
   items: PrintableItem[],
   mesaNombre: string,
   esAdicional = false,
@@ -105,6 +106,7 @@ export function generarComandaCocina(
 
   const cleanMesa = mesaNombre.toUpperCase().replace('MESA ', 'MESA #');
   t += `${cleanMesa}\n`;
+  t += `ORDEN: #${comanda.folio}\n`;
   if (habitacionNombre) {
     t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
   }
@@ -116,64 +118,80 @@ export function generarComandaCocina(
     t += `\n\n`;
   }
 
-  // Agrupar items por item_id o nombre para sumatoria de cantidad y desglose
-  const groups: {
-    [key: string]: {
-      nombre: string;
-      totalQty: number;
-      subItems: Array<{ cantidad: number; modifiers: string[]; nota?: string }>;
-    }
-  } = {};
+  // Separar cocina vs bebidas
+  const itemsCocina = items.filter(i => !i.es_bebida);
+  const itemsBebida = items.filter(i => i.es_bebida);
 
-  items.forEach(item => {
-    const key = item.item_id || item.nombre;
-    if (!groups[key]) {
-      groups[key] = {
-        nombre: item.nombre,
-        totalQty: 0,
-        subItems: []
-      };
-    }
-    groups[key].totalQty += item.cantidad;
-    groups[key].subItems.push({
-      cantidad: item.cantidad,
-      modifiers: item.modificadores || [],
-      nota: item.nota
-    });
-  });
-
-  const groupedList = Object.values(groups);
-
-  groupedList.forEach((group, index) => {
-    // Formato de item: [CANT] DESCRIPCION
-    t += `[${group.totalQty}]  ${group.nombre.toUpperCase()}\n`;
-
-    // Modificadores y notas agrupadas debajo
-    group.subItems.forEach(sub => {
-      if (sub.modifiers.length > 0) {
-        const modsStr = sub.modifiers.join(' · ').toUpperCase();
-        if (group.subItems.length === 1) {
-          t += `  ${modsStr}\n`;
-        } else {
-          t += `  ${sub.cantidad} = ${modsStr}\n`;
-        }
+  // Función interna para imprimir un grupo de items agrupados
+  function imprimirGrupo(groupItems: PrintableItem[]): string {
+    let s = '';
+    const groups: {
+      [key: string]: {
+        nombre: string;
+        totalQty: number;
+        subItems: Array<{ cantidad: number; modifiers: string[]; nota?: string }>;
       }
+    } = {};
 
-      if (sub.nota) {
-        const notaStr = sub.nota.toUpperCase();
-        if (group.subItems.length === 1) {
-          t += `  NOTA: ${notaStr}\n`;
-        } else {
-          t += `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
-        }
+    groupItems.forEach(item => {
+      const key = item.item_id || item.nombre;
+      if (!groups[key]) {
+        groups[key] = { nombre: item.nombre, totalQty: 0, subItems: [] };
       }
+      groups[key].totalQty += item.cantidad;
+      groups[key].subItems.push({
+        cantidad: item.cantidad,
+        modifiers: item.modificadores || [],
+        nota: item.nota
+      });
     });
 
-    // Separador entre platos (excepto el último)
-    if (index < groupedList.length - 1) {
-      t += '\n---\n\n';
+    const list = Object.values(groups);
+    list.forEach((group, index) => {
+      s += `[${group.totalQty}]  ${group.nombre.toUpperCase()}\n`;
+      group.subItems.forEach(sub => {
+        if (sub.modifiers.length > 0) {
+          const modsStr = sub.modifiers.join(' · ').toUpperCase();
+          s += group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
+        }
+        if (sub.nota) {
+          const notaStr = sub.nota.toUpperCase();
+          s += group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
+        }
+      });
+      if (index < list.length - 1) s += '\n---\n\n';
+    });
+    return s;
+  }
+
+  // Sección COCINA
+  if (itemsCocina.length > 0) {
+    t += imprimirGrupo(itemsCocina);
+  }
+
+  // Sección BEBIDAS (al final, separadas para recortar)
+  if (itemsBebida.length > 0) {
+    if (itemsCocina.length > 0) {
+      t += '\n\n';
+      t += `================================\n`;
+      t += `         RECORTAR AQUI          \n`;
+      t += `================================\n\n`;
     }
-  });
+    t += `${cleanMesa}\n`;
+    t += `ORDEN: #${comanda.folio}\n`;
+    if (habitacionNombre) {
+      t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
+    }
+    t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
+    if (esAdicional) {
+      t += `\n*** PEDIDO ADICIONAL ***\n`;
+      t += `================================\n\n`;
+    } else {
+      t += `\n`;
+    }
+    t += `--- BEBIDAS / BAR ---\n\n`;
+    t += imprimirGrupo(itemsBebida);
+  }
 
   t += '\n\n';
   t += `Notas:\n`;

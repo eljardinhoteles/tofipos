@@ -191,6 +191,7 @@ export interface RxMenuItem {
   categoria_id: string
   categoria_nombre?: string
   activo: boolean
+  es_bebida?: boolean
   modificadores: Array<{
     id: string
     nombre: string
@@ -438,7 +439,7 @@ const categoriaSchema = {
 } as const
 
 const menuItemSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -448,6 +449,7 @@ const menuItemSchema = {
     categoria_id: { type: 'string' },
     categoria_nombre: { type: 'string' },
     activo: { type: 'boolean' },
+    es_bebida: { type: ['boolean', 'null'] },
     modificadores: {
       type: 'array',
       items: {
@@ -739,7 +741,13 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
     pagos: { schema: pagoSchema },
     ajustes_iva: { schema: ajusteIvaSchema },
     usuarios: { schema: usuarioSchema },
-    menu_items: { schema: menuItemSchema },
+    menu_items: {
+      schema: menuItemSchema,
+      migrationStrategies: {
+        // v0 → v1: agrega es_bebida (nullable) a todos los items existentes
+        1: (oldDoc: any) => ({ ...oldDoc, es_bebida: null })
+      }
+    },
   }
 
   await db.addCollections(collectionsConfig)

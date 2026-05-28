@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Box, Stack, Group, Text, ActionIcon, Button, TextInput, NumberInput, Divider, Switch, Badge, Flex, ScrollArea, Select } from '@mantine/core';
-import { Trash, Plus, X, Check, Tag, CurrencyDollar, Sliders } from '@phosphor-icons/react';
+import { Trash, Plus, X, Check, Tag, CurrencyDollar, Sliders, Drop } from '@phosphor-icons/react';
 import { useForm } from '@mantine/form';
 import { type ModifierGroup } from '../../db/database';
 import { useUI } from '../../context/UIContext';
@@ -58,6 +58,7 @@ export function SidebarMenuProduct() {
       categoria: '',
       modificadores: [] as ModifierGroup[],
       activo: true,
+      es_bebida: false,
       iva_modalidad: 'sistema' as 'sistema' | 'especifico' | 'exento',
       iva_porcentaje: 15,
     },
@@ -75,6 +76,7 @@ export function SidebarMenuProduct() {
         categoria: editingProduct.categoria_nombre || '',
         modificadores: editingProduct.modificadores || [],
         activo: editingProduct.activo,
+        es_bebida: editingProduct.es_bebida || false,
         iva_modalidad: editingProduct.iva_modalidad || 'sistema',
         iva_porcentaje: editingProduct.iva_porcentaje !== undefined ? editingProduct.iva_porcentaje : 15,
       });
@@ -116,6 +118,7 @@ export function SidebarMenuProduct() {
         categoria_nombre: catNombre,
         modificadores: values.modificadores,
         activo: values.activo,
+        es_bebida: values.es_bebida,
         iva_modalidad: values.iva_modalidad,
         iva_porcentaje: values.iva_modalidad === 'especifico' ? values.iva_porcentaje : undefined,
         organization_id: localStorage.getItem('pos_active_org_id') || '',
@@ -129,6 +132,7 @@ export function SidebarMenuProduct() {
         categoria_id: catId,
         categoria_nombre: catNombre,
         activo: values.activo,
+        es_bebida: values.es_bebida,
         modificadores: values.modificadores,
         iva_modalidad: values.iva_modalidad,
         iva_porcentaje: values.iva_modalidad === 'especifico' ? values.iva_porcentaje : undefined,
@@ -225,6 +229,15 @@ export function SidebarMenuProduct() {
             <Text size="xs" c="dimmed" mt={6}>
               Usa $0.00 para productos incluidos en la tarifa o sin cobro directo.
             </Text>
+
+            <SectionLabel icon={Drop} label="Zona de producción" />
+            <Switch
+              label="Es Bebida"
+              description="Se imprime al final de la comanda de cocina (zona de bar)"
+              size="md"
+              color="blue"
+              {...form.getInputProps('es_bebida', { type: 'checkbox' })}
+            />
 
             <SectionLabel icon={Sliders} label="Impuestos (IVA)" />
             <Stack gap="sm">

@@ -183,6 +183,13 @@ export function SidebarDetails({
   const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
   const { menuItems } = useRxMenuCatalog();
 
+  // Helper: enriquece comanda items con es_bebida del catálogo
+  const withBebida = (items: any[]) =>
+    items.map(item => ({
+      ...item,
+      es_bebida: menuItems.find(m => m.id === item.item_id)?.es_bebida || false,
+    }));
+
   // Cálculos de IVA centralizados por item
   const totales = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
   const subtotal = totales.subtotalNeto;
@@ -199,6 +206,7 @@ export function SidebarDetails({
         : {};
     } catch { return {}; }
   })();
+
 
   // 1. Ítems completamente nuevos (created_at posterior a confirmada_at)
   const itemsRealmenteNuevos = activeComanda?.confirmada_at
@@ -662,7 +670,7 @@ export function SidebarDetails({
                             });
                             queueKitchenPrint({
                               comanda: activeComanda,
-                              items: comandaItems,
+                              items: withBebida(comandaItems),
                               mesaNombre: selectedMesa.nombre,
                               esAdicional: false,
                               habitacionNombre: linkedMesa?.nombre,
@@ -672,7 +680,7 @@ export function SidebarDetails({
                             // Hay ítems nuevos o con cantidad extra → imprimir solo el adicional
                             const content = generarComandaCocina(
                               activeComanda,
-                              itemsNuevos,
+                              withBebida(itemsNuevos),
                               selectedMesa.nombre,
                               true,
                               linkedMesa?.nombre
@@ -690,7 +698,7 @@ export function SidebarDetails({
                             });
                             queueKitchenPrint({
                               comanda: activeComanda,
-                              items: itemsNuevos,
+                              items: withBebida(itemsNuevos),
                               mesaNombre: selectedMesa.nombre,
                               esAdicional: true,
                               habitacionNombre: linkedMesa?.nombre,
@@ -699,7 +707,7 @@ export function SidebarDetails({
                             // Sin ítems nuevos → reimprimir toda la comanda
                             const content = generarComandaCocina(
                               activeComanda,
-                              comandaItems,
+                              withBebida(comandaItems),
                               selectedMesa.nombre,
                               false,
                               linkedMesa?.nombre
@@ -772,7 +780,7 @@ export function SidebarDetails({
                           }
                           setShowRoomChargeModal(true);
                         }}
-                        disabled={total === 0}
+                        disabled={comandaItems.length === 0}
                         fw={800}
                       >
                         Cargar Hab.

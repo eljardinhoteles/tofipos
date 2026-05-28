@@ -77,7 +77,7 @@ export const TableNode = memo(function TableNode({ mesa, isSelected, onSelect, t
       ? 'var(--ui-surface-muted)'
       : (activeComanda?.estado === 'cuenta'
         ? 'linear-gradient(135deg, rgba(250, 82, 82, 0.08) 0%, rgba(250, 82, 82, 0.02) 100%)'
-        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.12) 0%, rgba(46, 204, 113, 0.04) 100%)'
+        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.18) 0%, rgba(46, 204, 113, 0.08) 100%)'
       );
 
     const roomBorderColor = isFree
@@ -153,7 +153,12 @@ export const TableNode = memo(function TableNode({ mesa, isSelected, onSelect, t
       radius="xl"
       p="sm"
       withBorder
-      style={nodeVars}
+      style={{
+        ...nodeVars,
+        background: mesa.estado === 'ocupada'
+          ? 'linear-gradient(135deg, rgba(46, 204, 113, 0.16) 0%, rgba(46, 204, 113, 0.06) 100%)'
+          : undefined,
+      }}
       data-selected={isSelected || undefined}
       onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
     >
