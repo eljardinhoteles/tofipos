@@ -1,241 +1,251 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Divider, Group, Paper, Stack, Switch, Text, TextInput, ThemeIcon, Grid, Modal, ActionIcon } from '@mantine/core';
-import { Printer, FileText, FloppyDisk, Scroll, Eye } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
+import { Box, Button, Divider, Group, Paper, Stack, Switch, Text, TextInput, ThemeIcon, Grid, Modal, ActionIcon, Select, Card } from '@mantine/core';
+import { Printer, Plus, Trash, WifiHigh, Usb, Bluetooth } from '@phosphor-icons/react';
 import { useDisclosure } from '@mantine/hooks';
 import { sileo } from 'sileo';
-import { generarComandaCocina, generarPrecuenta, generarTicketPago, generarPrecuentaDividida } from '../../services/printTemplateEngine';
+import { savePrintServerPrinter } from '../../lib/printServerClient';
 
-const MOCK_COMANDA = {
-  id: 'mock-123',
-  folio: 42,
-  created_at: new Date().toISOString(),
-  mesero: 'Juan Pérez',
-  cliente: 'Consumidor Final',
-  cliente_id: '9999999999',
-  estado: 'abierta'
-} as any;
-
-const MOCK_ITEMS = [
-  { item_id: '1', nombre: 'Hamburguesa Clasica', precio: 8.50, cantidad: 2, modificadores: ['Sin cebolla'], nota: 'Bien cocida' },
-  { item_id: '2', nombre: 'Papas Fritas', precio: 3.00, cantidad: 1, modificadores: [], nota: '' },
-  { item_id: '3', nombre: 'Refresco', precio: 1.50, cantidad: 2, modificadores: [], nota: '' },
-] as any;
-
-const MOCK_PAGOS = [
-  { id: '1', monto: 26.45, metodo_pago: 'efectivo', fecha: new Date().toISOString() }
-] as any;
-
-type PrintFormat = {
-  key: string;
-  label: string;
-  description: string;
-  active: boolean;
+type PrinterConfig = {
+  id: string;
+  nombre: string;
+  tipo: 'red' | 'usb' | 'bluetooth';
+  conexion: string; // IP o Puerto
+  papel: '80mm' | '58mm';
+  activa: boolean;
 };
 
-type DocumentSequence = {
-  key: string;
-  label: string;
-  prefix: string;
-  nextNumber: number;
-};
+const PRINTERS_STORAGE = 'pos_printers_v1';
 
-const FORMAT_STORAGE = 'pos_print_formats_v1';
-const SEQ_STORAGE = 'pos_document_sequences_v1';
-
-const DEFAULT_FORMATS: PrintFormat[] = [
-  { key: 'cocina', label: 'Comanda Cocina', description: 'Ticket de producción para cocina.', active: true },
-  { key: 'precuenta', label: 'Precuenta', description: 'Documento para revisión de mesa.', active: true },
-  { key: 'pago', label: 'Ticket de Pago', description: 'Comprobante de cobro de una cuenta.', active: true },
-  { key: 'precuenta_dividida', label: 'Precuenta Dividida', description: 'Resumen de cuentas fraccionadas.', active: false },
-];
-
-const DEFAULT_SEQUENCES: DocumentSequence[] = [
-  { key: 'factura', label: 'Factura', prefix: 'F-', nextNumber: 1 },
-  { key: 'precuenta', label: 'Precuenta', prefix: 'P-', nextNumber: 1 },
-  { key: 'comanda', label: 'Comanda', prefix: 'C-', nextNumber: 1 },
-  { key: 'recibo', label: 'Recibo', prefix: 'R-', nextNumber: 1 },
+const DEFAULT_PRINTERS: PrinterConfig[] = [
+  { id: '1', nombre: 'Impresora Cocina', tipo: 'red', conexion: '192.168.1.200', papel: '80mm', activa: true },
+  { id: '2', nombre: 'Impresora Caja', tipo: 'usb', conexion: 'USB001', papel: '80mm', activa: true },
 ];
 
 export default function AjustesImpresion() {
-  const [formats, setFormats] = useState<PrintFormat[]>(DEFAULT_FORMATS);
-  const [sequences, setSequences] = useState<DocumentSequence[]>(DEFAULT_SEQUENCES);
+  const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [previewFormat, setPreviewFormat] = useState<PrintFormat | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
 
-  const openPreview = (format: PrintFormat) => {
-    setPreviewFormat(format);
-    open();
-  };
-
-  const previewContent = useMemo(() => {
-    if (!previewFormat) return '';
-    switch (previewFormat.key) {
-      case 'cocina':
-        return generarComandaCocina(MOCK_COMANDA, MOCK_ITEMS, 'MESA #5', false);
-      case 'precuenta':
-        return generarPrecuenta(MOCK_COMANDA, MOCK_ITEMS, 'MESA #5', 15, []);
-      case 'pago':
-        return generarTicketPago(MOCK_COMANDA, MOCK_ITEMS, MOCK_PAGOS, 'MESA #5', 15);
-      case 'precuenta_dividida':
-        return generarPrecuentaDividida(MOCK_COMANDA, MOCK_ITEMS, 'MESA #5', 'Cliente A', 0, 15);
-      default:
-        return 'Formato no soportado en la vista previa.';
-    }
-  }, [previewFormat]);
+  // Form State para nueva impresora
+  const [nombre, setNombre] = useState('');
+  const [tipo, setTipo] = useState<'red' | 'usb' | 'bluetooth'>('red');
+  const [conexion, setConexion] = useState('');
+  const [papel, setPapel] = useState<'80mm' | '58mm'>('80mm');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const savedFormats = localStorage.getItem(FORMAT_STORAGE);
-      const savedSeq = localStorage.getItem(SEQ_STORAGE);
-      if (savedFormats) setFormats(JSON.parse(savedFormats));
-      if (savedSeq) setSequences(JSON.parse(savedSeq));
+      const savedPrinters = localStorage.getItem(PRINTERS_STORAGE);
+      if (savedPrinters) {
+        setPrinters(JSON.parse(savedPrinters));
+      } else {
+        setPrinters(DEFAULT_PRINTERS);
+        localStorage.setItem(PRINTERS_STORAGE, JSON.stringify(DEFAULT_PRINTERS));
+      }
     } catch (error) {
-      console.error('Error cargando configuración de impresión:', error);
+      console.error('Error cargando impresoras:', error);
     } finally {
       setLoaded(true);
     }
   }, []);
 
-  const persist = (nextFormats: PrintFormat[], nextSequences: DocumentSequence[]) => {
-    localStorage.setItem(FORMAT_STORAGE, JSON.stringify(nextFormats));
-    localStorage.setItem(SEQ_STORAGE, JSON.stringify(nextSequences));
+  const savePrinters = (updatedPrinters: PrinterConfig[]) => {
+    setPrinters(updatedPrinters);
+    localStorage.setItem(PRINTERS_STORAGE, JSON.stringify(updatedPrinters));
   };
 
-  const saveAll = (nextFormats = formats, nextSequences = sequences) => {
-    persist(nextFormats, nextSequences);
-    sileo.success({ title: 'Impresión actualizada' });
+  const handleSavePrinter = () => {
+    if (!nombre.trim() || !conexion.trim()) {
+      sileo.error({ title: 'Error', message: 'Completa todos los campos' });
+      return;
+    }
+
+    let updated: PrinterConfig[];
+    if (editingId) {
+      updated = printers.map(p => p.id === editingId ? { ...p, nombre, tipo, conexion, papel } : p);
+      sileo.success({ title: 'Impresora actualizada' });
+    } else {
+      const newPrinter: PrinterConfig = {
+        id: Date.now().toString(),
+        nombre,
+        tipo,
+        conexion,
+        papel,
+        activa: true
+      };
+      updated = [...printers, newPrinter];
+      sileo.success({ title: 'Impresora agregada' });
+    }
+
+    savePrinters(updated);
+    savePrintServerPrinter({
+      name: editingId ? nombre : nombre,
+      target: conexion,
+      paper_width: papel === '80mm' ? 48 : 32,
+      active: true,
+    }).catch(err => {
+      console.warn('No se pudo sincronizar la impresora con el print server', err);
+    });
+    handleCloseModal();
   };
 
-  const updateFormat = (key: string, active: boolean) => {
-    const next = formats.map((item) => item.key === key ? { ...item, active } : item);
-    setFormats(next);
-    persist(next, sequences);
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setNombre('');
+    setTipo('red');
+    setConexion('');
+    setPapel('80mm');
+    open();
   };
 
-  const updateSequence = (key: string, patch: Partial<DocumentSequence>) => {
-    const next = sequences.map((item) => item.key === key ? { ...item, ...patch } : item);
-    setSequences(next);
-    persist(formats, next);
+  const handleOpenEdit = (printer: PrinterConfig) => {
+    setEditingId(printer.id);
+    setNombre(printer.nombre);
+    setTipo(printer.tipo);
+    setConexion(printer.conexion);
+    setPapel(printer.papel);
+    open();
+  };
+
+  const handleCloseModal = () => {
+    close();
+    setEditingId(null);
+  };
+
+  const handleDeletePrinter = (id: string) => {
+    const updated = printers.filter(p => p.id !== id);
+    savePrinters(updated);
+    sileo.success({ title: 'Impresora eliminada' });
+  };
+
+  const handleToggleActive = (id: string, activa: boolean) => {
+    const updated = printers.map(p => p.id === id ? { ...p, activa } : p);
+    savePrinters(updated);
+  };
+
+  const getTipoIcon = (tipo: 'red' | 'usb' | 'bluetooth') => {
+    switch (tipo) {
+      case 'red': return <WifiHigh size={18} weight="bold" />;
+      case 'usb': return <Usb size={18} weight="bold" />;
+      case 'bluetooth': return <Bluetooth size={18} weight="bold" />;
+    }
   };
 
   return (
     <Stack gap="lg" py="xl">
       <Group justify="space-between" align="center">
-          <Group gap="md">
-            <Box p={10} style={{ borderRadius: 12, backgroundColor: 'var(--ui-primary-soft)' }}>
-              <Printer size={22} color="var(--ui-primary)" weight="fill" />
-            </Box>
-            <Box>
-              <Text fw={900} size="lg">Gestión de Impresión</Text>
-              <Text size="sm" c="dimmed">Activa formatos y administra secuencias de documentos.</Text>
-            </Box>
-          </Group>
-          <Button leftSection={<FloppyDisk size={18} weight="bold" />} color="myColor" radius="md" onClick={() => saveAll()} disabled={!loaded}>
-            Guardar
-          </Button>
-        </Group>
-
-        <Divider />
-
-        <Grid>
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Box>
-              <Group mb="md" gap="sm">
-                <ThemeIcon variant="light" color="myColor" radius="md">
-                  <FileText size={18} weight="bold" />
-                </ThemeIcon>
-                <Text fw={800}>Formatos Activos</Text>
-              </Group>
-              <Stack gap="sm">
-                {formats.map((format) => (
-                  <Paper key={format.key} withBorder p="md" radius="md" bg="white">
-                    <Group justify="space-between" align="center">
-                      <Box>
-                        <Text fw={700}>{format.label}</Text>
-                        <Text size="xs" c="dimmed">{format.description}</Text>
-                      </Box>
-                      <Group gap="xs">
-                        <Switch
-                          checked={format.active}
-                          onChange={(e) => updateFormat(format.key, e.currentTarget.checked)}
-                          color="green"
-                          size="sm"
-                        />
-                        <ActionIcon variant="light" color="blue" onClick={() => openPreview(format)} radius="md">
-                          <Eye size={18} weight="bold" />
-                        </ActionIcon>
-                      </Group>
-                    </Group>
-                  </Paper>
-                ))}
-              </Stack>
-              <Text size="xs" c="dimmed" mt="sm">
-                Formatos disponibles: {formats.length}
-              </Text>
-            </Box>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Box>
-              <Group mb="md" gap="sm">
-                <ThemeIcon variant="light" color="myColor" radius="md">
-                  <Scroll size={18} weight="bold" />
-                </ThemeIcon>
-                <Text fw={800}>Secuencias de Documentos</Text>
-              </Group>
-              <Stack gap="sm">
-                {sequences.map((seq) => (
-                  <Paper key={seq.key} withBorder p="md" radius="md" bg="white">
-                    <Stack gap="xs">
-                      <Text fw={700}>{seq.label}</Text>
-                      <Group grow align="end">
-                        <TextInput
-                          label="Prefijo"
-                          value={seq.prefix}
-                          onChange={(e) => updateSequence(seq.key, { prefix: e.target.value })}
-                          radius="md"
-                          size="sm"
-                        />
-                        <TextInput
-                          label="Siguiente número"
-                          type="number"
-                          value={String(seq.nextNumber)}
-                          onChange={(e) => updateSequence(seq.key, { nextNumber: Number(e.target.value || 1) })}
-                          radius="md"
-                          size="sm"
-                        />
-                      </Group>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            </Box>
-          </Grid.Col>
-        </Grid>
-
-      <Modal opened={opened} onClose={close} title="Ejemplo de Formato" centered size="lg">
-        {previewFormat && (
-          <Box p="md" bg="gray.1" style={{ borderRadius: 8, border: '1px dashed #ccc', maxHeight: '70vh', overflowY: 'auto' }}>
-            <Text fw={700} ta="center" mb="sm">{previewFormat.label}</Text>
-            <Box mt="md" style={{ display: 'flex', justifyContent: 'center' }}>
-              <pre style={{ 
-                fontFamily: 'monospace', 
-                fontSize: '12px', 
-                lineHeight: 1.4, 
-                whiteSpace: 'pre-wrap', 
-                backgroundColor: 'white', 
-                padding: '16px', 
-                border: '1px solid #ddd', 
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                maxWidth: '100%',
-                overflowX: 'auto'
-              }}>
-                {previewContent}
-              </pre>
-            </Box>
+        <Group gap="md">
+          <Box p={10} style={{ borderRadius: 12, backgroundColor: 'var(--ui-primary-soft)' }}>
+            <Printer size={22} color="var(--ui-primary)" weight="fill" />
           </Box>
-        )}
+          <Box>
+            <Text fw={900} size="lg">Gestión de Impresoras</Text>
+            <Text size="sm" c="dimmed">Configura y administra las impresoras de tickets del sistema.</Text>
+          </Box>
+        </Group>
+        <Button leftSection={<Plus size={18} weight="bold" />} color="myColor" radius="md" onClick={handleOpenAdd} disabled={!loaded}>
+          Agregar Impresora
+        </Button>
+      </Group>
+
+      <Divider />
+
+      {printers.length === 0 ? (
+        <Card withBorder radius="md" p="xl" style={{ textAlign: 'center', minHeight: 200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Stack align="center" gap="sm">
+            <Printer size={48} weight="thin" color="gray" />
+            <Text fw={700} size="lg">No hay impresoras configuradas</Text>
+            <Text size="sm" c="dimmed" maw={400}>Agrega tu primera impresora térmica (red, USB o Bluetooth) para comenzar a imprimir comandas y facturas.</Text>
+            <Button leftSection={<Plus size={16} />} variant="light" color="myColor" mt="xs" onClick={handleOpenAdd}>
+              Configurar Impresora
+            </Button>
+          </Stack>
+        </Card>
+      ) : (
+        <Grid>
+          {printers.map((printer) => (
+            <Grid.Col key={printer.id} span={{ base: 12, sm: 6, md: 4 }}>
+              <Paper withBorder p="md" radius="md" style={{ position: 'relative' }}>
+                <Group justify="space-between" mb="xs">
+                  <Group gap="xs">
+                    <ThemeIcon variant="light" color="myColor" radius="md">
+                      {getTipoIcon(printer.tipo)}
+                    </ThemeIcon>
+                    <Box>
+                      <Text fw={800} size="sm">{printer.nombre}</Text>
+                      <Text size="xs" c="dimmed">{printer.papel} • {printer.tipo.toUpperCase()}</Text>
+                    </Box>
+                  </Group>
+                  <Switch
+                    checked={printer.activa}
+                    onChange={(e) => handleToggleActive(printer.id, e.currentTarget.checked)}
+                    color="green"
+                    size="xs"
+                  />
+                </Group>
+
+                <Box mt="md" p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: 8 }}>
+                  <Text size="xs" fw={500} c="dimmed">Conexión / Dirección:</Text>
+                  <Text size="sm" fw={700} style={{ fontFamily: 'monospace' }}>{printer.conexion}</Text>
+                </Box>
+
+                <Group justify="flex-end" gap="xs" mt="md">
+                  <Button variant="subtle" size="xs" color="gray" onClick={() => handleOpenEdit(printer)}>
+                    Editar
+                  </Button>
+                  <ActionIcon variant="light" color="red" size="sm" onClick={() => handleDeletePrinter(printer.id)}>
+                    <Trash size={16} />
+                  </ActionIcon>
+                </Group>
+              </Paper>
+            </Grid.Col>
+          ))}
+        </Grid>
+      )}
+
+      <Modal opened={opened} onClose={handleCloseModal} title={editingId ? "Editar Impresora" : "Agregar Impresora"} centered radius="md">
+        <Stack gap="md">
+          <TextInput
+            label="Nombre de la impresora"
+            placeholder="Ej: Cocina, Barra, Caja"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            required
+          />
+
+          <Select
+            label="Tipo de Conexión"
+            value={tipo}
+            onChange={(val) => setTipo(val as any)}
+            data={[
+              { value: 'red', label: 'Red (Ethernet/Wifi)' },
+              { value: 'usb', label: 'USB Local' },
+              { value: 'bluetooth', label: 'Bluetooth' }
+            ]}
+          />
+
+          <TextInput
+            label={tipo === 'red' ? 'Dirección IP' : tipo === 'usb' ? 'Nombre del Puerto USB' : 'Nombre/Dirección MAC Bluetooth'}
+            placeholder={tipo === 'red' ? 'Ej: 192.168.1.100' : tipo === 'usb' ? 'Ej: USB001' : 'Ej: 00:11:22:33:FF:EE'}
+            value={conexion}
+            onChange={(e) => setConexion(e.target.value)}
+            required
+          />
+
+          <Select
+            label="Ancho de Papel"
+            value={papel}
+            onChange={(val) => setPapel(val as any)}
+            data={[
+              { value: '80mm', label: '80 mm (Estándar)' },
+              { value: '58mm', label: '58 mm' }
+            ]}
+          />
+
+          <Button fullWidth color="myColor" mt="md" onClick={handleSavePrinter}>
+            {editingId ? "Guardar Cambios" : "Agregar"}
+          </Button>
+        </Stack>
       </Modal>
     </Stack>
   );

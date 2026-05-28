@@ -529,7 +529,7 @@ export default function Ordenes() {
                     ))}
                   </Table.Tbody>
                 </Table>
-                <Group justify="space-between" align="center" mt="lg" px="xl" pb="xl">
+                <Group justify="space-between" align="center" mt="lg" px="xl" pb={{ base: 140, sm: 'xl' }}>
                   <Text size="sm" c="dimmed" fw={600}>
                     Mostrando {Math.min((page - 1) * ITEMS_PER_PAGE + 1, anuladasItems.length)}-
                     {Math.min(page * ITEMS_PER_PAGE, anuladasItems.length)} de {anuladasItems.length}

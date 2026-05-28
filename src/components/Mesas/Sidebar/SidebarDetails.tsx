@@ -21,6 +21,7 @@ import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
 import { useRxClientes } from '../../../hooks/useRxClientes';
 import { useUI } from '../../../context/UIContext';
 import { initVerticalRxDb } from '../../../db/rxdb';
+import { queueKitchenPrint } from '../../../lib/printServerClient';
 
 interface SidebarDetailsProps {
   selectedMesa: Mesa;
@@ -659,6 +660,13 @@ export function SidebarDetails({
                               confirmada_at: ahora,
                               cantidades_snapshot: JSON.stringify(snapshot)
                             });
+                            queueKitchenPrint({
+                              comanda: activeComanda,
+                              items: comandaItems,
+                              mesaNombre: selectedMesa.nombre,
+                              esAdicional: false,
+                              habitacionNombre: linkedMesa?.nombre,
+                            }).catch(err => console.warn('print server offline', err));
                             sileo.success({ title: 'Orden Confirmada', description: 'La comanda fue sincronizada con las demás tablets.' });
                           } else if (hayItemsNuevos) {
                             // Hay ítems nuevos o con cantidad extra → imprimir solo el adicional
@@ -680,6 +688,13 @@ export function SidebarDetails({
                               confirmada_at: new Date().toISOString(),
                               cantidades_snapshot: JSON.stringify(nuevoSnapshot)
                             });
+                            queueKitchenPrint({
+                              comanda: activeComanda,
+                              items: itemsNuevos,
+                              mesaNombre: selectedMesa.nombre,
+                              esAdicional: true,
+                              habitacionNombre: linkedMesa?.nombre,
+                            }).catch(err => console.warn('print server offline', err));
                           } else {
                             // Sin ítems nuevos → reimprimir toda la comanda
                             const content = generarComandaCocina(

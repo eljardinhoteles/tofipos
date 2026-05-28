@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
-import { Group, Chip, Button } from '@mantine/core';
+import { Group, Button } from '@mantine/core';
 import { Plus } from '@phosphor-icons/react';
+import { FilterChips } from '../Common/FilterChips';
 
 interface MenuControlsProps {
   status: string;
@@ -14,12 +15,14 @@ export function MenuControls({ status, onStatusChange, onAddProduct, onManageCat
     <>
       {/* ── HEADER: Filtros de Menú (Chips) ────────────────────── */}
       {createPortal(
-        <Chip.Group value={status} onChange={(val) => onStatusChange(val as string)}>
-          <Group gap="xs">
-            <Chip value="activos" variant="filled" radius="xl" size="md">Activos</Chip>
-            <Chip value="desactivados" variant="filled" radius="xl" size="md">Desactivados</Chip>
-          </Group>
-        </Chip.Group>,
+        <FilterChips
+          value={status}
+          onChange={onStatusChange}
+          options={[
+            { value: 'activos', label: 'Activos' },
+            { value: 'desactivados', label: 'Desactivados' },
+          ]}
+        />,
         document.getElementById('subheader-portal') || document.body
       )}
 

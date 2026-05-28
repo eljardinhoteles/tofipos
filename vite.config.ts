@@ -36,6 +36,7 @@ export default defineConfig({
       ],
       // Workbox: estrategias de caché offline-first
       workbox: {
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // Precachea todos los assets del build
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
         // Rutas que van directo a la red (Supabase / PowerSync)

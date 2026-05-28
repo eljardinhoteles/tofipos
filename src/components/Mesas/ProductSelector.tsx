@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Box, Stack, Group, Text, TextInput, ScrollArea,
-  ActionIcon, Badge, Modal, Image, Chip,
+  ActionIcon, Badge, Modal, Image,
   Divider, Button, Center, Loader
 } from '@mantine/core';
 import { ArrowLeft, MagnifyingGlass, X, Star, Plus } from '@phosphor-icons/react';
@@ -11,6 +11,7 @@ import { sileo } from 'sileo';
 import { ProductModifiersModal } from '../Products/ProductModifiersModal';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
+import { FilterChips } from '../Common/FilterChips';
 
 interface ProductSelectorProps {
   activeComanda?: Comanda | null;
@@ -296,29 +297,16 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         py={10} 
         className="product-selector__categories"
       >
-        <ScrollArea type="never">
-          <Chip.Group
-            value={selectedCategory ?? 'Todos'}
-            onChange={(value) => setSelectedCategory(value === 'Todos' ? null : value as string)}
-          >
-            <Group gap="xs" wrap="nowrap">
-              <Chip value="Todos" variant="filled" radius="xl" size="md">
-                Todos
-              </Chip>
-              <Chip value="Favoritos" variant="filled" radius="xl" size="md">
-                <Group gap={4} wrap="nowrap">
-                  <Star size={13} weight={selectedCategory === 'Favoritos' ? 'fill' : 'bold'} />
-                  <span>Favoritos</span>
-                </Group>
-              </Chip>
-              {categories.map(cat => (
-                <Chip key={cat} value={cat} variant="filled" radius="xl" size="md">
-                  {cat}
-                </Chip>
-              ))}
-            </Group>
-          </Chip.Group>
-        </ScrollArea>
+        <FilterChips
+          value={selectedCategory ?? 'Todos'}
+          onChange={(value) => setSelectedCategory(value === 'Todos' ? null : value as string)}
+          options={[
+            { value: 'Todos', label: 'Todos' },
+            { value: 'Favoritos', label: 'Favoritos' },
+            ...categories.map(cat => ({ value: cat, label: cat })),
+          ]}
+          scrollable
+        />
       </Box>
 
       {/* ── GRID DE PRODUCTOS ──────────────────────────────────── */}

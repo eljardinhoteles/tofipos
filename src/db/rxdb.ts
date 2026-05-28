@@ -6,6 +6,26 @@ import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
 import { replicateSupabase } from 'rxdb/plugins/replication-supabase'
 import { supabase } from '../lib/supabase'
 
+function withSuppressedDexieWarning<T>(run: () => Promise<T>): Promise<T> {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    const first = args[0];
+    const message = typeof first === 'string' ? first : '';
+    const isDexieRxdbWarning =
+      message.includes('RxDB Open Core RxStorage') ||
+      message.includes('free Dexie.js based RxStorage implementation') ||
+      message.includes('rxdb-premium/plugins/shared');
+
+    if (!isDexieRxdbWarning) {
+      originalWarn(...args);
+    }
+  };
+
+  return run().finally(() => {
+    console.warn = originalWarn;
+  });
+}
+
 addRxPlugin(RxDBUpdatePlugin)
 addRxPlugin(RxDBLeaderElectionPlugin)
 addRxPlugin(RxDBMigrationSchemaPlugin)
@@ -691,11 +711,11 @@ function itemChangeSummary(before: any, patch: Partial<RxComandaItem>) {
 
 // Bump de nombre para cortar compatibilidad con el esquema anterior y arrancar limpio.
 export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
-  const db = await createRxDatabase({
+  const db = await withSuppressedDexieWarning(() => createRxDatabase({
     name,
     storage: getRxStorageDexie(),
     multiInstance: true
-  })
+  }))
 
   const collectionsConfig: Record<string, any> = {
     clientes: { schema: clienteSchema },
@@ -888,7 +908,6 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
   const patchPush = (state: any, handler: ReturnType<typeof makePushHandler>) => {
     if (state?.push) {
       state.push.handler = handler
-      console.log('[RxDB] push handler patched for', state.replicationIdentifier)
     }
     return state
   }

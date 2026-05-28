@@ -2,14 +2,14 @@ import { useEffect, useState, useRef } from 'react';
 import {
   Box, Stack, Group, Text, Button, ActionIcon,
   Badge, ScrollArea, Divider, ThemeIcon, NumberInput, Paper,
-  SimpleGrid, UnstyledButton
+  SimpleGrid, UnstyledButton, Modal, Image
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import {
   CalendarBlank, Clock, Users, MapPin, ArrowLeft,
   Money, Note, HandCoins, PencilSimple,
   CreditCard, Bank, Calculator, X, ArrowUpRight, CheckCircle,
-  Basket, Minus, Plus, Trash, ListPlus, Printer
+  Basket, Minus, Plus, Trash, ListPlus, Printer, ShareNetwork, DownloadSimple
 } from '@phosphor-icons/react';
 import { type Reserva } from '../../../db/database';
 import { sileo } from 'sileo';
@@ -24,7 +24,7 @@ import { calcularTotalesComanda } from '../../../lib/taxUtils';
 import { useRxClientes } from '../../../hooks/useRxClientes';
 import { initVerticalRxDb, updateRxReserva, updateRxComanda, createRxPago, updateRxComandaItem } from '../../../db/rxdb';
 import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { ReservaWhatsAppCard } from './ReservaWhatsAppCard';
 import { generarComandaCocina } from '../../../services/printTemplateEngine';
 import { TicketPreviewModal } from '../../Common/TicketPreviewModal';
@@ -64,6 +64,12 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
   const [view, setView] = useState<'detalles' | 'pagos'>('detalles');
   const [editClienteModal, setEditClienteModal] = useState(false);
   const [isAddPressed, setIsAddPressed] = useState(false);
+
+  // Modal preview imagen WhatsApp
+  const [waPreviewOpened, setWaPreviewOpened] = useState(false);
+  const [waPreviewUrl, setWaPreviewUrl] = useState<string | null>(null);
+  const [waPreviewBlob, setWaPreviewBlob] = useState<Blob | null>(null);
+  const [waPreviewFileName, setWaPreviewFileName] = useState('');
   
   const { setReservaView, openConfirm, openAssignModal, reservaProductosComandaId, setReservaProductosComandaId } = useUI();
 
@@ -100,59 +106,96 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
 
   const handleShareWhatsApp = async () => {
     if (!reserva || !whatsappCardRef.current) return;
+    sileo.info({ title: 'Generando...', description: 'Por favor espera un momento...' });
     try {
-      const canvas = await html2canvas(whatsappCardRef.current, {
-        backgroundColor: '#f8f9fa',
-        scale: 2,
-        logging: false,
+      const el = whatsappCardRef.current;
+      const dataUrl = await toPng(el, {
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        width: el.offsetWidth,
+        height: el.scrollHeight,
       });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          sileo.error({ title: 'Error', description: 'No se pudo generar la imagen' });
-          return;
-        }
 
-        // Descargar la imagen
-        const fileName = `reserva-${reserva.folio || codigoReserva || reserva.id.substring(0, 6)}.png`;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      // Convertir dataURL a Blob
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const fileName = `reserva-${reserva.folio || codigoReserva || reserva.id.substring(0, 6)}.png`;
+      const url = URL.createObjectURL(blob);
 
-        // Copiar al portapapeles
-        try {
-          if (navigator.clipboard && window.ClipboardItem) {
-            await navigator.clipboard.write([
-              new ClipboardItem({
-                'image/png': blob
-              })
-            ]);
-            sileo.success({ 
-              title: 'Listo', 
-              description: 'Imagen descargada y copiada al portapapeles.' 
-            });
-          } else {
-            sileo.success({ 
-              title: 'Descargado', 
-              description: 'Imagen descargada (portapapeles no soportado).' 
-            });
-          }
-        } catch (copyErr) {
-          console.error(copyErr);
-          sileo.success({ 
-            title: 'Descargado', 
-            description: 'Imagen descargada.' 
-          });
-        }
-      }, 'image/png');
+      setWaPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+      setWaPreviewBlob(blob);
+      setWaPreviewFileName(fileName);
+      setWaPreviewOpened(true);
     } catch (err) {
       console.error(err);
       sileo.error({ title: 'Error', description: 'No se pudo generar la imagen' });
+    }
+  };
+
+  const handleWaShare = async () => {
+    if (!waPreviewBlob || !waPreviewFileName || !reserva) return;
+    const file = new File([waPreviewBlob], waPreviewFileName, { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: `Reserva ${reserva.nombre}`,
+          text: `Aquí tienes los detalles de tu reserva confirmada.`,
+        });
+      } catch (shareErr) {
+        console.warn('Share cancelado', shareErr);
+      }
+    } else {
+      triggerDownloadAndCopy(waPreviewBlob, waPreviewFileName);
+    }
+  };
+
+  const handleWaDownload = () => {
+    if (!waPreviewUrl || !waPreviewFileName) return;
+    const a = document.createElement('a');
+    a.href = waPreviewUrl;
+    a.download = waPreviewFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    sileo.success({ title: 'Descargado', description: 'Imagen guardada en tu dispositivo.' });
+  };
+
+  const triggerDownloadAndCopy = async (blob: Blob, fileName: string) => {
+    // Descargar
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Copiar
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': blob
+          })
+        ]);
+        sileo.success({ 
+          title: 'Listo', 
+          description: 'Imagen descargada y copiada al portapapeles. Ya puedes pegarla en WhatsApp.' 
+        });
+      } else {
+        sileo.success({ 
+          title: 'Descargado', 
+          description: 'Imagen descargada (portapapeles no soportado).' 
+        });
+      }
+    } catch (copyErr) {
+      console.error(copyErr);
+      sileo.success({ 
+        title: 'Descargado', 
+        description: 'Imagen descargada.' 
+      });
     }
   };
 
@@ -921,6 +964,68 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
         title={previewTitle}
         content={previewContent}
       />
+
+      {/* ── Modal Preview WhatsApp ── */}
+      <Modal
+        opened={waPreviewOpened}
+        onClose={() => setWaPreviewOpened(false)}
+        title={
+          <Text fw={800} size="sm">Vista previa · Reserva de {reserva?.nombre}</Text>
+        }
+        size="sm"
+        centered
+        radius="lg"
+        padding="md"
+        zIndex={10000}
+        withinPortal
+      >
+        <Stack gap="md">
+          {waPreviewUrl && (
+            <Image
+              src={waPreviewUrl}
+              radius="md"
+              style={{ border: '1px solid var(--mantine-color-gray-2)', width: '100%' }}
+              alt="Preview tarjeta reserva"
+            />
+          )}
+          <Group grow gap="xs">
+            {/* Compartir nativo (principalmente móvil) */}
+            {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+              <Button
+                variant="filled"
+                color="green"
+                radius="md"
+                fw={700}
+                onClick={handleWaShare}
+                leftSection={<ShareNetwork size={16} weight="bold" />}
+              >
+                Compartir
+              </Button>
+            )}
+            {/* Descargar */}
+            <Button
+              variant="light"
+              color="blue"
+              radius="md"
+              fw={700}
+              onClick={handleWaDownload}
+              leftSection={<DownloadSimple size={16} weight="bold" />}
+            >
+              Descargar
+            </Button>
+          </Group>
+          <Button
+            variant="subtle"
+            color="gray"
+            radius="md"
+            size="sm"
+            onClick={() => setWaPreviewOpened(false)}
+          >
+            Cerrar
+          </Button>
+        </Stack>
+      </Modal>
+
     </Box>
   );
 }

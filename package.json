@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "print-server:run": "cargo run --manifest-path print-server/Cargo.toml"
   },
   "dependencies": {
     "@mantine/charts": "^8.3.18",
@@ -17,11 +18,14 @@
     "@mantine/hooks": "^8.3.18",
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.95.1",
+    "@types/d3": "^7.4.3",
     "@use-gesture/react": "^10.3.1",
+    "d3": "^7.9.0",
     "dayjs": "^1.11.20",
     "dexie": "^4.4.2",
     "dexie-react-hooks": "^4.4.0",
     "gsap": "^3.15.0",
+    "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

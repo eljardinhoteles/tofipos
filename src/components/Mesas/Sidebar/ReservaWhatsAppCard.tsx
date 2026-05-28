@@ -1,6 +1,4 @@
 import { forwardRef } from 'react';
-import { Box, Paper, Text, Group, Stack, ThemeIcon, Divider } from '@mantine/core';
-import { CalendarBlank, Clock, Users, MapPin, Receipt } from '@phosphor-icons/react';
 import { type Reserva } from '../../../db/database';
 
 interface ReservaWhatsAppCardProps {
@@ -15,131 +13,265 @@ interface ReservaWhatsAppCardProps {
 export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCardProps>(
   ({ reserva, zonaNombre, comandaItems, totalMonto, totalAbonado = 0, codigoReserva = '' }, ref) => {
     const showBilling = comandaItems.length > 0 || totalAbonado > 0;
+    const pendiente = Math.max(0, totalMonto - totalAbonado);
 
     return (
-      <Box
+      <div
+        aria-hidden="true"
         style={{
           position: 'absolute',
           left: '-9999px',
-          top: '-9999px',
-          width: 400, // Anchura fija para generar una imagen constante
-          backgroundColor: '#f8f9fa',
-          padding: 20,
+          top: '0',
+          width: '400px',
+          minWidth: '400px',
+          maxWidth: '400px',
+          height: 'auto',
+          overflow: 'visible',
+          pointerEvents: 'none',
+          zIndex: -9999,
+          boxSizing: 'border-box',
         }}
       >
-        <Paper ref={ref} radius="lg" p="md" style={{ backgroundColor: 'white', border: '1px solid #e9ecef', overflow: 'hidden' }}>
-          {/* Header */}
-          <Group justify="space-between" align="center" mb="xs">
-            <Stack gap={0}>
-              <Text fw={900} size="sm" style={{ letterSpacing: '0.5px' }} c="var(--ui-primary, blue.7)">
-                RESERVA CONFIRMADA {codigoReserva ? ` - ${codigoReserva}` : ''}
-              </Text>
-              <Text size="10px" fw={700} c="dimmed">
-                {localStorage.getItem('pos_org_name_cached') || 'Restaurante El Jardín'}
-              </Text>
-            </Stack>
-            <ThemeIcon size={32} radius="md" color="dark">
-              <CalendarBlank size={16} weight="bold" />
-            </ThemeIcon>
-          </Group>
+        {/* Estilos inyectados */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          .wa-card-container, .wa-card-container * {
+            box-sizing: border-box !important;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          }
+          .wa-card-container table {
+            display: table !important;
+            width: 100% !important;
+            border-collapse: collapse !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .wa-card-container tr {
+            display: table-row !important;
+            border: none !important;
+            background: none !important;
+          }
+          .wa-card-container td {
+            display: table-cell !important;
+            border: none !important;
+            background: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .wa-card-container td.wa-half {
+            width: 50% !important;
+          }
+          .wa-card-container td.wa-icon-cell {
+            width: 18px !important;
+            padding-right: 6px !important;
+            font-size: 11px !important;
+            line-height: 1 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+          }
+          .wa-emoji {
+            font-size: 11px !important;
+            line-height: 1 !important;
+            display: inline-block !important;
+          }
+        `}} />
 
-          <Divider variant="dashed" mb="xs" />
+        <div
+          ref={ref}
+          className="wa-card-container"
+          style={{
+            backgroundColor: 'white',
+            border: '1px solid #dee2e6',
+            borderRadius: '12px',
+            padding: '18px',
+            overflow: 'hidden',
+            width: '360px',
+            minWidth: '360px',
+            maxWidth: '360px',
+            boxSizing: 'border-box',
+          }}
+        >
 
-          {/* Datos del Cliente */}
-          <Box mb="md">
-            <Text fw={800} size="md" mb={2}>{reserva.nombre || 'Sin nombre'}</Text>
+          {/* ── Header ── */}
+          <table>
+            <tbody>
+              <tr>
+                <td style={{ verticalAlign: 'middle', textAlign: 'left' }}>
+                  <div style={{ fontWeight: 900, fontSize: '13px', letterSpacing: '0.6px', color: '#1c7ed6', lineHeight: '1.2' }}>
+                    ✅ RESERVA CONFIRMADA{codigoReserva ? ` · ${codigoReserva}` : ''}
+                  </div>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#adb5bd', marginTop: '3px', letterSpacing: '0.3px' }}>
+                    {localStorage.getItem('pos_org_name_cached') || 'Restaurante El Jardín'}
+                  </div>
+                </td>
+                <td style={{ width: '28px', textAlign: 'right', verticalAlign: 'middle' }}>
+                  <span className="wa-emoji" style={{ fontSize: '16px' }}>🍽️</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr style={{ border: 'none', borderTop: '1px dashed #dee2e6', margin: '10px 0' }} />
+
+          {/* ── Cliente ── */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ fontWeight: 800, fontSize: '15px', color: '#212529', marginBottom: '1px' }}>
+              {reserva.nombre || 'Sin nombre'}
+            </div>
             {reserva.telefono && (
-              <Text size="xs" c="dimmed" mb={4}>Tel: {reserva.telefono}</Text>
+              <div style={{ fontSize: '11px', color: '#868e96' }}>
+                📞 {reserva.telefono}
+              </div>
             )}
+          </div>
 
-            <Group gap="sm" mt="xs">
-              <Group gap={6}>
-                <CalendarBlank size={14} weight="bold" color="var(--mantine-color-blue-6)" />
-                <Text size="xs" fw={600}>{reserva.fecha}</Text>
-              </Group>
-              <Text c="dimmed" size="xs">·</Text>
-              <Group gap={6}>
-                <Clock size={14} weight="bold" color="var(--mantine-color-orange-6)" />
-                <Text size="xs" fw={600}>{reserva.hora}</Text>
-              </Group>
-            </Group>
+          {/* ── Info 2x2 ── */}
+          <table style={{ marginBottom: '4px' }}>
+            <tbody>
+              <tr>
+                {/* Fecha */}
+                <td className="wa-half" style={{ padding: '3px 0', verticalAlign: 'middle' }}>
+                  <table><tbody><tr>
+                    <td className="wa-icon-cell"><span className="wa-emoji">📅</span></td>
+                    <td style={{ fontSize: '11px', fontWeight: 600, color: '#495057', verticalAlign: 'middle' }}>
+                      {reserva.fecha}
+                    </td>
+                  </tr></tbody></table>
+                </td>
+                {/* Hora */}
+                <td className="wa-half" style={{ padding: '3px 0', verticalAlign: 'middle' }}>
+                  <table><tbody><tr>
+                    <td className="wa-icon-cell"><span className="wa-emoji">⏰</span></td>
+                    <td style={{ fontSize: '11px', fontWeight: 600, color: '#495057', verticalAlign: 'middle' }}>
+                      {reserva.hora}
+                    </td>
+                  </tr></tbody></table>
+                </td>
+              </tr>
+              <tr>
+                {/* Personas */}
+                <td className="wa-half" style={{ padding: '3px 0', verticalAlign: 'middle' }}>
+                  <table><tbody><tr>
+                    <td className="wa-icon-cell"><span className="wa-emoji">👥</span></td>
+                    <td style={{ fontSize: '11px', fontWeight: 600, color: '#495057', verticalAlign: 'middle' }}>
+                      {reserva.personas} personas
+                    </td>
+                  </tr></tbody></table>
+                </td>
+                {/* Zona */}
+                <td className="wa-half" style={{ padding: '3px 0', verticalAlign: 'middle' }}>
+                  <table><tbody><tr>
+                    <td className="wa-icon-cell"><span className="wa-emoji">📍</span></td>
+                    <td style={{ fontSize: '11px', fontWeight: 600, color: '#495057', verticalAlign: 'middle' }}>
+                      {zonaNombre || 'Sin zona'}
+                    </td>
+                  </tr></tbody></table>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
-            <Group gap="sm" mt={4}>
-              <Group gap={6}>
-                <Users size={14} weight="bold" color="var(--mantine-color-green-6)" />
-                <Text size="xs" fw={600}>{reserva.personas} personas</Text>
-              </Group>
-              <Text c="dimmed" size="xs">·</Text>
-              <Group gap={6}>
-                <MapPin size={14} weight="bold" color="var(--mantine-color-red-6)" />
-                <Text size="xs" fw={600}>{zonaNombre || 'Sin zona asignada'}</Text>
-              </Group>
-            </Group>
-          </Box>
+          {/* Nota */}
+          {reserva.nota && (
+            <div style={{ marginTop: '6px', fontSize: '10px', color: '#868e96', fontStyle: 'italic', lineHeight: '1.4' }}>
+              💬 {reserva.nota}
+            </div>
+          )}
 
-          {/* Pedido / Cuenta */}
+          {/* ── Pedido / Cuenta ── */}
           {showBilling && (
             <>
-              <Divider variant="dashed" mb="sm" />
-              <Box>
-                {comandaItems.length > 0 && (
-                  <>
-                    <Group gap="xs" mb="md">
-                      <Receipt size={18} weight="bold" color="gray" />
-                      <Text size="sm" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>Pedido Anticipado</Text>
-                    </Group>
-                    
-                    <Stack gap="xs" mb="md">
-                      {comandaItems.map((item, idx) => (
-                        <Group key={idx} justify="space-between" align="flex-start" wrap="nowrap">
-                          <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
-                            <Text fw={800} size="sm" c="dimmed">{item.cantidad}x</Text>
-                            <Text fw={600} size="sm" style={{ flex: 1 }}>{item.nombre}</Text>
-                          </Group>
-                          <Text fw={700} size="sm">
-                            ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </Text>
-                        </Group>
-                      ))}
-                    </Stack>
-                  </>
-                )}
-                
-                <Group justify="space-between" mt="lg" pt="sm" style={{ borderTop: '2px solid #f1f3f5' }}>
-                  <Text fw={700} size="sm">TOTAL</Text>
-                  <Text fw={900} size={totalAbonado > 0 ? 'md' : 'xl'} c={totalAbonado > 0 ? 'dark' : 'green.8'}>
-                    ${totalMonto.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </Text>
-                </Group>
+              <hr style={{ border: 'none', borderTop: '1px dashed #dee2e6', margin: '12px 0' }} />
 
-                {totalAbonado > 0 && (
-                  <>
-                    <Group justify="space-between" mt="xs">
-                      <Text fw={700} size="sm" c="green.7">ABONADO</Text>
-                      <Text fw={900} size="md" c="green.7">
-                        -${totalAbonado.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </Text>
-                    </Group>
-                    <Group justify="space-between" mt="xs" pt="xs" style={{ borderTop: '1px solid #f1f3f5' }}>
-                      <Text fw={800} size="sm" c="orange.9">PENDIENTE</Text>
-                      <Text fw={900} size="xl" c="orange.9">
-                        ${Math.max(0, totalMonto - totalAbonado).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </Text>
-                    </Group>
-                  </>
-                )}
-              </Box>
+              {comandaItems.length > 0 && (
+                <>
+                  {/* Título pedido */}
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#868e96', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                    🧾 Pedido Anticipado
+                  </div>
+
+                  {/* Items */}
+                  <table style={{ marginBottom: '10px' }}>
+                    <tbody>
+                      {comandaItems.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '2px 0', fontSize: '11px', verticalAlign: 'top', textAlign: 'left' }}>
+                            <span style={{ fontWeight: 800, color: '#adb5bd', marginRight: '5px' }}>{item.cantidad}×</span>
+                            <span style={{ fontWeight: 600, color: '#495057' }}>{item.nombre}</span>
+                          </td>
+                          <td style={{ padding: '2px 0', fontSize: '11px', fontWeight: 700, color: '#343a40', textAlign: 'right', verticalAlign: 'top', width: '72px', whiteSpace: 'nowrap' }}>
+                            ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* ── Totales ── */}
+              <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '10px 12px', marginTop: '4px' }}>
+                <table>
+                  <tbody>
+                    {/* Total */}
+                    <tr>
+                      <td style={{ fontSize: '11px', fontWeight: 700, color: '#495057', paddingBottom: totalAbonado > 0 ? '6px' : '0' }}>
+                        Total
+                      </td>
+                      <td style={{ fontSize: totalAbonado > 0 ? '13px' : '16px', fontWeight: 900, color: totalAbonado > 0 ? '#495057' : '#2b8a3e', textAlign: 'right', paddingBottom: totalAbonado > 0 ? '6px' : '0' }}>
+                        ${totalMonto.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+
+                    {totalAbonado > 0 && (
+                      <>
+                        {/* Separador */}
+                        <tr>
+                          <td colSpan={2} style={{ paddingBottom: '6px' }}>
+                            <div style={{ borderTop: '1px solid #dee2e6', marginTop: '0' }} />
+                          </td>
+                        </tr>
+                        {/* Abonado */}
+                        <tr>
+                          <td style={{ fontSize: '11px', fontWeight: 700, color: '#2b8a3e', paddingBottom: '6px' }}>
+                            ✅ Abonado
+                          </td>
+                          <td style={{ fontSize: '13px', fontWeight: 800, color: '#2b8a3e', textAlign: 'right', paddingBottom: '6px' }}>
+                            −${totalAbonado.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                        {/* Separador */}
+                        <tr>
+                          <td colSpan={2} style={{ paddingBottom: '6px' }}>
+                            <div style={{ borderTop: '2px solid #dee2e6', marginTop: '0' }} />
+                          </td>
+                        </tr>
+                        {/* Pendiente */}
+                        <tr>
+                          <td style={{ fontSize: '12px', fontWeight: 800, color: '#e8590c' }}>
+                            Saldo Pendiente
+                          </td>
+                          <td style={{ fontSize: '17px', fontWeight: 900, color: '#e8590c', textAlign: 'right' }}>
+                            ${pendiente.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
 
-          {/* Footer */}
-          <Box mt={32}>
-            <Text size="xs" c="dimmed" ta="center" style={{ fontStyle: 'italic' }}>
-              ¡Te esperamos! Agradecemos tu puntualidad (espera máxima de 15 minutos).
-            </Text>
-          </Box>
-        </Paper>
-      </Box>
+          {/* ── Footer ── */}
+          <div style={{ marginTop: '16px', textAlign: 'center', paddingTop: '10px', borderTop: '1px solid #f1f3f5' }}>
+            <span style={{ fontSize: '9px', color: '#adb5bd', fontStyle: 'italic', letterSpacing: '0.2px' }}>
+              ¡Te esperamos! · Espera máxima de 15 minutos · Gracias por tu preferencia
+            </span>
+          </div>
+
+        </div>
+      </div>
     );
   }
 );

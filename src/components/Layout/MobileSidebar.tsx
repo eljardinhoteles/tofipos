@@ -23,6 +23,7 @@ import {
   ShoppingCartSimple,
   List,
   DownloadSimple,
+  ChartBar,
 } from '@phosphor-icons/react';
 import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { useUI } from '../../context/UIContext';
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { label: 'Reservas', to: '/reservas', icon: CalendarCheck, desc: 'Agenda de reservas' },
   { label: 'Clientes', to: '/clientes', icon: Users,         desc: 'Base de clientes' },
   { label: 'Productos', to: '/menu',    icon: Bag,           desc: 'Carta y precios' },
+  { label: 'Métricas',  to: '/metricas', icon: ChartBar,      desc: 'Análisis de ventas y rendimiento' },
   { label: 'Ajustes',  to: '/ajustes',  icon: Gear,         desc: 'Configuración del sistema' },
 ];
 

@@ -2,7 +2,6 @@ import { createPortal } from 'react-dom';
 import { 
   Group, 
   Button, 
-  Chip 
 } from '@mantine/core';
 import { 
   Gear, 
@@ -10,6 +9,7 @@ import {
 } from '@phosphor-icons/react';
 import { useAuth } from '../../context/AuthContext';
 import { useMediaQuery } from '@mantine/hooks';
+import { FilterChips } from '../Common/FilterChips';
 
 interface MesasControlsProps {
   availablePisos: string[];
@@ -46,15 +46,12 @@ export function MesasControls({
     <>
       {/* ── HEADER: Selector de Pisos como Chips ────────────────── */}
       {!hideChips && createPortal(
-        <Chip.Group value={selectedPiso} onChange={(val) => onPisoChange(val as string)}>
-          <Group gap="xs">
-            {availablePisos.map((piso) => (
-              <Chip key={piso} value={piso} variant="filled" radius="xl" size="md">
-                {piso}
-              </Chip>
-            ))}
-          </Group>
-        </Chip.Group>,
+        <FilterChips
+          value={selectedPiso}
+          onChange={onPisoChange}
+          options={availablePisos.map((piso) => ({ value: piso, label: piso }))}
+          scrollable
+        />,
         subheaderPortal || document.body
       )}
 

@@ -102,6 +102,7 @@ import { AuthProvider } from './context/AuthContext';
 import './index.css';
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
+import '@mantine/charts/styles.css';
 import { diagnoseSyncState } from './db/rxdb';
 import { registerSW } from 'virtual:pwa-register';
 

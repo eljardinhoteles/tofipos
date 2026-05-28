@@ -11,7 +11,6 @@ import {
   ScrollArea,
   Tooltip,
   Badge,
-  Chip,
 } from '@mantine/core';
 import { useRxMenuCatalog } from '../hooks/useRxMenuCatalog';
 import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour } from '@phosphor-icons/react';
@@ -22,6 +21,7 @@ import { useMemo, useState } from 'react';
 import { POSCard } from '../components/Common/POSCard';
 import { useIvaActivo } from '../hooks/useIvaActivo';
 import { PageHeader } from '../components/Common/PageHeader';
+import { FilterChips } from '../components/Common/FilterChips';
 import { createRxCategoria, updateRxCategoria } from '../db/rxdb';
 
 export default function Menu() {
@@ -120,21 +120,17 @@ export default function Menu() {
 
           <Box style={{ width: 1, height: 24, backgroundColor: 'var(--pos-border)', flexShrink: 0 }} />
 
-          <Chip.Group
-            value={selectedCategory}
-            onChange={(value) => setSelectedCategory(value as string)}
-          >
-            <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 'max-content' }}>
-              <Chip value="all" variant="filled" radius="xl" size="md">
-                Todos
-              </Chip>
-              {safeDbCategorias.map(cat => (
-                <Chip key={cat.id} value={cat.nombre} variant="filled" radius="xl" size="md">
-                  {cat.nombre}
-                </Chip>
-              ))}
-            </Group>
-          </Chip.Group>
+          <Box style={{ flex: 1, minWidth: 0 }}>
+            <FilterChips
+              value={selectedCategory}
+              onChange={(value) => setSelectedCategory(value as string)}
+              options={[
+                { value: 'all', label: 'Todos' },
+                ...safeDbCategorias.map(cat => ({ value: cat.nombre, label: cat.nombre })),
+              ]}
+              scrollable
+            />
+          </Box>
 
           <Box style={{ width: 1, height: 24, backgroundColor: 'var(--pos-border)', flexShrink: 0 }} />
         </Group>

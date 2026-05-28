@@ -1,7 +1,8 @@
-import { Chip, Container, ScrollArea, Stack, Box, Group, Paper, Text } from '@mantine/core';
+import { Container, ScrollArea, Stack, Box, Paper, Text } from '@mantine/core';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { PageHeader } from '../../components/Common/PageHeader';
+import { FilterChips } from '../../components/Common/FilterChips';
 import AjustesOrganizacion from './AjustesOrganizacion';
 import AjustesImpresion from './AjustesImpresion';
 import AjustesAuditoria from './AjustesAuditoria';
@@ -32,15 +33,18 @@ export default function Ajustes() {
     <ScrollArea h="100%" offsetScrollbars>
       <PageHeader px="lg" height={56} style={{ position: 'sticky', top: 0 }}>
         <Box className="header-scroll-x hide-scrollbar" style={{ width: '100%', minWidth: 0 }}>
-              <Chip.Group value={activeSection} onChange={(val) => goToSection(val as any)}>
-                <Group wrap="nowrap" gap="xs" style={{ minWidth: 'max-content' }}>
-                  <Chip value="organizacion" variant="filled" radius="xl" size="md">Organización</Chip>
-                  <Chip value="impresion" variant="filled" radius="xl" size="md">Impresión</Chip>
-                  <Chip value="auditoria" variant="filled" radius="xl" size="md">Auditoría</Chip>
-                  <Chip value="iva" variant="filled" radius="xl" size="md">IVA</Chip>
-                  <Chip value="mantenimiento" variant="filled" radius="xl" size="md">Mantenimiento</Chip>
-                </Group>
-          </Chip.Group>
+          <FilterChips
+            value={activeSection}
+            onChange={(val) => goToSection(val as any)}
+            options={[
+              { value: 'organizacion', label: 'Organización' },
+              { value: 'impresion', label: 'Impresión' },
+              { value: 'auditoria', label: 'Auditoría' },
+              { value: 'iva', label: 'IVA' },
+              { value: 'mantenimiento', label: 'Mantenimiento' },
+            ]}
+            scrollable
+          />
         </Box>
       </PageHeader>
 

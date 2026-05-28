@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
-import { Chip, Group, Button } from '@mantine/core';
+import { Button } from '@mantine/core';
 import { Plus } from '@phosphor-icons/react';
+import { FilterChips } from '../Common/FilterChips';
 
 type DateFilter = 'todas' | 'hoy' | 'manana' | 'semana';
 
@@ -14,14 +15,17 @@ export function ReservasControls({ filter, onFilterChange, onNewReserva }: Reser
   return (
     <>
       {createPortal(
-        <Chip.Group value={filter} onChange={v => onFilterChange(v as DateFilter)}>
-          <Group gap="xs">
-            <Chip value="todas"  variant="filled" radius="xl" size="md">Todas</Chip>
-            <Chip value="hoy"    variant="filled" radius="xl" size="md">Hoy</Chip>
-            <Chip value="manana" variant="filled" radius="xl" size="md">Mañana</Chip>
-            <Chip value="semana" variant="filled" radius="xl" size="md">Próximos 7 días</Chip>
-          </Group>
-        </Chip.Group>,
+        <FilterChips
+          value={filter}
+          onChange={v => onFilterChange(v as DateFilter)}
+          options={[
+            { value: 'todas', label: 'Todas' },
+            { value: 'hoy', label: 'Hoy' },
+            { value: 'manana', label: 'Mañana' },
+            { value: 'semana', label: 'Próximos 7 días' },
+          ]}
+          scrollable
+        />,
         document.getElementById('subheader-portal') || document.body
       )}
 

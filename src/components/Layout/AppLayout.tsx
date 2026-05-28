@@ -19,6 +19,7 @@ import Menu from '../../pages/Menu';
 import Reservas from '../../pages/Reservas';
 import Clientes from '../../pages/Clientes';
 import Ajustes from '../../pages/Ajustes';
+import Metricas from '../../pages/Metricas';
 
 export function AppLayout() {
   const theme = useMantineTheme();
@@ -116,14 +117,15 @@ export function AppLayout() {
       {/* Barra de navegación inferior móvil */}
       {isMobile && <MobileSidebar />}
 
-      <AppShell.Main bg="var(--pos-bg)" style={{ height: '100%' }}>
-        <Box style={{ height: '100%', overflow: 'hidden', position: 'relative' }}>
-          <Box style={{ display: currentPath === '/ordenes' ? 'block' : 'none', height: '100%' }}><Ordenes /></Box>
-          <Box style={{ display: currentPath === '/mesas' ? 'block' : 'none', height: '100%' }}><Mesas /></Box>
-          <Box style={{ display: currentPath === '/reservas' ? 'block' : 'none', height: '100%' }}><Reservas /></Box>
-          <Box style={{ display: currentPath === '/menu' ? 'block' : 'none', height: '100%' }}><Menu /></Box>
-          <Box style={{ display: currentPath === '/clientes' ? 'block' : 'none', height: '100%' }}><Clientes /></Box>
-          <Box style={{ display: currentPath.startsWith('/ajustes') ? 'block' : 'none', height: '100%' }}><Ajustes /></Box>
+      <AppShell.Main bg="var(--pos-bg)" style={{ height: '100%', minWidth: 0 }}>
+        <Box style={{ height: '100%', width: '100%', minWidth: 0, overflow: 'hidden', position: 'relative' }}>
+          {currentPath === '/ordenes' && <Box style={{ height: '100%' }}><Ordenes /></Box>}
+          {currentPath === '/mesas' && <Box style={{ height: '100%' }}><Mesas /></Box>}
+          {currentPath === '/reservas' && <Box style={{ height: '100%' }}><Reservas /></Box>}
+          {currentPath === '/menu' && <Box style={{ height: '100%' }}><Menu /></Box>}
+          {currentPath === '/clientes' && <Box style={{ height: '100%' }}><Clientes /></Box>}
+          {currentPath.startsWith('/ajustes') && <Box style={{ height: '100%' }}><Ajustes /></Box>}
+          {currentPath === '/metricas' && <Box style={{ height: '100%' }}><Metricas /></Box>}
 
         </Box>
       </AppShell.Main>

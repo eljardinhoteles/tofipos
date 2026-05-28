@@ -71,3 +71,11 @@ export default defineConfig([
   },
 ])
 ```
+## Local Print Server
+
+This repo includes a Rust print server at `print-server/`.
+
+- Run it with `cargo run --manifest-path print-server/Cargo.toml`
+- Default endpoint: `http://127.0.0.1:18181`
+- Configure the active printer from `Ajustes > Impresión`
+- The server keeps a local job queue on disk and exposes health/config endpoints

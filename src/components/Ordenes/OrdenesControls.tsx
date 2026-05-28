@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { Group, Chip } from '@mantine/core';
+import { FilterChips } from '../Common/FilterChips';
 
 interface OrdenesControlsProps {
   status: string;
@@ -11,14 +11,16 @@ export function OrdenesControls({ status, onStatusChange }: OrdenesControlsProps
     <>
       {/* ── HEADER: Filtros de Estado como Chips ────────────────── */}
       {createPortal(
-        <Chip.Group value={status} onChange={(val) => onStatusChange(val as string)}>
-          <Group gap="xs">
-            <Chip value="activas" variant="filled" radius="xl" size="md">todas</Chip>
-            <Chip value="en_cocina" variant="filled" radius="xl" size="md">en cocina</Chip>
-            <Chip value="listo" variant="filled" radius="xl" size="md">listas</Chip>
-            <Chip value="facturadas" variant="filled" radius="xl" size="md">facturadas</Chip>
-          </Group>
-        </Chip.Group>,
+        <FilterChips
+          value={status}
+          onChange={onStatusChange}
+          options={[
+            { value: 'activas', label: 'todas' },
+            { value: 'en_cocina', label: 'en cocina' },
+            { value: 'listo', label: 'listas' },
+            { value: 'facturadas', label: 'facturadas' },
+          ]}
+        />,
         document.getElementById('subheader-portal') || document.body
       )}
     </>

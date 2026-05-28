@@ -21,6 +21,7 @@ import {
   User,
   SignOut,
   ArrowsClockwise,
+  ChartBar,
 } from '@phosphor-icons/react';
 
 const navItems = [
@@ -29,6 +30,7 @@ const navItems = [
   { label: 'Reservas', to: '/reservas', icon: CalendarCheck },
   { label: 'Clientes', to: '/clientes', icon: Users },
   { label: 'Productos',to: '/menu',     icon: Bag },
+  { label: 'Métricas', to: '/metricas', icon: ChartBar },
   { label: 'Ajustes',  to: '/ajustes',  icon: Gear },
 ];
 

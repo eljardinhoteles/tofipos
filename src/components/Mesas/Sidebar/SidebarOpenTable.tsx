@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
-import { Box, Stack, Text, Group, ActionIcon, Autocomplete, Button, UnstyledButton, SegmentedControl, SimpleGrid } from '@mantine/core';
+import { Box, Stack, Text, Group, ActionIcon, Autocomplete, Button, Chip, SegmentedControl, SimpleGrid } from '@mantine/core';
 import { X, Users, UserPlus, Minus, Plus, PushPin, Bed } from '@phosphor-icons/react';
 import type { Mesa } from '../../../db/database';
 import { useRxClientes } from '../../../hooks/useRxClientes';
@@ -290,21 +290,15 @@ export function SidebarOpenTable({
               </Group>
             </Group>
 
-            <SimpleGrid cols={6} spacing={6}>
-              {[1, 2, 3, 4, 5, 6].map(n => (
-                <UnstyledButton
-                  key={n}
-                  onClick={() => setGuestCount(n)}
-                  className={`tap guest-count-chip ${guestCount === n ? 'guest-count-chip--active' : ''}`}
-                  style={{
-                    backgroundColor: guestCount === n ? 'var(--ui-primary)' : 'var(--pos-bg)',
-                    color: guestCount === n ? 'white' : 'var(--pos-text)',
-                  }}
-                >
-                  {n}
-                </UnstyledButton>
-              ))}
-            </SimpleGrid>
+            <Chip.Group value={String(guestCount)} onChange={(val) => setGuestCount(Number(val))}>
+              <SimpleGrid cols={6} spacing={6}>
+                {[1, 2, 3, 4, 5, 6].map(n => (
+                  <Chip key={n} value={String(n)} variant="filled" radius="xl" size="md">
+                    {n}
+                  </Chip>
+                ))}
+              </SimpleGrid>
+            </Chip.Group>
           </Box>
         </Stack>
       </Box>
