@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install Rust toolchain
@@ -35,4 +35,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: .
-          args: build
+          tagName: v__VERSION__
+          releaseName: POS Food v__VERSION__
+          releaseBody: Instalador generado automaticamente por GitHub Actions.
+          releaseDraft: false
+          prerelease: false
+          args: ''
