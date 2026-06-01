@@ -44,6 +44,13 @@ export async function savePrintServerPrinter(config: PrinterPayload) {
   });
 }
 
+export async function testPrintServerPrinter(content?: string) {
+  return requestJson('/test', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
 export async function queueKitchenPrint(params: {
   comanda: Comanda;
   items: ComandaItem[];

@@ -3,7 +3,7 @@ import { Box, Button, Divider, Group, Paper, Stack, Switch, Text, TextInput, The
 import { Printer, Plus, Trash, WifiHigh, Usb, Bluetooth } from '@phosphor-icons/react';
 import { useDisclosure } from '@mantine/hooks';
 import { sileo } from 'sileo';
-import { savePrintServerPrinter } from '../../lib/printServerClient';
+import { getPrintServerStatus, savePrintServerPrinter, testPrintServerPrinter } from '../../lib/printServerClient';
 
 type PrinterConfig = {
   id: string;
@@ -25,6 +25,13 @@ export default function AjustesImpresion() {
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [opened, { open, close }] = useDisclosure(false);
+  const [serverOk, setServerOk] = useState<boolean | null>(null);
+  const [serverQueue, setServerQueue] = useState<number | null>(null);
+  const [printerConfigured, setPrinterConfigured] = useState<boolean | null>(null);
+  const [serverActive, setServerActive] = useState<boolean | null>(null);
+  const [serverUrl, setServerUrl] = useState('http://127.0.0.1:18181');
+  const [lastAction, setLastAction] = useState('Sin verificar');
+  const [logLines, setLogLines] = useState<string[]>([]);
 
   // Form State para nueva impresora
   const [nombre, setNombre] = useState('');
@@ -47,6 +54,40 @@ export default function AjustesImpresion() {
     } finally {
       setLoaded(true);
     }
+  }, []);
+
+  useEffect(() => {
+    setServerUrl(localStorage.getItem('pos_print_server_url') || 'http://127.0.0.1:18181');
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const syncStatus = async () => {
+      try {
+        const status = await getPrintServerStatus();
+        if (!mounted) return;
+        setServerOk(status.ok);
+        setServerQueue(status.queue ?? null);
+        setPrinterConfigured(status.printerConfigured ?? null);
+        setServerActive(status.active ?? null);
+        setLastAction(`Servidor OK. Cola: ${status.queue ?? 0}`);
+        setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] health ok`, ...prev].slice(0, 6));
+      } catch (error) {
+        if (!mounted) return;
+        setServerOk(false);
+        setServerQueue(null);
+        setPrinterConfigured(null);
+        setServerActive(null);
+        const message = error instanceof Error ? error.message : 'error desconocido';
+        setLastAction(`Health falló: ${message}`);
+        setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] health error: ${message}`, ...prev].slice(0, 6));
+      }
+    };
+
+    syncStatus();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const savePrinters = (updatedPrinters: PrinterConfig[]) => {
@@ -119,6 +160,31 @@ export default function AjustesImpresion() {
     sileo.success({ title: 'Impresora eliminada' });
   };
 
+  const handleTestPrinter = async () => {
+    try {
+      setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] enviando prueba`, ...prev].slice(0, 6));
+      const status = await getPrintServerStatus();
+      if (!status.ok) {
+        throw new Error('print server no responde correctamente');
+      }
+      await testPrintServerPrinter('=== PRUEBA DE IMPRESORA ===\nSi lees esto, el servidor esta funcionando.\n');
+      setServerOk(true);
+      setServerQueue(status.queue ?? null);
+      setPrinterConfigured(status.printerConfigured ?? null);
+      setServerActive(status.active ?? null);
+      setLastAction('Prueba enviada correctamente');
+      setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] test ok`, ...prev].slice(0, 6));
+      sileo.success({ title: 'Prueba enviada', message: 'La impresora recibió la orden de prueba.' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo enviar la prueba de impresión';
+      console.warn('No se pudo enviar la prueba de impresión', err);
+      setServerOk(false);
+      setLastAction(`Prueba falló: ${message}`);
+      setLogLines((prev) => [`[${new Date().toLocaleTimeString()}] test error: ${message}`, ...prev].slice(0, 6));
+      sileo.error({ title: 'Error', message });
+    }
+  };
+
   const handleToggleActive = (id: string, activa: boolean) => {
     const updated = printers.map(p => p.id === id ? { ...p, activa } : p);
     savePrinters(updated);
@@ -150,6 +216,60 @@ export default function AjustesImpresion() {
       </Group>
 
       <Divider />
+
+      <Card withBorder radius="md" p="md">
+        <Group justify="space-between" align="flex-start" mb="sm">
+          <Box>
+            <Text fw={800} size="md">Estado del print server</Text>
+            <Text size="sm" c="dimmed">Panel rápido para ver si el servidor responde y qué configuración está activa.</Text>
+          </Box>
+          <Button size="xs" variant="light" onClick={handleTestPrinter}>
+            Probar impresión
+          </Button>
+        </Group>
+
+        <Grid>
+          <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+            <Text size="xs" c="dimmed">Servidor</Text>
+            <Text fw={700}>{serverOk === null ? 'Sin verificar' : serverOk ? 'Online' : 'Offline'}</Text>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+            <Text size="xs" c="dimmed">Cola</Text>
+            <Text fw={700}>{serverQueue === null ? '-' : serverQueue}</Text>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+            <Text size="xs" c="dimmed">Impresora</Text>
+            <Text fw={700}>{printerConfigured === null ? '-' : printerConfigured ? 'Configurada' : 'No configurada'}</Text>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+            <Text size="xs" c="dimmed">Activo</Text>
+            <Text fw={700}>{serverActive === null ? '-' : serverActive ? 'Sí' : 'No'}</Text>
+          </Grid.Col>
+        </Grid>
+
+        <Box mt="md" p="sm" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: 8 }}>
+          <Text size="xs" c="dimmed">URL activa</Text>
+          <Text size="sm" fw={700} style={{ fontFamily: 'monospace' }}>{serverUrl}</Text>
+        </Box>
+
+        <Box mt="sm" p="sm" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: 8 }}>
+          <Text size="xs" c="dimmed">Última acción</Text>
+          <Text size="sm" fw={700}>{lastAction}</Text>
+        </Box>
+
+        <Box mt="sm" p="sm" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: 8 }}>
+          <Text size="xs" c="dimmed" mb={6}>Log reciente</Text>
+          <Stack gap={4}>
+            {logLines.length === 0 ? (
+              <Text size="sm" c="dimmed">Sin eventos todavía.</Text>
+            ) : (
+              logLines.map((line, index) => (
+                <Text key={`${line}-${index}`} size="xs" style={{ fontFamily: 'monospace' }}>{line}</Text>
+              ))
+            )}
+          </Stack>
+        </Box>
+      </Card>
 
       {printers.length === 0 ? (
         <Card withBorder radius="md" p="xl" style={{ textAlign: 'center', minHeight: 200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -246,6 +366,9 @@ export default function AjustesImpresion() {
 
           <Button fullWidth color="myColor" mt="md" onClick={handleSavePrinter}>
             {editingId ? "Guardar Cambios" : "Agregar"}
+          </Button>
+          <Button fullWidth variant="light" color="gray" onClick={handleTestPrinter}>
+            Probar impresión
           </Button>
         </Stack>
       </Modal>

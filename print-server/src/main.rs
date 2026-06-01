@@ -68,6 +68,11 @@ struct ConfigRequest {
     active: Option<bool>,
 }
 
+#[derive(Deserialize)]
+struct TestRequest {
+    content: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
     let store_path = state_path();
@@ -85,6 +90,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/config", get(get_config).post(set_config))
+        .route("/test", post(test_printer))
         .route("/jobs", post(enqueue_job))
         .route("/jobs/{id}/reprint", post(reprint_job))
         .route("/jobs/flush", post(flush_queue))
@@ -182,6 +188,41 @@ async fn reprint_job(
 async fn flush_queue(State(state): State<AppState>) -> impl IntoResponse {
     match process_queue(state.clone()).await {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "ok": true }))),
+        Err(err) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "error": err }))),
+    }
+}
+
+async fn test_printer(
+    State(state): State<AppState>,
+    Json(req): Json<TestRequest>,
+) -> impl IntoResponse {
+    let printer = {
+        let store = state.inner.lock().await;
+        match store.printer.clone() {
+            Some(printer) if printer.active => printer,
+            _ => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "error": "printer not configured" }))),
+        }
+    };
+
+    let now = Utc::now();
+    let job = PrintJob {
+        id: Uuid::new_v4(),
+        kind: "test".to_string(),
+        title: "Test de impresora".to_string(),
+        payload: serde_json::json!({
+            "type": "test",
+            "message": req.content.clone().unwrap_or_else(|| "Prueba de impresión OK".to_string())
+        }),
+        raw_text: req.content.unwrap_or_else(|| "=== PRUEBA DE IMPRESORA ===\nSi ves esto, el print server funciona.\n".to_string()),
+        status: "queued".to_string(),
+        attempts: 0,
+        created_at: now,
+        updated_at: now,
+        last_error: None,
+    };
+
+    match deliver_job(&printer, &job) {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "ok": true }))),
         Err(err) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "ok": false, "error": err }))),
     }
 }
