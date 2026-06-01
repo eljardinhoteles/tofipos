@@ -79,11 +79,8 @@ export default function AjustesImpresion() {
 
     savePrinters(updated);
     const buildTarget = () => {
-      if (tipo === 'usb') {
-        return `cmd:powershell -Command "$text=[Console]::In.ReadToEnd();$text|Out-Printer -Name '${conexion}'"`;
-      }
-      if (tipo === 'red') {
-        return `cmd:powershell -Command "$text=[Console]::In.ReadToEnd();$text|Out-Printer -Name '${conexion}'"`;
+      if (tipo === 'usb' || tipo === 'red') {
+        return `cmd:powershell -Command "Get-Content '{file}' | Out-Printer -Name '${conexion}'"`;
       }
       return conexion;
     };

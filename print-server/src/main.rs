@@ -242,28 +242,20 @@ fn deliver_job(printer: &PrinterConfig, job: &PrintJob) -> Result<(), String> {
     };
 
     if printer.target.starts_with("cmd:") {
-        use std::io::Write;
         let shell_cmd = printer.target.trim_start_matches("cmd:").trim();
-        let mut child = if cfg!(target_os = "windows") {
-            Command::new("cmd")
-                .args(["/C", shell_cmd])
-                .stdin(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
+
+        let temp_path = std::env::temp_dir().join("pos_print_job.txt");
+        fs::write(&temp_path, content.as_bytes()).map_err(|e| e.to_string())?;
+        let temp_str = temp_path.to_string_lossy();
+        let cmd_final = shell_cmd.replace("{file}", &temp_str);
+
+        let out = if cfg!(target_os = "windows") {
+            Command::new("cmd").args(["/C", &cmd_final]).output()
         } else {
-            Command::new("sh")
-                .args(["-c", shell_cmd])
-                .stdin(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
+            Command::new("sh").args(["-c", &cmd_final]).output()
         }
         .map_err(|e| e.to_string())?;
 
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
-        }
-
-        let out = child.wait_with_output().map_err(|e| e.to_string())?;
         return if out.status.success() {
             Ok(())
         } else {
