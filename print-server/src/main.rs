@@ -1,10 +1,11 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderValue, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
+use tower_http::cors::{Any, CorsLayer};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -76,12 +77,18 @@ async fn main() {
         store_path,
     };
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/config", get(get_config).post(set_config))
         .route("/jobs", post(enqueue_job))
         .route("/jobs/{id}/reprint", post(reprint_job))
         .route("/jobs/flush", post(flush_queue))
+        .layer(cors)
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 18181));
