@@ -1,0 +1,19 @@
+{
+  "name": "pos-print-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "bin": "server.js",
+  "pkg": {
+    "entrypoint": "server.js",
+    "targets": ["node18-win-x64"],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}
