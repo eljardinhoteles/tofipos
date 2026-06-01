@@ -51,6 +51,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
 
+      - name: Upload print server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-print-server
+          path: print-server/target/release/pos-print-server.exe
+          if-no-files-found: warn
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
