@@ -29,7 +29,19 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: |
+            ./src-tauri -> target
+            ./print-server -> target
+
+      - name: Build print server
+        run: cargo build --release --manifest-path print-server/Cargo.toml
+
+      - name: Copy print server sidecar
+        shell: pwsh
+        run: |
+          $triple = rustc -vV | Select-String "host:" | ForEach-Object { $_ -replace "host:\s*", "" }
+          $triple = $triple.Trim()
+          Copy-Item "print-server/target/release/pos-print-server.exe" "src-tauri/binaries/pos-print-server-$triple.exe"
 
       - name: Install frontend dependencies
         run: npm ci

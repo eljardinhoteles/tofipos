@@ -24,6 +24,9 @@
     "targets": ["nsis", "msi"],
     "icon": [
       "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/pos-print-server"
     ]
   }
 }
