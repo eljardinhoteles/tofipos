@@ -78,9 +78,19 @@ export default function AjustesImpresion() {
     }
 
     savePrinters(updated);
+    const buildTarget = () => {
+      if (tipo === 'usb') {
+        return `cmd:powershell -Command "$text=[Console]::In.ReadToEnd();$text|Out-Printer -Name '${conexion}'"`;
+      }
+      if (tipo === 'red') {
+        return `cmd:powershell -Command "$text=[Console]::In.ReadToEnd();$text|Out-Printer -Name '${conexion}'"`;
+      }
+      return conexion;
+    };
+
     savePrintServerPrinter({
-      name: editingId ? nombre : nombre,
-      target: conexion,
+      name: nombre,
+      target: buildTarget(),
       paper_width: papel === '80mm' ? 48 : 32,
       active: true,
     }).catch(err => {
@@ -225,8 +235,9 @@ export default function AjustesImpresion() {
           />
 
           <TextInput
-            label={tipo === 'red' ? 'Dirección IP' : tipo === 'usb' ? 'Nombre del Puerto USB' : 'Nombre/Dirección MAC Bluetooth'}
-            placeholder={tipo === 'red' ? 'Ej: 192.168.1.100' : tipo === 'usb' ? 'Ej: USB001' : 'Ej: 00:11:22:33:FF:EE'}
+            label={tipo === 'red' ? 'Nombre de impresora en Windows' : tipo === 'usb' ? 'Nombre de impresora en Windows' : 'Nombre/Dirección MAC Bluetooth'}
+            placeholder={tipo === 'red' ? 'Ej: EPSON TM-T20III Receipt' : tipo === 'usb' ? 'Ej: EPSON TM-T20III Receipt' : 'Ej: 00:11:22:33:FF:EE'}
+            description={tipo !== 'bluetooth' ? 'Nombre exacto como aparece en Dispositivos e impresoras de Windows' : undefined}
             value={conexion}
             onChange={(e) => setConexion(e.target.value)}
             required

@@ -80,7 +80,7 @@ async fn main() {
         .route("/health", get(health))
         .route("/config", get(get_config).post(set_config))
         .route("/jobs", post(enqueue_job))
-        .route("/jobs/:id/reprint", post(reprint_job))
+        .route("/jobs/{id}/reprint", post(reprint_job))
         .route("/jobs/flush", post(flush_queue))
         .with_state(state);
 
@@ -242,23 +242,33 @@ fn deliver_job(printer: &PrinterConfig, job: &PrintJob) -> Result<(), String> {
     };
 
     if printer.target.starts_with("cmd:") {
+        use std::io::Write;
         let shell_cmd = printer.target.trim_start_matches("cmd:").trim();
-        let output = if cfg!(target_os = "windows") {
+        let mut child = if cfg!(target_os = "windows") {
             Command::new("cmd")
-                .arg("/C")
-                .arg(shell_cmd)
-                .arg(&content)
-                .output()
+                .args(["/C", shell_cmd])
+                .stdin(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
         } else {
-            Command::new("sh").arg("-lc").arg(shell_cmd).output()
+            Command::new("sh")
+                .args(["-c", shell_cmd])
+                .stdin(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+        }
+        .map_err(|e| e.to_string())?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        let out = child.wait_with_output().map_err(|e| e.to_string())?;
+        return if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).to_string())
         };
-        return output.map_err(|e| e.to_string()).and_then(|out| {
-            if out.status.success() {
-                Ok(())
-            } else {
-                Err(String::from_utf8_lossy(&out.stderr).to_string())
-            }
-        });
     }
 
     let target = FsPath::new(&printer.target);
