@@ -175,9 +175,10 @@ export function generarComandaCocina(
 
     const list = Object.values(groups);
     list.forEach((group, index) => {
-      // Cantidad en grande, nombre en negrita
-      s += p(POS.SIZE_2X) + `[${group.totalQty}]` + p(POS.SIZE_NORMAL);
-      s += '  ' + p(POS.BOLD_ON) + group.nombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
+      // Cantidad y nombre en doble tamaño + negrita
+      s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
+      s += `${group.totalQty}  ${group.nombre.toUpperCase()}`;
+      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + '\n';
 
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
