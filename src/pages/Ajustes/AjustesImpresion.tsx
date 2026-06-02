@@ -120,9 +120,16 @@ export default function AjustesImpresion() {
 
     savePrinters(updated);
 
+    const buildTarget = () => {
+      if (tipo === 'usb' || tipo === 'red') {
+        return `cmd:powershell -Command "Get-Content - | Out-Printer -Name '${conexion.trim()}'"`;
+      }
+      return conexion.trim();
+    };
+
     savePrintServerPrinter({
       name: nombre,
-      target: conexion.trim(),
+      target: buildTarget(),
       paper_width: papel === '80mm' ? 48 : 32,
       active: true,
     }).catch(err => {
@@ -346,9 +353,9 @@ export default function AjustesImpresion() {
           />
 
           <TextInput
-            label="Target del print server"
-            placeholder={tipo === 'red' ? 'Ej: cmd:powershell -Command "Get-Content - | Out-Printer -Name \'EPSON TM-T20III Receipt\'"' : tipo === 'usb' ? 'Ej: \\\\?\\USB#VID_... o cmd:...' : 'Ej: 00:11:22:33:FF:EE'}
-            description="Se guarda tal cual lo usa el print server: ruta de dispositivo o comando cmd:"
+            label={tipo === 'bluetooth' ? 'Dirección MAC Bluetooth' : 'Nombre de impresora en Windows'}
+            placeholder={tipo === 'bluetooth' ? 'Ej: 00:11:22:33:FF:EE' : 'Ej: EPSON TM-T20III Receipt'}
+            description={tipo !== 'bluetooth' ? 'Nombre exacto como aparece en Dispositivos e impresoras de Windows' : undefined}
             value={conexion}
             onChange={(e) => setConexion(e.target.value)}
             required
