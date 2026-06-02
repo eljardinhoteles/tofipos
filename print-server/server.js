@@ -56,9 +56,11 @@ function deliverJob(job) {
     const printerName = cmd.match(/-Name '([^']+)'/)?.[1] ?? cmd.match(/-Name "([^"]+)"/)?.[1] ?? cmd.trim();
     if (!printerName) return reject(new Error('no se pudo extraer nombre de impresora del target'));
 
-    const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}.txt`);
-    // Append line feeds so paper advances out of the printer
-    fs.writeFileSync(tmpFile, content + '\n\n\n\n', 'utf8');
+    const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}.bin`);
+    // ESC/POS: feed 4 lines + full cut (GS V 0)
+    const cutCmd = Buffer.from([0x1d, 0x56, 0x00]);
+    const contentBuf = Buffer.from(content + '\n\n\n\n', 'utf8');
+    fs.writeFileSync(tmpFile, Buffer.concat([contentBuf, cutCmd]));
     console.log(`[deliver] printer name: ${printerName}, tmp: ${tmpFile}`);
 
     // Send raw bytes directly via WinAPI WritePrinter — bypasses GDI/fonts/margins
