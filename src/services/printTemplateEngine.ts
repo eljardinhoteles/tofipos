@@ -226,8 +226,8 @@ export function generarComandaCocina(
 
   t += '\n\n';
   t += `Notas:\n`;
-  t += `${'─'.repeat(48)}\n`;
-  t += `${'─'.repeat(48)}\n`;
+  t += `${'-'.repeat(48)}\n`;
+  t += `${'-'.repeat(48)}\n`;
   t += '\n';
   return t;
 }
