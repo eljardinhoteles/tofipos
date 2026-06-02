@@ -214,6 +214,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         precio: item.precio,
         cantidad: 1,
         modificadores: selectedModifiers,
+        es_bebida: item.es_bebida ?? null,
         estado: 'pendiente',
         pagado_cantidad: 0,
         created_at: new Date().toISOString(),

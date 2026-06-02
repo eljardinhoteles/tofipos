@@ -80,6 +80,7 @@ export interface RxComandaItem {
   cantidad: number
   modificadores?: string[]
   nota?: string
+  es_bebida?: boolean | null
   estado: ComandaItemEstado
   pagado_cantidad?: number
   created_at?: string
