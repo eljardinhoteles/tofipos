@@ -57,10 +57,15 @@ function deliverJob(job) {
     if (!printerName) return reject(new Error('no se pudo extraer nombre de impresora del target'));
 
     const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}.bin`);
-    // ESC/POS: feed 4 lines + full cut (GS V 0)
-    const cutCmd = Buffer.from([0x1d, 0x56, 0x00]);
-    const contentBuf = Buffer.from(content + '\n\n\n\n', 'utf8');
-    fs.writeFileSync(tmpFile, Buffer.concat([contentBuf, cutCmd]));
+    // ESC/POS: reset size, feed 5 lines then full cut (GS V 65 5)
+    const resetAndCut = Buffer.from([
+      0x1b, 0x21, 0x00,  // SIZE_NORMAL
+      0x1b, 0x45, 0x00,  // BOLD_OFF
+      0x1b, 0x61, 0x00,  // ALIGN_LEFT
+      0x1d, 0x56, 0x41, 0x05, // GS V 65 5 — feed 5 lines + full cut
+    ]);
+    const contentBuf = Buffer.from(content, 'utf8');
+    fs.writeFileSync(tmpFile, Buffer.concat([contentBuf, resetAndCut]));
     console.log(`[deliver] printer name: ${printerName}, tmp: ${tmpFile}`);
 
     // Send raw bytes directly via WinAPI WritePrinter — bypasses GDI/fonts/margins

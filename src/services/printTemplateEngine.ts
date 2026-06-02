@@ -202,9 +202,9 @@ export function generarComandaCocina(
   if (itemsBebida.length > 0) {
     if (itemsCocina.length > 0) {
       t += '\n\n';
-      t += `================================\n`;
-      t += `         RECORTAR AQUI          \n`;
-      t += `================================\n\n`;
+      t += `${'='.repeat(48)}\n`;
+      t += `${' '.repeat(16)}RECORTAR AQUI${' '.repeat(19)}\n`;
+      t += `${'='.repeat(48)}\n\n`;
     }
     t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `${cleanMesa}\n`;
@@ -226,9 +226,9 @@ export function generarComandaCocina(
 
   t += '\n\n';
   t += `Notas:\n`;
-  t += `------------------------------\n`;
-  t += `------------------------------\n`;
-  t += '\n\n';
+  t += `${'─'.repeat(48)}\n`;
+  t += `${'─'.repeat(48)}\n`;
+  t += '\n';
   return t;
 }
 
