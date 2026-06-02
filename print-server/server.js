@@ -40,10 +40,12 @@ const state = loadState();
 function deliverJob(job) {
   return new Promise((resolve, reject) => {
     const printer = state.printer;
+    console.log(`[deliver] printer:`, printer?.target ?? 'none');
     if (!printer || !printer.active) return reject(new Error('printer not configured'));
 
     const content = job.raw_text?.trim() ? job.raw_text : JSON.stringify(job.payload, null, 2);
     const target = printer.target;
+    console.log(`[deliver] cmd: ${target.slice(0, 80)}`);
 
     if (!target.startsWith('cmd:')) return reject(new Error('unsupported target; use cmd:'));
 
@@ -60,6 +62,7 @@ function deliverJob(job) {
     child.stderr.on('data', d => errChunks.push(d));
 
     child.on('close', code => {
+      console.log(`cmd exit code: ${code}`);
       if (code === 0) resolve();
       else reject(new Error(Buffer.concat(errChunks).toString() || `exit code ${code}`));
     });
