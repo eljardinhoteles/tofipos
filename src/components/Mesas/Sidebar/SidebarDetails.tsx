@@ -715,6 +715,13 @@ export function SidebarDetails({
                             setPreviewContent(content);
                             setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
                             setPreviewOpened(true);
+                            queueKitchenPrint({
+                              comanda: activeComanda,
+                              items: withBebida(comandaItems),
+                              mesaNombre: selectedMesa.nombre,
+                              esAdicional: false,
+                              habitacionNombre: linkedMesa?.nombre,
+                            }).catch(err => console.warn('print server offline', err));
                           }
                         }}
                         fw={800}

@@ -53,16 +53,57 @@ function deliverJob(job) {
     console.log(`[deliver] final cmd: ${cmd.slice(0, 120)}`);
 
     // Extract printer name and write content to temp file to avoid escaping issues
-    const printerName = cmd.match(/-Name '([^']+)'/)?.[1] ?? cmd.match(/-Name "([^"]+)"/)?.[1] ?? '';
+    const printerName = cmd.match(/-Name '([^']+)'/)?.[1] ?? cmd.match(/-Name "([^"]+)"/)?.[1] ?? cmd.trim();
     if (!printerName) return reject(new Error('no se pudo extraer nombre de impresora del target'));
 
     const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}.txt`);
-    fs.writeFileSync(tmpFile, content + '\n\n\n', 'utf8');
+    // Append line feeds so paper advances out of the printer
+    fs.writeFileSync(tmpFile, content + '\n\n\n\n', 'utf8');
     console.log(`[deliver] printer name: ${printerName}, tmp: ${tmpFile}`);
 
+    // Send raw bytes directly via WinAPI WritePrinter — bypasses GDI/fonts/margins
+    const psScript = `
+$printerName = '${printerName.replace(/'/g, "''")}';
+$bytes = [System.IO.File]::ReadAllBytes('${tmpFile.replace(/\\/g, '\\\\')}');
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class RawPrint {
+  [DllImport("winspool.drv",CharSet=CharSet.Auto,SetLastError=true)]
+  public static extern bool OpenPrinter(string n,out IntPtr h,IntPtr d);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool ClosePrinter(IntPtr h);
+  [DllImport("winspool.drv",CharSet=CharSet.Auto,SetLastError=true)]
+  public static extern bool StartDocPrinter(IntPtr h,int lvl,ref DOCINFO d);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv",SetLastError=true)]
+  public static extern bool WritePrinter(IntPtr h,byte[] b,int n,out int w);
+  [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Auto)]
+  public struct DOCINFO { public string pDocName; public string pOutputFile; public string pDatatype; }
+}
+'@
+$h = [IntPtr]::Zero;
+[RawPrint]::OpenPrinter($printerName,[ref]$h,[IntPtr]::Zero) | Out-Null;
+$di = New-Object RawPrint+DOCINFO;
+$di.pDocName = 'POS';
+$di.pDatatype = 'RAW';
+[RawPrint]::StartDocPrinter($h,1,[ref]$di) | Out-Null;
+[RawPrint]::StartPagePrinter($h) | Out-Null;
+$w = 0;
+[RawPrint]::WritePrinter($h,$bytes,$bytes.Length,[ref]$w) | Out-Null;
+[RawPrint]::EndPagePrinter($h) | Out-Null;
+[RawPrint]::EndDocPrinter($h) | Out-Null;
+[RawPrint]::ClosePrinter($h) | Out-Null;
+Write-Host "printed $w bytes";
+`;
+
     const child = spawn('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      `Get-Content -Path '${tmpFile}' -Raw | Out-Printer -Name '${printerName}'`,
+      '-NoProfile', '-NonInteractive', '-Command', psScript,
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
