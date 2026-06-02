@@ -188,13 +188,11 @@ export function generarComandaCocina(
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
           const modsStr = sub.modifiers.join(' · ').toUpperCase();
-          const line = group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
-          s += p(POS.SIZE_TALL) + line + p(POS.SIZE_NORMAL);
+          s += group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
         }
         if (sub.nota) {
           const notaStr = sub.nota.toUpperCase();
-          const line = group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
-          s += p(POS.SIZE_TALL) + line + p(POS.SIZE_NORMAL);
+          s += group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
         }
       });
       if (index < list.length - 1) s += '\n---\n\n';
