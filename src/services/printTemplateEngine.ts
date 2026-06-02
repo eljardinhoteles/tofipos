@@ -29,6 +29,7 @@ export const POS = {
   SIZE_2X:      ESC + '!\x30',
   // Double height only
   SIZE_TALL:    ESC + '!\x10',
+  SIZE_WIDE:    ESC + '!\x20',  // Double width only
   SIZE_NORMAL:  ESC + '!\x00',
   ALIGN_CENTER: ESC + 'a\x01',
   ALIGN_LEFT:   ESC + 'a\x00',
@@ -186,15 +187,15 @@ export function generarComandaCocina(
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
           const modsStr = sub.modifiers.join(' · ').toUpperCase();
-          s += p(POS.BOLD_ON);
+          s += p(POS.SIZE_WIDE);
           s += group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
-          s += p(POS.BOLD_OFF);
+          s += p(POS.SIZE_NORMAL);
         }
         if (sub.nota) {
           const notaStr = sub.nota.toUpperCase();
-          s += p(POS.BOLD_ON);
+          s += p(POS.SIZE_WIDE);
           s += group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
-          s += p(POS.BOLD_OFF);
+          s += p(POS.SIZE_NORMAL);
         }
       });
       if (index < list.length - 1) s += '\n---\n\n';
