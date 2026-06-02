@@ -179,9 +179,8 @@ export function generarComandaCocina(
 
     const list = Object.values(groups);
     list.forEach((group, index) => {
-      // Cantidad y nombre en doble tamaño + negrita
-      // El \n debe ir DENTRO del bloque SIZE_2X para que la altura de línea sea correcta
-      s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
+      // Cantidad y nombre en doble alto + negrita (SIZE_TALL: mismo ancho, doble alto)
+      s += p(POS.SIZE_TALL) + p(POS.BOLD_ON);
       s += `${group.totalQty}  ${group.nombre.toUpperCase()}\n`;
       s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL);
 
