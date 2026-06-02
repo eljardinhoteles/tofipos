@@ -52,13 +52,18 @@ function deliverJob(job) {
     const cmd = target.slice(4).trim();
     console.log(`[deliver] final cmd: ${cmd.slice(0, 120)}`);
 
-    // Extract printer name from cmd (format: [Console]::In.ReadToEnd() | Out-Printer -Name 'NAME')
-    // or just pass content directly via -Command with escaped string
-    const psCmd = `Out-Printer -Name '${cmd.match(/-Name '([^']+)'/)?.[1] ?? ''}'`;
-    const escaped = content.replace(/'/g, "''") + '\n\n\n';
-    const fullCmd = `'${escaped}' | ${psCmd}`;
+    // Extract printer name and write content to temp file to avoid escaping issues
+    const printerName = cmd.match(/-Name '([^']+)'/)?.[1] ?? cmd.match(/-Name "([^"]+)"/)?.[1] ?? '';
+    if (!printerName) return reject(new Error('no se pudo extraer nombre de impresora del target'));
 
-    const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', fullCmd], {
+    const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}.txt`);
+    fs.writeFileSync(tmpFile, content + '\n\n\n', 'utf8');
+    console.log(`[deliver] printer name: ${printerName}, tmp: ${tmpFile}`);
+
+    const child = spawn('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `Get-Content -Path '${tmpFile}' -Raw | Out-Printer -Name '${printerName}'`,
+    ], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     });
@@ -70,6 +75,7 @@ function deliverJob(job) {
 
     child.on('close', code => {
       console.log(`cmd exit code: ${code}`);
+      try { fs.unlinkSync(tmpFile); } catch {}
       if (code === 0) resolve();
       else reject(new Error(Buffer.concat(errChunks).toString() || `exit code ${code}`));
     });
