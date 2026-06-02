@@ -20,21 +20,21 @@ export function cleanHabitacionName(name: string): string {
 
 // ESC/POS command helpers
 const ESC = '\x1B';
-const GS  = '\x1D';
+const GS = '\x1D';
 export const POS = {
-  INIT:         ESC + '@',
-  BOLD_ON:      ESC + 'E\x01',
-  BOLD_OFF:     ESC + 'E\x00',
+  INIT: ESC + '@',
+  BOLD_ON: ESC + 'E\x01',
+  BOLD_OFF: ESC + 'E\x00',
   // Double width + double height
-  SIZE_2X:      ESC + '!\x30',
+  SIZE_2X: ESC + '!\x30',
   // Double height only
-  SIZE_TALL:    ESC + '!\x10',
-  SIZE_WIDE:    ESC + '!\x20',  // Double width only
-  SIZE_NORMAL:  ESC + '!\x00',
+  SIZE_TALL: ESC + '!\x10',
+  SIZE_WIDE: ESC + '!\x15',  // Double width only
+  SIZE_NORMAL: ESC + '!\x00',
   ALIGN_CENTER: ESC + 'a\x01',
-  ALIGN_LEFT:   ESC + 'a\x00',
-  CUT_FULL:     GS  + 'V\x41\x05',  // feed 5 + full cut
-  CUT_PARTIAL:  GS  + 'V\x42\x04',  // feed 4 + partial cut
+  ALIGN_LEFT: ESC + 'a\x00',
+  CUT_FULL: GS + 'V\x41\x05',  // feed 5 + full cut
+  CUT_PARTIAL: GS + 'V\x42\x04',  // feed 4 + partial cut
 };
 
 /**
@@ -203,8 +203,18 @@ export function generarComandaCocina(
     return s;
   }
 
+  const notasBlock = () => {
+    let n = '\n\n';
+    n += `Notas:\n`;
+    n += `${'-'.repeat(48)}\n`;
+    n += `${'-'.repeat(48)}\n`;
+    n += '\n\n\n';
+    return n;
+  };
+
   if (itemsCocina.length > 0) {
     t += imprimirGrupo(itemsCocina);
+    t += notasBlock();
   }
 
   if (itemsBebida.length > 0) {
@@ -212,7 +222,6 @@ export function generarComandaCocina(
       if (forPrinter) {
         t += p(POS.CUT_PARTIAL);
       } else {
-        t += '\n\n';
         t += `${'='.repeat(48)}\n`;
         t += `${' '.repeat(16)}RECORTAR AQUI${' '.repeat(19)}\n`;
         t += `${'='.repeat(48)}\n\n`;
@@ -228,7 +237,7 @@ export function generarComandaCocina(
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
-      t += `================================\n\n`;
+      t += `${'='.repeat(48)}\n\n`;
     } else {
       t += `\n`;
     }
@@ -236,13 +245,11 @@ export function generarComandaCocina(
     t += `BEBIDAS / BAR\n`;
     t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT) + '\n';
     t += imprimirGrupo(itemsBebida);
+    t += notasBlock();
+  } else if (itemsCocina.length === 0) {
+    t += notasBlock();
   }
 
-  t += '\n\n';
-  t += `Notas:\n`;
-  t += `${'-'.repeat(48)}\n`;
-  t += `${'-'.repeat(48)}\n`;
-  t += '\n';
   return t;
 }
 
