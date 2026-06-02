@@ -180,18 +180,21 @@ export function generarComandaCocina(
     const list = Object.values(groups);
     list.forEach((group, index) => {
       // Cantidad y nombre en doble tamaño + negrita
+      // El \n debe ir DENTRO del bloque SIZE_2X para que la altura de línea sea correcta
       s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
-      s += `${group.totalQty}  ${group.nombre.toUpperCase()}`;
-      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + '\n';
+      s += `${group.totalQty}  ${group.nombre.toUpperCase()}\n`;
+      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL);
 
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
           const modsStr = sub.modifiers.join(' · ').toUpperCase();
-          s += group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
+          const line = group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
+          s += p(POS.SIZE_TALL) + line + p(POS.SIZE_NORMAL);
         }
         if (sub.nota) {
           const notaStr = sub.nota.toUpperCase();
-          s += group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
+          const line = group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
+          s += p(POS.SIZE_TALL) + line + p(POS.SIZE_NORMAL);
         }
       });
       if (index < list.length - 1) s += '\n---\n\n';
