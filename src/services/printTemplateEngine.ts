@@ -18,6 +18,23 @@ export function cleanHabitacionName(name: string): string {
   return name.replace(/^(HAB(ITACI[OÓ]N)?\s*:?\s*)/i, '').trim();
 }
 
+// ESC/POS command helpers
+const ESC = '\x1B';
+const GS  = '\x1D';
+export const POS = {
+  INIT:         ESC + '@',
+  BOLD_ON:      ESC + 'E\x01',
+  BOLD_OFF:     ESC + 'E\x00',
+  // Double width + double height
+  SIZE_2X:      ESC + '!\x30',
+  // Double height only
+  SIZE_TALL:    ESC + '!\x10',
+  SIZE_NORMAL:  ESC + '!\x00',
+  ALIGN_CENTER: ESC + 'a\x01',
+  ALIGN_LEFT:   ESC + 'a\x00',
+  CUT:          GS  + 'V\x00',
+};
+
 /**
  * Centra un texto dentro del ancho de columnas especificado
  */
@@ -100,29 +117,39 @@ export function generarComandaCocina(
   items: PrintableItem[],
   mesaNombre: string,
   esAdicional = false,
-  habitacionNombre?: string
+  habitacionNombre?: string,
+  forPrinter = false,
 ): string {
+  // Shorthand: only emit ESC/POS sequences when printing
+  const p = (cmd: string) => forPrinter ? cmd : '';
+
   let t = '';
 
+  if (forPrinter) t += POS.INIT;
+
   const cleanMesa = mesaNombre.toUpperCase().replace('MESA ', 'MESA #');
+
+  // Header: mesa centrada en tamaño doble
+  t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
   t += `${cleanMesa}\n`;
-  t += `ORDEN: #${comanda.folio}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
+
+  t += p(POS.BOLD_ON) + `ORDEN: #${comanda.folio}` + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
   }
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
+
   if (esAdicional) {
-    t += `\n*** PEDIDO ADICIONAL ***\n`;
+    t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
     t += `================================\n\n`;
   } else {
     t += `\n\n`;
   }
 
-  // Separar cocina vs bebidas
   const itemsCocina = items.filter(i => !i.es_bebida);
   const itemsBebida = items.filter(i => i.es_bebida);
 
-  // Función interna para imprimir un grupo de items agrupados
   function imprimirGrupo(groupItems: PrintableItem[]): string {
     let s = '';
     const groups: {
@@ -142,13 +169,16 @@ export function generarComandaCocina(
       groups[key].subItems.push({
         cantidad: item.cantidad,
         modifiers: item.modificadores || [],
-        nota: item.nota
+        nota: item.nota,
       });
     });
 
     const list = Object.values(groups);
     list.forEach((group, index) => {
-      s += `[${group.totalQty}]  ${group.nombre.toUpperCase()}\n`;
+      // Cantidad en grande, nombre en negrita
+      s += p(POS.SIZE_2X) + `[${group.totalQty}]` + p(POS.SIZE_NORMAL);
+      s += '  ' + p(POS.BOLD_ON) + group.nombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
+
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
           const modsStr = sub.modifiers.join(' · ').toUpperCase();
@@ -164,12 +194,10 @@ export function generarComandaCocina(
     return s;
   }
 
-  // Sección COCINA
   if (itemsCocina.length > 0) {
     t += imprimirGrupo(itemsCocina);
   }
 
-  // Sección BEBIDAS (al final, separadas para recortar)
   if (itemsBebida.length > 0) {
     if (itemsCocina.length > 0) {
       t += '\n\n';
@@ -177,19 +205,21 @@ export function generarComandaCocina(
       t += `         RECORTAR AQUI          \n`;
       t += `================================\n\n`;
     }
+    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `${cleanMesa}\n`;
-    t += `ORDEN: #${comanda.folio}\n`;
+    t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
+    t += p(POS.BOLD_ON) + `ORDEN: #${comanda.folio}` + p(POS.BOLD_OFF) + '\n';
     if (habitacionNombre) {
       t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
     }
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
-      t += `\n*** PEDIDO ADICIONAL ***\n`;
+      t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
       t += `================================\n\n`;
     } else {
       t += `\n`;
     }
-    t += `--- BEBIDAS / BAR ---\n\n`;
+    t += p(POS.BOLD_ON) + `--- BEBIDAS / BAR ---\n` + p(POS.BOLD_OFF) + '\n';
     t += imprimirGrupo(itemsBebida);
   }
 

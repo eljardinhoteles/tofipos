@@ -45,9 +45,14 @@ export async function savePrintServerPrinter(config: PrinterPayload) {
 }
 
 export async function testPrintServerPrinter(content?: string) {
-  return requestJson('/test', {
+  return requestJson('/jobs', {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      kind: 'test',
+      title: 'Prueba de impresión',
+      payload: {},
+      raw_text: content ?? '=== PRUEBA DE IMPRESORA ===\nSi lees esto, funciona.\n\n\n',
+    }),
   });
 }
 
@@ -59,7 +64,7 @@ export async function queueKitchenPrint(params: {
   habitacionNombre?: string;
 }) {
   const { comanda, items, mesaNombre, esAdicional = false, habitacionNombre } = params;
-  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre);
+  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre, true);
   return requestJson('/jobs', {
     method: 'POST',
     body: JSON.stringify({
