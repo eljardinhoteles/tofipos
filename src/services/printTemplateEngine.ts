@@ -263,76 +263,99 @@ export function generarPrecuenta(
   mesaNombre: string,
   ivaPercent: number = 15,
   pagos: Pago[] = [],
-  habitacionNombre?: string
+  habitacionNombre?: string,
+  forPrinter = false,
 ): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
   let t = '';
 
-  t += `PRECUENTA #${comanda.folio}\n\n`;
+  if (forPrinter) t += POS.INIT;
 
-  t += `${mesaNombre}\n`;
+  // ── Encabezado ──────────────────────────────────────────────────
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `EL JARDIN\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_CENTER) + `Restaurante & Hospedaje\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Info de la orden ────────────────────────────────────────────
+  t += justifyBetween(`PRECUENTA #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
   }
   if (comanda.cliente && comanda.cliente !== 'Consumidor Final') {
     t += `Huesped: ${comanda.cliente}\n`;
   }
-  t += `Fecha: ${new Date(comanda.created_at).toLocaleDateString('es-ES')}\n`;
-  t += `---------------\n`;
-  t += `Cant  -  Detalle  -  Total\n\n`;
+  if (comanda.mesero) {
+    t += `Mesero: ${comanda.mesero}\n`;
+  }
+  t += `${'-'.repeat(W)}\n`;
 
+  // ── Cabecera de columnas ────────────────────────────────────────
+  t += p(POS.BOLD_ON);
+  t += justifyBetween('CANT  DESCRIPCION', 'TOTAL', W) + '\n';
+  t += p(POS.BOLD_OFF);
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Items ───────────────────────────────────────────────────────
   let subtotal = 0;
   items.forEach(item => {
     const itemTotal = item.precio * item.cantidad;
     subtotal += itemTotal;
-    t += `${item.cantidad} - ${item.nombre.toUpperCase()} - $${itemTotal.toFixed(2)}\n`;
-
-    // Modificadores tabulados debajo
+    t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
     if (item.modificadores && item.modificadores.length > 0) {
       item.modificadores.forEach((mod: string) => {
-        t += `   * ${mod.toUpperCase()}\n`;
+        t += `     * ${mod.toUpperCase()}\n`;
       });
     }
     if (item.nota) {
-      t += `   * NOTA: ${item.nota.toUpperCase()}\n`;
+      t += `     NOTA: ${item.nota.toUpperCase()}\n`;
     }
   });
 
-  t += `---------------\n`;
+  t += `${'-'.repeat(W)}\n`;
 
+  // ── Totales ─────────────────────────────────────────────────────
   const ivaFactor = ivaPercent / 100;
   const iva = subtotal * ivaFactor;
   const total = subtotal + iva;
 
-  t += `Subtotal: - $${subtotal.toFixed(2)}\n`;
-  t += `IVA (${ivaPercent}%): - $${iva.toFixed(2)}\n`;
-  t += `Total: - $${total.toFixed(2)}\n`;
+  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+  t += p(POS.BOLD_ON) + p(POS.SIZE_WIDE);
+  t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
 
-  t += `---------------\n\n`;
-
+  // ── Pagos / Abonos ──────────────────────────────────────────────
   if (pagos && pagos.length > 0) {
-    const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+    const totalPagado = pagos.reduce((acc, pg) => acc + pg.monto, 0);
     if (totalPagado > 0) {
-      t += `Abonado / Pagado: - $${totalPagado.toFixed(2)}\n`;
-      const saldoPendiente = Math.max(0, total - totalPagado);
-      t += `Saldo Pendiente: - $${saldoPendiente.toFixed(2)}\n`;
+      t += `${'-'.repeat(W)}\n`;
+      t += justifyBetween('Abonado:', `$${totalPagado.toFixed(2)}`, W) + '\n';
+      const saldo = Math.max(0, total - totalPagado);
+      t += p(POS.BOLD_ON) + justifyBetween('Saldo pendiente:', `$${saldo.toFixed(2)}`, W) + p(POS.BOLD_OFF) + '\n';
     }
   }
 
-  t += `------------------------------\n`;
-  t += `*Obligatorio escribir sus datos de facturación:\n`;
-  t += `Razón Social:\n`;
-  t += `------------------------------\n`;
-  t += `RUC/CI/PS:\n`;
-  t += `------------------------------\n`;
-  t += `Correo:\n`;
-  t += `------------------------------\n`;
-  t += `Telefono:\n`;
-  t += `------------------------------\n`;
-  t += `Direccion:\n`;
-  t += `------------------------------\n\n`;
+  // ── Datos de facturación ────────────────────────────────────────
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `*Datos de facturacion (obligatorio):\n`;
+  t += `Razon Social: ${'-'.repeat(W - 14)}\n`;
+  t += `RUC/CI/PS:    ${'-'.repeat(W - 14)}\n`;
+  t += `Correo:       ${'-'.repeat(W - 14)}\n`;
+  t += `Telefono:     ${'-'.repeat(W - 14)}\n`;
+  t += `Direccion:    ${'-'.repeat(W - 14)}\n`;
 
-  t += `EL JARDIN / Documento interno sin validéz tributaria.\n`;
-  t += `\n\n`;
+  // ── Pie ─────────────────────────────────────────────────────────
+  t += `\n`;
+  t += p(POS.ALIGN_CENTER);
+  t += `Documento interno sin validez tributaria.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += '\n\n\n';
 
   return t;
 }

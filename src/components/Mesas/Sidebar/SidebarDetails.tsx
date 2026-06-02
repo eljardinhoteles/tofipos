@@ -21,7 +21,7 @@ import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
 import { useRxClientes } from '../../../hooks/useRxClientes';
 import { useUI } from '../../../context/UIContext';
 import { initVerticalRxDb } from '../../../db/rxdb';
-import { queueKitchenPrint } from '../../../lib/printServerClient';
+import { queueKitchenPrint, queueReceiptPrint } from '../../../lib/printServerClient';
 
 interface SidebarDetailsProps {
   selectedMesa: Mesa;
@@ -827,6 +827,14 @@ export function SidebarDetails({
                           setPreviewContent(content);
                           setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
                           setPreviewOpened(true);
+                          queueReceiptPrint({
+                            comanda: activeComanda,
+                            items: comandaItems,
+                            mesaNombre: selectedMesa.nombre,
+                            ivaPorcentaje,
+                            pagos,
+                            habitacionNombre: linkedMesa?.nombre,
+                          }).catch(err => console.warn('print server offline', err));
                         }}
                       >
                         Pre Cuenta

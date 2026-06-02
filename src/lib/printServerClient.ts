@@ -56,6 +56,28 @@ export async function testPrintServerPrinter(content?: string) {
   });
 }
 
+export async function queueReceiptPrint(params: {
+  comanda: Comanda;
+  items: ComandaItem[];
+  mesaNombre: string;
+  ivaPorcentaje: number;
+  pagos?: any[];
+  habitacionNombre?: string;
+}) {
+  const { comanda, items, mesaNombre, ivaPorcentaje, pagos = [], habitacionNombre } = params;
+  const { generarPrecuenta } = await import('../services/printTemplateEngine');
+  const rawText = generarPrecuenta(comanda, items as any, mesaNombre, ivaPorcentaje, pagos, habitacionNombre, true);
+  return requestJson('/jobs', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'receipt',
+      title: `Precuenta - ${mesaNombre}`,
+      payload: { comanda, mesaNombre },
+      raw_text: rawText,
+    }),
+  });
+}
+
 export async function queueKitchenPrint(params: {
   comanda: Comanda;
   items: ComandaItem[];
