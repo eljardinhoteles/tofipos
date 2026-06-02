@@ -32,7 +32,8 @@ export const POS = {
   SIZE_NORMAL:  ESC + '!\x00',
   ALIGN_CENTER: ESC + 'a\x01',
   ALIGN_LEFT:   ESC + 'a\x00',
-  CUT:          GS  + 'V\x00',
+  CUT_FULL:     GS  + 'V\x41\x05',  // feed 5 + full cut
+  CUT_PARTIAL:  GS  + 'V\x42\x04',  // feed 4 + partial cut
 };
 
 /**
@@ -141,8 +142,11 @@ export function generarComandaCocina(
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
 
   if (esAdicional) {
-    t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
-    t += `================================\n\n`;
+    t += '\n';
+    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
+    t += `*** ADICIONAL ***\n`;
+    t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT);
+    t += `${'='.repeat(48)}\n\n`;
   } else {
     t += `\n\n`;
   }
@@ -201,10 +205,14 @@ export function generarComandaCocina(
 
   if (itemsBebida.length > 0) {
     if (itemsCocina.length > 0) {
-      t += '\n\n';
-      t += `${'='.repeat(48)}\n`;
-      t += `${' '.repeat(16)}RECORTAR AQUI${' '.repeat(19)}\n`;
-      t += `${'='.repeat(48)}\n\n`;
+      if (forPrinter) {
+        t += p(POS.CUT_PARTIAL);
+      } else {
+        t += '\n\n';
+        t += `${'='.repeat(48)}\n`;
+        t += `${' '.repeat(16)}RECORTAR AQUI${' '.repeat(19)}\n`;
+        t += `${'='.repeat(48)}\n\n`;
+      }
     }
     t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `${cleanMesa}\n`;
@@ -220,7 +228,9 @@ export function generarComandaCocina(
     } else {
       t += `\n`;
     }
-    t += p(POS.BOLD_ON) + `--- BEBIDAS / BAR ---\n` + p(POS.BOLD_OFF) + '\n';
+    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
+    t += `BEBIDAS / BAR\n`;
+    t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT) + '\n';
     t += imprimirGrupo(itemsBebida);
   }
 
