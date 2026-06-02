@@ -50,16 +50,23 @@ function deliverJob(job) {
     if (!target.startsWith('cmd:')) return reject(new Error('unsupported target; use cmd:'));
 
     const cmd = target.slice(4).trim();
-    const child = spawn('cmd', ['/c', cmd], {
-      stdio: ['pipe', 'ignore', 'pipe'],
+    console.log(`[deliver] final cmd: ${cmd.slice(0, 120)}`);
+
+    // Extract printer name from cmd (format: [Console]::In.ReadToEnd() | Out-Printer -Name 'NAME')
+    // or just pass content directly via -Command with escaped string
+    const psCmd = `Out-Printer -Name '${cmd.match(/-Name '([^']+)'/)?.[1] ?? ''}'`;
+    const escaped = content.replace(/'/g, "''") + '\n\n\n';
+    const fullCmd = `'${escaped}' | ${psCmd}`;
+
+    const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', fullCmd], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
     });
 
-    child.stdin.write(content, 'utf8');
-    child.stdin.end();
-
+    const outChunks = [];
     const errChunks = [];
-    child.stderr.on('data', d => errChunks.push(d));
+    child.stdout.on('data', d => { outChunks.push(d); console.log('[ps stdout]', d.toString()); });
+    child.stderr.on('data', d => { errChunks.push(d); console.log('[ps stderr]', d.toString()); });
 
     child.on('close', code => {
       console.log(`cmd exit code: ${code}`);

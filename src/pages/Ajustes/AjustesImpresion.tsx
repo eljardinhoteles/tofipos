@@ -122,7 +122,7 @@ export default function AjustesImpresion() {
 
     const buildTarget = () => {
       if (tipo === 'usb' || tipo === 'red') {
-        return `cmd:powershell -Command "Get-Content - | Out-Printer -Name '${conexion.trim()}'"`;
+        return `cmd:[Console]::In.ReadToEnd() | Out-Printer -Name '${conexion.trim()}'`;
       }
       return conexion.trim();
     };
