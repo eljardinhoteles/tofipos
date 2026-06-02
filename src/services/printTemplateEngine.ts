@@ -181,7 +181,7 @@ export function generarComandaCocina(
     list.forEach((group, index) => {
       s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
       s += `${group.totalQty}  ${group.nombre.toUpperCase()}\n`;
-      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL);
+      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + '\n';
 
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
