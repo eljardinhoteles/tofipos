@@ -93,6 +93,15 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// Polyfill crypto.randomUUID para contextos no seguros (HTTP dev)
+if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
+  (crypto as any).randomUUID = () =>
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { MantineProvider, createTheme, rem, type MantineColorsTuple } from '@mantine/core';

@@ -447,13 +447,17 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         )}
       </Modal>
 
-      <ProductModifiersModal 
+      <ProductModifiersModal
         opened={!!modifyingItem}
         onClose={() => setModifyingItem(null)}
         product={modifyingItem}
         onConfirm={(selected) => {
-          if (modifyingItem) {
-            performAddToCart(modifyingItem, selected);
+          const item = modifyingItem;
+          if (item) {
+            performAddToCart(item, selected).catch(err => {
+              console.error('[ProductSelector] error añadiendo item con modificadores:', err);
+              sileo.error({ title: 'Error al añadir', message: err?.message ?? String(err) });
+            });
           }
         }}
       />
