@@ -248,12 +248,15 @@ export interface RxAjusteIva {
   _modified: string
 }
 
+// Membresía de usuario en una organización. Las credenciales viven SOLO en Supabase Auth
+// (user_id = auth.users.id; una misma cuenta puede tener membresías en varias organizaciones).
+// Esta tabla es de solo lectura en el cliente y se muta vía la Edge Function manage-users.
 export interface RxUsuario {
   id: string
+  user_id: string
   nombre: string
   rol: 'admin' | 'mesero' | 'cajero'
   email?: string
-  password?: string
   organization_id: string
   activo: boolean
   _deleted: boolean
@@ -538,22 +541,22 @@ const ajusteIvaSchema = {
 } as const
 
 const usuarioSchema = {
-  version: 0,
+  version: 3,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: { type: 'string', maxLength: 100 },
+    user_id: { type: 'string', maxLength: 100 },
     nombre: { type: 'string' },
     rol: { type: 'string', enum: ['admin', 'mesero', 'cajero'] },
     email: { type: 'string' },
-    password: { type: 'string' },
     organization_id: { type: 'string' },
     activo: { type: 'boolean' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
   },
-  required: ['id', 'nombre', 'rol', 'organization_id', 'activo', '_deleted', '_modified'],
-  indexes: ['rol', 'activo', 'organization_id', '_modified']
+  required: ['id', 'user_id', 'nombre', 'rol', 'organization_id', 'activo', '_deleted', '_modified'],
+  indexes: ['rol', 'activo', 'organization_id', '_modified', 'user_id']
 } as const
 
 export type VerticalCollections = {
@@ -741,7 +744,18 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
     reservas: { schema: reservaSchema },
     pagos: { schema: pagoSchema },
     ajustes_iva: { schema: ajusteIvaSchema },
-    usuarios: { schema: usuarioSchema },
+    usuarios: {
+      schema: usuarioSchema,
+      migrationStrategies: {
+        // v0 → v1: elimina la contraseña en texto plano (credenciales migradas a Supabase Auth)
+        1: (oldDoc: any) => { const { password: _password, ...rest } = oldDoc; return rest },
+        // v1 → v2: membresías multi-organización (las filas antiguas usaban id = auth uid)
+        2: (oldDoc: any) => ({ ...oldDoc, user_id: oldDoc.user_id ?? oldDoc.id }),
+        // v2 → v3: sin cambios de datos; solo fuerza reconstrucción del esquema en cachés
+        // locales que quedaron con una v2 previa a la definición final (user_id/indexes)
+        3: (oldDoc: any) => oldDoc
+      }
+    },
     menu_items: {
       schema: menuItemSchema,
       migrationStrategies: {
@@ -1003,15 +1017,16 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     push: { batchSize: 100 }
   }), makePushHandler('ajustes_iva'))
 
-  const usuarios = patchPush(replicateSupabase({
+  // usuarios: SOLO pull. Las mutaciones van por la Edge Function manage-users
+  // (RLS bloquea escrituras directas desde el cliente).
+  const usuarios = replicateSupabase({
     ...replicaBase,
     tableName: 'usuarios',
     client: supabase,
     collection: db.usuarios,
     replicationIdentifier: `usuarios-supabase-${orgId}`,
-    pull: { batchSize: 100, queryBuilder, modifier: stripUndefined },
-    push: { batchSize: 100 }
-  }), makePushHandler('usuarios'))
+    pull: { batchSize: 100, queryBuilder, modifier: stripUndefined }
+  })
 
   const categorias = patchPush(replicateSupabase({
     ...replicaBase,
@@ -1496,49 +1511,8 @@ export async function updateRxAjusteIva(id: string, patch: Partial<RxAjusteIva>)
   return result
 }
 
-export async function createRxUsuario(input: Omit<RxUsuario, '_deleted' | '_modified'>) {
-  const db = await initVerticalRxDb()
-  const now = new Date().toISOString()
-  const orgId = input.organization_id || getActiveOrgIdStrict()
-  const created = await db.usuarios.insert({
-    ...input,
-    organization_id: orgId,
-    _deleted: false,
-    _modified: now
-  } as RxUsuario)
-  await createAuditLog({
-    entity: 'usuario',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó el usuario ${created.nombre}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
-  return created
-}
-
-export async function updateRxUsuario(id: string, patch: Partial<RxUsuario>) {
-  const db = await initVerticalRxDb()
-  getActiveOrgIdStrict()
-  const doc = await db.usuarios.findOne(id).exec(true)
-  const before = doc?.toJSON()
-  const result = await doc.update({
-    $set: {
-      ...patch,
-      _modified: new Date().toISOString()
-    }
-  } as any)
-  await createAuditLog({
-    entity: 'usuario',
-    entityId: id,
-    action: patch._deleted ? 'delete' : 'update',
-    summary: patch._deleted ? `Se eliminó el usuario ${before?.nombre || id}` : diffSummary('usuario', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
-  return result
-}
+// Nota: los usuarios ya no se crean/editan desde el cliente. Toda mutación pasa por
+// la Edge Function `manage-users` (Supabase Auth + tabla usuarios) y llega aquí por pull.
 
 export async function updateRxPiso(id: string, patch: Partial<RxPiso>) {
   const db = await initVerticalRxDb()

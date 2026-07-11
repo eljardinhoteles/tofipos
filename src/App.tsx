@@ -70,9 +70,25 @@ function App() {
       if (!adminUser || activeOrganizationId) return;
       setLoadingOrgs(true);
       try {
+        // Solo organizaciones donde este admin tiene membresía (RLS ya limita la lectura)
+        const { data: membresias, error: memError } = await supabase
+          .from('usuarios')
+          .select('organization_id')
+          .eq('user_id', adminUser.id)
+          .eq('_deleted', false);
+        if (memError) throw memError;
+
+        const orgIds = [...new Set((membresias || []).map((m) => m.organization_id))];
+        if (orgIds.length === 0) {
+          setOrgs([]);
+          setSelectedOrgId(null);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('organizaciones')
           .select('id, nombre')
+          .in('id', orgIds)
           .eq('activo', true)
           .order('nombre', { ascending: true });
 

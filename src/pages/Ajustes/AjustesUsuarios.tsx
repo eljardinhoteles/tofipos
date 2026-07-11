@@ -1,11 +1,20 @@
 import { useState } from 'react';
 import { ActionIcon, Badge, Box, Button, Divider, Grid, Group, Paper, Select, Stack, Switch, TextInput, PasswordInput, Text, ThemeIcon, Modal } from '@mantine/core';
-import { Pencil, Eye, EyeSlash, Plus, Trash } from '@phosphor-icons/react';
+import { Pencil, Plus, Trash, WifiSlash } from '@phosphor-icons/react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useRxUsuarios } from '../../hooks/useRxUsuarios';
-import { createRxUsuario, updateRxUsuario } from '../../db/rxdb';
+import { supabase } from '../../lib/supabase';
+import { sincronizarDatosOrganizacion } from '../../db/sync';
 import { sileo } from 'sileo';
+
+type Rol = 'admin' | 'mesero' | 'cajero';
+
+const ROL_LABELS: Record<Rol, string> = {
+  admin: 'Administrador',
+  mesero: 'Mesero',
+  cajero: 'Cajero',
+};
 
 export default function AjustesUsuarios() {
   const { openConfirm } = useUI();
@@ -15,29 +24,42 @@ export default function AjustesUsuarios() {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [formNombre, setFormNombre] = useState('');
-  const [formRol, setFormRol] = useState<'admin' | 'mesero' | 'cajero'>('cajero');
+  const [formRol, setFormRol] = useState<Rol>('cajero');
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formActivo, setFormActivo] = useState(true);
-  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
 
   const orgId = currentMesero?.organization_id || localStorage.getItem('pos_active_org_id') || '';
-  const isSelfAdmin = currentMesero?.rol === 'admin';
-  const isSelfUser = (user: any) => user.id === currentMesero?.id;
-  const canSelfManage = (user: any) => !(isSelfAdmin && isSelfUser(user));
-  const connectedEmail = adminUser?.email?.toLowerCase() || '';
-  const persistedAdminEmail = (localStorage.getItem('pos_admin_email') || '').toLowerCase();
-  const isConnectedUser = (user: any) => {
-    if (isSelfUser(user)) return true;
-    if ((adminUser?.email || persistedAdminEmail) && user.email) {
-      const email = user.email.toLowerCase();
-      return email === connectedEmail || email === persistedAdminEmail;
-    }
-    return false;
-  };
+  // Puede gestionar usuarios: el admin que configuró el dispositivo (sesión Supabase)
+  // o un colaborador con rol admin.
+  const canManage = !!adminUser || currentMesero?.rol === 'admin';
+  const isSelfUser = (user: any) => user.id === currentMesero?.id || user.user_id === adminUser?.id;
+  const connectedEmail = (adminUser?.email || localStorage.getItem('pos_admin_email') || '').toLowerCase();
+  const isConnectedUser = (user: any) =>
+    isSelfUser(user) || (!!user.email && user.email.toLowerCase() === connectedEmail);
 
-  const toggleSecret = (id: string) => {
-    setRevealedSecrets((prev) => ({ ...prev, [id]: !prev[id] }));
+  // Las mutaciones van a la Edge Function manage-users (requiere internet)
+  const invokeManageUsers = async (body: Record<string, unknown>) => {
+    if (!navigator.onLine) {
+      throw new Error('La gestión de usuarios requiere conexión a internet.');
+    }
+    const { data, error } = await supabase.functions.invoke('manage-users', {
+      body: { organization_id: orgId, ...body },
+    });
+    if (error) {
+      // El detalle viene en el body de la respuesta de la función
+      let detail = error.message;
+      try {
+        const ctx = (error as any).context;
+        if (ctx?.json) detail = (await ctx.json())?.error || detail;
+      } catch { /* usar mensaje genérico */ }
+      throw new Error(detail);
+    }
+    if (data?.error) throw new Error(data.error);
+    // Refrescar perfiles locales (la tabla usuarios es solo pull)
+    sincronizarDatosOrganizacion().catch(() => {});
+    return data;
   };
 
   const openCreate = () => {
@@ -53,9 +75,9 @@ export default function AjustesUsuarios() {
   const openEdit = (user: any) => {
     setEditingUser(user);
     setFormNombre(user.nombre);
-    setFormRol(user.rol as 'admin' | 'mesero' | 'cajero');
+    setFormRol(user.rol as Rol);
     setFormEmail(user.email || '');
-    setFormPassword(user.password || '');
+    setFormPassword('');
     setFormActivo(user.activo);
     setUserModalOpen(true);
   };
@@ -66,74 +88,93 @@ export default function AjustesUsuarios() {
       return;
     }
     if (!formNombre.trim()) return sileo.error({ title: 'Ingresa un nombre' });
-    if (!formEmail.trim()) return sileo.error({ title: 'Ingresa un usuario o correo' });
-    if (!formPassword.trim() || formPassword.length < 4) {
-      return sileo.error({ title: 'Contraseña muy corta', description: 'Debe tener al menos 4 caracteres.' });
+    if (!formEmail.trim() || !formEmail.includes('@')) {
+      return sileo.error({ title: 'Correo inválido', description: 'Las cuentas usan correo electrónico (Supabase Auth).' });
+    }
+    if (!editingUser && (!formPassword.trim() || formPassword.length < 6)) {
+      return sileo.error({ title: 'Contraseña muy corta', description: 'Debe tener al menos 6 caracteres.' });
+    }
+    if (editingUser && formPassword && formPassword.length < 6) {
+      return sileo.error({ title: 'Contraseña muy corta', description: 'Debe tener al menos 6 caracteres.' });
     }
 
-    const normalizedEmail = formEmail.trim().toLowerCase();
-    const duplicate = usuarios.find((u) =>
-      !u._deleted &&
-      u.email?.toLowerCase() === normalizedEmail &&
-      u.id !== editingUser?.id
-    );
-    if (duplicate) {
-      return sileo.error({ title: 'Usuario duplicado', description: 'Ya existe un usuario con ese correo/usuario.' });
-    }
-
+    setSaving(true);
     try {
       if (editingUser) {
-        if (!canSelfManage(editingUser)) {
-          sileo.error({ title: 'No permitido', description: 'No puedes desactivar ni borrar tu propia cuenta administradora.' });
-          return;
-        }
-        await updateRxUsuario(editingUser.id, {
-          nombre: formNombre,
-          rol: formRol,
-          email: normalizedEmail,
-          password: formPassword,
-          activo: formActivo,
+        await invokeManageUsers({
+          action: 'update',
+          user: {
+            id: editingUser.id,
+            nombre: formNombre.trim(),
+            rol: formRol,
+            email: formEmail.trim().toLowerCase(),
+            activo: formActivo,
+            ...(formPassword ? { password: formPassword } : {}),
+          },
         });
         sileo.success({ title: 'Usuario actualizado exitosamente' });
       } else {
-        await createRxUsuario({
-          id: crypto.randomUUID(),
-          nombre: formNombre,
-          rol: formRol,
-          email: normalizedEmail,
-          password: formPassword,
-          activo: formActivo,
-          organization_id: orgId,
+        await invokeManageUsers({
+          action: 'create',
+          user: {
+            nombre: formNombre.trim(),
+            rol: formRol,
+            email: formEmail.trim().toLowerCase(),
+            password: formPassword,
+            activo: formActivo,
+          },
         });
         sileo.success({ title: 'Usuario creado exitosamente' });
       }
       setUserModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      sileo.error({ title: 'Error al guardar usuario' });
+      sileo.error({ title: 'Error al guardar usuario', description: error.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActivo = async (user: any, activo: boolean) => {
+    try {
+      await invokeManageUsers({ action: 'update', user: { id: user.id, activo } });
+      sileo.success({ title: 'Estado actualizado' });
+    } catch (error: any) {
+      console.error(error);
+      sileo.error({ title: 'Error al actualizar estado', description: error.message });
     }
   };
 
   const deleteUser = (user: any) => {
-    if (!canSelfManage(user)) {
-      sileo.error({ title: 'No permitido', description: 'No puedes desactivar ni borrar tu propia cuenta administradora.' });
+    if (isSelfUser(user)) {
+      sileo.error({ title: 'No permitido', description: 'No puedes eliminar tu propia cuenta.' });
       return;
     }
-
     openConfirm(
       'Eliminar Colaborador',
-      `¿Estás seguro de eliminar a ${user.nombre}? Esta acción inhabilitará su acceso local e intentará remover su registro de forma remota.`,
+      `¿Estás seguro de eliminar a ${user.nombre}? Se desactivará su cuenta y no podrá volver a iniciar sesión.`,
       async () => {
         try {
-          await updateRxUsuario(user.id, { _deleted: true } as any);
+          await invokeManageUsers({ action: 'delete', user: { id: user.id } });
           sileo.success({ title: 'Usuario eliminado' });
-        } catch (error) {
+        } catch (error: any) {
           console.error(error);
-          sileo.error({ title: 'Error al eliminar usuario' });
+          sileo.error({ title: 'Error al eliminar usuario', description: error.message });
         }
       }
     );
   };
+
+  if (!canManage) {
+    return (
+      <Stack gap={0} py="xl">
+        <Paper withBorder p="xl" radius="lg" ta="center">
+          <Text fw={700}>Acceso restringido</Text>
+          <Text size="sm" c="dimmed">Solo los administradores pueden gestionar usuarios.</Text>
+        </Paper>
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap={0}>
@@ -144,10 +185,19 @@ export default function AjustesUsuarios() {
             <Text size="sm" c="dimmed">Vincula un hotel para administrar usuarios.</Text>
           </Paper>
         )}
+        {!navigator.onLine && (
+          <Paper withBorder p="md" radius="md" bg="yellow.0">
+            <Group gap="xs">
+              <WifiSlash size={18} />
+              <Text size="sm" fw={600}>Sin conexión: la creación y edición de usuarios requiere internet.</Text>
+            </Group>
+          </Paper>
+        )}
         <Paper withBorder p="xl" radius="lg" style={{ backgroundColor: 'var(--pos-surface)' }}>
           <Group justify="space-between" align="center">
             <Text size="sm" c="dimmed" style={{ maxWidth: 450 }}>
-              Administra usuarios, roles y credenciales desde aquí.
+              Los colaboradores inician sesión con su correo y contraseña de Supabase Auth.
+              La primera vez necesitan internet; luego pueden operar sin conexión.
             </Text>
             <Button color="myColor" radius="md" size="md" leftSection={<Plus size={18} weight="bold" />} onClick={openCreate} disabled={!orgId}>
               Agregar Usuario
@@ -165,8 +215,8 @@ export default function AjustesUsuarios() {
               usuarios.map((user) => {
                 const initials = user.nombre.slice(0, 2).toUpperCase();
                 const isUserAdmin = user.rol === 'admin';
-                const secretRevealed = !!revealedSecrets[user.id];
                 const isConnected = isConnectedUser(user);
+                const isSelf = isSelfUser(user);
 
                 return (
                   <Paper
@@ -193,7 +243,7 @@ export default function AjustesUsuarios() {
                             </Group>
                             <Group gap={6} mt={2}>
                               <Badge color={isUserAdmin ? 'grape' : 'blue'} size="xs" radius="sm" variant="light">
-                                {isUserAdmin ? 'Administrador' : 'Mesero'}
+                                {ROL_LABELS[(user.rol as Rol)] || user.rol}
                               </Badge>
                               {!user.activo && <Badge color="red" size="xs" radius="sm">Inactivo</Badge>}
                             </Group>
@@ -202,32 +252,15 @@ export default function AjustesUsuarios() {
                       </Grid.Col>
 
                       <Grid.Col span={{ base: 12, sm: 4 }}>
-                        <Box>
-                          <Text size="xs" c="dimmed" fw={600}>Usuario: {user.email || 'N/A'}</Text>
-                          <Group gap={4} align="center">
-                            <Text size="xs" c="dimmed" fw={600}>Clave: {secretRevealed ? (user.password || '') : '••••'}</Text>
-                            {user.password && (
-                              <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => toggleSecret(user.id)}>
-                                {secretRevealed ? <EyeSlash size={12} /> : <Eye size={12} />}
-                              </ActionIcon>
-                            )}
-                          </Group>
-                        </Box>
+                        <Text size="xs" c="dimmed" fw={600}>Correo: {user.email || 'N/A'}</Text>
                       </Grid.Col>
 
                       <Grid.Col span={{ base: 12, sm: 3 }}>
                         <Group justify="flex-end" gap="sm">
                           <Switch
                             checked={user.activo}
-                            disabled={!canSelfManage(user)}
-                            onChange={async (e) => {
-                              if (!canSelfManage(user)) {
-                                sileo.error({ title: 'No permitido', description: 'No puedes desactivar tu propia cuenta administradora.' });
-                                return;
-                              }
-                              await updateRxUsuario(user.id, { activo: e.currentTarget.checked });
-                              sileo.success({ title: 'Estado actualizado' });
-                            }}
+                            disabled={isSelf || !orgId}
+                            onChange={(e) => toggleActivo(user, e.currentTarget.checked)}
                             color="green"
                             size="sm"
                           />
@@ -239,7 +272,7 @@ export default function AjustesUsuarios() {
                             variant="light"
                             size="md"
                             radius="md"
-                            disabled={!canSelfManage(user) || !orgId}
+                            disabled={isSelf || !orgId}
                             onClick={() => deleteUser(user)}
                           >
                             <Trash size={16} />
@@ -269,36 +302,39 @@ export default function AjustesUsuarios() {
               placeholder="Selecciona el rol"
               data={[
                 { value: 'cajero', label: 'Cajero' },
+                { value: 'mesero', label: 'Mesero' },
                 { value: 'admin', label: 'Administrador' },
               ]}
               value={formRol}
-              onChange={(val) => setFormRol((val || 'cajero') as 'admin' | 'mesero' | 'cajero')}
+              onChange={(val) => setFormRol((val || 'cajero') as Rol)}
               required
               radius="md"
               size="sm"
             />
 
-            <TextInput label="Usuario / Correo Electrónico" placeholder="ejemplo@hotel.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} required radius="md" size="sm" />
-            <PasswordInput label="Contraseña" placeholder="Mínimo 4 caracteres" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} required radius="md" size="sm" />
+            <TextInput label="Correo Electrónico" placeholder="ejemplo@hotel.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} required radius="md" size="sm" />
+            <PasswordInput
+              label={editingUser ? 'Nueva Contraseña (opcional)' : 'Contraseña'}
+              placeholder={editingUser ? 'Dejar en blanco para no cambiarla' : 'Mínimo 6 caracteres'}
+              value={formPassword}
+              onChange={(e) => setFormPassword(e.target.value)}
+              required={!editingUser}
+              radius="md"
+              size="sm"
+            />
 
             <Switch
               label="Colaborador Activo (Habilitado para operar)"
               checked={formActivo}
-              onChange={(e) => {
-                if (editingUser && !canSelfManage(editingUser)) {
-                  sileo.error({ title: 'No permitido', description: 'No puedes desactivar tu propia cuenta administradora.' });
-                  return;
-                }
-                setFormActivo(e.currentTarget.checked);
-              }}
+              onChange={(e) => setFormActivo(e.currentTarget.checked)}
               color="green"
               mt="xs"
-              disabled={editingUser ? !canSelfManage(editingUser) : false}
+              disabled={!!editingUser && isSelfUser(editingUser)}
             />
 
             <Group justify="flex-end" mt="md">
               <Button variant="subtle" onClick={() => setUserModalOpen(false)} radius="md">Cancelar</Button>
-              <Button color="myColor" onClick={saveUser} radius="md" disabled={!orgId}>Guardar Cambios</Button>
+              <Button color="myColor" onClick={saveUser} radius="md" loading={saving} disabled={!orgId}>Guardar Cambios</Button>
             </Group>
           </Stack>
         </Modal>

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, createVerificationClient } from '../lib/supabase';
 import type { UsuarioLocal } from '../db/database';
 import { initVerticalRxDb } from '../db/rxdb';
+import { cacheCredential, verifyCachedCredential, hasCachedCredential, clearAuthCache } from '../lib/authCache';
 
 interface AuthContextType {
   // Estado de Administrador de Supabase
@@ -103,7 +104,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [activeOrganizationId, currentMesero]);
 
-  // Deshabilitado: este bootstrap local generaba duplicados de usuarios al iniciar/sincronizar.
+  // Bootstrap: si el admin del dispositivo aún no tiene perfil en `usuarios`
+  // (p. ej. dispositivos vinculados antes de la migración a Supabase Auth),
+  // lo crea vía Edge Function. Idempotente y silencioso.
+  useEffect(() => {
+    if (!adminUser || !activeOrganizationId || !navigator.onLine) return;
+    supabase.functions.invoke('manage-users', {
+      body: { action: 'ensure-self', organization_id: activeOrganizationId }
+    }).catch(err => console.warn('ensure-self falló:', err));
+  }, [adminUser, activeOrganizationId]);
 
   const loginAdmin = async (email: string, password: string) => {
     try {
@@ -143,6 +152,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem('pos_active_org_id', orgId);
     setActiveOrganizationId(orgId);
+
+    // Bootstrap: garantiza que el admin que vincula tenga perfil en `usuarios`
+    // (solo se auto-crea como admin si la organización aún no tiene administradores)
+    supabase.functions.invoke('manage-users', {
+      body: { action: 'ensure-self', organization_id: orgId }
+    }).catch(err => console.warn('ensure-self falló (se reintentará al gestionar usuarios):', err));
   };
 
   const desvincularDispositivo = async () => {
@@ -150,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('pos_current_mesero_id');
     localStorage.removeItem('pos_offline_auth');
     localStorage.removeItem('pos_org_name_cached');
+    clearAuthCache();
     setActiveOrganizationId(null);
     setCurrentMesero(null);
 
@@ -175,53 +191,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Busca la membresía local (RxDB) de una cuenta de Auth en la organización activa
+  const cargarPerfilLocal = async (authUserId: string): Promise<UsuarioLocal | null> => {
+    if (!activeOrganizationId) return null;
+    const rxDb = await initVerticalRxDb();
+    const doc = await rxDb.usuarios.findOne({
+      selector: { user_id: authUserId, organization_id: activeOrganizationId, _deleted: { $ne: true } }
+    }).exec();
+    if (!doc) return null;
+    const perfil = doc.toJSON() as UsuarioLocal;
+    if (!perfil.activo) return null;
+    return perfil;
+  };
+
+  const activarMesero = (perfil: UsuarioLocal) => {
+    setCurrentMesero(perfil);
+    localStorage.setItem('pos_current_mesero_id', perfil.id);
+    localStorage.setItem('pos_offline_auth', 'true');
+  };
+
+  /**
+   * Login de colaborador contra Supabase Auth (única fuente de credenciales).
+   * Online: valida con un cliente efímero (no toca la sesión del dispositivo) y
+   * refresca el verificador PBKDF2 local. Offline: valida contra el verificador cacheado.
+   * En ambos casos el rol/estado viene del perfil sincronizado en la tabla `usuarios`.
+   */
   const loginConPassword = async (email: string, pass: string) => {
     if (!activeOrganizationId) {
       return { success: false, error: 'El dispositivo no está asociado a ningún hotel.' };
     }
+    const cleanEmail = email.trim().toLowerCase();
 
     try {
-      // 1. Intentar validar localmente en Dexie para cualquier usuario activo
-      const rxDb = await initVerticalRxDb();
-      const usuariosValidos = await rxDb.usuarios.find({
-        selector: { organization_id: activeOrganizationId, _deleted: { $ne: true } }
-      }).exec();
+      if (navigator.onLine) {
+        const verifier = createVerificationClient();
+        const { data, error } = await verifier.auth.signInWithPassword({
+          email: cleanEmail,
+          password: pass
+        });
 
-      const localUser = usuariosValidos.map((d: any) => d.toJSON()).find(
-        u => u.email?.toLowerCase() === email.trim().toLowerCase() && u.password === pass && u.activo
-      );
+        if (!error && data.user) {
+          let perfil = await cargarPerfilLocal(data.user.id);
+          if (!perfil) {
+            // Perfil aún no sincronizado localmente: leerlo directo con la sesión efímera
+            const { data: remoto } = await verifier
+              .from('usuarios')
+              .select('*')
+              .eq('user_id', data.user.id)
+              .eq('organization_id', activeOrganizationId)
+              .eq('_deleted', false)
+              .maybeSingle();
+            if (remoto && remoto.activo && !remoto._deleted) perfil = remoto as UsuarioLocal;
+          }
+          await verifier.auth.signOut();
 
-      if (localUser) {
-        setCurrentMesero(localUser);
-        localStorage.setItem('pos_current_mesero_id', localUser.id);
-        localStorage.setItem('pos_offline_auth', 'true');
+          if (!perfil) {
+            return { success: false, error: 'Tu cuenta no pertenece a esta organización o está inactiva.' };
+          }
+
+          await cacheCredential(cleanEmail, pass, data.user.id);
+          activarMesero(perfil);
+          return { success: true };
+        }
+
+        // Credenciales rechazadas online: son la verdad; no caer al caché offline
+        if (error && error.message?.toLowerCase().includes('invalid')) {
+          return { success: false, error: 'Credenciales inválidas.' };
+        }
+        // Otro tipo de error (red intermitente, servicio caído): intentar offline
+      }
+
+      // Camino offline: verificador PBKDF2 local
+      const cachedUserId = await verifyCachedCredential(cleanEmail, pass);
+      if (cachedUserId) {
+        const perfil = await cargarPerfilLocal(cachedUserId);
+        if (!perfil) {
+          return { success: false, error: 'Usuario inactivo o fuera de esta organización.' };
+        }
+        activarMesero(perfil);
         return { success: true };
       }
 
-      // 2. Si no se encuentra localmente, y hay internet, intentar validar con Supabase Auth
-      if (navigator.onLine) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password: pass
-        });
-        if (!error && data.user) {
-          // Crear un perfil virtual para la interfaz del POS
-          const tempUser: UsuarioLocal = {
-            id: data.user.id,
-            nombre: data.user.email?.split('@')[0] || 'Usuario',
-            rol: 'admin',
-            organization_id: activeOrganizationId,
-            activo: true,
-            _deleted: false,
-            _modified: new Date().toISOString(),
-          };
-          setCurrentMesero(tempUser);
-          localStorage.setItem('pos_current_mesero_id', tempUser.id);
-          localStorage.setItem('pos_offline_auth', 'true');
-          return { success: true };
-        }
+      if (!navigator.onLine && !hasCachedCredential(cleanEmail)) {
+        return { success: false, error: 'Primer inicio de sesión requiere conexión a internet.' };
       }
-
       return { success: false, error: 'Credenciales inválidas o usuario no encontrado.' };
     } catch (err: any) {
       console.error('Error al iniciar sesión con contraseña:', err);

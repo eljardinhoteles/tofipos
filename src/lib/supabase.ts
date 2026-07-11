@@ -8,3 +8,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Cliente efímero para verificar credenciales de colaboradores contra Supabase Auth
+ * SIN tocar la sesión principal del dispositivo (la del admin que vinculó la org).
+ */
+export function createVerificationClient() {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+}
