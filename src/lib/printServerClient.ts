@@ -3,11 +3,14 @@ import { generarComandaCocina } from '../services/printTemplateEngine';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:18181';
 
-type PrinterPayload = {
+export type PrinterRole = 'kitchen' | 'receipt';
+
+export type ConfiguredPrinter = {
+  id: string;
   name: string;
   target: string;
-  paper_width?: number;
-  active?: boolean;
+  roles: PrinterRole[];
+  active: boolean;
 };
 
 export type PrintServerStatus = {
@@ -21,9 +24,20 @@ function getBaseUrl() {
   return localStorage.getItem('pos_print_server_url') || DEFAULT_BASE_URL;
 }
 
+function getPrintToken() {
+  return localStorage.getItem('pos_print_server_token') || '';
+}
+
+export function savePrintToken(token: string) {
+  localStorage.setItem('pos_print_server_token', token.trim());
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${getBaseUrl()}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Print-Token': getPrintToken(),
+    },
     ...init,
   });
   if (!res.ok) {
@@ -33,24 +47,48 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Impresoras que Windows ya conoce (catálogo del sistema, para elegir sin escribir nombres a mano). */
+export async function listSystemPrinters(): Promise<string[]> {
+  const data = await requestJson<{ ok: boolean; printers: string[] }>('/system-printers');
+  return data.printers;
+}
+
+/** Impresoras configuradas en el print server (subset del catálogo, con roles asignados). */
+export async function listConfiguredPrinters(): Promise<ConfiguredPrinter[]> {
+  const data = await requestJson<{ ok: boolean; printers: ConfiguredPrinter[] }>('/printers');
+  return data.printers;
+}
+
+export async function addConfiguredPrinter(printer: { name: string; target: string; roles: PrinterRole[]; active?: boolean }) {
+  return requestJson<{ ok: boolean; printer: ConfiguredPrinter }>('/printers', {
+    method: 'POST',
+    body: JSON.stringify(printer),
+  });
+}
+
+export async function updateConfiguredPrinter(id: string, patch: Partial<{ name: string; target: string; roles: PrinterRole[]; active: boolean }>) {
+  return requestJson<{ ok: boolean; printer: ConfiguredPrinter }>(`/printers/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteConfiguredPrinter(id: string) {
+  return requestJson<{ ok: boolean }>(`/printers/${id}`, { method: 'DELETE' });
+}
+
 export async function getPrintServerStatus(): Promise<PrintServerStatus> {
   return requestJson<PrintServerStatus>('/health');
 }
 
-export async function savePrintServerPrinter(config: PrinterPayload) {
-  return requestJson('/config', {
-    method: 'POST',
-    body: JSON.stringify(config),
-  });
-}
-
-export async function testPrintServerPrinter(content?: string) {
+export async function testPrintServerPrinter(printerId: string, content?: string) {
   return requestJson('/jobs', {
     method: 'POST',
     body: JSON.stringify({
       kind: 'test',
       title: 'Prueba de impresión',
       payload: {},
+      printer_id: printerId,
       raw_text: content ?? '=== PRUEBA DE IMPRESORA ===\nSi lees esto, funciona.\n\n\n',
     }),
   });
