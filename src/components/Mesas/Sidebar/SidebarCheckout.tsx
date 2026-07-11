@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Box, Stack, Group, Text, Title, Button, ActionIcon,
+  Box, Stack, Group, Text, Button, ActionIcon,
   ScrollArea, Divider, Paper, TextInput,
   ThemeIcon, UnstyledButton
 } from '@mantine/core';
@@ -248,9 +248,9 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
               <ArrowLeft size={20} />
             </ActionIcon>
             <Stack gap={0}>
-              <Title order={4} fw={900}>
+              <Text size="lg" fw={800}>
                 Pago Total
-              </Title>
+              </Text>
               <Text size="xs" c="dimmed">
                 {selectedMesa.nombre.replace('Mesa ', 'Mesa #')} - Cuenta #{activeComanda?.folio} {activeComanda?.cliente ? `- ${activeComanda.cliente}` : ''}
               </Text>
@@ -362,7 +362,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
       <Box p="lg" className="checkout-sidebar__footer">
         <Stack gap="sm">
           <Button
-            size="xl"
+            size="lg"
             radius="md"
             fullWidth
             color="green"

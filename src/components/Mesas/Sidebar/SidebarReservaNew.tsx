@@ -191,7 +191,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
     <Box px="md" pt="md" style={{ flexShrink: 0 }}>
       <Group justify="space-between" align="center" mb="md">
         <Stack gap={0}>
-          <Text fw={900} size="lg" c="var(--pos-text)" style={{ lineHeight: 1 }}>
+          <Text size="lg" fw={800} c="var(--pos-text)" style={{ lineHeight: 1 }}>
             {isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}
           </Text>
           <Group gap={6} mt={4}>

@@ -29,7 +29,7 @@ export function SidebarConfigMesas({
           <ArrowLeft size={20} />
         </ActionIcon>
         <Stack gap={0}>
-          <Text fw={900} size="xl" c="var(--pos-text)">
+          <Text size="lg" fw={800} c="var(--pos-text)">
             {isHabitacion ? 'Habitaciones' : `Mesas: ${selectedConfigPiso}`}
           </Text>
           <Text size="sm" c="dimmed">
@@ -42,6 +42,8 @@ export function SidebarConfigMesas({
         variant="light"
         color={isHabitacion ? 'blue' : 'blue'}
         mb="lg"
+        size="lg"
+        radius="md"
         leftSection={isHabitacion ? <BedIcon size={18} /> : <Plus size={18} />}
         onClick={onOpenAddTable}
       >

@@ -47,7 +47,7 @@ export function SidebarConfigPisos({
             <ArrowLeft size={20} />
           </ActionIcon>
           <Stack gap={0}>
-            <Text fw={900} size="xl" c="var(--pos-text)">Zonas y Pisos</Text>
+            <Text size="lg" fw={800} c="var(--pos-text)">Zonas y Pisos</Text>
             <Text size="sm" c="dimmed">Gestiona las áreas del local</Text>
           </Stack>
         </Group>

@@ -73,7 +73,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
               <BedIcon size={22} weight="bold" color="white" />
             </Box>
             <Stack gap={0}>
-              <Text fw={900} size="md" c="var(--pos-text)" className="hab-sidebar__title">
+              <Text size="lg" fw={800} c="var(--pos-text)" className="hab-sidebar__title">
                 Iniciar Cuenta
               </Text>
               <Text size="11px" c="dimmed" fw={700} className="hab-sidebar__eyebrow">

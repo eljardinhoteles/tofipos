@@ -35,7 +35,7 @@ export function SidebarConciliarModal({ opened, onClose, activeComanda, onSucces
     <Modal
       opened={opened}
       onClose={onClose}
-      title={<Text fw={900} size="lg">Conciliar Orden con Factura</Text>}
+      title={<Text size="lg" fw={800}>Conciliar Orden con Factura</Text>}
       centered
       radius="lg"
       size={sidebarPagosParaConciliar.length > 1 ? "lg" : "md"}

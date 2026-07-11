@@ -99,7 +99,7 @@ export function SidebarOpenTable({
               </Text>
             </Box>
             <Stack gap={0}>
-              <Text fw={800} size="md" c="var(--pos-text)" style={{ lineHeight: 1 }}>{tableDisplay}</Text>
+              <Text size="lg" fw={800} c="var(--pos-text)" style={{ lineHeight: 1 }}>{tableDisplay}</Text>
               <Text size="11px" c="dimmed" fw={700} mt={2} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Apertura de Mesa
               </Text>

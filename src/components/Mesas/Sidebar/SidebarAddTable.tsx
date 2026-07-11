@@ -39,7 +39,7 @@ export function SidebarAddTable({
           <ArrowLeft size={20} />
         </ActionIcon>
         <Stack gap={0}>
-          <Text fw={900} size="xl" c="var(--pos-text)">
+          <Text size="lg" fw={800} c="var(--pos-text)">
             {editingMesaId
               ? (isHabitacion ? 'Editar Habitación' : 'Editar Mesa')
               : (isHabitacion ? 'Nueva Habitación' : 'Nueva Mesa')}
@@ -99,6 +99,8 @@ export function SidebarAddTable({
               color="gray"
               fullWidth
               mt="sm"
+              size="lg"
+              radius="md"
               onClick={onBack}
             >
               Cancelar

@@ -181,7 +181,7 @@ export function CuentaView({
               </Text>
             </Box>
             <Stack gap={0}>
-              <Text fw={800} size="md" c="var(--pos-text)" className="hab-sidebar__title">
+              <Text size="lg" fw={800} c="var(--pos-text)" className="hab-sidebar__title">
                 {roomType}
               </Text>
               <Group gap={8} mt={4}>

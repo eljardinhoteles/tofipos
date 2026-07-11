@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
 import {
-  Box, Stack, Group, Text, Title, ActionIcon,
+  Box, Stack, Group, Text, ActionIcon,
   Badge, ScrollArea, Divider, NumberInput, Button, ThemeIcon, Paper, Modal, TextInput, SimpleGrid
 } from '@mantine/core';
 import {
@@ -239,7 +239,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
               <ArrowLeft size={20} />
             </ActionIcon>
             <Stack gap={0}>
-              <Title order={4} fw={900}>Dividir Cuenta</Title>
+              <Text size="lg" fw={800}>Dividir Cuenta</Text>
               <Text size="xs" c="dimmed">
                 {selectedMesa.nombre.replace('Mesa ', 'Mesa #')} - Cuenta #{activeComanda?.folio} {activeComanda?.cliente ? `- ${activeComanda.cliente}` : ''}
               </Text>
@@ -752,7 +752,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
         onClose={() => {
           setCobrarModalState(null);
         }}
-        title={<Text fw={900} size="lg">Cobrar e Imprimir</Text>}
+        title={<Text size="lg" fw={800}>Cobrar e Imprimir</Text>}
         centered
         radius="lg"
         padding="xl"
@@ -774,6 +774,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
             <Stack gap="sm" mt="md">
               <Button
                 size="lg"
+                radius="md"
                 color="green"
                 leftSection={<Printer size={20} />}
                 onClick={() => {
@@ -788,7 +789,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
               >
                 Cobrar e Imprimir
               </Button>
-              <Button variant="light" color="gray" size="lg" onClick={() => {
+              <Button variant="light" color="gray" size="lg" radius="md" onClick={() => {
                 setCobrarModalState(null);
               }}>
                 Cancelar

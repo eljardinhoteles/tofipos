@@ -12,7 +12,7 @@ export function SidebarPagosModal({ opened, onClose, pagos, totalPagado }: Sideb
     <Modal
       opened={opened}
       onClose={onClose}
-      title={<Text fw={900} size="lg">Historial de Pagos</Text>}
+      title={<Text size="lg" fw={800}>Historial de Pagos</Text>}
       centered
       zIndex={2000}
     >

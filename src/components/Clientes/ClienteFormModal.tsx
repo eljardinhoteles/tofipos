@@ -85,7 +85,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
     <Modal
       opened={opened}
       onClose={() => { onClose(); form.reset(); }}
-      title={<Text fw={900} size="xl">{editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}</Text>}
+      title={<Text size="lg" fw={800}>{editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}</Text>}
       centered
       radius="xl"
       size="lg"
@@ -137,10 +137,10 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
             {...form.getInputProps('notas')}
           />
           <Group justify="flex-end" mt="xl">
-            <Button variant="light" color="gray" radius="md" onClick={() => { onClose(); form.reset(); }}>
+            <Button variant="light" color="gray" size="lg" radius="md" onClick={() => { onClose(); form.reset(); }}>
               Cancelar
             </Button>
-            <Button type="submit" radius="md">
+            <Button type="submit" size="lg" radius="md">
               {editingCliente ? 'Guardar Cambios' : 'Registrar Cliente'}
             </Button>
           </Group>

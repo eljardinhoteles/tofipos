@@ -33,6 +33,7 @@ export function SidebarWelcome({
         <Button
           variant="light"
           color="gray"
+          size="lg"
           radius="md"
           onClick={onOpenConfig}
         >

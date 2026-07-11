@@ -22,7 +22,7 @@ export function SidebarCloseCuentaModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={<Text fw={900} size="lg">Confirmar Cierre de Cuenta</Text>}
+      title={<Text size="lg" fw={800}>Confirmar Cierre de Cuenta</Text>}
       centered
       radius="lg"
       padding="xl"
@@ -52,6 +52,7 @@ export function SidebarCloseCuentaModal({
         <Stack gap="sm" mt="md">
           <Button
             size="lg"
+            radius="md"
             color="green"
             leftSection={<Printer size={20} />}
             onClick={onConfirm}
@@ -62,6 +63,7 @@ export function SidebarCloseCuentaModal({
             variant="light"
             color="gray"
             size="lg"
+            radius="md"
             onClick={onClose}
           >
             Cancelar

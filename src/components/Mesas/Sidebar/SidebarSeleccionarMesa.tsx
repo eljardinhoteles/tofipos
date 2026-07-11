@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
-import { Box, Stack, Group, Text, Title, ActionIcon, ScrollArea, Paper, Badge, ThemeIcon, Center } from '@mantine/core';
+import { Box, Stack, Group, Text, ActionIcon, ScrollArea, Paper, Badge, ThemeIcon, Center } from '@mantine/core';
 import { ArrowLeft, TableIcon } from '@phosphor-icons/react';
 import type { Mesa } from '../../../db/database';
 import { initVerticalRxDb } from '../../../db/rxdb';
@@ -44,7 +44,7 @@ export function SidebarSeleccionarMesa({ onSelectMesa, onClose }: SidebarSelecci
             <ArrowLeft size={20} />
           </ActionIcon>
           <Stack gap={0}>
-            <Title order={4} fw={900}>Seleccionar Mesa</Title>
+            <Text size="lg" fw={800}>Seleccionar Mesa</Text>
             <Text size="xs" c="dimmed">Elige la mesa donde tomarás el pedido</Text>
           </Stack>
         </Group>

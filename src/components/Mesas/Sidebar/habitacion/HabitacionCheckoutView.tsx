@@ -174,7 +174,7 @@ export function HabitacionCheckoutView({
             <XIcon size={20} />
           </ActionIcon>
           <Stack gap={0}>
-            <Text fw={900} size="lg">Checkout — {selectedMesa.nombre}</Text>
+            <Text size="lg" fw={800}>Checkout — {selectedMesa.nombre}</Text>
             <Text size="xs" c="dimmed">{cuenta.huesped}</Text>
           </Stack>
         </Group>
@@ -303,7 +303,7 @@ export function HabitacionCheckoutView({
 
       <Box p="lg" className="hab-sidebar__footer">
         <Button
-          size="xl"
+          size="lg"
           radius="md"
           fullWidth
           color="green"
