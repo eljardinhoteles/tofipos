@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Box, Stack, Group, Text, ActionIcon, Button, TextInput, NumberInput, Divider, Switch, Badge, Flex, ScrollArea, Select } from '@mantine/core';
-import { Trash, Plus, X, Check, Tag, CurrencyDollar, Sliders, Drop } from '@phosphor-icons/react';
+import { useDisclosure } from '@mantine/hooks';
+import { Trash, Plus, X, Check, Tag, CurrencyDollar, Sliders, Drop, UploadSimple } from '@phosphor-icons/react';
 import { useForm } from '@mantine/form';
 import { type ModifierGroup } from '../../db/database';
 import { useUI } from '../../context/UIContext';
@@ -8,6 +9,7 @@ import { sileo } from 'sileo';
 import { useEffect, useState } from 'react';
 import { initVerticalRxDb, createRxCategoria, createRxMenuItem, updateRxMenuItem } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
+import { ImportarMenuCsvModal } from './ImportarMenuCsvModal';
 
 function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
@@ -25,6 +27,7 @@ export function SidebarMenuProduct() {
   const { selectedMenuProductId, setMenuView, setSelectedMenuProductId, openConfirm } = useUI();
 
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [isImportCsvOpen, { open: openImportCsv, close: closeImportCsv }] = useDisclosure(false);
   const { categorias: dbCategorias } = useRxMenuCatalog();
   const categoryOptions = dbCategorias.map(c => ({ value: c.nombre, label: c.nombre }));
 
@@ -43,7 +46,7 @@ export function SidebarMenuProduct() {
       } else {
         setEditingProduct(null);
       }
-    })().catch(() => {});
+    })().catch(() => { });
 
     return () => {
       alive = false;
@@ -150,20 +153,27 @@ export function SidebarMenuProduct() {
 
   return (
     <Box h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
+      <ImportarMenuCsvModal
+        opened={isImportCsvOpen}
+        onClose={() => {
+          closeImportCsv();
+          handleClose();
+        }}
+      />
 
       {/* HEADER — diseño unificado */}
       <Box px="md" pt="md" style={{ flexShrink: 0 }}>
         <Group justify="space-between" align="center" mb="md">
           <Group gap={12} align="center">
-            <ActionIcon 
-              variant="light" 
-              color="gray" 
-              onClick={handleClose} 
-              size="lg" 
+            <ActionIcon
+              variant="light"
+              color="gray"
+              onClick={handleClose}
+              size="lg"
               radius="xl"
-              style={{ 
-                backgroundColor: 'rgba(255,255,255,0.05)', 
-                color: 'var(--pos-text-sub)' 
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                color: 'var(--pos-text-sub)'
               }}
             >
               <X size={18} weight="bold" />
@@ -213,7 +223,7 @@ export function SidebarMenuProduct() {
                 size="lg"
                 value={form.values.categoria || null}
                 onChange={(v) => form.setFieldValue('categoria', v || '')}
-  
+
               />
               <NumberInput
                 placeholder="0.00"
@@ -223,7 +233,7 @@ export function SidebarMenuProduct() {
                 decimalScale={2}
                 min={0}
                 {...form.getInputProps('precio')}
-  
+
               />
             </Group>
             <Text size="xs" c="dimmed" mt={6}>
@@ -302,7 +312,7 @@ export function SidebarMenuProduct() {
                 {form.values.modificadores.map((group, gIndex) => (
                   <Box key={group.id}>
                     {gIndex > 0 && <Divider mb="xl" color="var(--pos-border-dark)" style={{ opacity: 0.5 }} />}
-                    
+
                     <Stack gap="md">
                       <Group gap="sm" align="flex-start">
                         <TextInput
@@ -415,9 +425,14 @@ export function SidebarMenuProduct() {
             >
               Eliminar
             </Button>
-          ) : (
-            <Button size="lg" radius="md" variant="light" color="gray" onClick={handleClose} fw={800}>
-              Cancelar
+          ) : null}
+          {!editingProduct && (
+            <Button
+              size="lg" radius="md" variant="light" color="gray" fw={800}
+              leftSection={<UploadSimple size={20} />}
+              onClick={openImportCsv}
+            >
+              Importar CSV
             </Button>
           )}
           <Button
@@ -426,7 +441,7 @@ export function SidebarMenuProduct() {
             onClick={() => form.onSubmit(handleSubmit)()}
             color="myColor"
           >
-            {editingProduct ? 'Guardar cambios' : 'Crear producto'}
+            {editingProduct ? 'Guardar' : 'Crear producto'}
           </Button>
         </Group>
       </Box>
