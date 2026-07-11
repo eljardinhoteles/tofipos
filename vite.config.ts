@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import basicSsl from '@vitejs/plugin-basic-ssl'
+// import basicSsl from '@vitejs/plugin-basic-ssl'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
@@ -13,7 +13,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    basicSsl(),
+    // basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {

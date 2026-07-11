@@ -29,7 +29,6 @@ export const POS = {
   SIZE_2X: ESC + '!\x30',
   // Double height only
   SIZE_TALL: ESC + '!\x10',
-  SIZE_WIDE: ESC + '!\x15',  // Double width only
   SIZE_NORMAL: ESC + '!\x00',
   ALIGN_CENTER: ESC + 'a\x01',
   ALIGN_LEFT: ESC + 'a\x00',
@@ -78,26 +77,38 @@ export function drawDivider(char: string = '-', width: number = DEFAULT_CONFIG.c
   return char.repeat(width);
 }
 
+function truncateToWidth(text: string, width: number): string {
+  if (text.length <= width) return text;
+  if (width <= 3) return text.substring(0, width);
+  return text.substring(0, width - 3) + '...';
+}
+
+function padEndWidth(text: string, width: number): string {
+  const value = truncateToWidth(text, width);
+  return value.padEnd(width, ' ');
+}
+
+function padStartWidth(text: string, width: number): string {
+  const value = truncateToWidth(text, width);
+  return value.padStart(width, ' ');
+}
+
 /**
  * Formatea una fila de producto típica para tickets de cobro:
  * "Cant Descripcion                            Total"
  * "1x   Hamburguesa doble con queso          $12.50"
  */
 export function formatProductRow(cant: number, desc: string, total: number, width: number = DEFAULT_CONFIG.columns): string {
-  const prefix = `${cant}x `.padEnd(5, ' '); // "1x   " (5 caracteres)
-  const totalStr = `$${total.toFixed(2)}`; // "$12.50" (ej. 7 caracteres)
+  const qtyCol = 4;
+  const totalStr = `$${total.toFixed(2)}`;
+  const totalCol = Math.max(8, totalStr.length);
+  const descCol = Math.max(1, width - qtyCol - totalCol - 1);
 
-  // Columnas restantes para la descripción
-  const remainingWidth = width - prefix.length - totalStr.length - 1; // -1 de espacio separador
-  let description = desc;
-  if (desc.length > remainingWidth) {
-    description = desc.substring(0, remainingWidth - 3) + '...';
-  }
+  const qtyPart = padEndWidth(`${cant}`, qtyCol);
+  const descPart = padEndWidth(desc, descCol);
+  const totalPart = padStartWidth(totalStr, totalCol);
 
-  const rightPart = totalStr;
-  const leftPart = prefix + description;
-
-  return justifyBetween(leftPart, rightPart, width, ' ');
+  return `${qtyPart} ${descPart}${totalPart}`;
 }
 
 // --- PLANTILLAS DE DOCUMENTOS ---
@@ -131,14 +142,20 @@ export function generarComandaCocina(
 
   const cleanMesa = mesaNombre.toUpperCase().replace('MESA ', 'MESA #');
 
-  // Header: mesa centrada en tamaño doble
+  // Header: mesa enmarcada en tamaño gigante
   t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
-  t += `${cleanMesa}\n`;
-  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
+  t += `------------------------\n`;
+  t += `    ${cleanMesa}\n`;
+  t += `------------------------\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
 
-  t += p(POS.BOLD_ON) + `ORDEN: #${comanda.folio}` + p(POS.BOLD_OFF) + '\n';
+  t += p(POS.ALIGN_LEFT);
+  t += `ORDEN: #${comanda.folio}\n`;
+
   if (habitacionNombre) {
+    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
+    t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
   }
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
 
@@ -149,7 +166,7 @@ export function generarComandaCocina(
     t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT);
     t += `${'='.repeat(48)}\n\n`;
   } else {
-    t += `\n\n`;
+    t += `${'='.repeat(48)}\n\n`;
   }
 
   const itemsCocina = items.filter(i => !i.es_bebida);
@@ -182,23 +199,25 @@ export function generarComandaCocina(
     list.forEach((group, index) => {
       s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
       s += `${group.totalQty}  ${group.nombre.toUpperCase()}\n`;
-      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + '\n';
+      s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL);
 
       group.subItems.forEach(sub => {
         if (sub.modifiers.length > 0) {
           const modsStr = sub.modifiers.join(' · ').toUpperCase();
-          s += p(POS.SIZE_WIDE);
-          s += group.subItems.length === 1 ? `  ${modsStr}\n` : `  ${sub.cantidad} = ${modsStr}\n`;
-          s += p(POS.SIZE_NORMAL);
+          s += group.subItems.length === 1 ? `   -> ${modsStr}\n` : `   (${sub.cantidad}) -> ${modsStr}\n`;
         }
         if (sub.nota) {
           const notaStr = sub.nota.toUpperCase();
-          s += p(POS.SIZE_WIDE);
-          s += group.subItems.length === 1 ? `  NOTA: ${notaStr}\n` : `  NOTA: ${sub.cantidad} = ${notaStr}\n`;
-          s += p(POS.SIZE_NORMAL);
+          s += p(POS.SIZE_2X) + p(POS.BOLD_ON);
+          s += group.subItems.length === 1 ? `   * NOTA: ${notaStr} *\n` : `   * NOTA (${sub.cantidad}): ${notaStr} *\n`;
+          s += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL);
         }
       });
-      if (index < list.length - 1) s += '\n---\n\n';
+      if (index < list.length - 1) {
+        s += `\n${'- '.repeat(24)}\n\n`;
+      } else {
+        s += '\n';
+      }
     });
     return s;
   }
@@ -228,18 +247,22 @@ export function generarComandaCocina(
       }
     }
     t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
-    t += `${cleanMesa}\n`;
+    t += `------------------------\n`;
+    t += `    ${cleanMesa}\n`;
+    t += `------------------------\n`;
     t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
-    t += p(POS.BOLD_ON) + `ORDEN: #${comanda.folio}` + p(POS.BOLD_OFF) + '\n';
+    t += `ORDEN: #${comanda.folio}\n`;
     if (habitacionNombre) {
+      t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
       t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
+      t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
     }
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
       t += `${'='.repeat(48)}\n\n`;
     } else {
-      t += `\n`;
+      t += `${'='.repeat(48)}\n\n`;
     }
     t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `BEBIDAS / BAR\n`;
@@ -273,10 +296,10 @@ export function generarPrecuenta(
   if (forPrinter) t += POS.INIT;
 
   // ── Encabezado ──────────────────────────────────────────────────
+  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
   t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
-  t += `EL JARDIN\n`;
+  t += `${orgName.toUpperCase()}\n`;
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
-  t += p(POS.ALIGN_CENTER) + `Restaurante & Hospedaje\n`;
   t += p(POS.ALIGN_LEFT);
   t += `${'-'.repeat(W)}\n`;
 
@@ -326,9 +349,9 @@ export function generarPrecuenta(
   t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
   t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
   t += `${'-'.repeat(W)}\n`;
-  t += p(POS.BOLD_ON) + p(POS.SIZE_WIDE);
+  t += p(POS.BOLD_ON);
   t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
-  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.BOLD_OFF);
 
   // ── Pagos / Abonos ──────────────────────────────────────────────
   if (pagos && pagos.length > 0) {
@@ -449,7 +472,8 @@ export function generarTicketPago(
 ): string {
   let t = '';
 
-  t += alignCenter('RESTAURANTE EL JARDIN', width) + '\n';
+  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
+  t += alignCenter(orgName.toUpperCase(), width) + '\n';
   t += alignCenter('Calle de las Flores #123', width) + '\n';
   t += alignCenter('Quito - Ecuador', width) + '\n';
   t += alignCenter('Teléfono: 099-999-9999', width) + '\n';
@@ -535,72 +559,94 @@ export function generarPrecuentaDividida(
   nombrePagador: string,
   montoTotal: number,
   ivaPercent: number = 15,
-  habitacionNombre?: string
+  habitacionNombre?: string,
+  forPrinter = false,
 ): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
   let t = '';
 
-  t += `PRECUENTA #${comanda.folio}\n\n`;
+  if (forPrinter) t += POS.INIT;
 
-  t += `${mesaNombre}\n`;
+  // ── Encabezado ──────────────────────────────────────────────────
+  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `${orgName.toUpperCase()}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_LEFT);
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Info de la orden ────────────────────────────────────────────
+  t += justifyBetween(`PRECUENTA #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
   }
-  t += `Fecha: ${new Date(comanda.created_at || new Date()).toLocaleDateString('es-ES')}\n`;
   if (nombrePagador) {
     t += `Cliente que paga: ${nombrePagador.toUpperCase()}\n`;
   }
-  t += `---------------\n`;
-  t += `Cant  -  Detalle  -  Total\n\n`;
+  if (comanda.mesero) {
+    t += `Mesero: ${comanda.mesero}\n`;
+  }
+  t += `${'-'.repeat(W)}\n`;
 
+  // ── Cabecera de columnas ────────────────────────────────────────
+  t += p(POS.BOLD_ON);
+  t += justifyBetween('CANT  DESCRIPCION', 'TOTAL', W) + '\n';
+  t += p(POS.BOLD_OFF);
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Items ───────────────────────────────────────────────────────
   let subtotal = 0;
   if (items && items.length > 0) {
     items.forEach(item => {
       const qty = item.qtyToPay || item.cantidad || 1;
       const itemTotal = item.precio * qty;
       subtotal += itemTotal;
-      t += `${qty} - ${item.nombre.toUpperCase()} - $${itemTotal.toFixed(2)}\n`;
-
-      // Modificadores tabulados debajo
+      t += formatProductRow(qty, item.nombre, itemTotal, W) + '\n';
       if (item.modificadores && item.modificadores.length > 0) {
         item.modificadores.forEach((mod: string) => {
-          t += `   * ${mod.toUpperCase()}\n`;
+          t += `     * ${mod.toUpperCase()}\n`;
         });
       }
       if (item.nota) {
-        t += `   * NOTA: ${item.nota.toUpperCase()}\n`;
+        t += `     NOTA: ${item.nota.toUpperCase()}\n`;
       }
     });
   } else {
     subtotal = montoTotal / (1 + ivaPercent / 100);
-    t += `1 - CONSUMO PARCIAL - $${subtotal.toFixed(2)}\n`;
+    t += formatProductRow(1, 'CONSUMO PARCIAL', montoTotal, W) + '\n';
   }
 
-  t += `---------------\n`;
+  t += `${'-'.repeat(W)}\n`;
 
-  const iva = subtotal * (ivaPercent / 100);
+  // ── Totales ─────────────────────────────────────────────────────
+  const ivaFactor = ivaPercent / 100;
+  const iva = subtotal * ivaFactor;
   const total = subtotal + iva;
 
-  t += `Subtotal: - $${subtotal.toFixed(2)}\n`;
-  t += `IVA (${ivaPercent}%): - $${iva.toFixed(2)}\n`;
-  t += `Total: - $${total.toFixed(2)}\n`;
+  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+  t += p(POS.BOLD_ON);
+  t += justifyBetween('TOTAL PARCIAL:', `$${total.toFixed(2)}`, W) + '\n';
+  t += p(POS.BOLD_OFF);
 
-  t += `---------------\n\n`;
+  // ── Datos de facturación ────────────────────────────────────────
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `*Datos de facturacion (obligatorio):\n`;
+  t += `Razon Social: ${'-'.repeat(W - 14)}\n`;
+  t += `RUC/CI/PS:    ${'-'.repeat(W - 14)}\n`;
+  t += `Correo:       ${'-'.repeat(W - 14)}\n`;
+  t += `Telefono:     ${'-'.repeat(W - 14)}\n`;
+  t += `Direccion:    ${'-'.repeat(W - 14)}\n`;
 
-  t += `------------------------------\n`;
-  t += `*Obligatorio escribir sus datos de facturación:\n`;
-  t += `Razón Social:\n`;
-  t += `------------------------------\n`;
-  t += `RUC/CI/PS:\n`;
-  t += `------------------------------\n`;
-  t += `Correo:\n`;
-  t += `------------------------------\n`;
-  t += `Telefono:\n`;
-  t += `------------------------------\n`;
-  t += `Direccion:\n`;
-  t += `------------------------------\n\n`;
-
-  t += `EL JARDIN / Documento interno sin validéz tributaria.\n`;
-  t += `\n\n`;
+  // ── Pie ─────────────────────────────────────────────────────────
+  t += `\n`;
+  t += p(POS.ALIGN_CENTER);
+  t += `Documento interno sin validez tributaria.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += '\n\n\n';
 
   return t;
 }
