@@ -311,6 +311,19 @@ export default function Ordenes() {
     return anuladasItems.slice(start, start + ITEMS_PER_PAGE);
   }, [anuladasItems, page]);
 
+  // Items y total por comanda de la página visible, precalculados una sola vez
+  // por cambio real de datos en vez de filtrar/recalcular IVA en cada render
+  // de la tabla dentro del .map().
+  const comandaRowData = useMemo(() => {
+    const map = new Map<string, { items: typeof safeComandaItems; total: number }>();
+    for (const comanda of paginatedComandas) {
+      const items = safeComandaItems.filter(i => i.comanda_id === comanda.id);
+      const total = calcularTotalesComanda(items, menuItems, ivaPorcentaje, preciosConIva).total;
+      map.set(comanda.id, { items, total });
+    }
+    return map;
+  }, [paginatedComandas, safeComandaItems, menuItems, ivaPorcentaje, preciosConIva]);
+
   useEffect(() => { setPage(1); }, [status, searchQuery, dateRange]);
   useEffect(() => {
     const maxPages = status === 'anuladas' ? totalAnuladasPages : totalPages;
@@ -586,10 +599,10 @@ export default function Ordenes() {
                 <Table.Tbody>
                   {paginatedComandas.map(comanda => {
                     const mesa = safeMesas.find(m => m.id === comanda.mesa_id);
-                    const items = safeComandaItems.filter(i => i.comanda_id === comanda.id);
+                    const rowData = comandaRowData.get(comanda.id);
+                    const items = rowData?.items ?? [];
                     const timeAgo = Math.floor((Date.now() - new Date(comanda.created_at).getTime()) / 60000);
-                    const totales = calcularTotalesComanda(items, menuItems, ivaPorcentaje, preciosConIva);
-                    const total = totales.total;
+                    const total = rowData?.total ?? 0;
                     const isPedirCuenta = comanda.estado === 'cuenta';
 
                     return (

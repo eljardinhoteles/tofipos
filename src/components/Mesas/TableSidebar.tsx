@@ -67,13 +67,16 @@ export function TableSidebar({
   const [liveComandaItems, setLiveComandaItems] = useState<any[]>([]);
   const [activeCuentaHabitacion, setActiveCuentaHabitacion] = useState<any | null>(null);
 
+  // Suscripciones globales de la organización (mesas, pisos, comandas activas):
+  // dependen solo de orgId, no de qué mesa esté seleccionada. Antes vivían en el
+  // mismo efecto que la mesa seleccionada y se recreaban en cada tap de mesa,
+  // relanzando consultas sobre TODA la organización y retrasando la apertura
+  // del sheet. Ahora corren una sola vez al montar el sidebar.
   useEffect(() => {
     let alive = true;
     let mesasSub: { unsubscribe: () => void } | null = null;
     let pisosSub: { unsubscribe: () => void } | null = null;
-    let comandasSub: { unsubscribe: () => void } | null = null;
     let allComandasSub: { unsubscribe: () => void } | null = null;
-    let cuentaSub: { unsubscribe: () => void } | null = null;
 
     (async () => {
       const rxDb = await initVerticalRxDb();
@@ -116,6 +119,28 @@ export function TableSidebar({
         );
         setActiveMesaIds(ids);
       });
+    })().catch(err => console.warn('Error cargando datos globales RxDB del sidebar:', err));
+
+    return () => {
+      alive = false;
+      mesasSub?.unsubscribe();
+      pisosSub?.unsubscribe();
+      allComandasSub?.unsubscribe();
+    };
+  }, []);
+
+  // Suscripciones específicas de la mesa/comanda seleccionada: este es el único
+  // trabajo que debe repetirse en cada tap de mesa.
+  useEffect(() => {
+    let alive = true;
+    let comandasSub: { unsubscribe: () => void } | null = null;
+    let cuentaSub: { unsubscribe: () => void } | null = null;
+
+    (async () => {
+      const rxDb = await initVerticalRxDb();
+      if (!alive) return;
+
+      const orgId = localStorage.getItem('pos_active_org_id') || '';
 
       if (viewingComandaId) {
         const doc = await rxDb.comandas.findOne(viewingComandaId).exec();
@@ -162,10 +187,7 @@ export function TableSidebar({
 
     return () => {
       alive = false;
-      mesasSub?.unsubscribe();
-      pisosSub?.unsubscribe();
       comandasSub?.unsubscribe();
-      allComandasSub?.unsubscribe();
       cuentaSub?.unsubscribe();
     };
   }, [selectedMesa?.id, selectedMesa?.estado, viewingComandaId]);

@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
-  Box, Stack, Group, Text, Title, Button, ActionIcon,
+  Box, Stack, Group, Text, Button, ActionIcon,
   ScrollArea, Paper, ThemeIcon, Center, Badge, Loader
 } from '@mantine/core';
 import { ArrowLeft, Door, Check } from '@phosphor-icons/react';
@@ -104,7 +104,10 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
   const getMesaNombre = (mesaId: string) => mesasHabitacion.find(m => m.id === mesaId)?.nombre || mesaId;
 
   // Cálculos financieros centralizados por item
-  const totales = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
+  const totales = useMemo(
+    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
+    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
 
   const total = totales.total;
 
@@ -144,7 +147,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
             <ArrowLeft size={20} />
           </ActionIcon>
           <Stack gap={0}>
-            <Title order={4} fw={900}>Enviar a Habitación</Title>
+            <Text size="lg" fw={800}>Enviar a Habitación</Text>
             <Text size="xs" c="dimmed">Comanda #{activeComanda.folio}</Text>
           </Stack>
         </Group>
@@ -220,7 +223,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
 
       <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)' }}>
         <Button
-          size="xl"
+          size="lg"
           radius="md"
           fullWidth
           color="myColor"

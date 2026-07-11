@@ -231,6 +231,8 @@ export function SidebarKitchenReport({
           <Button
             variant="light"
             color="myColor"
+            size="lg"
+            radius="md"
             leftSection={<Printer size={16} weight="bold" />}
             onClick={() => handleGenerarReporte('80mm')}
             disabled={selectedReportMesas.size === 0}
@@ -240,6 +242,8 @@ export function SidebarKitchenReport({
           </Button>
           <Button
             color="myColor"
+            size="lg"
+            radius="md"
             leftSection={<FileText size={16} weight="bold" />}
             onClick={() => handleGenerarReporte('a4')}
             disabled={selectedReportMesas.size === 0}
@@ -248,7 +252,7 @@ export function SidebarKitchenReport({
             Hoja A4
           </Button>
         </Group>
-        <Button variant="subtle" color="gray" onClick={onClose} size="sm">
+        <Button variant="subtle" color="gray" onClick={onClose} size="lg" radius="md">
           Cancelar
         </Button>
       </Stack>
@@ -270,7 +274,7 @@ export function SidebarKitchenReport({
                 <ClipboardText size={18} weight="bold" />
               </ThemeIcon>
               <Stack gap={0}>
-                <Text fw={900} size="md" c="var(--pos-text)" lh={1.2}>Reporte de Cocina</Text>
+                <Text fw={800} size="lg" c="var(--pos-text)" lh={1.2}>Reporte de Cocina</Text>
                 <Text size="xs" c="dimmed">Consolidado de mesas activas</Text>
               </Stack>
             </Group>
@@ -304,7 +308,7 @@ export function SidebarKitchenReport({
                     <ClipboardText size={18} weight="bold" />
                   </ThemeIcon>
                   <Stack gap={0}>
-                    <Text fw={900} size="md" c="var(--pos-text)" lh={1.2}>Reporte de Cocina</Text>
+                    <Text fw={800} size="lg" c="var(--pos-text)" lh={1.2}>Reporte de Cocina</Text>
                     <Text size="xs" c="dimmed">Consolidado de mesas activas</Text>
                   </Stack>
                 </Group>
@@ -314,7 +318,7 @@ export function SidebarKitchenReport({
               </Group>
 
               {/* Body */}
-              <div className="vaul-body" style={{ overflowY: 'hidden', flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }} data-vaul-no-drag>
+              <div className="vaul-body" style={{ overflowY: 'hidden', flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
                 {opened && content}
               </div>
             </VaulDrawer.Content>

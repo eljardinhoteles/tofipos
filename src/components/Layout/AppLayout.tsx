@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   AppShell, Box, Modal, Stack, Text, Group, Button, useMantineTheme, TextInput
 } from '@mantine/core';
@@ -84,6 +84,27 @@ export function AppLayout() {
     reservaView !== 'none' ||
     menuView !== 'none'
   );
+
+  // Única fuente de verdad para abrir/mostrar el sheet móvil (antes se repetía
+  // esta expresión en `open`, en el render del body y en `onOpenChange`)
+  const isMobileSheetOpen = useMemo(
+    () =>
+      (selectedMesaId !== null && mesaView !== 'productos') ||
+      configView !== 'none' ||
+      menuView === 'producto' ||
+      (reservaView !== 'none' && !reservaProductosComandaId),
+    [selectedMesaId, mesaView, configView, menuView, reservaView, reservaProductosComandaId]
+  );
+
+  const closeMobileSheet = useCallback(() => {
+    setSelectedMesaId(null);
+    setConfigView('none');
+    setViewingComandaId(null);
+    setReservaView('none');
+    setSelectedReservaId(null);
+    setMenuView('none');
+    setSelectedMenuProductId(null);
+  }, [setSelectedMesaId, setConfigView, setViewingComandaId, setReservaView, setSelectedReservaId, setMenuView, setSelectedMenuProductId]);
 
   return (
     <AppShell
@@ -239,16 +260,10 @@ export function AppLayout() {
       {/* SIDEBAR MÓVIL (Vaul Drawer / Bottom Sheet) */}
       {isMobile && (
         <VaulDrawer.Root
-          open={(selectedMesaId !== null && mesaView !== 'productos') || configView !== 'none' || menuView === 'producto' || (reservaView !== 'none' && !reservaProductosComandaId)}
+          open={isMobileSheetOpen}
           onOpenChange={(open) => {
             if (!open && !reservaProductosComandaId) {
-              setSelectedMesaId(null);
-              setConfigView('none');
-              setViewingComandaId(null);
-              setReservaView('none');
-              setSelectedReservaId(null);
-              setMenuView('none');
-              setSelectedMenuProductId(null);
+              closeMobileSheet();
             }
           }}
         >
@@ -259,19 +274,14 @@ export function AppLayout() {
                 Acciones y detalles de la mesa seleccionada
               </VaulDrawer.Description>
               <div className="vaul-handle" />
-              <div className="vaul-body" data-vaul-no-drag>
-                {((selectedMesaId !== null && mesaView !== 'productos') || configView !== 'none' || menuView === 'producto' || (reservaView !== 'none' && !reservaProductosComandaId)) && (
+              {/* Sin data-vaul-no-drag global: Vaul ya evita interceptar el gesto
+                  dentro de inputs y áreas con overflow propio; bloquearlo en todo
+                  el body impedía cerrar arrastrando desde el contenido. */}
+              <div className="vaul-body">
+                {isMobileSheetOpen && (
                   <TableSidebar
                     selectedMesa={selectedMesa}
-                    onClose={() => {
-                      setSelectedMesaId(null);
-                      setConfigView('none');
-                      setViewingComandaId(null);
-                      setReservaView('none');
-                      setSelectedReservaId(null);
-                      setMenuView('none');
-                      setSelectedMenuProductId(null);
-                    }}
+                    onClose={closeMobileSheet}
                     onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
                       if (res === 'productos') {
                         setMesaView('productos');

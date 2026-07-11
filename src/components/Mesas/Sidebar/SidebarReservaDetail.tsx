@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import {
   Box, Stack, Group, Text, Button, ActionIcon,
   Badge, ScrollArea, Divider, ThemeIcon, NumberInput, Paper,
@@ -324,16 +324,20 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
     };
   }, [reservaId]);
 
+  // Cálculos financieros centralizados por item (antes del early-return de
+  // `reserva` para respetar las reglas de hooks)
+  const totales = useMemo(
+    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
+    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
+  const totalAbonado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+
   if (!reserva) return null;
 
   const isReadOnly = reserva.estado === 'completada' || reserva.estado === 'cancelada';
-  
-  // Cálculos financieros centralizados por item
-  const totales = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
   const subtotal = totales.subtotalNeto;
   const iva = totales.ivaTotal;
   const total = totales.total;
-  const totalAbonado = pagos.reduce((acc, p) => acc + p.monto, 0);
 
   const fechaDisplay = new Date(reserva.fecha + 'T12:00').toLocaleDateString('es-ES', {
     dateStyle: 'full'
@@ -366,7 +370,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
                 <ArrowLeft size={22} weight="bold" />
               </ActionIcon>
               <Stack gap={0}>
-                <Text fw={800} size="md" c="var(--pos-text)" style={{ lineHeight: 1 }}>Historial de Pagos</Text>
+                <Text size="lg" fw={800} c="var(--pos-text)" style={{ lineHeight: 1 }}>Historial de Pagos</Text>
                 <Text size="11px" c="dimmed" fw={700} mt={2} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Reserva de {reserva.nombre}
                 </Text>
@@ -489,7 +493,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
               <CalendarBlank size={22} weight="bold" color="white" />
             </Box>
             <Stack gap={0}>
-              <Text fw={800} size="md" c="var(--pos-text)" style={{ lineHeight: 1.1 }}>
+              <Text size="lg" fw={800} c="var(--pos-text)" style={{ lineHeight: 1.1 }}>
                 {codigoReserva ? `${codigoReserva} - ` : ''}{reserva.nombre}
               </Text>
               <Text size="11px" fw={700} c={STATUS_COLOR[reserva.estado as Reserva['estado']]} mt={4} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -952,7 +956,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
           reserva={reserva}
           zonaNombre={zonas.find(z => z.id === reserva.zona_id)?.nombre || ''}
           comandaItems={comandaItems}
-          totalMonto={calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva).total}
+          totalMonto={total}
           totalAbonado={totalAbonado}
           codigoReserva={codigoReserva}
         />
@@ -970,7 +974,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
         opened={waPreviewOpened}
         onClose={() => setWaPreviewOpened(false)}
         title={
-          <Text fw={800} size="sm">Vista previa · Reserva de {reserva?.nombre}</Text>
+          <Text size="lg" fw={800}>Vista previa · Reserva de {reserva?.nombre}</Text>
         }
         size="sm"
         centered

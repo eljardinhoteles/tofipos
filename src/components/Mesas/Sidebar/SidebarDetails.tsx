@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Box, Stack, Text, Group, ActionIcon, Button, ScrollArea, Divider, Badge, NumberInput, UnstyledButton, ThemeIcon, Center, Modal, Paper } from '@mantine/core';
 import { X, Plus, User, Printer, ArrowCounterClockwise, Trash, Minus, PushPin, Calculator, Check, CheckCircle, ListPlus, Bed, Basket, CaretDoubleUp, ArrowDown, CaretDown } from '@phosphor-icons/react';
 import { useForm } from '@mantine/form';
@@ -191,11 +191,14 @@ export function SidebarDetails({
     }));
 
   // Cálculos de IVA centralizados por item
-  const totales = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
+  const totales = useMemo(
+    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
+    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
   const subtotal = totales.subtotalNeto;
   const ivaCalculado = totales.ivaTotal;
   const total = totales.total;
-  const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+  const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
   const saldoPendiente = Math.max(0, total - totalPagado);
 
   // Snapshot de cantidades guardado en la última confirmación: { [item_id]: cantidad }

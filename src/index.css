@@ -376,7 +376,7 @@ label {
   gap: 4px;
   color: var(--ui-on-primary-muted) !important;
   text-decoration: none;
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
   background-color: transparent;
   margin: 4px 0;
 }
@@ -588,7 +588,7 @@ label {
 }
 
 .fab-main {
-  transition: all 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: transform 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .fab-main:hover {
@@ -824,9 +824,11 @@ label {
   to { transform: translateY(6px); }
 }
 
+/* Pulso vía box-shadow (compositable) en vez de animar border-color,
+   que fuerza recálculo de estilos/paint en cada frame. */
 @keyframes sidebar-details-pulse-border {
-  0%, 100% { border-color: rgba(247, 103, 7, 0.35); }
-  50% { border-color: rgba(247, 103, 7, 0.8); }
+  0%, 100% { box-shadow: 0 0 0 1px rgba(247, 103, 7, 0.35) inset; }
+  50% { box-shadow: 0 0 0 1px rgba(247, 103, 7, 0.8) inset; }
 }
 
 /* ── Product selector ────────────────────────────────────── */
@@ -1603,6 +1605,8 @@ label {
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   perspective: 1000px;
+  /* Evita que el drag del sheet dispare scroll/bounce del body detrás en iOS */
+  overscroll-behavior: contain;
 }
 
 .vaul-handle {

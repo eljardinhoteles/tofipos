@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Box, Stack, Text, Group, ActionIcon, Button, ScrollArea, Badge, Paper } from '@mantine/core';
 import { X, Printer, User, PushPin, BedIcon, ForkKnifeIcon, ListChecks } from '@phosphor-icons/react';
 import { type Mesa } from '../../../db/database';
@@ -92,11 +92,14 @@ export function SidebarReceiptViewer({
   const { menuItems } = useRxMenuCatalog();
 
   // Cálculos financieros centralizados por item
-  const totales = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
+  const totales = useMemo(
+    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
+    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
   const subtotal = totales.subtotalNeto;
   const ivaCalculado = totales.ivaTotal;
 
-  const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
+  const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
 
   const isFacturado = activeComanda?.estado === 'facturado';
   const isAnulada = activeComanda?.estado === 'anulada';
@@ -157,7 +160,7 @@ export function SidebarReceiptViewer({
               <X size={20} />
             </ActionIcon>
             <Stack gap={0}>
-              <Text fw={800} size="md">
+              <Text size="lg" fw={800}>
                 Detalle Comanda #{activeComanda?.folio}
               </Text>
               {isFacturado && (

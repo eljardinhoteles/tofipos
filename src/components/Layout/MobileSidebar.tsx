@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Stack,
   UnstyledButton,
@@ -243,8 +243,14 @@ export function MobileSidebar() {
     };
   }, [activeComanda?.id]);
 
-  const totalProductos = comandaItems.reduce((acc, i) => acc + i.cantidad, 0);
-  const totalMonto = calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva).total;
+  const totalProductos = useMemo(
+    () => comandaItems.reduce((acc, i) => acc + i.cantidad, 0),
+    [comandaItems]
+  );
+  const totalMonto = useMemo(
+    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva).total,
+    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
 
   useEffect(() => {
     const unsub = subscribeSyncStatus(setSyncStatus);
@@ -313,8 +319,14 @@ export function MobileSidebar() {
       itemsSub?.unsubscribe();
     };
   }, [reservaProductosComandaId]);
-  const reservaTotalProductos = reservaComandaItems.reduce((acc, i) => acc + i.cantidad, 0);
-  const reservaTotalMonto = calcularTotalesComanda(reservaComandaItems, menuItems, ivaPorcentaje, preciosConIva).total;
+  const reservaTotalProductos = useMemo(
+    () => reservaComandaItems.reduce((acc, i) => acc + i.cantidad, 0),
+    [reservaComandaItems]
+  );
+  const reservaTotalMonto = useMemo(
+    () => calcularTotalesComanda(reservaComandaItems, menuItems, ivaPorcentaje, preciosConIva).total,
+    [reservaComandaItems, menuItems, ivaPorcentaje, preciosConIva]
+  );
 
   if (reservaProductosComandaId) {
     return (

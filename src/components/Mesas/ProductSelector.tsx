@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import {
   Box, Stack, Group, Text, TextInput, ScrollArea,
   ActionIcon, Badge, Modal, Image,
@@ -151,28 +151,24 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
     });
   }, [safeMenuItems, searchQueryDebounced, selectedCategory]);
 
-  const handleAddProduct = async (item: MenuItem) => {
-    if (!activeComanda) {
-      sileo.error({ 
-        title: 'Vista de solo lectura',
-        description: 'Debes seleccionar o abrir una mesa para añadir productos.'
-      });
-      return;
+  // Agrupación por categoría precalculada: antes vivía como IIFE dentro del JSX
+  // y se recalculaba en cada render del componente (ej. al abrir el modal de
+  // detalle), aunque filteredItems no hubiera cambiado.
+  const groupedItems = useMemo(() => {
+    const groups: { category: string; items: typeof filteredItems }[] = [];
+    for (const item of filteredItems) {
+      const cat = item.categoria_nombre || 'Sin Categoría';
+      const last = groups[groups.length - 1];
+      if (last && last.category === cat) {
+        last.items.push(item);
+      } else {
+        groups.push({ category: cat, items: [item] });
+      }
     }
+    return groups;
+  }, [filteredItems]);
 
-    // Si la comanda todavía no se ha sincronizado, permitimos seguir editándola
-    // aunque ya tenga una cuenta/habitación asociada localmente.
-
-    // Si tiene modificadores, abrir el modal primero
-    if (item.modificadores && item.modificadores.length > 0 && !detailItem) {
-      setModifyingItem(item);
-      return;
-    }
-
-    await performAddToCart(item);
-  };
-
-  const performAddToCart = async (item: MenuItem, selectedModifiers: string[] = []) => {
+  const performAddToCart = useCallback(async (item: MenuItem, selectedModifiers: string[] = []) => {
     if (!activeComanda) return;
     const rxDb = await initVerticalRxDb();
     const orgId = localStorage.getItem('pos_active_org_id') || activeComanda.organization_id || '';
@@ -224,7 +220,28 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         _modified: new Date().toISOString()
       });
     }
-  };
+  }, [activeComanda, rxComandaItems]);
+
+  const handleAddProduct = useCallback(async (item: MenuItem) => {
+    if (!activeComanda) {
+      sileo.error({
+        title: 'Vista de solo lectura',
+        description: 'Debes seleccionar o abrir una mesa para añadir productos.'
+      });
+      return;
+    }
+
+    // Si la comanda todavía no se ha sincronizado, permitimos seguir editándola
+    // aunque ya tenga una cuenta/habitación asociada localmente.
+
+    // Si tiene modificadores, abrir el modal primero
+    if (item.modificadores && item.modificadores.length > 0 && !detailItem) {
+      setModifyingItem(item);
+      return;
+    }
+
+    await performAddToCart(item);
+  }, [activeComanda, detailItem, performAddToCart]);
 
   if (isLoading) {
     return (
@@ -339,46 +356,33 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           </Center>
         ) : (
           <Stack gap="lg" pb={80}>
-            {(() => {
-              // Agrupar items por categoría manteniendo el orden ya establecido
-              const groups: { category: string; items: typeof filteredItems }[] = [];
-              for (const item of filteredItems) {
-                const cat = item.categoria_nombre || 'Sin Categoría';
-                const last = groups[groups.length - 1];
-                if (last && last.category === cat) {
-                  last.items.push(item);
-                } else {
-                  groups.push({ category: cat, items: [item] });
-                }
-              }
-              return groups.map(group => (
-                <Box key={group.category}>
-                  <Text
-                    fw={800}
-                    size="xs"
-                    tt="uppercase"
-                    c="dimmed"
-                    mb="xs"
-                    px={4}
-                    className="product-selector__category-title"
-                  >
-                    {group.category}
-                  </Text>
-                  <Box
-                    className="product-selector__grid"
-                  >
-                    {group.items.map(item => (
-                      <ProductCard
-                        key={item.id}
-                        item={item}
-                        onAdd={() => handleAddProduct(item)}
-                        currentQty={itemQuantities[item.id] || 0}
-                      />
-                    ))}
-                  </Box>
+            {groupedItems.map(group => (
+              <Box key={group.category}>
+                <Text
+                  fw={800}
+                  size="xs"
+                  tt="uppercase"
+                  c="dimmed"
+                  mb="xs"
+                  px={4}
+                  className="product-selector__category-title"
+                >
+                  {group.category}
+                </Text>
+                <Box
+                  className="product-selector__grid"
+                >
+                  {group.items.map(item => (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      onAdd={handleAddProduct}
+                      currentQty={itemQuantities[item.id] || 0}
+                    />
+                  ))}
                 </Box>
-              ));
-            })()}
+              </Box>
+            ))}
           </Stack>
         )}
         </ScrollArea>
@@ -468,18 +472,20 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 // ── CARD DE PRODUCTO ─────────────────────────────────────────────
 interface ProductCardProps {
   item: MenuItem;
-  onAdd: () => void;
+  onAdd: (item: MenuItem) => void;
   currentQty: number;
 }
 
-function ProductCard({ item, onAdd, currentQty }: ProductCardProps) {
+// Memoizado: en listas de 30-50+ productos, evita re-renderizar todas las
+// cards cuando solo cambia la cantidad de una (ej. al agregar un producto).
+const ProductCard = memo(function ProductCard({ item, onAdd, currentQty }: ProductCardProps) {
   const isSelected = currentQty > 0;
 
   return (
     <Box
       component="div"
       className={`tap product-selector__card${isSelected ? ' product-selector__card--selected' : ''}`}
-      onClick={onAdd}
+      onClick={() => onAdd(item)}
     >
       {/* Nombre — ocupa el espacio superior, clamped a 2 líneas */}
       <Text
@@ -532,4 +538,4 @@ function ProductCard({ item, onAdd, currentQty }: ProductCardProps) {
       </Group>
     </Box>
   );
-}
+});

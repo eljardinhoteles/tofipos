@@ -189,9 +189,70 @@ export default function Mesas() {
     };
   }, []);
 
-  const mesasToShow = allMesas
-    .filter(m => m.piso === selectedPiso)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity: 'base' }));
+  const mesasToShow = useMemo(
+    () => allMesas
+      .filter(m => m.piso === selectedPiso)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity: 'base' })),
+    [allMesas, selectedPiso]
+  );
+
+  // Datos derivados por mesa (comanda activa, cuenta de habitación, habitación
+  // asociada) precalculados una sola vez por cambio real de datos, en vez de
+  // recorrer allComandas/allCuentas/allMesas con .find() en cada render del grid.
+  const mesaDerivedData = useMemo(() => {
+    const isHabitacionPiso = selectedPiso.toLowerCase() === 'habitaciones';
+    const comandaByMesaId = new Map<string, Comanda>();
+    for (const c of allComandas) {
+      if (isOperativeComanda(c) && !comandaByMesaId.has(c.mesa_id)) comandaByMesaId.set(c.mesa_id, c);
+    }
+    const cuentaByMesaId = new Map<string, HabitacionCuenta>();
+    const cuentaById = new Map<string, HabitacionCuenta>();
+    for (const c of allCuentas) {
+      if (!cuentaByMesaId.has(c.mesa_id)) cuentaByMesaId.set(c.mesa_id, c);
+      cuentaById.set(c.id, c);
+    }
+    const mesaById = new Map(allMesas.map(m => [m.id, m]));
+
+    const map = new Map<string, {
+      mesaConEstado: typeof mesasToShow[number] & { estado: 'libre' | 'ocupada' | 'cuenta' };
+      mesaComanda: Comanda | undefined;
+      clienteNombre: string | undefined;
+      isHabitacion: boolean;
+      habitacionAsociada: string;
+    }>();
+
+    for (const mesa of mesasToShow) {
+      const mesaComanda = comandaByMesaId.get(mesa.id);
+      const mesaCuenta = cuentaByMesaId.get(mesa.id);
+      const clienteNombre = mesaCuenta ? mesaCuenta.huesped : mesaComanda?.cliente;
+      const estadoVisual = isHabitacionPiso
+        ? (mesaCuenta ? 'ocupada' : 'libre')
+        : (mesaComanda ? (mesaComanda.estado === 'cuenta' ? 'cuenta' : 'ocupada') : 'libre');
+
+      let habitacionAsociada = '';
+      if (!isHabitacionPiso && mesaComanda?.habitacion_cuenta_id) {
+        const cuenta = cuentaById.get(mesaComanda.habitacion_cuenta_id);
+        const roomMesa = cuenta ? mesaById.get(cuenta.mesa_id) : undefined;
+        if (roomMesa) habitacionAsociada = roomMesa.nombre;
+      }
+
+      map.set(mesa.id, {
+        mesaConEstado: { ...mesa, estado: estadoVisual },
+        mesaComanda,
+        clienteNombre,
+        isHabitacion: isHabitacionPiso,
+        habitacionAsociada,
+      });
+    }
+    return map;
+  }, [mesasToShow, allComandas, allCuentas, allMesas, selectedPiso]);
+
+  const handleSelectMesa = useCallback((mesa: { id: string }) => {
+    setSelectedMesaEsHabitacion(selectedPiso.toLowerCase() === 'habitaciones');
+    setSelectedMesaId(mesa.id);
+    setViewingComandaId(null);
+    setConfigView('none');
+  }, [selectedPiso, setSelectedMesaEsHabitacion, setSelectedMesaId, setViewingComandaId, setConfigView]);
 
   useEffect(() => {
     if (dbPisos.length === 0) return;
@@ -431,40 +492,20 @@ export default function Mesas() {
                 ) : (
                   <Box className="pos-tables-grid">
                     {mesasToShow.map((mesa) => {
-                      const mesaComanda = allComandas.find(c => c.mesa_id === mesa.id && isOperativeComanda(c));
-                      const mesaCuenta = allCuentas.find(c => c.mesa_id === mesa.id);
-                      const clienteNombre = mesaCuenta ? mesaCuenta.huesped : mesaComanda?.cliente;
-                      const isHabitacion = selectedPiso.toLowerCase() === 'habitaciones';
-                      const estadoVisual = isHabitacion
-                        ? (mesaCuenta ? 'ocupada' : 'libre')
-                        : (mesaComanda ? (mesaComanda.estado === 'cuenta' ? 'cuenta' : 'ocupada') : 'libre');
-
-                      let habitacionAsociada = '';
-                      if (!isHabitacion && mesaComanda?.habitacion_cuenta_id) {
-                        const cuenta = allCuentas.find(c => c.id === mesaComanda.habitacion_cuenta_id);
-                        if (cuenta) {
-                          const roomMesa = allMesas.find(m => m.id === cuenta.mesa_id);
-                          if (roomMesa) {
-                            habitacionAsociada = roomMesa.nombre;
-                          }
-                        }
-                      }
+                      const derived = mesaDerivedData.get(mesa.id);
+                      if (!derived) return null;
+                      const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada } = derived;
 
                       return (
                         <Box key={mesa.id} style={{ overflow: 'visible' }}>
                           <TableNode
-                            mesa={{ ...mesa, estado: estadoVisual } as any}
+                            mesa={mesaConEstado as any}
                             isSelected={selectedMesaId === mesa.id}
                             cliente={clienteNombre}
                             isHabitacion={isHabitacion}
                             activeComanda={mesaComanda}
                             roomBadge={habitacionAsociada}
-                            onSelect={(m) => {
-                              setSelectedMesaEsHabitacion(selectedPiso.toLowerCase() === 'habitaciones');
-                              setSelectedMesaId(m.id);
-                              setViewingComandaId(null);
-                              setConfigView('none');
-                            }}
+                            onSelect={handleSelectMesa}
                           />
                         </Box>
                       );
