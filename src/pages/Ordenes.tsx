@@ -8,6 +8,7 @@ import { sileo } from 'sileo';
 import dayjs from 'dayjs';
 import { PageHeader } from '../components/Common/PageHeader';
 import { initVerticalRxDb, updateRxComanda, updateRxPago } from '../db/rxdb';
+import { useDbEpoch } from '../hooks/useDbEpoch';
 
 import { FacturadasList } from '../components/Ordenes/FacturadasList';
 import { useIvaActivo } from '../hooks/useIvaActivo';
@@ -92,6 +93,7 @@ export default function Ordenes() {
   // Para los números de factura y notas de cada pago en el modal de Ordenes:
   const [pagosParaConciliar, setPagosParaConciliar] = useState<{ id: string, monto: number, metodo_pago: string, tipo_division?: string, factura_nro: string, factura_nota: string }[]>([]);
   const [comandas, setComandas] = useState<Comanda[]>([]);
+  const dbEpoch = useDbEpoch();
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [comandaItems, setComandaItems] = useState<ComandaItem[]>([]);
   const [habitacionCuentas, setHabitacionCuentas] = useState<HabitacionCuenta[]>([]);
@@ -156,7 +158,7 @@ export default function Ordenes() {
       cuentasSub?.unsubscribe();
       reservasSub?.unsubscribe();
     };
-  }, []);
+  }, [dbEpoch]);
 
   const safeComandas = comandas;
   const safeMesas = mesas;
@@ -427,7 +429,7 @@ export default function Ordenes() {
                   fontSize: 'var(--mantine-font-size-sm)',
                   whiteSpace: 'nowrap',
                   border: `1px solid ${active ? activeColor : 'var(--pos-border)'}`,
-                  transition: 'all var(--ease-fast)',
+                  transition: 'background-color var(--ease-fast), color var(--ease-fast), border-color var(--ease-fast)',
                 }}
               >
                 {label}

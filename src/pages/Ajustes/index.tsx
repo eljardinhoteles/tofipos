@@ -174,7 +174,7 @@ export default function Ajustes() {
                       style={{
                         borderColor: item.activo ? 'var(--ui-primary)' : 'var(--pos-border)',
                         backgroundColor: item.activo ? 'var(--ui-primary-soft)' : 'white',
-                        transition: 'all 0.2s ease',
+                        transition: 'border-color 0.2s ease, background-color 0.2s ease',
                       }}
                     >
                       <Group justify="space-between" align="flex-start" mb="xs">

@@ -452,6 +452,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
       </Modal>
 
       <ProductModifiersModal
+        key={modifyingItem?.id}
         opened={!!modifyingItem}
         onClose={() => setModifyingItem(null)}
         product={modifyingItem}

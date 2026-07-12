@@ -332,6 +332,7 @@ export function MobileSidebar() {
     return (
       <div className="mob-nav">
         <button
+          type="button"
           className="mob-nav__pill mob-nav__pill--comanda"
           onClick={() => setReservaProductosComandaId(null)}
         >
@@ -359,6 +360,7 @@ export function MobileSidebar() {
     return (
       <div className="mob-nav" >
         <button
+          type="button"
           className="mob-nav__pill mob-nav__pill--comanda"
           onClick={() => setMesaView('mapa')}
         >
@@ -385,6 +387,7 @@ export function MobileSidebar() {
       <div className="mob-nav" >
         {/* Izquierda: Menú */}
         <button
+          type="button"
           className="mob-nav__btn"
           onClick={() => setMenuOpen(true)}
           aria-label="Abrir menú"
@@ -394,6 +397,7 @@ export function MobileSidebar() {
 
         {/* Centro: Mesas */}
         <button
+          type="button"
           className="mob-nav__pill"
           onClick={() => navigate('/mesas')}
           aria-label="Ir a Mesas"
@@ -409,6 +413,7 @@ export function MobileSidebar() {
 
         {/* Derecha: Sync */}
         <button
+          type="button"
           className="mob-nav__btn"
           aria-label="Estado de sincronización"
           onClick={handleOpenSyncModal}

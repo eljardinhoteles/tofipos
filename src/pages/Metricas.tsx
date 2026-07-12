@@ -7,6 +7,7 @@ import { Calendar, Coin, Receipt, Warning, Tag } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
 import { PageHeader } from '../components/Common/PageHeader';
 import { initVerticalRxDb } from '../db/rxdb';
+import { useDbEpoch } from '../hooks/useDbEpoch';
 import { useRxClientes } from '../hooks/useRxClientes';
 import '@mantine/charts/styles.css';
 
@@ -74,6 +75,8 @@ export default function Metricas() {
   const [categorias, setCategorias] = useState<any[]>([]);
   const { clientes } = useRxClientes();
 
+  const dbEpoch = useDbEpoch();
+
   useEffect(() => {
     let alive = true;
     const subs: Array<{ unsubscribe: () => void }> = [];
@@ -102,7 +105,7 @@ export default function Metricas() {
       alive = false;
       subs.forEach((sub) => sub.unsubscribe());
     };
-  }, []);
+  }, [dbEpoch]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setChartsReady(true));

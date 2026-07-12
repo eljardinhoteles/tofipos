@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
+import { useDbEpoch } from './useDbEpoch'
 
 export function useRxUsuarios() {
   const [usuarios, setUsuarios] = useState<any[]>([])
+  const dbEpoch = useDbEpoch()
 
   useEffect(() => {
     let alive = true
@@ -25,7 +27,7 @@ export function useRxUsuarios() {
       alive = false
       sub?.unsubscribe()
     }
-  }, [])
+  }, [dbEpoch])
 
   return { usuarios }
 }

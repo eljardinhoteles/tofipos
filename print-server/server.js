@@ -4,7 +4,7 @@
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomInt } = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -54,7 +54,10 @@ if (!Array.isArray(state.printers)) {
 const TOKEN_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O/1/I
 
 function generateToken() {
-  const part = (n) => Array.from({ length: n }, () => TOKEN_CHARS[Math.floor(Math.random() * TOKEN_CHARS.length)]).join('');
+  // crypto.randomInt (CSPRNG) en vez de Math.random(): esto genera el token
+  // de autenticación del servidor, Math.random() es predecible y no debe
+  // usarse para material de seguridad.
+  const part = (n) => Array.from({ length: n }, () => TOKEN_CHARS[randomInt(TOKEN_CHARS.length)]).join('');
   return `${part(4)}-${part(4)}`;
 }
 

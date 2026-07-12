@@ -184,7 +184,7 @@ export function SidebarKitchenReport({
                     cursor: 'pointer',
                     border: `1px solid ${isChecked ? 'var(--ui-primary)' : 'var(--pos-border)'}`,
                     backgroundColor: isChecked ? 'var(--ui-primary-soft)' : 'var(--pos-bg)',
-                    transition: 'all 120ms ease',
+                    transition: 'border-color 120ms ease, background-color 120ms ease',
                     userSelect: 'none',
                   }}
                 >

@@ -17,6 +17,19 @@ export interface A4ReportPreviewModalProps {
   mesasData: Array<{ mesaNombre: string; habitacionNombre?: string; items: PrintableItem[] }>;
 }
 
+// Los nombres de producto, notas y mesas son texto libre editable por el
+// usuario (Ajustes → Menú, notas de comanda) y se interpolan en HTML dentro
+// de dangerouslySetInnerHTML — sin escapar, un nombre de producto como
+// "<img src=x onerror=...>" ejecutaría en el reporte A4.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function A4ReportPreviewModal({
   opened,
   onClose,
@@ -80,7 +93,7 @@ export function A4ReportPreviewModal({
       html += `
         <div style="margin-top: ${10 * scale}px; margin-bottom: ${12 * scale}px;">
           <span style="font-size: ${22 * scale}px; font-weight: 900; letter-spacing: 0.5px; color: #0f172a; line-height: 1.2;">
-            --- ${mesa.mesaNombre.toUpperCase()} ---
+            --- ${escapeHtml(mesa.mesaNombre.toUpperCase())} ---
           </span>
         </div>
       `;
@@ -89,7 +102,7 @@ export function A4ReportPreviewModal({
         html += `
           <div style="margin-top: ${10 * scale}px; margin-bottom: ${12 * scale}px;">
             <span style="font-size: ${22 * scale}px; font-weight: 900; letter-spacing: 0.5px; color: #0f172a; line-height: 1.2;">
-              HAB: ${mesa.habitacionNombre.toUpperCase()}
+              HAB: ${escapeHtml(mesa.habitacionNombre.toUpperCase())}
             </span>
           </div>
         `;
@@ -100,21 +113,21 @@ export function A4ReportPreviewModal({
           <div style="display: flex; align-items: flex-start; min-height: ${30 * scale}px; margin: ${6 * scale}px 0;">
             <span style="background-color: #0f172a; color: #ffffff; min-width: ${26 * scale}px; height: ${26 * scale}px; padding: 0 ${6 * scale}px; display: inline-flex; align-items: center; justify-content: center; border-radius: ${5 * scale}px; font-weight: 900; font-size: ${14 * scale}px; margin-right: ${12 * scale}px; flex-shrink: 0; margin-top: ${2 * scale}px;">${g.totalQty}</span>
             <div style="flex: 1;">
-              <span style="font-weight: 800; font-size: ${17 * scale}px; color: #0f172a; letter-spacing: 0.1px;">${g.nombre.toUpperCase()}</span>
+              <span style="font-weight: 800; font-size: ${17 * scale}px; color: #0f172a; letter-spacing: 0.1px;">${escapeHtml(g.nombre.toUpperCase())}</span>
         `;
         
         g.subItems.forEach(sub => {
           if (sub.modifiers.length > 0) {
             html += `
               <div style="display: flex; align-items: center; min-height: ${20 * scale}px; margin: ${2 * scale}px 0;">
-                <span style="font-weight: 700; font-size: ${13 * scale}px; color: #64748b; letter-spacing: 0.1px;">• ${sub.modifiers.join(' · ').toUpperCase()}</span>
+                <span style="font-weight: 700; font-size: ${13 * scale}px; color: #64748b; letter-spacing: 0.1px;">• ${escapeHtml(sub.modifiers.join(' · ').toUpperCase())}</span>
               </div>
             `;
           }
           if (sub.nota) {
             html += `
               <div style="display: flex; align-items: center; min-height: ${20 * scale}px; margin: ${2 * scale}px 0;">
-                <span style="font-weight: 700; font-size: ${13 * scale}px; color: #64748b; letter-spacing: 0.1px;">• NOTA: ${sub.nota.toUpperCase()}</span>
+                <span style="font-weight: 700; font-size: ${13 * scale}px; color: #64748b; letter-spacing: 0.1px;">• NOTA: ${escapeHtml(sub.nota.toUpperCase())}</span>
               </div>
             `;
           }
@@ -143,7 +156,7 @@ export function A4ReportPreviewModal({
       html += `
         <div style="break-inside: avoid; display: flex; align-items: center; min-height: ${30 * scale}px; margin: ${6 * scale}px 0;">
           <span style="background-color: #0f172a; color: #ffffff; min-width: ${26 * scale}px; height: ${26 * scale}px; padding: 0 ${6 * scale}px; display: inline-flex; align-items: center; justify-content: center; border-radius: ${5 * scale}px; font-weight: 900; font-size: ${14 * scale}px; margin-right: ${12 * scale}px; flex-shrink: 0;">${g.totalQty}</span>
-          <span style="font-weight: 800; font-size: ${17 * scale}px; color: #0f172a; letter-spacing: 0.1px;">${g.nombre.toUpperCase()}</span>
+          <span style="font-weight: 800; font-size: ${17 * scale}px; color: #0f172a; letter-spacing: 0.1px;">${escapeHtml(g.nombre.toUpperCase())}</span>
         </div>
       `;
     });

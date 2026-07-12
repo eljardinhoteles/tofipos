@@ -455,7 +455,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose }: SidebarRese
                   styles={{ input: { fontSize: 24, fontWeight: 900, textAlign: 'center', height: 70, backgroundColor: 'var(--pos-bg)' } }}
                 />
 
-                <Box style={{ opacity: (typeof abonoInput === 'number' && abonoInput > 0) ? 1 : 0.4, pointerEvents: (typeof abonoInput === 'number' && abonoInput > 0) ? 'auto' : 'none', transition: 'all 0.2s ease' }}>
+                <Box style={{ opacity: (typeof abonoInput === 'number' && abonoInput > 0) ? 1 : 0.4, pointerEvents: (typeof abonoInput === 'number' && abonoInput > 0) ? 'auto' : 'none', transition: 'opacity 0.2s ease' }}>
                   <Text size="xs" fw={700} c="dimmed" mb="sm" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Método de pago
                   </Text>

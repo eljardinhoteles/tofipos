@@ -99,7 +99,7 @@ export function SidebarSeleccionarMesa({ onSelectMesa, onClose }: SidebarSelecci
                           style={{
                             cursor: 'pointer',
                             borderColor: 'var(--pos-border)',
-                            transition: 'all var(--ease-fast)',
+                            transition: 'transform var(--ease-fast), opacity var(--ease-fast)',
                             boxShadow: 'none',
                           }}
                         >

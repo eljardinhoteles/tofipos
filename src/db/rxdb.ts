@@ -577,7 +577,40 @@ export type VerticalCollections = {
 let verticalDbPromise: Promise<RxDatabase<VerticalCollections>> | null = null
 let verticalReplicationState: ReturnType<typeof startVerticalReplication> | null = null
 let verticalReplicationOrgId: string | null = null
+// Lock de inicialización: si initVerticalRxDb() se llama dos veces casi al
+// mismo tiempo (ej. un handler que la llama directo + un useEffect reactivo
+// al mismo cambio de organización), sin este lock ambas pasan el chequeo
+// `!verticalReplicationState` antes de que la primera termine de asignarlo,
+// arrancando la replicación por duplicado y dejándola en un estado roto.
+let initInFlight: Promise<RxDatabase<VerticalCollections>> | null = null
+// Se resuelve cuando el primer pull de todas las colecciones de la
+// replicación activa completó (ver startVerticalReplication). La UI puede
+// esperar esta promesa tras vincular un dispositivo para no exponer una
+// pantalla vacía mientras el pull inicial sigue en curso.
+let initialSyncPromise: Promise<void> | null = null
 let suspendHooks = false
+
+/**
+ * Epoch de la base de datos local. Sube cada vez que se recrea la DB
+ * (desvincular → vincular). Los hooks de React deben incluirlo en su
+ * array de dependencias para re-suscribirse a la nueva instancia de
+ * colección en vez de quedar pegados a la instancia destruida.
+ */
+let _dbEpoch = 0
+const _dbEpochListeners = new Set<() => void>()
+
+export function getDbEpoch() { return _dbEpoch }
+
+export function subscribeDbEpoch(fn: () => void): () => void {
+  _dbEpochListeners.add(fn)
+  return () => _dbEpochListeners.delete(fn)
+}
+
+function bumpDbEpoch() {
+  _dbEpoch++
+  _dbEpochListeners.forEach(fn => fn())
+}
+
 
 function getActiveOrgIdStrict() {
   const orgId = localStorage.getItem('pos_active_org_id') || ''
@@ -798,10 +831,32 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     return clean
   }
 
+  // Para usuarios: garantiza que user_id nunca sea null (fallback al id legacy)
+  // Algunas filas pueden llegar con user_id=null si el backfill en Supabase no las cubrió.
+  // Sin este fallback RxDB rechaza el doc (user_id está en `required`) y el pull
+  // de la colección falla, bloqueando awaitInitialReplication() para todos.
+  const normalizeUsuario = (doc: any) => {
+    const clean = stripUndefined(doc)
+    if (!clean.user_id) clean.user_id = clean.id  // fallback: antes id == auth.uid()
+    return clean
+  }
+
   // El plugin de Supabase ignora push.handler en las opciones; construye el suyo propio.
   // Para sobreescribirlo hay que mutar replicationPrimitivesPush.handler post-creación.
+  //
+  // Un dispositivo recién vinculado arranca con RxDB local vacío. Con push y
+  // pull corriendo en paralelo (live: true) desde el primer instante, cualquier
+  // cambio local que ocurra antes de que el pull inicial complete podría
+  // empujar hacia Supabase un estado incompleto, afectando a los demás
+  // dispositivos ya sincronizados. `pushEnabled` bloquea todo push hasta que
+  // `markInitialSyncDone()` confirme que el pull inicial de todas las
+  // colecciones terminó (ver esperarSyncInicial más abajo).
+  let pushEnabled = false
+  const markInitialSyncDone = () => { pushEnabled = true }
+
   const makePushHandler = (tableName: string, filterRow?: (doc: Record<string, unknown>) => boolean) =>
     async (rows: Array<{ newDocumentState: any; assumedMasterState: any }>) => {
+      if (!pushEnabled) throw new Error('push suspendido: esperando sincronización inicial')
       // Offline: no intentar push, lanzar para que RxDB reintente después
       if (!navigator.onLine) throw new Error('offline')
 
@@ -917,8 +972,15 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
           if (error.message?.includes('fetch') || error.code === 'PGRST' || error.code === '23503') {
             throw new Error(error.message)
           }
-          // Errores de datos (validación, etc.): loguear y descartar para no bloquear
-          console.warn(`[Push ${tableName}] descartado:`, error.message, error.code)
+          // Errores de datos (validación, columna faltante, etc.): no se puede
+          // reintentar sin intervención, pero descartar el doc en silencio deja
+          // datos "atascados" para siempre en local sin que nadie se entere
+          // (pasó con menu_items cuando faltaba la columna es_bebida). Se marca
+          // como error de la colección para que quede visible en el panel de
+          // sync de Ajustes, en vez de solo un console.warn.
+          const dataErrorMsg = `${error.message} (código ${error.code || 's/c'})`
+          console.warn(`[Push ${tableName}] descartado:`, dataErrorMsg)
+          lastCollectionError[tableName] = dataErrorMsg
           return []
         }
         return []
@@ -1025,7 +1087,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     client: supabase,
     collection: db.usuarios,
     replicationIdentifier: `usuarios-supabase-${orgId}`,
-    pull: { batchSize: 100, queryBuilder, modifier: stripUndefined }
+    pull: { batchSize: 100, queryBuilder, modifier: normalizeUsuario }
   })
 
   const categorias = patchPush(replicateSupabase({
@@ -1058,6 +1120,22 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     push: { batchSize: 100 }
   }), makePushHandler('menu_items'))
 
+  const allReplications = [clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ajustesIva, usuarios, menuItems]
+
+  // Espera el primer pull de TODAS las colecciones antes de habilitar el push.
+  // Si el dispositivo está offline o el pull inicial falla, no bloqueamos para
+  // siempre: awaitInitialReplication() de RxDB se resuelve igual apenas hay
+  // datos disponibles (vacíos si no hay red), así que el push se habilita en
+  // cuanto la replicación logra completar un ciclo, con o sin conexión al
+  // vincular. El objetivo es solo evitar la ventana de carrera del primer
+  // instante, no exigir sincronización perfecta antes de operar.
+  initialSyncPromise = Promise.all(allReplications.map((state: any) => state?.awaitInitialReplication?.()))
+    .then(() => { markInitialSyncDone() })
+    .catch((err: unknown) => {
+      console.warn('[RxDB] error esperando sincronización inicial, habilitando push de todas formas:', err)
+      markInitialSyncDone()
+    })
+
   return { clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ajustesIva, usuarios, menuItems }
 }
 
@@ -1076,6 +1154,18 @@ function stopVerticalReplication() {
 }
 
 export async function initVerticalRxDb() {
+  // Si ya hay una inicialización en curso, todas las llamadas concurrentes
+  // esperan esa misma promesa en vez de correr el bloque de abajo en paralelo.
+  if (initInFlight) return initInFlight
+  initInFlight = initVerticalRxDbInner()
+  try {
+    return await initInFlight
+  } finally {
+    initInFlight = null
+  }
+}
+
+async function initVerticalRxDbInner() {
   if (suspendHooks) {
     // compat flag para el reset viejo
   }
@@ -1135,12 +1225,54 @@ export async function initVerticalRxDb() {
   return db
 }
 
-export function getVerticalRxDbPromise() {
-  return verticalDbPromise
-}
-
 export async function getVerticalRxDb() {
   return initVerticalRxDb()
+}
+
+/**
+ * Destruye por completo la base de datos local (storage incluido), sin dejar
+ * rastros replicables. Para usar al desvincular el dispositivo.
+ *
+ * IMPORTANTE: no usar `.find().remove()` por colección para "limpiar" — eso
+ * crea borrados lógicos (_deleted: true) que la replicación interpreta como
+ * cambios locales pendientes y los EMPUJA a Supabase al re-vincular,
+ * borrando los datos reales de la organización para todos los dispositivos.
+ * (Ese fue el bug que vació las organizaciones al vincular un dispositivo.)
+ */
+export async function resetLocalDatabase() {
+  stopVerticalReplication()
+  if (verticalDbPromise) {
+    try {
+      const db = await verticalDbPromise
+      await db.remove()
+    } catch (e) {
+      console.warn('[RxDB] error destruyendo base local durante desvinculación:', e)
+    }
+  }
+  verticalDbPromise = null
+  initInFlight = null
+  initialSyncPromise = null
+  // Notifica a los hooks de React que la DB fue destruida y deben
+  // re-suscribirse a la nueva instancia cuando se recree.
+  bumpDbEpoch()
+}
+
+/**
+ * Espera a que el primer pull de todas las colecciones complete (con datos
+ * si hay red, o de inmediato si no la hay). Pensada para mostrar una
+ * pantalla de "Sincronizando…" tras vincular un dispositivo nuevo, antes de
+ * dejarlo operar — así nunca se ve la app vacía mientras el pull real sigue
+ * en curso. Debe llamarse después de initVerticalRxDb().
+ */
+export async function waitForInitialSync(timeoutMs = 15_000): Promise<void> {
+  if (!initialSyncPromise) return
+  // Race: resolvemos en cuanto el pull termina O pasado el timeout, lo que ocurra
+  // primero. Sin timeout, un error de red en una colección podría colgar la pantalla
+  // de "Sincronizando..." para siempre.
+  await Promise.race([
+    initialSyncPromise,
+    new Promise<void>(resolve => setTimeout(resolve, timeoutMs))
+  ])
 }
 
 export type SyncStatus = {
@@ -1254,9 +1386,11 @@ export async function diagnoseSyncState() {
 
   // Contar docs locales en RxDB
   const db = await initVerticalRxDb()
-  const mesasCount = await db.mesas.count().exec()
-  const comandasCount = await db.comandas.count().exec()
-  const itemsCount = await db.comanda_items.count().exec()
+  const [mesasCount, comandasCount, itemsCount] = await Promise.all([
+    db.mesas.count().exec(),
+    db.comandas.count().exec(),
+    db.comanda_items.count().exec()
+  ])
   console.log('RxDB local counts:', { mesas: mesasCount, comandas: comandasCount, comanda_items: itemsCount })
 
   console.groupEnd()

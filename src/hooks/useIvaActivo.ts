@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { useEffect, useState } from 'react';
 import { initVerticalRxDb } from '../db/rxdb';
+import { useDbEpoch } from './useDbEpoch';
 
 export function useIvaActivo() {
   const [activeIvaObj, setActiveIvaObj] = useState<any | null>(null);
+  const dbEpoch = useDbEpoch();
 
   useEffect(() => {
     let alive = true;
@@ -20,7 +22,7 @@ export function useIvaActivo() {
       alive = false;
       sub?.unsubscribe();
     };
-  }, []);
+  }, [dbEpoch]);
 
   const porcentaje = activeIvaObj ? activeIvaObj.porcentaje : 15;
   const valor = porcentaje / 100;

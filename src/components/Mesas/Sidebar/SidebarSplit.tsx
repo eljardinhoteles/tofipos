@@ -309,7 +309,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                 borderColor: 'var(--pos-border)',
                 backgroundColor: 'white',
                 cursor: 'pointer',
-                transition: 'all var(--ease-fast)',
+                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
               }}
             >
               <Group wrap="nowrap" align="center" gap="sm">
@@ -339,7 +339,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                 backgroundColor: hasNonProductPayments ? '#f8fafc' : 'white',
                 opacity: hasNonProductPayments ? 0.6 : 1,
                 cursor: hasNonProductPayments ? 'not-allowed' : 'pointer',
-                transition: 'all var(--ease-fast)',
+                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
               }}
             >
               <Group wrap="nowrap" align="center" gap="sm">
@@ -370,7 +370,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                 borderColor: 'var(--pos-border)',
                 backgroundColor: 'white',
                 cursor: 'pointer',
-                transition: 'all var(--ease-fast)',
+                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
               }}
             >
               <Group wrap="nowrap" align="center" gap="sm">

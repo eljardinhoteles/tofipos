@@ -193,7 +193,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
                     cursor: 'pointer',
                     border: isSelected ? '2px solid var(--mantine-color-myColor-6)' : '1px solid var(--pos-border)',
                     backgroundColor: isSelected ? 'var(--mantine-color-myColor-0)' : 'white',
-                    transition: 'all 0.15s',
+                    transition: 'border 0.15s, background-color 0.15s',
                     boxShadow: 'none',
                   }}
                 >

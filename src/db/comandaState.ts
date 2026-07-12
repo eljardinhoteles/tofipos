@@ -7,10 +7,6 @@ export function isOperativeComanda(comanda: ComandaEstadoBase) {
     ['pendiente', 'en_cocina', 'listo', 'cuenta'].includes(comanda.estado)
 }
 
-export function isOperativeComandaForMesa(comanda: ComandaEstadoBase) {
-  return isOperativeComanda(comanda)
-}
-
 export function getMesaEstadoEfectivo(
   mesa: Mesa,
   comanda?: ComandaEstadoBase | null

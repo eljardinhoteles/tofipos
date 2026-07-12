@@ -45,8 +45,7 @@ export function SidebarOpenTable({
       if (!alive) return;
       const cuentasQuery = rxDb.habitacion_cuentas.find({ selector: { estado: 'activa', _deleted: { $ne: true } } });
       const mesasQuery = rxDb.mesas.find({ selector: { _deleted: { $ne: true } } });
-      const cuentasDocs = await cuentasQuery.exec();
-      const mesasDocs = await mesasQuery.exec();
+      const [cuentasDocs, mesasDocs] = await Promise.all([cuentasQuery.exec(), mesasQuery.exec()]);
       if (!alive) return;
       setActiveCuentas(cuentasDocs.map((doc: any) => doc.toJSON()));
       setAllMesas(mesasDocs.map((doc: any) => doc.toJSON()));
@@ -187,7 +186,7 @@ export function SidebarOpenTable({
                           border: `2px solid ${isSelected ? 'var(--ui-primary)' : 'var(--pos-border)'}`,
                           backgroundColor: isSelected ? 'var(--ui-primary-soft)' : 'var(--pos-bg)',
                           padding: '10px 14px',
-                          transition: 'all 0.15s',
+                          transition: 'border-color 0.15s, background-color 0.15s',
                         }}
                       >
                         <Group justify="space-between" wrap="nowrap">

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, createVerificationClient } from '../lib/supabase';
 import type { UsuarioLocal } from '../db/database';
-import { initVerticalRxDb } from '../db/rxdb';
+import { initVerticalRxDb, resetLocalDatabase } from '../db/rxdb';
 import { cacheCredential, verifyCachedCredential, hasCachedCredential, clearAuthCache } from '../lib/authCache';
 
 interface AuthContextType {
@@ -19,7 +19,7 @@ interface AuthContextType {
   // Operaciones
   loginAdmin: (email: string, password: string) => Promise<{ error: any }>;
   logoutAdmin: () => Promise<{ error: any }>;
-  vincularOrganizacion: (orgId: string) => void;
+  vincularOrganizacion: (orgId: string) => Promise<void>;
   desvincularDispositivo: () => void;
   loginConPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logoutMesero: () => void;
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const vincularOrganizacion = (orgId: string) => {
+  const vincularOrganizacion = async (orgId: string): Promise<void> => {
     const currentOrgId = localStorage.getItem('pos_active_org_id');
     if (currentOrgId && currentOrgId !== orgId) {
       localStorage.removeItem('pos_current_mesero_id');
@@ -154,10 +154,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveOrganizationId(orgId);
 
     // Bootstrap: garantiza que el admin que vincula tenga perfil en `usuarios`
-    // (solo se auto-crea como admin si la organización aún no tiene administradores)
-    supabase.functions.invoke('manage-users', {
-      body: { action: 'ensure-self', organization_id: orgId }
-    }).catch(err => console.warn('ensure-self falló (se reintentará al gestionar usuarios):', err));
+    // (solo se auto-crea como admin si la organización aún no tiene administradores).
+    // IMPORTANTE: awaiteamos el resultado para que la replicación (initVerticalRxDb)
+    // arranque DESPUÉS de que la membresía exista en Supabase. Sin este await,
+    // mis_organizaciones() podría devolver vacío y la RLS bloquearía todos los pulls.
+    try {
+      await supabase.functions.invoke('manage-users', {
+        body: { action: 'ensure-self', organization_id: orgId }
+      });
+    } catch (err) {
+      // Si falla (p.ej. ya tiene membresía y el 403 es esperado), continuar.
+      // El dispositivo podrá leer datos si ya existe su membresía.
+      console.warn('ensure-self falló (puede ser normal si ya tiene perfil):', err);
+    }
   };
 
   const desvincularDispositivo = async () => {
@@ -169,23 +178,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveOrganizationId(null);
     setCurrentMesero(null);
 
-    // Limpieza completa de RxDB local para evitar mezclar datos con la nueva vinculación
+    // Limpieza completa de RxDB local para evitar mezclar datos con la nueva
+    // vinculación. Se destruye la base entera (resetLocalDatabase) en vez de
+    // hacer .find().remove() por colección: los remove() son borrados lógicos
+    // que la replicación empujaba a Supabase al re-vincular, ¡borrando los
+    // datos reales de la organización para todos los dispositivos!
     try {
-      const rxDb = await initVerticalRxDb();
-      await Promise.all([
-        rxDb.mesas.find().remove(),
-        rxDb.menu_items.find().remove(),
-        rxDb.comandas.find().remove(),
-        rxDb.comanda_items.find().remove(),
-        rxDb.pisos.find().remove(),
-        rxDb.categorias.find().remove(),
-        rxDb.reservas.find().remove(),
-        rxDb.clientes.find().remove(),
-        rxDb.pagos.find().remove(),
-        rxDb.habitacion_cuentas.find().remove(),
-        rxDb.usuarios.find().remove()
-      ]);
-      console.log('RxDB local limpiado correctamente.');
+      await resetLocalDatabase();
+      console.log('RxDB local destruido correctamente.');
     } catch (e) {
       console.error('Error al limpiar RxDB local durante la desvinculación:', e);
     }

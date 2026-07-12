@@ -5,7 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useRxUsuarios } from '../../hooks/useRxUsuarios';
 import { supabase } from '../../lib/supabase';
-import { sincronizarDatosOrganizacion } from '../../db/sync';
+import { forceSyncAll } from '../../db/rxdb';
+import { removeCachedCredential } from '../../lib/authCache';
 import { sileo } from 'sileo';
 
 type Rol = 'admin' | 'mesero' | 'cajero';
@@ -58,7 +59,7 @@ export default function AjustesUsuarios() {
     }
     if (data?.error) throw new Error(data.error);
     // Refrescar perfiles locales (la tabla usuarios es solo pull)
-    sincronizarDatosOrganizacion().catch(() => {});
+    forceSyncAll().catch(() => {});
     return data;
   };
 
@@ -114,7 +115,7 @@ export default function AjustesUsuarios() {
         });
         sileo.success({ title: 'Usuario actualizado exitosamente' });
       } else {
-        await invokeManageUsers({
+        const result = await invokeManageUsers({
           action: 'create',
           user: {
             nombre: formNombre.trim(),
@@ -124,7 +125,16 @@ export default function AjustesUsuarios() {
             activo: formActivo,
           },
         });
-        sileo.success({ title: 'Usuario creado exitosamente' });
+        // Si el correo ya tenía cuenta de Auth (en otra organización), se
+        // invitó conservando su contraseña actual — la que escribiste no se usó.
+        if (result?.existing) {
+          sileo.success({
+            title: 'Colaborador invitado',
+            description: `${formEmail.trim()} ya tenía una cuenta y fue añadido a esta organización con su contraseña actual.`,
+          });
+        } else {
+          sileo.success({ title: 'Usuario creado exitosamente' });
+        }
       }
       setUserModalOpen(false);
     } catch (error: any) {
@@ -156,6 +166,9 @@ export default function AjustesUsuarios() {
       async () => {
         try {
           await invokeManageUsers({ action: 'delete', user: { id: user.id } });
+          // Invalida el verificador PBKDF2 local para que no pueda seguir
+          // iniciando sesión offline en este dispositivo con el caché viejo.
+          if (user.email) removeCachedCredential(user.email);
           sileo.success({ title: 'Usuario eliminado' });
         } catch (error: any) {
           console.error(error);

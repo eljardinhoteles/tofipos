@@ -18,6 +18,7 @@ import { TableNode } from '../components/Mesas/TableNode';
 import { MesasControls } from '../components/Mesas/MesasControls';
 import { ProductSelector } from '../components/Mesas/ProductSelector';
 import { initVerticalRxDb } from '../db/rxdb';
+import { useDbEpoch } from '../hooks/useDbEpoch';
 import { Plus, Basket, Bed, ClipboardText } from '@phosphor-icons/react';
 import { useUI } from '../context/UIContext';
 import { useSearchParams } from 'react-router-dom';
@@ -27,6 +28,7 @@ import { SidebarKitchenReport } from '../components/Mesas/Sidebar/SidebarKitchen
 export default function Mesas() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedPiso, setSelectedPiso] = useState<string>('');
+  const dbEpoch = useDbEpoch();
   const {
     selectedMesaId, setSelectedMesaId,
     configView, setConfigView,
@@ -187,7 +189,7 @@ export default function Mesas() {
       comandasSub?.unsubscribe();
       cuentasSub?.unsubscribe();
     };
-  }, []);
+  }, [dbEpoch]);
 
   const mesasToShow = useMemo(
     () => allMesas
@@ -385,7 +387,7 @@ export default function Mesas() {
                           fontSize: '13px',
                           whiteSpace: 'nowrap',
                           border: `1px solid ${active ? 'var(--ui-primary)' : 'var(--pos-border)'}`,
-                          transition: 'all var(--ease-fast)',
+                          transition: 'background-color var(--ease-fast), color var(--ease-fast), border-color var(--ease-fast)',
                         }}
                       >
                         {piso}
@@ -403,7 +405,7 @@ export default function Mesas() {
                       fontSize: '13px',
                       whiteSpace: 'nowrap',
                       border: `1px dashed ${configView !== 'none' ? 'var(--ui-primary)' : 'var(--pos-border)'}`,
-                      transition: 'all var(--ease-fast)',
+                      transition: 'background-color var(--ease-fast), color var(--ease-fast), border-color var(--ease-fast)',
                     }}
                   >
                     Añadir

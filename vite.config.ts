@@ -61,15 +61,16 @@ export default defineConfig({
               expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
-          // Supabase API: network-first (datos siempre frescos cuando hay red)
+          // Supabase API: sin caché del Service Worker. RxDB ya maneja su
+          // propia persistencia (IndexedDB) y sync incremental por
+          // checkpoint; cachear las respuestas HTTP con NetworkFirst hacía
+          // que, tras 5s sin red o con timing desfavorable, Workbox sirviera
+          // una respuesta vieja (ej. un health-check vacío) en vez de dejar
+          // pasar el pull real a la red — un dispositivo nuevo veía todo
+          // vacío aunque los datos sí existieran en Supabase.
           {
             urlPattern: /^https:\/\/.+\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-            },
+            handler: 'NetworkOnly',
           },
         ],
       },

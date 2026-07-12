@@ -73,7 +73,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, total,
           <Group gap={4} style={{ flex: 1 }}>
             {item.modificadores && item.modificadores.length > 0 &&
               item.modificadores.map((mod, i) => (
-                <Badge key={i} size="xs" variant="light" color="gray" radius="sm" style={{ textTransform: 'none' }}>
+                <Badge key={`${mod}-${i}`} size="xs" variant="light" color="gray" radius="sm" style={{ textTransform: 'none' }}>
                   {mod}
                 </Badge>
               ))

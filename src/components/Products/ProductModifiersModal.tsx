@@ -137,6 +137,7 @@ export function ProductModifiersModal({
               return (
                 <button
                   key={option}
+                  type="button"
                   onClick={() => toggle(option)}
                   style={{
                     display: 'flex',

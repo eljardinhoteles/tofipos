@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
+import { useDbEpoch } from './useDbEpoch'
 
 export function useRxAjustesIva() {
   const [ajustesIva, setAjustesIva] = useState<any[]>([])
+  const dbEpoch = useDbEpoch()
 
   useEffect(() => {
     let alive = true
@@ -25,7 +27,7 @@ export function useRxAjustesIva() {
       alive = false
       sub?.unsubscribe()
     }
-  }, [])
+  }, [dbEpoch])
 
   return { ajustesIva }
 }

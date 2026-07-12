@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
+import { useDbEpoch } from './useDbEpoch'
 
 export function useRxMenuCatalog() {
   const [menuItems, setMenuItems] = useState<any[]>([])
   const [categorias, setCategorias] = useState<any[]>([])
+  const dbEpoch = useDbEpoch()
 
   useEffect(() => {
     let alive = true
@@ -35,7 +37,7 @@ export function useRxMenuCatalog() {
       menuSub?.unsubscribe()
       catSub?.unsubscribe()
     }
-  }, [])
+  }, [dbEpoch])
 
   return { menuItems, categorias }
 }

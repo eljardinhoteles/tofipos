@@ -33,7 +33,7 @@ export const POSCard = memo(function POSCard({
       style={{ 
         backgroundColor: 'white', 
         opacity: active ? 1 : 0.7,
-        transition: 'all 0.2s ease',
+        transition: 'opacity 0.2s ease, border-color 0.2s ease',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',

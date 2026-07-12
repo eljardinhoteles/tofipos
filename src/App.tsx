@@ -3,13 +3,12 @@ import { LoadingOverlay, Title, Text, Button, Stack, Container, useMantineTheme,
 import { useAuth } from './context/AuthContext';
 import { useEffect, useState, type ReactElement } from 'react';
 import { useMediaQuery, useNetwork } from '@mantine/hooks';
-import { iniciarSync, detenerSync, sincronizarDatosOrganizacion } from './db/sync';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './components/Layout/AppLayout';
 import { Toaster, sileo } from "sileo";
 import { setSuspendHooks } from './db/database';
 import { supabase } from './lib/supabase';
-import { initVerticalRxDb } from './db/rxdb';
+import { initVerticalRxDb, forceSyncAll, waitForInitialSync } from './db/rxdb';
 import { SignOut, ArrowsClockwise } from '@phosphor-icons/react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -62,6 +61,9 @@ function App() {
   const [newOrgNombre, setNewOrgNombre] = useState('');
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [isStandalone, setIsStandalone] = useState(true);
+  // true mientras el dispositivo recién vinculado espera su primer pull
+  // completo de todas las colecciones, antes de entrar a la app operativa.
+  const [isSyncingInitial, setIsSyncingInitial] = useState(false);
   const [pwaHintDismissed, setPwaHintDismissed] = useState<boolean>(() => localStorage.getItem('pos_pwa_hint_dismissed') === 'true');
 
   // Cargar lista de organizaciones si el admin está logueado pero no hay org vinculada
@@ -147,20 +149,10 @@ function App() {
 
   useEffect(() => {
     if (!activeOrganizationId) return;
-    let cancelled = false;
-    let startTimer: number | null = null;
-
+    // La replicación real arranca sola dentro de initVerticalRxDb() en cuanto
+    // hay organización activa (ver startVerticalReplication en rxdb.ts); no
+    // depende de un "iniciar/detener" externo.
     initVerticalRxDb().catch(err => console.warn('Error al iniciar RxDB vertical:', err));
-    startTimer = window.setTimeout(() => {
-      if (cancelled) return;
-      iniciarSync();
-    }, 800);
-
-    return () => {
-      cancelled = true;
-      if (startTimer) window.clearTimeout(startTimer);
-      detenerSync();
-    };
   }, [activeOrganizationId]);
 
   useEffect(() => {
@@ -192,12 +184,19 @@ function App() {
       localStorage.setItem('pos_org_name_cached', matchedOrg.label);
       setOrganizacionNombre(matchedOrg.label);
     }
-    vincularOrganizacion(selectedOrgId);
+    await vincularOrganizacion(selectedOrgId);
     sileo.success({ title: 'Vinculado', description: 'Dispositivo vinculado al hotel seleccionado.' });
-    
-    // Descargar datos iniciales de forma inmediata
+
+    // isSyncingInitial mantiene al dispositivo en la pantalla de progreso
+    // hasta que el pull inicial de todas las colecciones complete — así
+    // nunca llega a operar (ni a poder empujar cambios) sobre un estado
+    // local vacío que pisaría los datos reales de los demás dispositivos.
     setIsAdminSubmitting(true);
-    await sincronizarDatosOrganizacion();
+    setIsSyncingInitial(true);
+    await initVerticalRxDb();
+    await waitForInitialSync();
+    await forceSyncAll();
+    setIsSyncingInitial(false);
     setIsAdminSubmitting(false);
   };
 
@@ -219,13 +218,18 @@ function App() {
         _modified: now
       });
       if (error) throw error;
-      vincularOrganizacion(orgId);
+      await vincularOrganizacion(orgId);
       localStorage.setItem('pos_org_name_cached', newOrgNombre.trim());
       setOrganizacionNombre(newOrgNombre.trim());
-      await sincronizarDatosOrganizacion();
+      setIsSyncingInitial(true);
+      await initVerticalRxDb();
+      await waitForInitialSync();
+      await forceSyncAll();
+      setIsSyncingInitial(false);
     } catch (error) {
       console.error('Error al crear organización:', error);
       sileo.error({ title: 'Error', description: 'No se pudo crear la organización.' });
+      setIsSyncingInitial(false);
     } finally {
       setIsAdminSubmitting(false);
     }
@@ -256,8 +260,25 @@ function App() {
   );
 
   let content: ReactElement;
-  // 1. Si no hay organización vinculada, forzar la vinculación
-  if (!activeOrganizationId) {
+  // 1. Dispositivo recién vinculado: mostrar progreso hasta completar el
+  // primer pull, en vez de entrar directo a la app operativa (que vería todo
+  // vacío mientras la sincronización sigue en curso).
+  if (activeOrganizationId && isSyncingInitial) {
+    content = (
+      <Container size="xs" p="xl" style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Stack align="center" gap="lg">
+          <Loader size="lg" />
+          <Stack align="center" gap={4}>
+            <Title order={3} ta="center">Sincronizando datos del hotel…</Title>
+            <Text size="sm" c="dimmed" ta="center">
+              Descargando mesas, menú y configuración. Esto solo pasa la primera vez que vinculas este dispositivo.
+            </Text>
+          </Stack>
+        </Stack>
+      </Container>
+    );
+  // 2. Si no hay organización vinculada, forzar la vinculación
+  } else if (!activeOrganizationId) {
     if (!adminUser) {
       content = (
         <Container size="xs" p="xl" style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
