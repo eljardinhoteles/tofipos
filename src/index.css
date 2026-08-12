@@ -1,39 +1,49 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
 /* ============================================================
    POS FOOD — Tokens semánticos conectados a Mantine
    ============================================================ */
 
-
-
 :root {
-  --ui-bg: var(--mantine-color-gray-0);
-  --ui-surface: var(--mantine-color-white);
-  --ui-surface-muted: var(--mantine-color-gray-1);
-  --ui-border: var(--mantine-color-gray-2);
-  --ui-border-strong: var(--mantine-color-gray-3);
-  --ui-text: var(--mantine-color-dark-8);
-  --ui-text-muted: var(--mantine-color-gray-6);
-  --ui-text-subtle: var(--mantine-color-gray-5);
-  --ui-primary: var(--mantine-primary-color-filled);
-  --ui-primary-hover: var(--mantine-primary-color-filled-hover);
-  --ui-primary-soft: var(--mantine-primary-color-light);
-  --ui-primary-text: var(--mantine-primary-color-light-color);
-  --ui-on-primary: var(--mantine-color-white);
+  --ui-bg: var(--background);
+  --ui-surface: var(--card);
+  --ui-surface-muted: var(--muted);
+  --ui-border: var(--border);
+  --ui-border-strong: var(--border);
+  --ui-text: var(--foreground);
+  --ui-text-muted: var(--muted-foreground);
+  --ui-text-subtle: var(--muted-foreground);
+  --ui-primary: var(--primary);
+  --ui-primary-hover: var(--primary);
+  --ui-primary-soft: var(--accent);
+  --ui-primary-text: var(--accent-foreground);
+  --ui-on-primary: var(--primary-foreground);
   --ui-on-primary-muted: rgba(255, 255, 255, 0.78);
   --ui-on-primary-subtle: rgba(255, 255, 255, 0.62);
   --ui-primary-layer: rgba(255, 255, 255, 0.14);
   --ui-primary-layer-active: rgba(255, 255, 255, 0.22);
   --ui-primary-layer-strong: rgba(255, 255, 255, 0.28);
-  --ui-shadow-soft: 0 1px 4px color-mix(in srgb, var(--mantine-color-dark-9), transparent 96%);
-  --ui-shadow-md: 0 8px 32px color-mix(in srgb, var(--mantine-color-dark-9), transparent 88%);
+  --ui-shadow-soft: 0 1px 4px color-mix(in srgb, var(--foreground), transparent 96%);
+  --ui-shadow-md: 0 8px 32px color-mix(in srgb, var(--foreground), transparent 88%);
   --ui-shadow-primary: 0 4px 6px -1px color-mix(in srgb, var(--ui-primary), transparent 90%);
-  --ui-shadow-floating: 0 8px 24px color-mix(in srgb, var(--mantine-color-dark-9), transparent 80%);
+  --ui-shadow-floating: 0 8px 24px color-mix(in srgb, var(--foreground), transparent 80%);
   --ui-table-seat-free: color-mix(in srgb, var(--ui-text), transparent 85%);
-  --ui-success: var(--mantine-color-green-6);
-  --ui-success-soft: var(--mantine-color-green-0);
-  --ui-warning: var(--mantine-color-yellow-6);
-  --ui-warning-soft: var(--mantine-color-yellow-0);
-  --ui-danger: var(--mantine-color-red-6);
-  --ui-danger-soft: var(--mantine-color-red-0);
+  --ui-success: oklch(0.6 0.15 145);
+  --ui-success-soft: oklch(0.95 0.03 145);
+  --ui-warning: oklch(0.75 0.15 85);
+  --ui-warning-soft: oklch(0.96 0.04 85);
+  --ui-danger: var(--destructive);
+  --ui-danger-soft: color-mix(in srgb, var(--destructive), transparent 90%);
+
+  /* Fondo de navegación (navbar móvil, sidebar de escritorio): verde bosque
+     oscuro, distinto de --primary para que los acentos (ej. botón "Mesas"
+     activo) sigan contrastando sobre él. */
+  --ui-nav: oklch(0.266 0.036 158.776);
+  --ui-nav-foreground: oklch(0.975 0.007 160.078);
 
   /* Aliases temporales para no romper pantallas mientras migramos componentes. */
   --pos-bg: var(--ui-bg);
@@ -57,6 +67,95 @@
   --status-closed: var(--ui-danger);
 
   --ease-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --background: oklch(0.97 0.002 247.839);
+
+  --foreground: oklch(0.148 0.004 228.8);
+
+  --card: oklch(1 0 0);
+
+  --card-foreground: oklch(0.148 0.004 228.8);
+
+  --popover: oklch(1 0 0);
+
+  --popover-foreground: oklch(0.148 0.004 228.8);
+
+  --primary: oklch(0.479 0.078 161.08);
+
+  --primary-foreground: oklch(0.975 0.007 160.078);
+
+  --secondary: oklch(0.967 0.001 286.375);
+
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+
+  --muted: oklch(0.963 0.002 197.1);
+
+  --muted-foreground: oklch(0.56 0.021 213.5);
+
+  --accent: oklch(0.963 0.002 197.1);
+
+  --accent-foreground: oklch(0.218 0.008 223.9);
+
+  --destructive: oklch(0.577 0.245 27.325);
+
+  --border: oklch(0.925 0.005 214.3);
+
+  --input: oklch(0.925 0.005 214.3);
+
+  --ring: oklch(0.479 0.078 161.08 / 0.5);
+
+  --chart-1: oklch(0.809 0.105 251.813);
+
+  --chart-2: oklch(0.623 0.214 259.815);
+
+  --chart-3: oklch(0.546 0.245 262.881);
+
+  --chart-4: oklch(0.488 0.243 264.376);
+
+  --chart-5: oklch(0.424 0.199 265.638);
+
+  --radius: 0.45rem;
+
+  --sidebar: oklch(0.987 0.002 197.1);
+
+  --sidebar-foreground: oklch(0.148 0.004 228.8);
+
+  --sidebar-primary: oklch(0.479 0.078 161.08);
+
+  --sidebar-primary-foreground: oklch(0.975 0.007 160.078);
+
+  --sidebar-accent: oklch(0.963 0.002 197.1);
+
+  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
+
+  --sidebar-border: oklch(0.925 0.005 214.3);
+
+  --sidebar-ring: oklch(0.479 0.078 161.08 / 0.5);
+
+  /* Compat: mapea nombres de variables Mantine restantes en reglas legacy a tokens shadcn */
+  --mantine-color-gray-0: var(--muted);
+  --mantine-color-gray-1: var(--muted);
+  --mantine-color-green-0: var(--ui-success-soft);
+  --mantine-color-green-6: var(--ui-success);
+  --mantine-color-myColor-0: var(--accent);
+  --mantine-color-myColor-6: var(--primary);
+  --mantine-color-orange-0: oklch(0.96 0.05 65);
+  --mantine-color-orange-6: oklch(0.7 0.17 55);
+  --mantine-color-red-0: var(--ui-danger-soft);
+  --mantine-color-red-3: color-mix(in srgb, var(--destructive), white 30%);
+  --mantine-color-red-6: var(--destructive);
+  --mantine-color-violet-0: oklch(0.95 0.03 300);
+  --mantine-color-violet-6: oklch(0.55 0.2 300);
+  --mantine-color-yellow-0: var(--ui-warning-soft);
+  --mantine-color-yellow-6: var(--ui-warning);
+  --mantine-font-size-sm: 0.875rem;
+  --mantine-primary-color-filled: var(--primary);
+  --mantine-primary-color-filled-hover: var(--primary);
+  --mantine-radius-md: var(--radius);
+  --mantine-radius-xl: calc(var(--radius) * 2);
+  --mantine-shadow-xl: var(--ui-shadow-md);
+  --mantine-spacing-sm: 0.75rem;
+  --mantine-spacing-xs: 0.5rem;
 }
 
 html {
@@ -65,13 +164,24 @@ html {
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background: var(--pos-bg);
   color: var(--pos-text);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   overscroll-behavior: none;
+}
+
+/* Radix Dialog (base de nuestros Drawer no-modales) marca el resto del árbol
+   con aria-hidden y bloquea el pointer-events del body mientras el portal
+   está abierto. Nuestros drawers usan modal=false a propósito para permitir
+   interactuar con el fondo, así que forzamos que el body siga siendo
+   interactivo pase lo que pase. */
+body {
+  pointer-events: auto !important;
 }
 
 input,
@@ -593,18 +703,11 @@ label {
 
 .fab-main:hover {
   transform: scale(1.1) translateY(-4px);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--ui-primary), transparent 60%);
 }
 
 .fab-main:active {
   transform: scale(0.9) translateY(0);
-}
-
-/* ── Fondo de rejilla de puntos ────────────────────────────── */
-.pos-grid-bg {
-  background-image: radial-gradient(circle, var(--pos-border-dark) 1px, transparent 1px);
-  background-size: 30px 30px;
-  background-attachment: local;
 }
 
 /* Grilla de mesas/habitaciones responsive */
@@ -1719,7 +1822,7 @@ label {
     width: 0 !important;
     height: 0 !important;
   }
-  
+
   * {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
@@ -1727,5 +1830,99 @@ label {
 
   .mantine-ScrollArea-scrollbar {
     display: none !important;
+  }
+}
+
+.dark {
+  --background: oklch(0.148 0.004 228.8);
+  --foreground: oklch(0.987 0.002 197.1);
+  --card: oklch(0.218 0.008 223.9);
+  --card-foreground: oklch(0.987 0.002 197.1);
+  --popover: oklch(0.218 0.008 223.9);
+  --popover-foreground: oklch(0.987 0.002 197.1);
+  --primary: oklch(0.625 0.093 160.846);
+  --primary-foreground: oklch(0.148 0.02 160.078);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.275 0.011 216.9);
+  --muted-foreground: oklch(0.723 0.014 214.4);
+  --accent: oklch(0.275 0.011 216.9);
+  --accent-foreground: oklch(0.987 0.002 197.1);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.625 0.093 160.846 / 0.5);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.218 0.008 223.9);
+  --sidebar-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-primary: oklch(0.625 0.093 160.846);
+  --sidebar-primary-foreground: oklch(0.148 0.02 160.078);
+  --sidebar-accent: oklch(0.275 0.011 216.9);
+  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.625 0.093 160.846 / 0.5);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', sans-serif;
+  --font-heading: 'Geist Variable', sans-serif;
+  --color-nav: var(--ui-nav);
+  --color-nav-foreground: var(--ui-nav-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
   }
 }

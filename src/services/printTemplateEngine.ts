@@ -533,7 +533,9 @@ export function generarTicketPago(
   t += alignCenter('DESGLOSE DE PAGO', width) + '\n';
   let totalPagado = 0;
   pagos.forEach(pago => {
-    const metodoLabel = pago.metodo_pago.toUpperCase();
+    // metodo_pago puede venir null: el checkout ya no elige método al
+    // cerrar, se define después al anclar en Centro de Ventas.
+    const metodoLabel = pago.metodo_pago ? pago.metodo_pago.toUpperCase() : 'PENDIENTE DE DEFINIR';
     t += justifyBetween(`${metodoLabel}:`, `$${pago.monto.toFixed(2)}`, width) + '\n';
     totalPagado += pago.monto;
   });

@@ -23,6 +23,7 @@ interface AuthContextType {
   desvincularDispositivo: () => void;
   loginConPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logoutMesero: () => void;
+  fetchOrganizacionesAdmin: () => Promise<Array<{ id: string; nombre: string }>>;
 
   isLoading: boolean;
 }
@@ -287,6 +288,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('pos_current_mesero_id');
   };
 
+  // Lista las organizaciones a las que pertenece el admin autenticado (multi-org)
+  const fetchOrganizacionesAdmin = async (): Promise<Array<{ id: string; nombre: string }>> => {
+    const { data: orgIds, error: rpcError } = await supabase.rpc('mis_organizaciones');
+    if (rpcError) throw rpcError;
+    if (!orgIds || orgIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('organizaciones')
+      .select('id, nombre')
+      .in('id', orgIds);
+    if (error) throw error;
+    return (data || []) as Array<{ id: string; nombre: string }>;
+  };
+
   const isAdminConfigured = !!adminUser && !!activeOrganizationId;
   const isAuthenticated = !!currentMesero;
 
@@ -304,6 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       desvincularDispositivo,
       loginConPassword,
       logoutMesero,
+      fetchOrganizacionesAdmin,
       isLoading
     }}>
       {children}

@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Box, Center, Loader } from '@mantine/core';
-import { type Mesa, type Piso } from '../../db/database';
+import { useState, useEffect, useMemo } from 'react';
+import { type Mesa } from '../../db/database';
 
-// Importar sub-componentes refactorizados
 import { SidebarWelcome } from './Sidebar/SidebarWelcome';
 import { SidebarDetails } from './Sidebar/SidebarDetails';
 import { SidebarReceiptViewer } from './Sidebar/SidebarReceiptViewer';
@@ -20,6 +18,9 @@ import { SidebarHabitacionCuenta } from './Sidebar/SidebarHabitacionCuenta';
 import { getMesaEstadoEfectivo, isOperativeComanda } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
 import { useRxClientes } from '../../hooks/useRxClientes';
+import { useRxMesas } from '../../hooks/useRxMesas';
+import { useRxPisos } from '../../hooks/useRxPisos';
+import { useRxComandas } from '../../hooks/useRxComandas';
 
 interface TableSidebarProps {
   selectedMesa: Mesa | null;
@@ -42,95 +43,53 @@ export function TableSidebar({
   setSelectedConfigPiso,
   mesaEsDeHabitaciones = false,
 }: TableSidebarProps) {
-  // Estados para apertura de mesa
   const [customerName, setCustomerName] = useState('');
-  const [guestCount, setGuestCount] = useState(0);
-  const { checkoutView, setCheckoutView, viewingComandaId, reservaView, setReservaView, selectedReservaId, setSelectedReservaId, menuView } = useUI();
+  const [guestCount, setGuestCount] = useState(1);
+  const { checkoutView, setCheckoutView, viewingComandaId, setViewingComandaId, reservaView, setReservaView, selectedReservaId, setSelectedReservaId, menuView } = useUI();
   const [checkoutType, setCheckoutType] = useState<'directo' | 'dividido'>('directo');
   const [checkoutMode, setCheckoutMode] = useState<'cobro' | 'enviar_habitacion'>('cobro');
   const [openLinkMode, setOpenLinkMode] = useState<'manual' | 'habitacion'>('manual');
 
-  // Estados para gestión de pisos (Config)
   const [newPisoName, setNewPisoName] = useState('');
   const [editingPisoId, setEditingPisoId] = useState<string | null>(null);
   const [editingPisoName, setEditingPisoName] = useState('');
 
-  // Consultas Live
-  const [allMesas, setAllMesas] = useState<Mesa[]>([]);
-  const [dbPisos, setDbPisos] = useState<Piso[]>([]);
-  const [activeMesaIds, setActiveMesaIds] = useState<Set<string>>(new Set());
+  // Mesas/pisos/comandas de la organización vienen de hooks compartidos (una
+  // única suscripción real por colección, reutilizada por todas las páginas
+  // que la necesiten) en vez de que cada instancia de este sidebar abra sus
+  // propias queries redundantes sobre la colección completa.
+  const { mesas: allMesasUnsorted } = useRxMesas();
+  const { pisos: dbPisosUnsorted } = useRxPisos();
+  const { comandas: allComandasRaw } = useRxComandas();
+
+  const allMesas = useMemo(
+    () => [...allMesasUnsorted].sort((a, b) =>
+      (a.piso || '').localeCompare(b.piso || '') || a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+    ),
+    [allMesasUnsorted]
+  );
+  const dbPisos = useMemo(
+    () => [...dbPisosUnsorted].sort((a, b) =>
+      (a.orden ?? 0) - (b.orden ?? 0) || a.nombre.localeCompare(b.nombre)
+    ),
+    [dbPisosUnsorted]
+  );
+  const activeMesaIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of allComandasRaw) {
+      if (['cerrado', 'facturado', 'anulada'].includes(c.estado)) continue;
+      if (isOperativeComanda(c) && c.mesa_id) ids.add(c.mesa_id);
+    }
+    return ids;
+  }, [allComandasRaw]);
 
   const { clientes: allClientes } = useRxClientes();
-  
+
   const [historicalComanda, setHistoricalComanda] = useState<any | null>(null);
   const [activeComandaLive, setActiveComandaLive] = useState<any | null>(null);
   const [liveComandaItems, setLiveComandaItems] = useState<any[]>([]);
   const [activeCuentaHabitacion, setActiveCuentaHabitacion] = useState<any | null>(null);
 
-  // Suscripciones globales de la organización (mesas, pisos, comandas activas):
-  // dependen solo de orgId, no de qué mesa esté seleccionada. Antes vivían en el
-  // mismo efecto que la mesa seleccionada y se recreaban en cada tap de mesa,
-  // relanzando consultas sobre TODA la organización y retrasando la apertura
-  // del sheet. Ahora corren una sola vez al montar el sidebar.
-  useEffect(() => {
-    let alive = true;
-    let mesasSub: { unsubscribe: () => void } | null = null;
-    let pisosSub: { unsubscribe: () => void } | null = null;
-    let allComandasSub: { unsubscribe: () => void } | null = null;
-
-    (async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-
-      const orgId = localStorage.getItem('pos_active_org_id') || '';
-      const mesasQuery = rxDb.mesas.find({
-        selector: { organization_id: orgId, _deleted: { $ne: true } },
-        sort: [{ piso: 'asc' }, { nombre: 'asc' }]
-      });
-      const pisosQuery = rxDb.pisos.find({
-        selector: {
-          organization_id: orgId,
-          _deleted: { $ne: true }
-        },
-        sort: [{ orden: 'asc' }, { nombre: 'asc' }]
-      });
-      mesasSub = mesasQuery.$.subscribe((docs: any[]) => {
-        if (!alive) return;
-        setAllMesas(docs.map((doc: any) => doc.toJSON()));
-      });
-      pisosSub = pisosQuery.$.subscribe((docs: any[]) => {
-        if (!alive) return;
-        setDbPisos(docs.map((doc: any) => doc.toJSON()));
-      });
-      allComandasSub = rxDb.comandas.find({
-        selector: {
-          organization_id: orgId,
-          estado: { $nin: ['cerrado', 'facturado', 'anulada'] },
-          _deleted: { $ne: true },
-        }
-      }).$.subscribe((docs: any[]) => {
-        if (!alive) return;
-        const ids = new Set(
-          docs
-            .map((d: any) => d.toJSON())
-            .filter((c: any) => isOperativeComanda(c))
-            .map((c: any) => c.mesa_id)
-            .filter(Boolean)
-        );
-        setActiveMesaIds(ids);
-      });
-    })().catch(err => console.warn('Error cargando datos globales RxDB del sidebar:', err));
-
-    return () => {
-      alive = false;
-      mesasSub?.unsubscribe();
-      pisosSub?.unsubscribe();
-      allComandasSub?.unsubscribe();
-    };
-  }, []);
-
-  // Suscripciones específicas de la mesa/comanda seleccionada: este es el único
-  // trabajo que debe repetirse en cada tap de mesa.
   useEffect(() => {
     let alive = true;
     let comandasSub: { unsubscribe: () => void } | null = null;
@@ -243,18 +202,16 @@ export function TableSidebar({
   const [tableFormValues, setTableFormValues] = useState({ numero: 1, nombre: '', capacidad: 0 });
   const [selectedHabitacionId, setSelectedHabitacionId] = useState<string | null>(null);
 
-  // Resetear estados al cambiar de mesa
   useEffect(() => {
     if (selectedMesa) {
       setCustomerName('');
-      setGuestCount(selectedMesa.capacidad || 2); // Pre-llena la capacidad de la mesa o 2 por defecto
+      setGuestCount(selectedMesa.capacidad || 2);
       setCheckoutView(false);
       setSelectedHabitacionId(null);
       setOpenLinkMode('manual');
     }
   }, [selectedMesa]);
 
-  // Handlers de Configuración
   const handleAddPiso = async (name: string) => {
     if (!name.trim()) return;
     await createRxPiso({
@@ -303,7 +260,6 @@ export function TableSidebar({
     const currentPiso = dbPisos[currentIndex];
     const targetPiso = dbPisos[targetIndex];
 
-    // Intercambiar órdenes
     await updateRxPiso(currentPiso.id, { orden: targetPiso.orden });
     await updateRxPiso(targetPiso.id, { orden: currentPiso.orden });
   };
@@ -398,17 +354,13 @@ export function TableSidebar({
     }
   };
 
-  // ── LÓGICA DE RENDERING (ROUTER) ──────────────────────────────────────────
-
   return (
-    <Box h="100%">
+    <div className="h-full w-full bg-card text-foreground overflow-hidden flex flex-col">
       {(() => {
-        // 0. Vistas de Menú
         if (menuView === 'producto') {
           return <SidebarMenuProduct />;
         }
 
-        // 0. Vistas de Reserva
         if (reservaView === 'nueva') {
           return (
             <SidebarReservaNew
@@ -434,7 +386,6 @@ export function TableSidebar({
           );
         }
 
-        // 1. Vista de Añadir/Editar Mesa (Jerarquía 3)
         if (configView === 'nueva_mesa' && selectedConfigPiso) {
           return (
             <SidebarAddTable
@@ -448,7 +399,6 @@ export function TableSidebar({
           );
         }
 
-        // 2. Vista de Configuración de Mesas (Jerarquía 2)
         if (configView === 'mesas' && selectedConfigPiso) {
           return (
             <SidebarConfigMesas
@@ -466,7 +416,6 @@ export function TableSidebar({
           );
         }
 
-        // 2. Vista de Configuración de Pisos (Jerarquía 1)
         if (configView === 'pisos') {
           return (
             <SidebarConfigPisos 
@@ -488,16 +437,14 @@ export function TableSidebar({
           );
         }
 
-        // Si se está cargando una comanda histórica, evitar caer a bienvenida/formulario.
         if (viewingComandaId && activeComanda === undefined) {
           return (
-            <Center style={{ height: '100%' }}>
-              <Loader color="orange" size="lg" type="dots" />
-            </Center>
+            <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs font-semibold">
+              Cargando comanda...
+            </div>
           );
         }
 
-        // 3. Si no hay mesa seleccionada -> Bienvenida
         if (!selectedMesaEffective) {
           return (
             <SidebarWelcome 
@@ -506,8 +453,6 @@ export function TableSidebar({
           );
         }
 
-        // 3a. Las habitaciones siempre usan su vista especializada (a menos que estemos viendo una comanda específica).
-        // Si tienen comandas vinculadas, se muestran como cargos dentro de la cuenta.
         if (isHabitacion && !viewingComandaId) {
           return (
             <SidebarHabitacionCuenta
@@ -517,11 +462,10 @@ export function TableSidebar({
           );
         }
 
-        // 4. Vista de Cobro (Checkout Directo o Dividido)
         if (checkoutView && activeComanda) {
           if (checkoutType === 'dividido') {
             return (
-            <SidebarSplit 
+              <SidebarSplit 
                 selectedMesa={selectedMesaEffective}
                 activeComanda={activeComanda}
                 comandaItems={comandaItems}
@@ -550,28 +494,30 @@ export function TableSidebar({
           );
         }
 
-        // Si se está cargando la comanda de la base de datos, evitar flasheo de mesa libre
         if (activeComanda === undefined) {
           return (
-            <Center style={{ height: '100%' }}>
-              <Loader color="orange" size="lg" type="dots" />
-            </Center>
+            <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs font-semibold">
+              Cargando estado...
+            </div>
           );
         }
 
-        // 4. Si hay una comanda activa o estamos viendo una histórica -> Detalles o Visor de Recibo
         if (activeComanda) {
           const isReadOnly = activeComanda.estado === 'cerrado' ||
                              activeComanda.estado === 'facturado' ||
                              activeComanda.estado === 'anulada' ||
                              (!!activeComanda.habitacion_cuenta_id && activeComanda.sincronizado !== false);
           if (isReadOnly) {
+            // Si se llegó aquí desde la lista de comandas de una habitación
+            // (CuentaView), "volver" debe regresar a esa lista, no cerrar
+            // todo el sidebar.
+            const backToHabitacion = !!viewingComandaId && !!activeComanda.habitacion_cuenta_id;
             return (
-            <SidebarReceiptViewer
+              <SidebarReceiptViewer
                 selectedMesa={selectedMesaEffective}
                 activeComanda={activeComanda}
                 comandaItems={comandaItems}
-                onClose={onClose}
+                onClose={backToHabitacion ? () => setViewingComandaId(null) : onClose}
                 onAction={handleActionOverride}
               />
             );
@@ -589,7 +535,6 @@ export function TableSidebar({
           );
         }
 
-        // 5. Si la mesa está libre -> Formulario de Apertura
         return (
           <SidebarOpenTable 
             selectedMesa={selectedMesaEffective}
@@ -605,7 +550,6 @@ export function TableSidebar({
             onOpenTable={() => {
               const matchedClient = allClientes.find(c => c.nombre.trim().toLowerCase() === customerName.trim().toLowerCase());
               const resolvedId = matchedClient ? matchedClient.id : '';
-              // Protocolo: abrir:<base64-json> o formato legado abrir:nombre:comensales:clienteId:habitacionCuentaId
               const habitacionCuentaId = openLinkMode === 'habitacion' ? (selectedHabitacionId || '') : '';
               const payload = btoa(JSON.stringify({
                 customerName,
@@ -618,8 +562,6 @@ export function TableSidebar({
           />
         );
       })()}
-
-      {/* El modal ha sido eliminado y reemplazado por la vista interna del sidebar */}
-    </Box>
+    </div>
   );
 }

@@ -1,206 +1,155 @@
-import { Text, Paper, Group, Stack } from '@mantine/core';
-import type { Mesa, Comanda } from '../../db/database';
-import { UserIcon, ReceiptIcon, ForkKnifeIcon, BedIcon } from '@phosphor-icons/react';
-import { memo } from 'react';
-import type { CSSProperties } from 'react';
+import { memo } from'react';
+import type { Mesa, Comanda } from'../../db/database';
+import { User, Receipt, ForkKnife, Bed } from'@phosphor-icons/react';
+import { cn } from'@/lib/utils';
 
 interface TableNodeProps {
-  mesa: Mesa;
-  isSelected: boolean;
-  onSelect: (mesa: Mesa) => void;
-  tiempoActivo?: string;
-  cliente?: string;
-  isHabitacion?: boolean;
-  activeComanda?: Pick<Comanda, 'estado' | 'habitacion_cuenta_id'> & { sincronizado?: boolean } | null;
-  roomBadge?: string;
+ mesa: Mesa;
+ isSelected: boolean;
+ onSelect: (mesa: Mesa) => void;
+ tiempoActivo?: string;
+ cliente?: string;
+ isHabitacion?: boolean;
+ activeComanda?: Pick<Comanda,'estado'|'habitacion_cuenta_id'> & { sincronizado?: boolean } | null;
+ roomBadge?: string;
 }
 
-export const TableNode = memo(function TableNode({ mesa, isSelected, onSelect, tiempoActivo, cliente, isHabitacion, activeComanda, roomBadge }: TableNodeProps) {
-  const isFree = mesa.estado === 'libre' && !activeComanda;
+export const TableNode = memo(function TableNode({
+ mesa,
+ isSelected,
+ onSelect,
+ tiempoActivo,
+ cliente,
+ isHabitacion,
+ activeComanda,
+ roomBadge
+}: TableNodeProps) {
+ const isFree = mesa.estado ==='libre'&& !activeComanda;
 
-  const getStatusMeta = () => {
-    const hasOpenComanda = Boolean(activeComanda)
-    const effectiveState = hasOpenComanda
-      ? (activeComanda?.estado === 'cuenta' ? 'cuenta' : 'ocupada')
-      : mesa.estado
+ const hasOpenComanda = Boolean(activeComanda);
+ const effectiveState = hasOpenComanda
+ ? (activeComanda?.estado ==='cuenta'?'cuenta':'ocupada')
+ : mesa.estado;
 
-    switch (effectiveState) {
-      case 'libre':
-        return {
-          label: isFree ? 'Libre' : 'Libre',
-          main: 'var(--status-free)',
-          seat: 'var(--ui-table-seat-free)',
-          bg: 'var(--ui-surface-muted)',
-          text: 'var(--pos-text-muted)'
-        };
-      case 'ocupada':
-        return {
-          label: 'Ocupada',
-          main: 'var(--status-active)',
-          seat: 'var(--status-active)',
-          bg: 'var(--pos-surface)',
-          text: 'var(--status-active)'
-        };
-      case 'cuenta':
-        return {
-          label: 'Cuenta',
-          main: 'var(--status-closed)',
-          seat: 'var(--status-closed)',
-          bg: 'var(--pos-surface)',
-          text: 'var(--status-closed)'
-        };
-      default:
-        return {
-          label: 'Libre',
-          main: 'var(--status-free)',
-          seat: 'var(--ui-table-seat-free)',
-          bg: 'var(--ui-surface-muted)',
-          text: 'var(--pos-text-muted)'
-        };
-    }
-  };
+ // Capacidad es opcional al crear la mesa; sin un mínimo visual las mesas
+ // creadas sin ese campo se ven"sin sillas"(indistinguibles de una habitación).
+ const capacidad = mesa.capacidad || 2;
+ const roomNumber = isHabitacion ? (mesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || mesa.nombre) : mesa.nombre;
+ const roomType = isHabitacion ? (mesa.nombre.match(/\(([^)]+)\)/)?.[1] ||'Sin nombre') :'';
 
-  const status = getStatusMeta();
-  const capacidad = mesa.capacidad || 0;
+ if (isHabitacion) {
+ return (
+ <div
+ onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
+ className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
+ isSelected
+ ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white": isFree
+ ?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": isFree
+ ?"bg-card border-border text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":"bg-primary/10 border-primary/50 text-primary")}
+ >
+ <div className="flex items-center justify-between">
+ <span className="text-[10px] font-black uppercase tracking-wider">
+ {isFree ?'Libre': activeComanda?.estado ==='cuenta'?'Cuenta':'Ocupada'}
+ </span>
+ <Bed
+ size={18}
+ weight={isFree && !isSelected ?'regular':'fill'}
+ className={cn(isFree && !isSelected ?"opacity-40":"opacity-90")}
+ />
+ </div>
 
-  const nodeVars = {
-    '--table-node-status': status.main,
-    '--table-node-seat': status.seat,
-    '--table-node-bg': status.bg,
-  } as CSSProperties;
+ <div className="flex flex-col items-center justify-center gap-0.5 text-center my-auto">
+ <span className="font-black text-xl leading-none truncate max-w-full">
+ {roomNumber}
+ </span>
+ <span className="text-[10px] font-bold opacity-80 truncate max-w-full">
+ {roomType}
+ </span>
+ {cliente && (
+ <div className={cn("flex items-center gap-1 mt-1 font-extrabold text-[10px] max-w-full", isSelected ?"text-white":"text-primary")}>
+ <User size={10} className="shrink-0"/>
+ <span className="truncate">{cliente}</span>
+ </div>
+ )}
+ </div>
+ </div>
+ );
+ }
 
-  const roomNumber = isHabitacion ? (mesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || mesa.nombre) : mesa.nombre;
-  const roomType = isHabitacion ? (mesa.nombre.match(/\(([^)]+)\)/)?.[1] || 'Sin nombre') : '';
+ // Generar sillas visuales según capacidad
+ const renderChairs = () => {
+ const chairs = [];
+ 
+ // Relleno de un tono ligeramente distinto al fondo de la card (un paso más
+ // oscuro/saturado en la misma familia de color), para que se distingan del
+ // fondo en vez de fundirse en un bulto tipo"orejas".
+ const chairClass = cn("absolute rounded-full transition-colors",
+ isSelected
+ ? effectiveState ==='cuenta'?"bg-orange-700": effectiveState ==='ocupada'?"bg-primary":"bg-primary/80": effectiveState ==='libre'?"bg-muted-foreground/30": effectiveState ==='cuenta'?"bg-orange-300":"bg-primary/40");
 
-  if (isHabitacion) {
-    const roomBg = isFree
-      ? 'var(--ui-surface-muted)'
-      : (activeComanda?.estado === 'cuenta'
-        ? 'linear-gradient(135deg, rgba(250, 82, 82, 0.08) 0%, rgba(250, 82, 82, 0.02) 100%)'
-        : 'linear-gradient(135deg, rgba(46, 204, 113, 0.18) 0%, rgba(46, 204, 113, 0.08) 100%)'
-      );
+ // El gráfico se limita a un máximo de 4 sillas (2 arriba + 2 a los lados)
+ // sin importar la capacidad real de la mesa: con 6-8 el card se saturaba
+ // visualmente y el nodo tenía que montar más elementos de los necesarios
+ // solo para representar un número, no un layout real de sillas.
+ if (capacidad >= 2) {
+ chairs.push(<div key="c1"className={cn(chairClass,"top-0 left-1/2 -translate-x-1/2 -translate-y-full w-11 h-1.5")} />);
+ chairs.push(<div key="c2"className={cn(chairClass,"bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-11 h-1.5")} />);
+ }
+ if (capacidad >= 4) {
+ chairs.push(<div key="c3"className={cn(chairClass,"left-0 top-1/2 -translate-x-full -translate-y-1/2 w-1.5 h-11")} />);
+ chairs.push(<div key="c4"className={cn(chairClass,"right-0 top-1/2 translate-x-full -translate-y-1/2 w-1.5 h-11")} />);
+ }
+ return chairs;
+ };
 
-    const roomBorderColor = isFree
-      ? 'var(--pos-border-dark)'
-      : (activeComanda?.estado === 'cuenta'
-        ? 'var(--status-closed)'
-        : 'var(--status-active)'
-      );
+ return (
+ <div
+ onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
+ className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
+ isSelected
+ ? effectiveState ==='cuenta'?"bg-orange-600 border-orange-600 text-white": effectiveState ==='ocupada'?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": effectiveState ==='libre'?"bg-card border-border text-muted-foreground": effectiveState ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":"bg-primary/10 border-primary/50 text-primary")}
+ >
+ {/* Sillas alrededor de la mesa */}
+ {renderChairs()}
 
-    const roomTitleColor = isFree
-      ? 'var(--pos-text-sub)'
-      : (activeComanda?.estado === 'cuenta'
-        ? 'var(--status-closed)'
-        : 'var(--status-active)'
-      );
+ <div className="flex items-center justify-between relative z-10">
+ <span className={cn("text-[10px] font-black uppercase tracking-wider",
+ isSelected 
+ ?"text-white/90": effectiveState ==='libre'?"text-muted-foreground": effectiveState ==='cuenta'?"text-orange-600":"text-primary")}>
+ {effectiveState ==='libre'?'Libre': effectiveState ==='cuenta'?'Cuenta':'Ocupada'}
+ </span>
 
-    const bedIconWeight = isFree ? 'light' : 'fill';
-    const bedIconColor = isFree
-      ? 'var(--pos-text-muted)'
-      : (activeComanda?.estado === 'cuenta'
-        ? 'var(--status-closed)'
-        : 'var(--status-active)'
-      );
+ {!isFree && (
+ <div className="flex items-center gap-1">
+ {effectiveState ==='cuenta'? (
+ <Receipt size={14} className={isSelected ?"text-white":"text-orange-600"} />
+ ) : (
+ <ForkKnife size={14} className={isSelected ?"text-white":"text-primary"} />
+ )}
+ {tiempoActivo && <span className="text-xs font-extrabold">{tiempoActivo}</span>}
+ </div>
+ )}
+ </div>
 
-    return (
-      <Paper
-        className="tap table-node"
-        shadow="none"
-        radius="xl"
-        p="sm"
-        withBorder
-        style={{
-          ...nodeVars,
-          background: roomBg,
-          borderColor: isSelected ? 'var(--table-node-status)' : roomBorderColor,
-          borderWidth: '2px',
-          borderStyle: 'solid',
-        }}
-        data-selected={isSelected || undefined}
-        onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
-      >
-        <Group justify="space-between" align="center" className="table-node__header">
-          <Text size="10px" fw={900} c={bedIconColor} className="table-node__status-label">
-            {status.label}
-          </Text>
-          <BedIcon size={18} color={bedIconColor} weight={bedIconWeight} className="table-node__muted-icon" style={{ opacity: isFree ? 0.4 : 0.95 }} />
-        </Group>
+ <div className="flex flex-col items-center justify-center gap-1 text-center my-auto relative z-10">
+ <span className={cn("font-black text-lg leading-tight truncate max-w-full",
+ effectiveState ==='libre'&& !isSelected ?"text-foreground":"text-inherit")}>
+ {mesa.nombre}
+ </span>
 
-        <Stack align="center" justify="center" gap={2} h="100%" pt={6}>
-          <Text fw={900} size="1.25rem" c={roomTitleColor} className="table-node__title table-node__title--room">
-            {roomNumber}
-          </Text>
-          <Text size="10px" fw={800} c={isFree ? 'dimmed' : 'var(--pos-text-sub)'} className="table-node__subtitle">
-            {roomType}
-          </Text>
-          {cliente && (
-            <Group gap={2} mt={2} wrap="wrap" justify="center" className="table-node__client-group">
-              <UserIcon size={10} weight="bold" color="var(--ui-primary)" className="table-node__shrink-icon" />
-              <Text size="10px" fw={800} c="var(--ui-primary)" lineClamp={2} ta="center" className="table-node__client">
-                {cliente}
-              </Text>
-            </Group>
-          )}
-        </Stack>
-      </Paper>
-    );
-  }
+ {roomBadge && (
+ <span className={cn("px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wide",
+ isSelected ?"bg-white/20 text-white":"bg-primary text-primary-foreground")}>
+ HAB: {roomBadge.match(/\d+/)?.[0] || roomBadge}
+ </span>
+ )}
 
-  return (
-    <Paper
-      className="tap table-node"
-      shadow="none"
-      radius="xl"
-      p="sm"
-      withBorder
-      style={{
-        ...nodeVars,
-        background: mesa.estado === 'ocupada'
-          ? 'linear-gradient(135deg, rgba(46, 204, 113, 0.16) 0%, rgba(46, 204, 113, 0.06) 100%)'
-          : undefined,
-      }}
-      data-selected={isSelected || undefined}
-      onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
-    >
-      {/* Sillas (Reducidas un 10%) */}
-      <div className="table-node__seat table-node__seat--top" />
-      <div className="table-node__seat table-node__seat--bottom" />
-      <div className="table-node__seat table-node__seat--left" />
-      <div className="table-node__seat table-node__seat--right" />
-
-      <Group justify="space-between" align="center" className="table-node__header">
-        <Text size="10px" fw={900} c={status.main} className="table-node__status-label">
-          {status.label}
-        </Text>
-        {!isFree && (
-          <Group gap={4}>
-            {mesa.estado === 'cuenta' ? (
-              <ReceiptIcon size={13} color={status.main} />
-            ) : (
-              <ForkKnifeIcon size={13} color={status.main} weight="bold" />
-            )}
-            {tiempoActivo && <Text size="xs" fw={800} c="var(--pos-text)">{tiempoActivo}</Text>}
-          </Group>
-        )}
-      </Group>
-
-      <Stack align="center" justify="center" gap={4} h="100%" pt={6}>
-        <Text fw={900} size="1.15rem" c="var(--pos-text)" className="table-node__title">{mesa.nombre}</Text>
-        {roomBadge && (
-          <Text size="11px" fw={900} c="white" bg="blue" px={9} py={4} style={{ borderRadius: 6, letterSpacing: '0.5px' }}>
-            HAB: {roomBadge.match(/\d+/)?.[0] || roomBadge}
-          </Text>
-        )}
-        <Group gap={6}>
-          <UserIcon size={13} weight="bold" color="var(--pos-text-muted)" />
-          <Text size="xs" fw={800} c="var(--pos-text-sub)">{capacidad}</Text>
-        </Group>
-        {cliente && (
-          <Text size="10px" fw={700} c="var(--ui-primary)" lineClamp={2} ta="center" className="table-node__client table-node__client--wide">
-            {cliente}
-          </Text>
-        )}
-      </Stack>
-    </Paper>
-  );
+ {cliente && (
+ <span className="text-[10px] font-extrabold truncate max-w-full mt-1">
+ {cliente}
+ </span>
+ )}
+ </div>
+ </div>
+ );
 });

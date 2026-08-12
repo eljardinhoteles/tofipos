@@ -1,451 +1,351 @@
-// @ts-nocheck
-import { Box, Stack, Group, Text, ActionIcon, Button, TextInput, NumberInput, Divider, Switch, Badge, Flex, ScrollArea, Select } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
-import { Trash, Plus, X, Check, Tag, CurrencyDollar, Sliders, Drop, UploadSimple } from '@phosphor-icons/react';
-import { useForm } from '@mantine/form';
-import { type ModifierGroup } from '../../db/database';
-import { useUI } from '../../context/UIContext';
-import { sileo } from 'sileo';
-import { useEffect, useState } from 'react';
-import { initVerticalRxDb, createRxCategoria, createRxMenuItem, updateRxMenuItem } from '../../db/rxdb';
-import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
-import { ImportarMenuCsvModal } from './ImportarMenuCsvModal';
-
-function SectionLabel({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
-  return (
-    <Group gap={6} mb={10}>
-      <Icon size={14} weight="bold" color="var(--mantine-color-myColor-6)" />
-      <Text size="xs" fw={700} c="dimmed" style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}
-      </Text>
-    </Group>
-  );
-}
-
+import { useEffect, useState } from'react';
+import { X, Plus, Trash } from'@phosphor-icons/react';
+import { type ModifierGroup } from'../../db/database';
+import { useUI } from'../../context/UIContext';
+import { showToast } from'@/lib/toast';
+import { initVerticalRxDb, createRxCategoria, createRxMenuItem, updateRxMenuItem } from'../../db/rxdb';
+import { useRxMenuCatalog } from'../../hooks/useRxMenuCatalog';
+import { Input } from'@/components/ui/input';
+import { Label } from'@/components/ui/label';
+import { Switch } from'@/components/ui/switch';
+import { Button } from'@/components/ui/button';
 
 export function SidebarMenuProduct() {
-  const { selectedMenuProductId, setMenuView, setSelectedMenuProductId, openConfirm } = useUI();
+ const { selectedMenuProductId, setMenuView, setSelectedMenuProductId, openConfirm } = useUI();
+ const [editingProduct, setEditingProduct] = useState<any>(null);
+ const { categorias: dbCategorias } = useRxMenuCatalog();
 
-  const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [isImportCsvOpen, { open: openImportCsv, close: closeImportCsv }] = useDisclosure(false);
-  const { categorias: dbCategorias } = useRxMenuCatalog();
-  const categoryOptions = dbCategorias.map(c => ({ value: c.nombre, label: c.nombre }));
+ const [nombre, setNombre] = useState('');
+ const [precio, setPrecio] = useState<number>(0);
+ const [categoria, setCategoria] = useState('');
+ const [modificadores, setModificadores] = useState<ModifierGroup[]>([]);
+ const [activo, setActivo] = useState(true);
+ const [esBebida, setEsBebida] = useState(false);
+ const [ivaModalidad, setIvaModalidad] = useState<'sistema'|'especifico'|'exento'>('sistema');
+ const [ivaPorcentaje, setIvaPorcentaje] = useState(15);
+ const [nombreError, setNombreError] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    let productSub: { unsubscribe: () => void } | null = null;
+ useEffect(() => {
+ let alive = true;
+ let productSub: { unsubscribe: () => void } | null = null;
 
-    (async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      if (selectedMenuProductId) {
-        productSub = rxDb.menu_items.findOne(selectedMenuProductId).$.subscribe((doc: any) => {
-          if (!alive) return;
-          setEditingProduct(doc ? doc.toJSON() : null);
-        });
-      } else {
-        setEditingProduct(null);
-      }
-    })().catch(() => { });
+ (async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ if (selectedMenuProductId) {
+ productSub = rxDb.menu_items.findOne(selectedMenuProductId).$.subscribe((doc: any) => {
+ if (!alive) return;
+ setEditingProduct(doc ? doc.toJSON() : null);
+ });
+ } else {
+ setEditingProduct(null);
+ }
+ })().catch(() => {});
 
-    return () => {
-      alive = false;
-      productSub?.unsubscribe();
-    };
-  }, [selectedMenuProductId]);
+ return () => {
+ alive = false;
+ productSub?.unsubscribe();
+ };
+ }, [selectedMenuProductId]);
 
-  const form = useForm({
-    initialValues: {
-      nombre: '',
-      precio: 0,
-      categoria: '',
-      modificadores: [] as ModifierGroup[],
-      activo: true,
-      es_bebida: false,
-      iva_modalidad: 'sistema' as 'sistema' | 'especifico' | 'exento',
-      iva_porcentaje: 15,
-    },
-    validate: {
-      nombre: (v) => (v.trim().length < 2 ? 'Nombre muy corto' : null),
-      precio: (v) => (v < 0 ? 'El precio no puede ser negativo' : null),
-    },
-  });
+ useEffect(() => {
+ if (editingProduct) {
+ setNombre(editingProduct.nombre ||'');
+ setPrecio(editingProduct.precio || 0);
+ setCategoria(editingProduct.categoria_nombre ||'');
+ setModificadores(editingProduct.modificadores || []);
+ setActivo(editingProduct.activo ?? true);
+ setEsBebida(editingProduct.es_bebida || false);
+ setIvaModalidad(editingProduct.iva_modalidad ||'sistema');
+ setIvaPorcentaje(editingProduct.iva_porcentaje !== undefined ? editingProduct.iva_porcentaje : 15);
+ } else {
+ setNombre('');
+ setPrecio(0);
+ setCategoria('');
+ setModificadores([]);
+ setActivo(true);
+ setEsBebida(false);
+ setIvaModalidad('sistema');
+ setIvaPorcentaje(15);
+ }
+ }, [editingProduct?.id]);
 
-  useEffect(() => {
-    if (editingProduct) {
-      form.setValues({
-        nombre: editingProduct.nombre,
-        precio: editingProduct.precio,
-        categoria: editingProduct.categoria_nombre || '',
-        modificadores: editingProduct.modificadores || [],
-        activo: editingProduct.activo,
-        es_bebida: editingProduct.es_bebida || false,
-        iva_modalidad: editingProduct.iva_modalidad || 'sistema',
-        iva_porcentaje: editingProduct.iva_porcentaje !== undefined ? editingProduct.iva_porcentaje : 15,
-      });
-    } else {
-      form.reset();
-    }
-  }, [editingProduct?.id]);
+ const addModifierGroup = () => {
+ setModificadores(prev => [
+ ...prev,
+ { id: crypto.randomUUID(), nombre:'', obligatorio: false, multi: false, opciones: [] },
+ ]);
+ };
 
-  const handleSubmit = async (values: typeof form.values) => {
-    let catId = '';
-    let catNombre = values.categoria || 'General';
+ const removeModifierGroup = (groupId: string) => {
+ setModificadores(prev => prev.filter(g => g.id !== groupId));
+ };
 
-    if (values.categoria) {
-      const category = dbCategorias.find(c => c.nombre.toLowerCase() === values.categoria.toLowerCase());
-      if (!category) {
-        catId = crypto.randomUUID();
-        await createRxCategoria({ id: catId, nombre: values.categoria, organization_id: localStorage.getItem('pos_active_org_id') || '' });
-        catNombre = values.categoria;
-      } else {
-        catId = category.id;
-        catNombre = category.nombre;
-      }
-    } else {
-      const generalCat = dbCategorias.find(c => c.nombre === 'General');
-      if (!generalCat) {
-        catId = crypto.randomUUID();
-        await createRxCategoria({ id: catId, nombre: 'General', organization_id: localStorage.getItem('pos_active_org_id') || '' });
-      } else {
-        catId = generalCat.id;
-      }
-      catNombre = 'General';
-    }
+ const updateModifierGroup = (groupId: string, patch: Partial<ModifierGroup>) => {
+ setModificadores(prev => prev.map(g => g.id === groupId ? { ...g, ...patch } : g));
+ };
 
-    if (editingProduct) {
-      await updateRxMenuItem(editingProduct.id, {
-        nombre: values.nombre,
-        precio: values.precio,
-        categoria_id: catId,
-        categoria_nombre: catNombre,
-        modificadores: values.modificadores,
-        activo: values.activo,
-        es_bebida: values.es_bebida,
-        iva_modalidad: values.iva_modalidad,
-        iva_porcentaje: values.iva_modalidad === 'especifico' ? values.iva_porcentaje : undefined,
-        organization_id: localStorage.getItem('pos_active_org_id') || '',
-      });
-      sileo.success({ title: 'Producto actualizado' });
-    } else {
-      await createRxMenuItem({
-        id: crypto.randomUUID(),
-        nombre: values.nombre,
-        precio: values.precio,
-        categoria_id: catId,
-        categoria_nombre: catNombre,
-        activo: values.activo,
-        es_bebida: values.es_bebida,
-        modificadores: values.modificadores,
-        iva_modalidad: values.iva_modalidad,
-        iva_porcentaje: values.iva_modalidad === 'especifico' ? values.iva_porcentaje : undefined,
-        organization_id: localStorage.getItem('pos_active_org_id') || '',
-      });
-      sileo.success({ title: 'Producto creado' });
-    }
-    handleClose();
-  };
+ const addOption = (groupId: string) => {
+ setModificadores(prev => prev.map(g =>
+ g.id === groupId ? { ...g, opciones: [...g.opciones,''] } : g
+ ));
+ };
 
-  const handleClose = () => {
-    setMenuView('none');
-    setSelectedMenuProductId(null);
-  };
+ const updateOption = (groupId: string, index: number, value: string) => {
+ setModificadores(prev => prev.map(g =>
+ g.id === groupId
+ ? { ...g, opciones: g.opciones.map((op, i) => i === index ? value : op) }
+ : g
+ ));
+ };
 
-  return (
-    <Box h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
-      <ImportarMenuCsvModal
-        opened={isImportCsvOpen}
-        onClose={() => {
-          closeImportCsv();
-          handleClose();
-        }}
-      />
+ const removeOption = (groupId: string, index: number) => {
+ setModificadores(prev => prev.map(g =>
+ g.id === groupId
+ ? { ...g, opciones: g.opciones.filter((_, i) => i !== index) }
+ : g
+ ));
+ };
 
-      {/* HEADER — diseño unificado */}
-      <Box px="md" pt="md" style={{ flexShrink: 0 }}>
-        <Group justify="space-between" align="center" mb="md">
-          <Group gap={12} align="center">
-            <ActionIcon
-              variant="light"
-              color="gray"
-              onClick={handleClose}
-              size="lg"
-              radius="xl"
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                color: 'var(--pos-text-sub)'
-              }}
-            >
-              <X size={18} weight="bold" />
-            </ActionIcon>
-            <Text fw={900} size="lg" c="var(--pos-text)" style={{ lineHeight: 1 }}>
-              {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
-            </Text>
-          </Group>
-          <Switch
-            size="md"
-            color="green"
-            label={form.values.activo ? 'Activo' : 'Inactivo'}
-            labelPosition="left"
-            styles={{ label: { fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' } }}
-            {...form.getInputProps('activo', { type: 'checkbox' })}
-          />
-        </Group>
-        <Divider color="var(--pos-border)" style={{ margin: '0 -16px' }} />
-      </Box>
+ const handleSubmit = async () => {
+ if (nombre.trim().length < 2) {
+ setNombreError('Nombre muy corto');
+ return;
+ }
+ setNombreError('');
 
-      {/* BODY */}
-      <ScrollArea flex={1} type="never" px="md" pt="md" pb="md">
-        <Stack gap="xl">
+ // Descarta grupos sin nombre o sin opciones válidas al guardar
+ const modificadoresValidos = modificadores
+ .map(g => ({ ...g, nombre: g.nombre.trim(), opciones: g.opciones.map(o => o.trim()).filter(Boolean) }))
+ .filter(g => g.nombre.length > 0 && g.opciones.length > 0);
 
-          {/* Info básica */}
-          <Box>
-            <SectionLabel icon={Tag} label="Nombre del producto" />
-            <TextInput
-              placeholder="Ej: Lomo Saltado"
-              required
-              radius="md"
-              size="lg"
-              {...form.getInputProps('nombre')}
+ let catId ='';
+ let catNombre = categoria ||'General';
 
-            />
-          </Box>
+ if (categoria) {
+ const category = dbCategorias.find(c => c.nombre.toLowerCase() === categoria.toLowerCase());
+ if (!category) {
+ catId = crypto.randomUUID();
+ await createRxCategoria({ id: catId, nombre: categoria, organization_id: localStorage.getItem('pos_active_org_id') ||''});
+ catNombre = categoria;
+ } else {
+ catId = category.id;
+ catNombre = category.nombre;
+ }
+ } else {
+ const generalCat = dbCategorias.find(c => c.nombre ==='General');
+ if (!generalCat) {
+ catId = crypto.randomUUID();
+ await createRxCategoria({ id: catId, nombre:'General', organization_id: localStorage.getItem('pos_active_org_id') ||''});
+ } else {
+ catId = generalCat.id;
+ }
+ catNombre ='General';
+ }
 
-          <Box>
-            <SectionLabel icon={CurrencyDollar} label="Categoría y precio" />
-            <Group grow gap="sm" mb="md">
-              <Select
-                placeholder="Sin categoría"
-                data={categoryOptions}
-                searchable
-                clearable
-                radius="md"
-                size="lg"
-                value={form.values.categoria || null}
-                onChange={(v) => form.setFieldValue('categoria', v || '')}
+ if (editingProduct) {
+ await updateRxMenuItem(editingProduct.id, {
+ nombre,
+ precio,
+ categoria_id: catId,
+ categoria_nombre: catNombre,
+ modificadores: modificadoresValidos,
+ activo,
+ es_bebida: esBebida,
+ iva_modalidad: ivaModalidad,
+ iva_porcentaje: ivaModalidad ==='especifico'? ivaPorcentaje : undefined,
+ organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ });
+ showToast.success('Producto actualizado');
+ } else {
+ await createRxMenuItem({
+ id: crypto.randomUUID(),
+ nombre,
+ precio,
+ categoria_id: catId,
+ categoria_nombre: catNombre,
+ activo,
+ es_bebida: esBebida,
+ modificadores: modificadoresValidos,
+ iva_modalidad: ivaModalidad,
+ iva_porcentaje: ivaModalidad ==='especifico'? ivaPorcentaje : undefined,
+ organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ });
+ showToast.success('Producto creado');
+ }
+ handleClose();
+ };
 
-              />
-              <NumberInput
-                placeholder="0.00"
-                radius="md"
-                size="lg"
-                prefix="$"
-                decimalScale={2}
-                min={0}
-                {...form.getInputProps('precio')}
+ const handleClose = () => {
+ setMenuView('none');
+ setSelectedMenuProductId(null);
+ };
 
-              />
-            </Group>
-            <Text size="xs" c="dimmed" mt={6}>
-              Usa $0.00 para productos incluidos en la tarifa o sin cobro directo.
-            </Text>
+ return (
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
+ <div className="flex items-center gap-3">
+ <button
+ type="button"onClick={handleClose}
+ className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ <X size={18} weight="bold"/>
+ </button>
+ <h3 className="font-extrabold text-base text-foreground leading-tight">
+ {editingProduct ?'Editar Producto':'Nuevo Producto'}
+ </h3>
+ </div>
 
-            <SectionLabel icon={Drop} label="Zona de producción" />
-            <Switch
-              label="Es Bebida"
-              description="Se imprime al final de la comanda de cocina (zona de bar)"
-              size="md"
-              color="blue"
-              {...form.getInputProps('es_bebida', { type: 'checkbox' })}
-            />
+ <div className="flex items-center gap-2">
+ <Switch checked={activo} onCheckedChange={setActivo} />
+ <Label className="text-xs font-bold cursor-pointer">Activo</Label>
+ </div>
+ </header>
 
-            <SectionLabel icon={Sliders} label="Impuestos (IVA)" />
-            <Stack gap="sm">
-              <Select
-                placeholder="IVA del producto"
-                data={[
-                  { value: 'sistema', label: 'IVA General del Sistema' },
-                  { value: 'especifico', label: 'Tasa de IVA Específica' },
-                  { value: 'exento', label: 'Exento de IVA (0%)' },
-                ]}
-                radius="md"
-                size="md"
-                {...form.getInputProps('iva_modalidad')}
-              />
-              {form.values.iva_modalidad === 'especifico' && (
-                <NumberInput
-                  label="Porcentaje de IVA del Producto"
-                  placeholder="Ej: 10"
-                  suffix="%"
-                  radius="md"
-                  size="md"
-                  min={0}
-                  max={100}
-                  {...form.getInputProps('iva_porcentaje')}
-                />
-              )}
-            </Stack>
-          </Box>
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold">Nombre del producto *</Label>
+ <Input
+ type="text"placeholder="Ej: Lomo Saltado"value={nombre}
+ onChange={e => { setNombre(e.target.value); setNombreError(''); }}
+ className="h-9 text-xs font-semibold"/>
+ {nombreError && <span className="text-[10px] text-destructive font-bold">{nombreError}</span>}
+ </div>
 
+ <div className="grid grid-cols-2 gap-3">
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold">Categoría</Label>
+ <Input
+ type="text"placeholder="General"value={categoria}
+ onChange={e => setCategoria(e.target.value)}
+ className="h-9 text-xs font-semibold"/>
+ </div>
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold">Precio ($)</Label>
+ <Input
+ type="number"step="0.01"min={0}
+ placeholder="0.00"value={precio ||''}
+ onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
+ className="h-9 text-xs font-bold"/>
+ </div>
+ </div>
 
-          {/* Modificadores */}
-          <Box>
-            <Group justify="space-between" align="center" mb={10}>
-              <SectionLabel icon={Sliders} label="Grupos de modificadores" />
-              <ActionIcon
-                variant="light"
-                color="myColor"
-                radius="md"
-                size="md"
-                mb={10}
-                onClick={() => {
-                  const newGroup: ModifierGroup = {
-                    id: crypto.randomUUID(),
-                    nombre: '',
-                    obligatorio: false,
-                    multi: false,
-                    opciones: [],
-                  };
-                  form.setFieldValue('modificadores', [...form.values.modificadores, newGroup]);
-                }}
-              >
-                <Plus size={16} weight="bold" />
-              </ActionIcon>
-            </Group>
+ <div className="flex items-center gap-2">
+ <Switch id="esBebida"checked={esBebida} onCheckedChange={setEsBebida} />
+ <Label htmlFor="esBebida"className="text-xs font-bold cursor-pointer">
+ Es Bebida (imprime en barra)
+ </Label>
+ </div>
 
-            {form.values.modificadores.length === 0 ? (
-              <Text size="xs" c="dimmed" ta="center" py="lg">
-                Sin modificadores — toca + para añadir
-              </Text>
-            ) : (
-              <Stack gap="xl">
-                {form.values.modificadores.map((group, gIndex) => (
-                  <Box key={group.id}>
-                    {gIndex > 0 && <Divider mb="xl" color="var(--pos-border-dark)" style={{ opacity: 0.5 }} />}
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold">Modalidad IVA</Label>
+ <select
+ value={ivaModalidad}
+ onChange={e => setIvaModalidad(e.target.value as any)}
+ className="h-9 px-3 text-xs bg-input/50 border border-transparent rounded-2xl focus:outline-none focus:border-ring font-semibold">
+ <option value="sistema">IVA General del Sistema</option>
+ <option value="especifico">Tasa de IVA Específica</option>
+ <option value="exento">Exento de IVA (0%)</option>
+ </select>
+ </div>
 
-                    <Stack gap="md">
-                      <Group gap="sm" align="flex-start">
-                        <TextInput
-                          placeholder="Nombre del grupo (ej: Término carne)"
-                          style={{ flex: 1 }}
-                          size="md"
-                          radius="md"
-                          {...form.getInputProps(`modificadores.${gIndex}.nombre`)}
-                          styles={{ input: { fontWeight: 700, backgroundColor: 'transparent', border: 'none', paddingLeft: 0, fontSize: 16 } }}
-                        />
-                        <ActionIcon color="red" variant="subtle" radius="md" onClick={() => {
-                          const updated = [...form.values.modificadores];
-                          updated.splice(gIndex, 1);
-                          form.setFieldValue('modificadores', updated);
-                        }}>
-                          <Trash size={18} />
-                        </ActionIcon>
-                      </Group>
+ {/* Grupos de modificadores (ej:"Tipo de papas"-> Fritas / Doradas) */}
+ <div className="flex flex-col gap-2">
+ <div className="flex items-center justify-between">
+ <Label className="text-xs font-bold">Opciones adicionales</Label>
+ <Button
+ type="button"variant="ghost"size="sm"onClick={addModifierGroup}
+ className="h-7 px-2 text-xs font-bold text-primary gap-1">
+ <Plus size={14} weight="bold"/> Añadir grupo
+ </Button>
+ </div>
 
-                      <Group gap="lg">
-                        <Switch
-                          label="Obligatorio"
-                          size="xs"
-                          color="orange"
-                          checked={form.values.modificadores[gIndex].obligatorio}
-                          onChange={(e) => form.setFieldValue(`modificadores.${gIndex}.obligatorio`, e.currentTarget.checked)}
-                        />
-                        <Switch
-                          label="Múltiple"
-                          size="xs"
-                          color="myColor"
-                          checked={form.values.modificadores[gIndex].multi}
-                          onChange={(e) => form.setFieldValue(`modificadores.${gIndex}.multi`, e.currentTarget.checked)}
-                        />
-                      </Group>
+ {modificadores.length === 0 ? (
+ <p className="text-[11px] text-muted-foreground">
+ Sin opciones adicionales. Añade un grupo para ofrecer variantes como"Tipo de papas"(Fritas, Doradas).
+ </p>
+ ) : (
+ <div className="flex flex-col gap-3">
+ {modificadores.map(group => (
+ <div key={group.id} className="flex flex-col gap-2.5 p-3 rounded-xl bg-muted/60">
+ <div className="flex items-center gap-2">
+ <Input
+ type="text"placeholder="Nombre del grupo (Ej: Tipo de papas)"value={group.nombre}
+ onChange={e => updateModifierGroup(group.id, { nombre: e.target.value })}
+ className="h-8 text-xs font-semibold flex-1"/>
+ <Button
+ type="button"variant="ghost"size="icon"onClick={() => removeModifierGroup(group.id)}
+ className="h-8 w-8 shrink-0 text-destructive">
+ <Trash size={14} />
+ </Button>
+ </div>
 
-                      <Box>
-                        <Text size="10px" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Opciones — Enter para añadir
-                        </Text>
-                        <Flex gap={8} wrap="wrap" align="center">
-                          {group.opciones.map((opt, oIndex) => (
-                            <Badge
-                              key={oIndex}
-                              variant="light"
-                              color="myColor"
-                              size="lg"
-                              radius="md"
-                              rightSection={
-                                <ActionIcon size="xs" color="myColor" variant="transparent" onClick={() => {
-                                  const updated = [...group.opciones];
-                                  updated.splice(oIndex, 1);
-                                  form.setFieldValue(`modificadores.${gIndex}.opciones`, updated);
-                                }}>
-                                  <X size={10} />
-                                </ActionIcon>
-                              }
-                            >
-                              {opt}
-                            </Badge>
-                          ))}
-                          <TextInput
-                            placeholder="Añadir opción..."
-                            variant="unstyled"
-                            size="sm"
-                            style={{ width: 140 }}
-                            styles={{ input: { fontSize: 14, fontWeight: 600, color: 'var(--ui-primary)' } }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const val = e.currentTarget.value.trim();
-                                if (val && !group.opciones.includes(val)) {
-                                  form.setFieldValue(`modificadores.${gIndex}.opciones`, [...group.opciones, val]);
-                                  e.currentTarget.value = '';
-                                }
-                              }
-                            }}
-                          />
-                        </Flex>
-                      </Box>
-                    </Stack>
-                  </Box>
-                ))}
-              </Stack>
-            )}
-          </Box>
+ <div className="flex items-center gap-4">
+ <label className="flex items-center gap-1.5 cursor-pointer">
+ <Switch
+ checked={group.obligatorio}
+ onCheckedChange={v => updateModifierGroup(group.id, { obligatorio: v })}
+ />
+ <span className="text-[11px] font-bold text-muted-foreground">Obligatorio</span>
+ </label>
+ <label className="flex items-center gap-1.5 cursor-pointer">
+ <Switch
+ checked={group.multi}
+ onCheckedChange={v => updateModifierGroup(group.id, { multi: v })}
+ />
+ <span className="text-[11px] font-bold text-muted-foreground">Selección múltiple</span>
+ </label>
+ </div>
 
-        </Stack>
-      </ScrollArea>
+ <div className="flex flex-col gap-1.5">
+ {group.opciones.map((opcion, idx) => (
+ <div key={idx} className="flex items-center gap-2">
+ <Input
+ type="text"placeholder={`Opción ${idx + 1} (Ej: Papas Fritas)`}
+ value={opcion}
+ onChange={e => updateOption(group.id, idx, e.target.value)}
+ className="h-8 text-xs font-semibold flex-1 bg-card"/>
+ <Button
+ type="button"variant="ghost"size="icon"onClick={() => removeOption(group.id, idx)}
+ className="h-8 w-8 shrink-0 text-muted-foreground">
+ <X size={14} />
+ </Button>
+ </div>
+ ))}
+ <Button
+ type="button"variant="outline"size="sm"onClick={() => addOption(group.id)}
+ className="h-8 text-xs font-bold gap-1 self-start">
+ <Plus size={13} weight="bold"/> Añadir opción
+ </Button>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ </main>
 
-      {/* FOOTER — diseño unificado */}
-      <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)', backgroundColor: 'var(--pos-bg)', flexShrink: 0 }}>
-        <Group grow gap="sm">
-          {editingProduct ? (
-            <Button
-              size="lg" radius="md" variant="subtle" color="red"
-              leftSection={<Trash size={20} />}
-              onClick={() => {
-                openConfirm(
-                  'Eliminar producto',
-                  '¿Estás seguro de eliminar este producto del menú?',
-                  async () => {
-                    await updateRxMenuItem(editingProduct.id, { _deleted: true });
-                    sileo.success({ title: 'Producto eliminado' });
-                    handleClose();
-                  }
-                );
-              }}
-              fw={800}
-            >
-              Eliminar
-            </Button>
-          ) : null}
-          {!editingProduct && (
-            <Button
-              size="lg" radius="md" variant="light" color="gray" fw={800}
-              leftSection={<UploadSimple size={20} />}
-              onClick={openImportCsv}
-            >
-              Importar CSV
-            </Button>
-          )}
-          <Button
-            size="lg" radius="md" fw={900}
-            leftSection={<Check size={20} weight="bold" />}
-            onClick={() => form.onSubmit(handleSubmit)()}
-            color="myColor"
-          >
-            {editingProduct ? 'Guardar' : 'Crear producto'}
-          </Button>
-        </Group>
-      </Box>
-
-    </Box>
-  );
+ <footer className="p-4 border-t border-border bg-card flex items-center justify-end gap-2 shrink-0">
+ {editingProduct && (
+ <button
+ type="button"onClick={() => {
+ openConfirm('Eliminar producto','¿Estás seguro de eliminar este producto del menú?',
+ async () => {
+ await updateRxMenuItem(editingProduct.id, { _deleted: true });
+ showToast.success('Producto eliminado');
+ handleClose();
+ }
+ );
+ }}
+ className="px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive font-bold text-xs cursor-pointer">
+ Eliminar
+ </button>
+ )}
+ <button
+ type="button"onClick={handleSubmit}
+ className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs cursor-pointer shadow-xs">
+ {editingProduct ?'Guardar':'Crear producto'}
+ </button>
+ </footer>
+ </div>
+ );
 }

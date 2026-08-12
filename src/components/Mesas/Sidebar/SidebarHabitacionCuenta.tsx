@@ -4,6 +4,7 @@ import { CheckinForm } from './habitacion/CheckinForm'
 import { CuentaView } from './habitacion/CuentaView'
 import { HabitacionCheckoutView } from './habitacion/HabitacionCheckoutView'
 import { initVerticalRxDb } from '../../../db/rxdb'
+import { useUI } from '../../../context/UIContext'
 
 interface SidebarHabitacionCuentaProps {
   selectedMesa: Mesa
@@ -11,6 +12,7 @@ interface SidebarHabitacionCuentaProps {
 }
 
 export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabitacionCuentaProps) {
+  const { setViewingComandaId } = useUI()
   const [checkoutComanda, setCheckoutComanda] = useState<any>(null)
   const [cuentaActiva, setCuentaActiva] = useState<any | null>(null)
 
@@ -56,6 +58,7 @@ export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabita
         selectedMesa={selectedMesa}
         onClose={onClose}
         onCheckout={(data) => setCheckoutComanda(data)}
+        onOpenComanda={(comandaId) => setViewingComandaId(comandaId)}
       />
     )
   }

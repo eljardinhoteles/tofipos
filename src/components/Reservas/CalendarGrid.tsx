@@ -1,4 +1,3 @@
-import { Box, Group, Text } from '@mantine/core';
 import { CalendarCheck, Users } from '@phosphor-icons/react';
 import { type Reserva, type Piso, type Mesa } from '../../db/database';
 import { isToday, isWeekend, toISO } from './reservaUtils';
@@ -49,96 +48,61 @@ export function CalendarGrid({
   })();
 
   return (
-    <Box
-      flex={1}
-      className="calendar-grid"
-      style={{ ['--cg-columns' as string]: gridColumns, ['--cg-min-width' as string]: `${gridMinWidth}px` }}
-    >
-      {/* Un solo scroll container para evitar desalineación entre header y celdas */}
-      <Box className="calendar-grid__scroll">
-        <Box className="calendar-grid__inner">
-      {/* Header fijo de fechas */}
-      <Box className="calendar-grid__header">
-        {/* Esquina superior izquierda vacía */}
-        <Box className="calendar-grid__zones-btn" />
+    <div className="flex-1 w-full overflow-hidden bg-muted relative">
+      <div className="w-full h-full overflow-auto">
+        <div style={{ display: 'grid', gridTemplateColumns: gridColumns, minWidth: `${gridMinWidth}px` }}>
+          {/* Header */}
+          <div className="h-12 bg-background border-b border-r border-border" />
+          {visibleDates.map(date => {
+            const ds = toISO(date);
+            const dayReservasAll = (reservas || []).filter(r => r.fecha === ds);
+            const dayCount = dayReservasAll.length;
+            const peopleCount = dayReservasAll.reduce((sum, r) => sum + (r.personas || 0), 0);
+            const today = isToday(date);
 
-        {/* Días */}
-        {visibleDates.map(date => {
-          const ds = toISO(date);
-          const dayReservasAll = (reservas || []).filter(r => r.fecha === ds);
-          const dayCount = dayReservasAll.length;
-          const peopleCount = dayReservasAll.reduce((sum, r) => sum + (r.personas || 0), 0);
-
-          return (
-            <Box
-              key={date.toISOString()}
-              className={`calendar-grid__day-header${isToday(date) ? ' calendar-grid__day-header--today' : ''}${isWeekend(date) ? ' calendar-grid__day-header--weekend' : ''}`}
-            >
-              <Group justify="space-between" align="center" w="100%" px="sm" wrap="nowrap">
-                {/* Lado izquierdo: Fecha */}
-                <Group gap={6} wrap="nowrap" align="baseline">
-                  <Text size="10px" fw={800} tt="uppercase" c={isToday(date) ? 'var(--ui-primary)' : 'dimmed'} className="calendar-grid__caps">
+            return (
+              <div
+                key={date.toISOString()}
+                className={`h-12 px-3 bg-background border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'bg-primary/10 text-primary' : 'text-foreground'}`}
+              >
+                <div className="flex items-baseline gap-1">
+                  <span className="uppercase text-[10px] text-muted-foreground">
                     {date.toLocaleDateString('es-ES', { weekday: 'short' })}
-                  </Text>
-                  <Text fw={900} size="md" c={isToday(date) ? 'var(--ui-primary)' : 'var(--pos-text)'} lh={1}>
-                    {date.getDate()}
-                  </Text>
-                  <Text size="10px" fw={600} tt="uppercase" c="dimmed" className="calendar-grid__caps">
-                    {date.toLocaleDateString('es-ES', { month: 'short' })}
-                  </Text>
-                </Group>
+                  </span>
+                  <span className="text-base font-black leading-none">{date.getDate()}</span>
+                </div>
 
-                {/* Lado derecho: Indicadores */}
                 {dayCount > 0 ? (
-                  <Group gap={10} wrap="nowrap" align="center">
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <CalendarCheck size={14} color={isToday(date) ? 'var(--ui-primary)' : 'var(--pos-text-muted)'} weight="bold" />
-                      <Text size="12px" fw={600} c={isToday(date) ? 'var(--ui-primary)' : 'var(--pos-text)'} lh={1}>{dayCount}</Text>
-                    </Group>
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <Users size={14} color={isToday(date) ? 'var(--ui-primary)' : 'var(--pos-text-muted)'} weight="bold" />
-                      <Text size="12px" fw={600} c={isToday(date) ? 'var(--ui-primary)' : 'var(--pos-text)'} lh={1}>{peopleCount}</Text>
-                    </Group>
-                  </Group>
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <CalendarCheck size={13} className="text-primary" />
+                      <span>{dayCount}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users size={13} className="text-muted-foreground" />
+                      <span>{peopleCount}</span>
+                    </div>
+                  </div>
                 ) : (
-                  <Text size="9px" fw={700} c="dimmed" className="calendar-grid__free">LIBRE</Text>
+                  <span className="text-[9px] font-bold uppercase text-muted-foreground/60">LIBRE</span>
                 )}
-              </Group>
-            </Box>
-          );
-        })}
-      </Box>
+              </div>
+            );
+          })}
 
-      {/* Cuerpo de zonas */}
-      <Box>
-        <Box className="calendar-grid__body">
-          {/* Si no hay zonas (cargando), mostramos 6 filas de esqueleto */}
-          {(!zonasRows ? Array.from({ length: 6 }, (_, i) => ({ id: `skel-${i}`, nombre: '', orden: i })) : zonasRows).map((zona, _zIndex) => {
-            const isSkeleton = !zonasRows;
-            return [
-              /* Celda zona */
-              <Box key={`zona-${zona.id}`} className={`calendar-grid__zone-cell${isSkeleton ? ' calendar-grid__zone-cell--skeleton' : ''}`}>
-                {isSkeleton ? (
-                  <Box className="calendar-grid__skeleton-bar" />
-                ) : (
-                  <>
-                    <Text fw={900} size="xs" c="var(--pos-text)" className="calendar-grid__zone-name">
-                      {zona.nombre}
-                    </Text>
-                    {zona.id !== 'sin_zona' && mesas && (() => {
-                      const count = mesas.filter(m => m.piso === zona.nombre).length;
-                      return (
-                        <Text size="9px" fw={700} c="dimmed" mt={2} className="calendar-grid__caps">
-                          {count} {count === 1 ? 'MESA' : 'MESAS'}
-                        </Text>
-                      );
-                    })()}
-                  </>
+          {/* Grid Body */}
+          {(!zonasRows ? Array.from({ length: 6 }, (_, i) => ({ id: `skel-${i}`, nombre: '', orden: i })) : zonasRows).map((zona) => (
+            <div key={`row-group-${zona.id}`} className="contents">
+              <div key={`zona-${zona.id}`} className="p-3 bg-background border-b border-r border-border flex flex-col justify-center">
+                <span className="font-extrabold text-xs text-foreground truncate">{zona.nombre}</span>
+                {zona.id !== 'sin_zona' && mesas && (
+                  <span className="text-[9px] font-bold uppercase text-muted-foreground mt-0.5">
+                    {mesas.filter(m => m.piso === zona.nombre).length} mesas
+                  </span>
                 )}
-              </Box>,
+              </div>
 
-              /* Celdas de días */
-              ...visibleDates.map(date => {
+              {visibleDates.map(date => {
                 const ds = toISO(date);
                 const q = search.trim().toLowerCase();
                 const dayReservas = (reservas || [])
@@ -151,22 +115,20 @@ export function CalendarGrid({
                     key={`${zona.id}-${ds}`}
                     isToday={isToday(date)}
                     isWeekend={isWeekend(date)}
-                    dayReservas={isSkeleton ? [] : dayReservas}
+                    dayReservas={dayReservas}
                     highlightedId={highlightedId}
-                    onCellClick={() => !isSkeleton && onCellClick(date, zona.id === 'sin_zona' ? undefined : zona.id)}
+                    onCellClick={() => onCellClick(date, zona.id === 'sin_zona' ? undefined : zona.id)}
                     onCardClick={onCardClick}
                     onAssign={onAssign}
                     onCancel={onCancel}
                     codigoMap={codigoMap}
                   />
                 );
-              }),
-            ];
-          })}
-        </Box>
-      </Box>
-      </Box>
-      </Box>
-    </Box>
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

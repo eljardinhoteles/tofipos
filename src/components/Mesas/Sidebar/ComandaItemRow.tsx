@@ -1,113 +1,91 @@
-/**
- * ComandaItemRow
- * Fila de producto de comanda reutilizable.
- * SidebarDetails: modo editable (onClick abre modal de edición)
- * SidebarReservaDetail: modo solo lectura (sin onClick, sin badge de pagado)
- */
-import { memo } from 'react';
-import { Box, Stack, Text, Group, Badge, Divider, UnstyledButton } from '@mantine/core';
+import { memo } from'react';
+import { cn } from'@/lib/utils';
 
 export interface ComandaItemData {
-  id: string;
-  nombre: string;
-  cantidad: number;
-  precio: number;
-  modificadores?: string[];
-  pagado_cantidad?: number;
+ id: string;
+ nombre: string;
+ cantidad: number;
+ precio: number;
+ modificadores?: string[];
+ pagado_cantidad?: number;
 }
 
 interface ComandaItemRowProps {
-  item: ComandaItemData;
-  index: number;
-  total: number;
-  /** Si se omite, la fila es solo lectura */
-  onClick?: () => void;
-  showDivider?: boolean;
+ item: ComandaItemData;
+ index: number;
+ onClick?: () => void;
+ isSelected?: boolean;
 }
 
-export const ComandaItemRow = memo(function ComandaItemRow({ item, index, total, onClick, showDivider = true }: ComandaItemRowProps) {
-  const pagado = item.pagado_cantidad || 0;
-  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
-  const isReadOnly = !onClick;
+export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClick, isSelected }: ComandaItemRowProps) {
+ const pagado = item.pagado_cantidad || 0;
+ const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
+ const isReadOnly = !onClick;
+ const isOdd = index % 2 === 1;
 
-  const content = (
-    <Group align="flex-start" py={6} wrap="nowrap">
-      {/* Badge de cantidad */}
-      <Box
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: '8px',
-          backgroundColor: isFullyPaid ? 'var(--mantine-color-green-0)' : 'var(--pos-bg)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: `1px solid ${isFullyPaid ? 'var(--mantine-color-green-3)' : 'var(--pos-border)'}`,
-          flexShrink: 0,
-          marginTop: 2,
-        }}
-      >
-        <Text size="md" fw={900} c={isFullyPaid ? 'green.8' : 'var(--pos-text)'}>{item.cantidad}</Text>
-      </Box>
+ const content = (
+ <div className="flex items-center gap-3 w-full px-4 py-3">
+ {/* Badge de cantidad */}
+ <div className={cn("w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0",
+ isFullyPaid ?"bg-emerald-100 border-emerald-300 text-emerald-800":"bg-muted border-border text-foreground")}>
+ {item.cantidad}
+ </div>
 
-      {/* Contenido */}
-      <Stack gap={2} style={{ flex: 1 }}>
-        {/* Nombre y precio total */}
-        <Group justify="space-between" align="baseline" wrap="nowrap" gap="md">
-          <Text fw={700} size="md" c="var(--pos-text)" style={{ flex: 1 }}>{item.nombre}</Text>
-          <Text
-            fw={800}
-            size="lg"
-            c="var(--pos-text)"
-            style={{
-              flexShrink: 0,
-              textDecoration: isFullyPaid ? 'line-through' : 'none',
-            }}
-          >
-            ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </Text>
-        </Group>
+ {/* Contenido */}
+ <div className="flex flex-col flex-1 min-w-0">
+ <div className="flex items-center justify-between gap-2">
+ <span className="font-bold text-sm text-foreground truncate">{item.nombre}</span>
+ <span className={cn("font-black text-sm shrink-0",
+ isFullyPaid ?"line-through text-muted-foreground":"text-foreground")}>
+ ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+ </span>
+ </div>
 
-        {/* Badges y precio unitario */}
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Group gap={4} style={{ flex: 1 }}>
-            {item.modificadores && item.modificadores.length > 0 &&
-              item.modificadores.map((mod, i) => (
-                <Badge key={`${mod}-${i}`} size="xs" variant="light" color="gray" radius="sm" style={{ textTransform: 'none' }}>
-                  {mod}
-                </Badge>
-              ))
-            }
-            {pagado > 0 && (
-              <Badge size="xs" variant="filled" color={isFullyPaid ? 'green' : 'orange'} radius="sm">
-                {isFullyPaid ? 'Pagado' : `${pagado} pagados`}
-              </Badge>
-            )}
-          </Group>
-          {item.cantidad > 1 && (
-            <Text size="10px" c="dimmed" fw={600} style={{ flexShrink: 0 }}>
-              ${item.precio.toLocaleString('en-US', { minimumFractionDigits: 2 })} c/u
-            </Text>
-          )}
-        </Group>
-      </Stack>
-    </Group>
-  );
+ {(item.modificadores?.length || pagado > 0 || item.cantidad > 1) ? (
+ <div className="flex items-center justify-between gap-2 mt-0.5">
+ <div className="flex items-center gap-1 flex-wrap">
+ {item.modificadores && item.modificadores.length > 0 &&
+ item.modificadores.map((mod, i) => (
+ <span key={`${mod}-${i}`} className="px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground font-medium text-[10px]">
+ {mod}
+ </span>
+ ))
+ }
+ {pagado > 0 && (
+ <span className={cn("px-1.5 py-0.5 rounded font-bold text-[10px] text-white",
+ isFullyPaid ?"bg-emerald-600":"bg-amber-600")}>
+ {isFullyPaid ?'Pagado':`${pagado} pagados`}
+ </span>
+ )}
+ </div>
+ {item.cantidad > 1 && (
+ <span className="text-[10px] text-muted-foreground font-semibold shrink-0">
+ ${item.precio.toLocaleString('en-US', { minimumFractionDigits: 2 })} c/u
+ </span>
+ )}
+ </div>
+ ) : null}
+ </div>
+ </div>
+ );
 
-  return (
-    <Box style={{ opacity: isFullyPaid ? 0.6 : 1 }}>
-      {isReadOnly ? (
-        content
-      ) : (
-        <UnstyledButton
-          w="100%"
-          onClick={onClick}
-          style={{ borderRadius: '8px', cursor: 'pointer' }}
-        >
-          {content}
-        </UnstyledButton>
-      )}
-      {showDivider && index < total - 1 && <Divider variant="dashed" opacity={0.6} my={3} />}
-    </Box>
-  );
+ return (
+ <div className={cn("w-full transition-opacity", isFullyPaid &&"opacity-60")}>
+ {isReadOnly ? (
+ <div className={cn("w-full text-left transition-colors", isOdd &&"bg-muted/70")}>
+ {content}
+ </div>
+ ) : (
+ <button
+ type="button"onClick={onClick}
+ className={cn("w-full text-left cursor-pointer transition-colors focus:outline-none focus-visible:bg-primary/10 border-l-4",
+ isSelected
+ ?"bg-primary/10 border-l-primary"
+ :cn("border-l-transparent", isOdd &&"bg-muted/70"))}
+ >
+ {content}
+ </button>
+ )}
+ </div>
+ );
 });

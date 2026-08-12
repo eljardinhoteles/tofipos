@@ -1,73 +1,87 @@
-import { Button, Group, NumberInput, Select, Stack, TextInput } from '@mantine/core';
-import { useForm } from '@mantine/form';
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 
 interface ProductFormProps {
-    initialValues?: {
-        name: string;
-        price: number;
-        category: string;
-        stock: number;
-    };
-    onSubmit: (values: any) => void;
-    onCancel: () => void;
+  initialValues?: {
+    name: string;
+    price: number;
+    category: string;
+    stock: number;
+  };
+  onSubmit: (values: any) => void;
+  onCancel: () => void;
 }
 
 export function ProductForm({ initialValues, onSubmit, onCancel }: ProductFormProps) {
-    const form = useForm({
-        initialValues: initialValues || {
-            name: '',
-            price: 0,
-            category: 'General',
-            stock: 0,
-        },
-        validate: {
-            name: (value) => (value.length < 2 ? 'Mínimo 2 caracteres' : null),
-            price: (value) => (value < 0 ? 'Precio inválido' : null),
-        },
-    });
+  const [name, setName] = useState(initialValues?.name || '');
+  const [price, setPrice] = useState(initialValues?.price || 0);
+  const [category, setCategory] = useState(initialValues?.category || 'General');
+  const [stock, setStock] = useState(initialValues?.stock || 0);
 
-    return (
-        <form onSubmit={form.onSubmit(onSubmit)}>
-            <Stack gap="xl">
-                <TextInput
-                    label="Nombre del Producto"
-                    placeholder="Ej. Pizza Margarita"
-                    required
-                    {...form.getInputProps('name')}
-                />
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ name, price, category, stock });
+  };
 
-                <Group grow gap="xl">
-                    <NumberInput
-                        label="Precio"
-                        prefix="$"
-                        decimalScale={2}
-                        fixedDecimalScale
-                        required
-                        {...form.getInputProps('price')}
-                    />
-                    <NumberInput
-                        label="Stock"
-                        placeholder="0"
-                        {...form.getInputProps('stock')}
-                    />
-                </Group>
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs font-bold">Nombre del Producto *</Label>
+        <Input
+          type="text"
+          required
+          placeholder="Ej. Pizza Margarita"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-9 text-xs font-semibold"
+        />
+      </div>
 
-                <Select
-                    label="Categoría"
-                    placeholder="Selecciona categoría"
-                    data={['General', 'Comida', 'Bebidas', 'Postres']}
-                    {...form.getInputProps('category')}
-                />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs font-bold">Precio ($)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min={0}
+            value={price || ''}
+            onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+            className="h-9 text-xs font-bold"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs font-bold">Stock</Label>
+          <Input
+            type="number"
+            min={0}
+            value={stock || ''}
+            onChange={(e) => setStock(parseInt(e.target.value) || 0)}
+            className="h-9 text-xs font-semibold"
+          />
+        </div>
+      </div>
 
-                <Group justify="flex-end" mt="xl">
-                    <Button variant="light" color="gray" onClick={onCancel}>
-                        Cancelar
-                    </Button>
-                    <Button type="submit">
-                        Guardar Producto
-                    </Button>
-                </Group>
-            </Stack>
-        </form>
-    );
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs font-bold">Categoría</Label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="h-9 px-3 text-xs bg-input/50 border border-transparent rounded-2xl focus:outline-none focus:border-ring font-semibold"
+        >
+          <option value="General">General</option>
+          <option value="Bebidas">Bebidas</option>
+          <option value="Entradas">Entradas</option>
+          <option value="Platos">Platos</option>
+          <option value="Postres">Postres</option>
+        </select>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+        <Button type="submit" size="sm">Guardar</Button>
+      </div>
+    </form>
+  );
 }

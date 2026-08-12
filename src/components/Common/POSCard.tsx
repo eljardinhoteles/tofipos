@@ -1,74 +1,53 @@
-import { memo } from 'react';
-import { Paper, Stack, Group, Text, Box } from '@mantine/core';
-import type { ReactNode } from 'react';
+import { memo } from'react';
+import type { ReactNode } from'react';
+import { cn } from'@/lib/utils';
 
 interface POSCardProps {
-  title: string;
-  subtitle?: string;
-  amount?: string | number;
-  ivaLabel?: string;
-  active?: boolean;
-  children?: ReactNode;
-  isSelected?: boolean;
-  onClick?: () => void;
+ title: string;
+ subtitle?: string;
+ amount?: string | number;
+ ivaLabel?: string;
+ active?: boolean;
+ children?: ReactNode;
+ isSelected?: boolean;
+ onClick?: () => void;
 }
 
 export const POSCard = memo(function POSCard({
-  title,
-  subtitle,
-  amount,
-  ivaLabel,
-  active = true,
-  children,
-  isSelected = false,
-  onClick
+ title,
+ subtitle,
+ amount,
+ ivaLabel,
+ active = true,
+ children,
+ isSelected = false,
+ onClick
 }: POSCardProps) {
-  return (
-    <Paper 
-      shadow="none" 
-      radius="xl" 
-      p="lg" 
-      withBorder 
-      onClick={onClick}
-      style={{ 
-        backgroundColor: 'white', 
-        opacity: active ? 1 : 0.7,
-        transition: 'opacity 0.2s ease, border-color 0.2s ease',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        borderColor: isSelected ? 'var(--ui-primary)' : 'var(--ui-border)',
-        borderWidth: '2px',
-        cursor: onClick ? 'pointer' : 'default'
-      }}
-    >
-      <Stack gap="xs" style={{ flex: 1 }}>
-        <Group justify="space-between" align="flex-start" wrap="nowrap">
-          <Stack gap={2} style={{ flex: 1 }}>
-            <Text fw={900} size="lg" lineClamp={1} c="var(--pos-text)">{title}</Text>
-            {subtitle && <Text size="xs" c="dimmed" fw={600}>{subtitle}</Text>}
-          </Stack>
-        </Group>
+ return (
+ <div 
+ onClick={onClick}
+ className={cn("bg-card p-5 rounded-2xl border-2 transition-all flex flex-col justify-between shadow-xs",
+ active ?"opacity-100":"opacity-70",
+ isSelected ?"border-primary ring-2 ring-primary/20":"border-border",
+ onClick &&"cursor-pointer active:scale-98")}
+ >
+ <div className="flex flex-col gap-3 flex-1">
+ <div className="flex flex-col gap-0.5">
+ <h4 className="font-black text-base text-foreground truncate">{title}</h4>
+ {subtitle && <span className="text-xs font-semibold text-muted-foreground">{subtitle}</span>}
+ </div>
 
-        {children && (
-          <Box style={{ flex: 1 }}>
-            {children}
-          </Box>
-        )}
+ {children && <div className="flex-1">{children}</div>}
 
-        {amount !== undefined && (
-          <Group justify={ivaLabel ? "space-between" : "flex-end"} align="center" mt="auto">
-            {ivaLabel && (
-              <Text size="xs" c="dimmed" fw={750} tt="uppercase">
-                {ivaLabel}
-              </Text>
-            )}
-            <Text fw={900} size="xl" c="var(--ui-primary)" style={{ whiteSpace: 'nowrap', letterSpacing: '-0.5px' }}>
-              {amount}
-            </Text>
-          </Group>
-        )}
-      </Stack>
-    </Paper>
-  );
+ {amount !== undefined && (
+ <div className={cn("flex items-center mt-auto pt-2", ivaLabel ?"justify-between":"justify-end")}>
+ {ivaLabel && (
+ <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{ivaLabel}</span>
+ )}
+ <span className="font-black text-lg text-primary">{amount}</span>
+ </div>
+ )}
+ </div>
+ </div>
+ );
 });

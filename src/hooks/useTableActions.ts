@@ -1,7 +1,8 @@
 import { type Mesa } from '../db/database';
-import { sileo } from 'sileo';
+import { showToast } from '@/lib/toast';
 import { useUI } from '../context/UIContext';
 import { createRxComanda, updateRxComanda, updateRxMesa, getVerticalRxDb } from '../db/rxdb';
+import { isOperativeComanda } from '../db/comandaState';
 
 export function useTableActions() {
   const { openConfirm, openPrompt } = useUI();
@@ -22,7 +23,15 @@ export function useTableActions() {
       selector.estado = { $nin: ['cerrado', 'facturado', 'anulada'] };
     }
 
-    return rxDb.comandas.find({ selector }).exec();
+    const docs = await rxDb.comandas.find({
+      selector,
+      sort: [{ updated_at: 'desc' }, { id: 'desc' }],
+    }).exec();
+
+    if (!estadoFilter) {
+      return docs.filter((d: any) => isOperativeComanda(d.toJSON ? d.toJSON() : d));
+    }
+    return docs;
   };
 
   const handleTableAction = async (
@@ -36,15 +45,11 @@ export function useTableActions() {
     } else if (action.startsWith('abrir:')) {
       const orgId = getOrgId();
       if (!orgId) {
-        sileo.error({
-          title: 'Sin organización activa',
-          description: 'No se pudo abrir la mesa porque no hay hotel vinculado.'
-        });
+        showToast.error('Sin organización activa', 'No se pudo abrir la mesa porque no hay hotel vinculado.');
         return;
       }
       const existingComandas = await findMesaComandas(mesa.id);
 
-      // Evitar doble apertura si ya hay una comanda activa directa (no consumos de habitación)
       const directComandas = existingComandas.filter((c: any) => !c.habitacion_cuenta_id);
       if (directComandas.length > 0) {
         onComplete?.('productos');
@@ -111,31 +116,25 @@ export function useTableActions() {
 
         onComplete?.('productos');
         setTimeout(() => {
-          sileo.success({
-            title: `${mesa.nombre} abierta`,
-            description: `Servicio iniciado for ${guestCount} personas.`,
-          });
+          showToast.success(`${mesa.nombre} abierta`, `Servicio iniciado para ${guestCount} personas.`);
         }, 50);
       } catch (error) {
         console.error('Error al abrir mesa:', error);
-        sileo.error({
-          title: 'No se pudo abrir la mesa',
-          description: error instanceof Error ? error.message : 'Revisa la consola.'
-        });
+        showToast.error('No se pudo abrir la mesa', error instanceof Error ? error.message : 'Revisa la consola.');
       }
     } else if (action === 'cuenta') {
       const activeComanda = (await findMesaComandas(mesa.id))[0];
 
-      if (activeComanda) {
-        await updateRxComanda(activeComanda.id, {
-          estado: 'cuenta',
-          confirmada: true,
-        });
+      if (!activeComanda) {
+        showToast.error('No se pudo pedir la cuenta', `No hay una comanda activa en ${mesa.nombre}.`);
+        return;
       }
-      sileo.success({
-        title: `Cuenta solicitada`,
-        description: `Se ha marcado la ${mesa.nombre} para pago.`,
+
+      await updateRxComanda(activeComanda.id, {
+        estado: 'cuenta',
+        confirmada: true,
       });
+      showToast.success('Cuenta solicitada', `Se ha marcado la ${mesa.nombre} para pago.`);
     } else if (action === 'reabrir') {
       const comandaCuenta = (await findMesaComandas(mesa.id, 'cuenta'))[0];
 
@@ -152,14 +151,11 @@ export function useTableActions() {
           const activeComanda = (await findMesaComandas(mesa.id))[0];
 
           if (!activeComanda) {
-            sileo.error({ title: 'No hay comanda activa para cerrar' });
+            showToast.error('No hay comanda activa para cerrar');
             return;
           }
 
-          sileo.success({
-            title: 'Precuenta enviada',
-            description: `Imprimiendo precuenta de ${mesa.nombre}...`
-          });
+          showToast.success('Precuenta enviada', `Imprimiendo precuenta de ${mesa.nombre}...`);
 
           await updateRxComanda(activeComanda.id, {
             estado: 'cerrado',
@@ -171,10 +167,7 @@ export function useTableActions() {
           if (setCheckoutView) setCheckoutView(false);
           onComplete?.('mapa');
           setTimeout(() => {
-            sileo.success({
-              title: 'Cierre operativo completado',
-              description: `${mesa.nombre} quedó lista para conciliación en Órdenes.`
-            });
+            showToast.success('Cierre operativo completado', `${mesa.nombre} quedó lista para conciliación en Órdenes.`);
           }, 50);
         }
       );
@@ -183,10 +176,7 @@ export function useTableActions() {
 
       if (activeComandas.length === 0) {
         onComplete?.('mapa');
-        sileo.success({
-          title: `Mesa liberada`,
-          description: `La ${mesa.nombre} ha sido liberada (no tenía comanda activa).`,
-        });
+        showToast.success('Mesa liberada', `La ${mesa.nombre} ha sido liberada (no tenía comanda activa).`);
         return;
       }
 
@@ -205,10 +195,7 @@ export function useTableActions() {
           await updateRxMesa(mesa.id, { estado: 'libre' });
           onComplete?.('mapa');
 
-          sileo.error({
-            title: `Mesa anulada`,
-            description: `La ${mesa.nombre} ha sido liberada y la orden marcada como anulada.`,
-          });
+          showToast.error('Mesa anulada', `La ${mesa.nombre} ha sido liberada y la orden marcada como anulada.`);
         }
       });
     }

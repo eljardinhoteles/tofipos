@@ -1,424 +1,270 @@
-// @ts-nocheck
-import { useEffect, useState, useMemo } from 'react';
-import {
-  Box, Stack, Group, Text, Button, ActionIcon,
-  ScrollArea, Divider, Paper, TextInput,
-  ThemeIcon, UnstyledButton
-} from '@mantine/core';
-import {
-  X,
-  Printer, ArrowLeft, Door
-} from '@phosphor-icons/react';
-import type { Mesa } from '../../../db/database';
-import { sileo } from 'sileo';
-import { SidebarEnviarHabitacion } from './SidebarEnviarHabitacion';
-import { PaymentMethodAndCharge } from '../../Common/PaymentMethodAndCharge';
-import { getPaymentSettings, type PaymentMethod } from '../../../lib/paymentSettings';
-
-import { useIvaActivo } from '../../../hooks/useIvaActivo';
-import { calcularTotalesComanda } from '../../../lib/taxUtils';
-import { generarPrecuenta, generarTicketPago } from '../../../services/printTemplateEngine';
-import { TicketPreviewModal } from '../../Common/TicketPreviewModal';
-import { initVerticalRxDb, createRxPago, updateRxComanda, updateRxMesa } from '../../../db/rxdb';
-import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
+import { useEffect, useState, useMemo } from'react';
+import { Printer, ArrowLeft, Door, Check } from'@phosphor-icons/react';
+import type { Mesa } from'../../../db/database';
+import { showToast } from'@/lib/toast';
+import { SidebarEnviarHabitacion } from'./SidebarEnviarHabitacion';
+import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { calcularTotalesComanda } from'../../../lib/taxUtils';
+import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
+import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
+import { initVerticalRxDb, createRxVenta, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
+import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
+import { Button } from'@/components/ui/button';
 
 interface SidebarCheckoutProps {
-  selectedMesa: Mesa;
-  activeComanda: any;
-  comandaItems: any[];
-  onBack: () => void;
-  onSuccess: () => void;
-  initialType?: 'directo' | 'dividido';
-  startInEnviarHabitacion?: boolean;
+ selectedMesa: Mesa;
+ activeComanda: any;
+ comandaItems: any[];
+ onBack: () => void;
+ onSuccess: () => void;
+ initialType?:'directo'|'dividido';
+ startInEnviarHabitacion?: boolean;
 }
 
+/**
+ * Cierre de cuenta en Mesas: solo pide cobrar el total y cerrar — sin elegir
+ * método de pago. El pago se registra "pendiente de definir" (metodo_pago
+ * null, metodo_definido=false); el método real (efectivo/tarjeta/
+ * transferencia/otros) y su detalle de comprobante se asignan después en
+ * Centro de Ventas, al anclar la transacción. Esto mantiene "cobrar y
+ * cerrar" siempre rápido en el punto de venta.
+ */
 export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onBack, onSuccess, startInEnviarHabitacion = false }: SidebarCheckoutProps) {
-  const round2 = (value: number) => Math.round(value * 100) / 100;
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
-  const [lineAmount, setLineAmount] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showEnviarHabitacion, setShowEnviarHabitacion] = useState(startInEnviarHabitacion);
-  const [cardNetwork, setCardNetwork] = useState<string | null>(null);
-  const [transferBank, setTransferBank] = useState<string | null>(null);
-  const [transferReference, setTransferReference] = useState('');
-  const [paymentLines, setPaymentLines] = useState<Array<{
-    id: string;
-    method: PaymentMethod;
-    amount: number;
-    cardNetwork?: string | null;
-    transferBank?: string | null;
-    transferReference?: string;
-  }>>([]);
-  const [previewOpened, setPreviewOpened] = useState(false);
-  const [previewTitle, setPreviewTitle] = useState('');
-  const [previewContent, setPreviewContent] = useState('');
-  const [onCloseCallback, setOnCloseCallback] = useState<(() => void) | null>(null);
-  const paymentSettings = getPaymentSettings();
+ const [isProcessing, setIsProcessing] = useState(false);
+ const [showEnviarHabitacion, setShowEnviarHabitacion] = useState(startInEnviarHabitacion);
+ const [previewOpened, setPreviewOpened] = useState(false);
+ const [previewTitle, setPreviewTitle] = useState('');
+ const [previewContent, setPreviewContent] = useState('');
+ const [onCloseCallback, setOnCloseCallback] = useState<(() => void) | null>(null);
 
-  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
-  const { menuItems } = useRxMenuCatalog();
-  const [cuentasActivas, setCuentasActivas] = useState(0);
-  const [pagos, setPagos] = useState<any[]>([]);
-  const [habitacionNombre, setHabitacionNombre] = useState<string | undefined>(undefined);
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ const { menuItems } = useRxMenuCatalog();
+ const [cuentasActivas, setCuentasActivas] = useState(0);
+ const [pagos, setPagos] = useState<any[]>([]);
+ const [habitacionNombre, setHabitacionNombre] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    let alive = true;
-    const run = async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      const activeCount = await rxDb.habitacion_cuentas.find({
-        selector: { estado: 'activa', _deleted: false }
-      }).exec();
-      if (alive) setCuentasActivas(activeCount.length);
+ useEffect(() => {
+ let alive = true;
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ const activeCount = await rxDb.habitacion_cuentas.find({
+ selector: { estado:'activa', _deleted: false }
+ }).exec();
+ if (alive) setCuentasActivas(activeCount.length);
 
-      if (activeComanda?.habitacion_cuenta_id) {
-        const hc = await rxDb.habitacion_cuentas.findOne(activeComanda.habitacion_cuenta_id).exec();
-        if (!alive || !hc) return;
-        const mesa = await rxDb.mesas.findOne(hc.toJSON().mesa_id).exec();
-        if (alive) setHabitacionNombre(mesa ? mesa.toJSON().nombre : undefined);
-      }
-    };
-    run().catch(console.error);
-    return () => { alive = false; };
-  }, [activeComanda?.habitacion_cuenta_id]);
+ if (activeComanda?.habitacion_cuenta_id) {
+ const hc = await rxDb.habitacion_cuentas.findOne(activeComanda.habitacion_cuenta_id).exec();
+ if (!alive || !hc) return;
+ const mesa = await rxDb.mesas.findOne(hc.toJSON().mesa_id).exec();
+ if (alive) setHabitacionNombre(mesa ? mesa.toJSON().nombre : undefined);
+ }
+ };
+ run().catch(console.error);
+ return () => { alive = false; };
+ }, [activeComanda?.habitacion_cuenta_id]);
 
-  useEffect(() => {
-    if (!activeComanda?.id) {
-      setPagos([]);
-      return;
-    }
-    let alive = true;
-    let unsub: (() => void) | null = null;
-    const run = async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      const query = rxDb.pagos.find({ selector: { comanda_id: activeComanda.id, _deleted: false } });
-      const docs = await query.exec();
-      if (!alive) return;
-      setPagos(docs.map((doc: any) => doc.toJSON()));
-      unsub = query.$.subscribe((docs: any[]) => {
-        setPagos(docs.map((doc: any) => doc.toJSON()));
-      }) as any;
-    };
-    run().catch(console.error);
-    return () => {
-      alive = false;
-      if (unsub) unsub();
-    };
-  }, [activeComanda?.id]);
+ useEffect(() => {
+ if (!activeComanda?.id) {
+ setPagos([]);
+ return;
+ }
+ let alive = true;
+ let unsub: (() => void) | null = null;
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ const query = rxDb.pagos.find({ selector: { comanda_id: activeComanda.id, _deleted: false } });
+ const docs = await query.exec();
+ if (!alive) return;
+ setPagos(docs.map((doc: any) => doc.toJSON()));
+ unsub = query.$.subscribe((docs: any[]) => {
+ setPagos(docs.map((doc: any) => doc.toJSON()));
+ }) as any;
+ };
+ run().catch(console.error);
+ return () => {
+ alive = false;
+ if (unsub) unsub();
+ };
+ }, [activeComanda?.id]);
 
-  const totales = useMemo(() => {
-    return calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
-  }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
+ const totales = useMemo(() => {
+ return calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
+ }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
+ const total = totales.total;
+ const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ const saldoPendiente = Math.max(0, total - totalPagado);
 
-  const total = totales.total;
-  const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
-  const saldoPendiente = Math.max(0, total - totalPagado);
+ const canFinalize = saldoPendiente > 0.001;
 
-  const totalLineas = useMemo(() => round2(paymentLines.reduce((acc, l) => acc + l.amount, 0)), [paymentLines]);
-  const restante = round2(Math.max(0, saldoPendiente - totalLineas));
+ const handleFinalize = async () => {
+ if (!activeComanda) return;
+ setIsProcessing(true);
+ try {
+ const fecha = new Date().toISOString();
+ const pObj = {
+ id: crypto.randomUUID(),
+ comanda_id: activeComanda.id,
+ monto: saldoPendiente,
+ fecha,
+ organization_id: localStorage.getItem('pos_active_org_id') ||''};
+ await createRxVenta({
+ id: crypto.randomUUID(),
+ origen:'mesa',
+ tipo:'directa',
+ cliente_id: activeComanda.cliente_id || undefined,
+ cliente_nombre: activeComanda.cliente || undefined,
+ referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio}`,
+ comanda_id: activeComanda.id,
+ organization_id: pObj.organization_id,
+ }, saldoPendiente);
 
-  const canAddLine = useMemo(() => {
-    const amount = parseFloat(lineAmount) || 0;
-    if (amount <= 0) return false;
-    if (amount > restante + 0.001) return false;
-    if (paymentMethod === 'tarjeta' && paymentSettings.cardNetworks.length > 0 && !cardNetwork) return false;
-    if (paymentMethod === 'transferencia') {
-      if (paymentSettings.transferBanks.length > 0 && !transferBank) return false;
-      if (paymentSettings.requireTransferReference && !transferReference.trim()) return false;
-    }
-    return true;
-  }, [lineAmount, restante, paymentMethod, paymentSettings, cardNetwork, transferBank, transferReference]);
+ await updateRxComanda(activeComanda.id, {
+ estado:'cerrado',
+ mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
+ });
+ await updateRxMesa(selectedMesa.id, { estado:'libre'});
 
-  const canFinalize = restante <= 0.001 && paymentLines.length > 0;
+ showToast.success('Venta Finalizada',`La mesa ${selectedMesa.nombre} ha sido cobrada exitosamente.`);
 
-  const addPaymentLine = () => {
-    if (!canAddLine) return;
-    const amount = round2(parseFloat(lineAmount) || 0);
-    setPaymentLines(prev => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        method: paymentMethod,
-        amount,
-        cardNetwork,
-        transferBank,
-        transferReference: transferReference.trim(),
-      }
-    ]);
-    setLineAmount('');
-    setCardNetwork(null);
-    setTransferBank(null);
-    setTransferReference('');
-    setPaymentMethod('efectivo');
-  };
+ const content = generarTicketPago(
+ activeComanda,
+ comandaItems,
+ [...pagos, pObj],
+ selectedMesa.nombre,
+ ivaPorcentaje,
+ undefined,
+ habitacionNombre
+ );
+ setPreviewContent(content);
+ setPreviewTitle(`Recibo de Pago - ${selectedMesa.nombre}`);
+ setOnCloseCallback(() => () => onSuccess());
+ setPreviewOpened(true);
 
-  const handleFinalize = async () => {
-    if (!activeComanda) return;
-    setIsProcessing(true);
-    try {
-      const newPagos: any[] = [];
-      for (const line of paymentLines) {
-        const pObj = {
-          id: crypto.randomUUID(),
-          comanda_id: activeComanda.id,
-          monto: line.amount,
-          metodo_pago: line.method,
-          fecha: new Date().toISOString(),
-          organization_id: localStorage.getItem('pos_active_org_id') || ''
-        };
-        await createRxPago(pObj as any);
-        newPagos.push(pObj);
-      }
+ } catch (error) {
+ showToast.error('Error al procesar el cobro');
+ setIsProcessing(false);
+ }
+ };
 
-      // Cerrar comanda y mesa
-      await updateRxComanda(activeComanda.id, { 
-        estado: 'cerrado',
-        mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
-      });
-      await updateRxMesa(selectedMesa.id, { estado: 'libre' });
+ const handleShowPrecuentaPreview = () => {
+ if (!activeComanda) return;
+ const content = generarPrecuenta(
+ activeComanda,
+ comandaItems,
+ selectedMesa.nombre,
+ ivaPorcentaje,
+ pagos,
+ habitacionNombre
+ );
+ setPreviewContent(content);
+ setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
+ setOnCloseCallback(null);
+ setPreviewOpened(true);
+ };
 
-      sileo.success({ 
-        title: 'Venta Finalizada',
-        description: `La mesa ${selectedMesa.nombre} ha sido cobrada exitosamente.`
-      });
+ if (showEnviarHabitacion && activeComanda) {
+ return (
+ <SidebarEnviarHabitacion
+ activeComanda={activeComanda}
+ onBack={() => {
+ if (startInEnviarHabitacion) {
+ onBack();
+ return;
+ }
+ setShowEnviarHabitacion(false);
+ }}
+ onSuccess={onSuccess}
+ />
+ );
+ }
 
-      const content = generarTicketPago(
-        activeComanda,
-        comandaItems,
-        [...pagos, ...newPagos],
-        selectedMesa.nombre,
-        ivaPorcentaje,
-        undefined,
-        habitacionNombre
-      );
-      setPreviewContent(content);
-      setPreviewTitle(`Recibo de Pago - ${selectedMesa.nombre}`);
-      setOnCloseCallback(() => () => onSuccess());
-      setPreviewOpened(true);
+ return (
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ {/* Header */}
+ <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
+ <div className="flex items-center gap-3">
+ <button
+ type="button"onClick={onBack}
+ className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ <ArrowLeft size={18} weight="bold"/>
+ </button>
+ <div className="flex flex-col">
+ <h3 className="font-extrabold text-base text-foreground leading-tight">Pago Total</h3>
+ <span className="text-[10px] font-bold text-muted-foreground">
+ {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{activeComanda?.folio}
+ </span>
+ </div>
+ </div>
 
-    } catch (error) {
-      sileo.error({ title: 'Error al procesar el cobro' });
-      setIsProcessing(false);
-    }
-  };
+ <button
+ type="button"onClick={handleShowPrecuentaPreview}
+ title="Previsualizar Precuenta"className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center cursor-pointer transition-colors">
+ <Printer size={18} />
+ </button>
+ </header>
 
-  const handleShowPrecuentaPreview = () => {
-    if (!activeComanda) return;
-    const content = generarPrecuenta(
-      activeComanda,
-      comandaItems,
-      selectedMesa.nombre,
-      ivaPorcentaje,
-      pagos,
-      habitacionNombre
-    );
-    setPreviewContent(content);
-    setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
-    setOnCloseCallback(null);
-    setPreviewOpened(true);
-  };
+ {/* Main */}
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+ <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total a cobrar</span>
+ <span className="text-4xl font-black text-foreground">${saldoPendiente.toFixed(2)}</span>
+ <p className="text-xs text-muted-foreground max-w-[220px]">
+ El método de pago (efectivo, tarjeta, transferencia) se asigna después en Centro de Ventas.
+ </p>
+ </div>
 
-  if (showEnviarHabitacion && activeComanda) {
-    return (
-      <SidebarEnviarHabitacion
-        activeComanda={activeComanda}
-        onBack={() => {
-          if (startInEnviarHabitacion) {
-            onBack();
-            return;
-          }
-          setShowEnviarHabitacion(false);
-        }}
-        onSuccess={onSuccess}
-      />
-    );
-  }
+ {/* Resumen */}
+ <div className="p-4 rounded-xl bg-foreground text-background flex flex-col gap-2 shadow-xs">
+ <div className="flex items-center justify-between text-xs">
+ <span className="text-background/60 font-bold uppercase">Total de la cuenta</span>
+ <span className="font-black text-base text-background">${total.toFixed(2)}</span>
+ </div>
+ {totalPagado > 0 && (
+ <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
+ <span>Pagado previamente</span>
+ <span>-${totalPagado.toFixed(2)}</span>
+ </div>
+ )}
+ <div className="w-full h-[1px] bg-background/20 my-1"/>
+ <div className="flex items-center justify-between text-sm font-black">
+ <span>RESTANTE</span>
+ <span className="text-primary">${saldoPendiente.toFixed(2)}</span>
+ </div>
+ </div>
+ </main>
 
+ {/* Footer */}
+ <footer className="p-4 border-t border-border bg-card flex flex-col gap-2 shrink-0">
+ <Button
+ type="button"disabled={!canFinalize || isProcessing}
+ onClick={handleFinalize}
+ className="w-full py-3.5 h-auto rounded-xl bg-emerald-600 text-white font-black text-sm shadow-xs">
+ <Check size={20} weight="bold"/> Cobrar y Cerrar
+ </Button>
 
+ {cuentasActivas > 0 && (
+ <button
+ type="button"onClick={() => setShowEnviarHabitacion(true)}
+ className="w-full py-2.5 rounded-xl bg-primary/10 text-primary font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
+ <Door size={18} weight="bold"/> Enviar a Habitación
+ </button>
+ )}
+ </footer>
 
-  return (
-    <Box h="100%" className="checkout-sidebar">
-      {/* Header */}
-      <Box p="lg" className="checkout-sidebar__header">
-        <Group justify="space-between">
-          <Group gap="sm">
-            <ActionIcon variant="subtle" color="gray" onClick={onBack}>
-              <ArrowLeft size={20} />
-            </ActionIcon>
-            <Stack gap={0}>
-              <Text size="lg" fw={800}>
-                Pago Total
-              </Text>
-              <Text size="xs" c="dimmed">
-                {selectedMesa.nombre.replace('Mesa ', 'Mesa #')} - Cuenta #{activeComanda?.folio} {activeComanda?.cliente ? `- ${activeComanda.cliente}` : ''}
-              </Text>
-            </Stack>
-          </Group>
-          <ActionIcon
-            variant="light"
-            color="blue"
-            size="lg"
-            radius="md"
-            onClick={handleShowPrecuentaPreview}
-            title="Previsualizar Precuenta"
-          >
-            <Printer size={18} />
-          </ActionIcon>
-        </Group>
-      </Box>
-
-      <ScrollArea flex={1} p="lg">
-        <Stack gap="xl">
-          {/* Métodos de Pago */}
-          <PaymentMethodAndCharge
-            method={paymentMethod}
-            onMethodChange={setPaymentMethod}
-            onMethodDoubleClick={(method) => {
-              setPaymentMethod(method);
-              if (method === 'tarjeta' && !cardNetwork && paymentSettings.cardNetworks.length > 0) {
-                setCardNetwork(paymentSettings.cardNetworks[0]);
-              }
-              if (method === 'transferencia') {
-                if (!transferBank && paymentSettings.transferBanks.length > 0) {
-                  setTransferBank(paymentSettings.transferBanks[0]);
-                }
-                if (paymentSettings.requireTransferReference && !transferReference.trim()) {
-                  setTransferReference('AUTO');
-                }
-              }
-              if (restante > 0) {
-                setLineAmount(restante.toFixed(2));
-              }
-            }}
-            settings={paymentSettings}
-            selectedCardNetwork={cardNetwork}
-            onCardNetworkChange={setCardNetwork}
-            selectedTransferBank={transferBank}
-            onTransferBankChange={setTransferBank}
-            transferReference={transferReference}
-            onTransferReferenceChange={setTransferReference}
-          />
-
-          <Divider variant="dashed" />
-
-          <Stack gap="sm">
-            <TextInput
-              label="Monto de esta linea"
-              placeholder="0.00"
-              type="number"
-              value={lineAmount}
-              onChange={(e) => setLineAmount(e.target.value)}
-            />
-            <Button variant="light" onClick={addPaymentLine} disabled={!canAddLine}>
-              Agregar Pago
-            </Button>
-          </Stack>
-
-          {paymentLines.length > 0 && (
-            <Paper p="sm" withBorder radius="md" shadow="none">
-              <Stack gap={6}>
-                {paymentLines.map((line) => (
-                  <Group key={line.id} justify="space-between">
-                    <Text size="sm" tt="capitalize">
-                      {line.method}
-                      {line.cardNetwork ? ` - ${line.cardNetwork}` : ''}
-                      {line.transferBank ? ` - ${line.transferBank}` : ''}
-                    </Text>
-                    <Group gap="xs">
-                      <Text size="sm" fw={800}>${line.amount.toFixed(2)}</Text>
-                      <ActionIcon color="red" variant="subtle" onClick={() => setPaymentLines(prev => prev.filter(p => p.id !== line.id))}>
-                        <X size={14} />
-                      </ActionIcon>
-                    </Group>
-                  </Group>
-                ))}
-              </Stack>
-            </Paper>
-          )}
-
-          {/* Resumen Simple */}
-          <Box p="md" className="checkout-sidebar__summary">
-            <Stack gap={4}>
-              <Group justify="space-between" align="flex-end">
-                <Text size="sm" c="dimmed" fw={700} tt="uppercase">Total de la cuenta</Text>
-                <Text fw={900} c="myColor.9" className="checkout-sidebar__summary-total">
-                  ${total.toFixed(2)}
-                </Text>
-              </Group>
-              {totalPagado > 0 && (
-                <Group justify="space-between"><Text size="xs" c="green.8" fw={600}>Pagado</Text><Text size="xs" fw={700} c="green.8">-${totalPagado.toFixed(2)}</Text></Group>
-              )}
-              <Divider my={4} />
-              <Group justify="space-between"><Text fw={800} size="sm">APLICADO</Text><Text fw={900} size="sm" c="green">${totalLineas.toFixed(2)}</Text></Group>
-              <Group justify="space-between"><Text fw={800} size="sm">RESTANTE</Text><Text fw={900} size="lg" c="myColor">${restante.toFixed(2)}</Text></Group>
-            </Stack>
-          </Box>
-        </Stack>
-      </ScrollArea>
-
-      {/* Acciones Footer */}
-      <Box p="lg" className="checkout-sidebar__footer">
-        <Stack gap="sm">
-          <Button
-            size="lg"
-            radius="md"
-            fullWidth
-            color="green"
-            leftSection={<Printer size={24} />}
-            disabled={!canFinalize}
-            loading={isProcessing}
-            onClick={handleFinalize}
-            h={70}
-            className="checkout-sidebar__finalize-btn"
-          >
-            Finalizar y Cobrar
-          </Button>
-          {cuentasActivas > 0 && (
-            <Button
-              size="lg"
-              radius="md"
-              fullWidth
-              variant="light"
-              color="myColor"
-              leftSection={<Door size={20} />}
-              onClick={() => setShowEnviarHabitacion(true)}
-              fw={800}
-            >
-              Enviar a Habitación
-            </Button>
-          )}
-        </Stack>
-      </Box>
-
-      <TicketPreviewModal
-        opened={previewOpened}
-        onClose={() => {
-          setPreviewOpened(false);
-          if (onCloseCallback) {
-            onCloseCallback();
-          }
-        }}
-        title={previewTitle}
-        content={previewContent}
-      />
-    </Box>
-  );
-}
-
-export function PaymentMethodButton({ active, onClick, onDoubleClick, icon: Icon, label, color }: any) {
-  return (
-    <UnstyledButton 
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      p="md"
-      className={`payment-method-btn payment-method-btn--${color}${active ? ' payment-method-btn--active' : ''}`}
-    >
-      <ThemeIcon size={40} radius="xl" color={color} variant={active ? "filled" : "light"}>
-        <Icon size={20} weight={active ? "bold" : "regular"} />
-      </ThemeIcon>
-      <Text fw={800} size="xs" c={active ? `var(--mantine-color-${color}-9)` : 'var(--pos-text)'}>{label}</Text>
-    </UnstyledButton>
-  );
+ <TicketPreviewModal
+ opened={previewOpened}
+ onClose={() => {
+ setPreviewOpened(false);
+ if (onCloseCallback) {
+ onCloseCallback();
+ }
+ }}
+ title={previewTitle}
+ content={previewContent}
+ />
+ </div>
+ );
 }

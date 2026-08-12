@@ -1,15 +1,4 @@
 import {
-  Modal,
-  Text,
-  Group,
-  Badge,
-  Divider,
-  Button,
-  ScrollArea,
-  Box,
-  Stack,
-} from '@mantine/core';
-import {
   ArrowsClockwise,
   WifiHigh,
   WifiSlash,
@@ -19,6 +8,15 @@ import {
   Database,
 } from '@phosphor-icons/react';
 import type { SyncStatus } from '../../db/rxdb';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 const COLLECTION_LABELS: Record<string, string> = {
   mesas: 'Mesas',
@@ -43,122 +41,139 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
   syncing: boolean;
 }) {
   const overallOk = status.online && status.supabaseOk && !status.hasError;
-  const overallColor = !status.online ? 'orange' : status.hasError ? 'red' : status.supabaseOk ? 'green' : 'gray';
-  const overallIcon = !status.online
-    ? <WifiSlash size={20} weight="bold" />
-    : status.hasError
-      ? <XCircle size={20} weight="bold" />
-      : status.supabaseOk
-        ? <CheckCircle size={20} weight="bold" />
-        : <WarningCircle size={20} weight="bold" />;
-  const overallLabel = !status.online
-    ? 'Sin conexión'
-    : status.hasError
-      ? `Error en ${status.errorCollections.length} colección(es)`
-      : status.supabaseOk === null
-        ? 'Verificando...'
-        : 'Sincronización activa';
-
   const collectionEntries = Object.entries(status.collections);
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Estado de Sincronización"
-      size="sm"
-      radius="lg"
-    >
-      {/* Estado general */}
-      <Group gap="sm" mb="md" p="sm" style={{
-        background: overallOk ? 'rgba(21,128,61,0.08)' : !status.online ? 'rgba(202,138,4,0.08)' : 'rgba(185,28,28,0.08)',
-        borderRadius: 10,
-        border: `1px solid ${overallOk ? 'rgba(21,128,61,0.2)' : !status.online ? 'rgba(202,138,4,0.2)' : 'rgba(185,28,28,0.2)'}`,
-      }}>
-        <Box style={{ color: `var(--mantine-color-${overallColor}-6)` }}>{overallIcon}</Box>
-        <Box style={{ flex: 1 }}>
-          <Text fw={700} size="sm">{overallLabel}</Text>
-          <Text size="xs" c="dimmed">
-            {!status.online
-              ? 'El dispositivo no tiene internet'
-              : status.supabaseOk === null
-                ? 'Verificando conexión...'
+    <Dialog open={opened} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm gap-4">
+        <DialogHeader>
+          <DialogTitle>Estado de Sincronización</DialogTitle>
+          <DialogDescription className="sr-only">
+            Estado de la conexión y sincronización de datos con Supabase
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Estado General */}
+        <div className={cn(
+          "p-3 rounded-xl border flex items-center gap-3",
+          overallOk
+            ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+            : !status.online
+              ? "bg-amber-50/60 border-amber-200 text-amber-900"
+              : "bg-red-50/60 border-red-200 text-red-900"
+        )}>
+          {!status.online ? (
+            <WifiSlash size={20} className="text-amber-600 shrink-0" />
+          ) : status.hasError ? (
+            <XCircle size={20} className="text-red-600 shrink-0" />
+          ) : status.supabaseOk ? (
+            <CheckCircle size={20} className="text-emerald-600 shrink-0" />
+          ) : (
+            <WarningCircle size={20} className="text-amber-600 shrink-0" />
+          )}
+
+          <div className="flex flex-col gap-0.5">
+            <span className="font-extrabold text-xs">
+              {!status.online
+                ? 'Sin conexión'
+                : status.hasError
+                  ? `Error en ${status.errorCollections.length} colección(es)`
+                  : status.supabaseOk === null
+                    ? 'Verificando...'
+                    : 'Sincronización activa'}
+            </span>
+            <span className="text-[11px] opacity-80">
+              {!status.online
+                ? 'El dispositivo no tiene internet'
+                : status.supabaseOk === null
+                  ? 'Verificando conexión...'
+                  : status.supabaseOk
+                    ? 'Supabase conectado y accesible'
+                    : 'No se puede alcanzar Supabase'}
+            </span>
+          </div>
+        </div>
+
+        {/* Status Rows */}
+        <div className="flex flex-col gap-2 text-xs font-semibold">
+          <div className="flex items-center justify-between py-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {status.online ? <WifiHigh size={16} /> : <WifiSlash size={16} />}
+              <span>Red</span>
+            </div>
+            <span className={cn(
+              "px-2 py-0.5 rounded-md text-[10px] font-bold",
+              status.online ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+            )}>
+              {status.online ? 'Online' : 'Offline'}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between py-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Database size={16} />
+              <span>Supabase</span>
+            </div>
+            <span className={cn(
+              "px-2 py-0.5 rounded-md text-[10px] font-bold",
+              status.supabaseOk === null
+                ? "bg-muted text-muted-foreground"
                 : status.supabaseOk
-                  ? 'Supabase conectado y accesible'
-                  : 'No se puede alcanzar Supabase'}
-          </Text>
-        </Box>
-      </Group>
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-red-100 text-red-700"
+            )}>
+              {status.supabaseOk === null ? 'Verificando' : status.supabaseOk ? 'OK' : 'Error'}
+            </span>
+          </div>
+        </div>
 
-      {/* Red y Supabase */}
-      <Group justify="space-between" mb="xs">
-        <Group gap={6}>
-          {status.online ? <WifiHigh size={14} /> : <WifiSlash size={14} />}
-          <Text size="xs" fw={600}>Red</Text>
-        </Group>
-        <Badge size="sm" color={status.online ? 'green' : 'orange'} variant="light">
-          {status.online ? 'Online' : 'Offline'}
-        </Badge>
-      </Group>
-
-      <Group justify="space-between" mb="md">
-        <Group gap={6}>
-          <Database size={14} />
-          <Text size="xs" fw={600}>Supabase</Text>
-        </Group>
-        <Badge size="sm"
-          color={status.supabaseOk === null ? 'gray' : status.supabaseOk ? 'green' : 'red'}
-          variant="light"
-        >
-          {status.supabaseOk === null ? 'Verificando' : status.supabaseOk ? 'OK' : 'Error'}
-        </Badge>
-      </Group>
-
-      {/* Colecciones */}
-      {collectionEntries.length > 0 && (
-        <>
-          <Divider mb="sm" label="Colecciones" labelPosition="left" />
-          <ScrollArea.Autosize mah={220}>
-            <Stack gap={4}>
+        {/* Colecciones */}
+        {collectionEntries.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2 border-t border-border">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Colecciones</span>
+            <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-1">
               {collectionEntries.map(([key, col]) => (
-                <Group key={key} justify="space-between" py={4} px={6} style={{
-                  borderRadius: 6,
-                  background: col.error ? 'rgba(185,28,28,0.05)' : 'transparent',
-                }}>
-                  <Group gap={6}>
-                    {col.error
-                      ? <XCircle size={12} color="var(--mantine-color-red-6)" />
-                      : col.stopped
-                        ? <WarningCircle size={12} color="var(--mantine-color-orange-6)" />
-                        : <CheckCircle size={12} color="var(--mantine-color-green-6)" />}
-                    <Text size="xs">{COLLECTION_LABELS[key] || key}</Text>
-                  </Group>
-                  <Badge size="xs" variant="light"
-                    color={col.error ? 'red' : col.stopped ? 'orange' : col.active ? 'green' : 'gray'}
-                  >
+                <div key={key} className={cn(
+                  "flex items-center justify-between py-1 px-2 rounded-lg text-xs",
+                  col.error && "bg-red-50 text-red-900"
+                )}>
+                  <div className="flex items-center gap-1.5">
+                    {col.error ? (
+                      <XCircle size={14} className="text-red-600" />
+                    ) : col.stopped ? (
+                      <WarningCircle size={14} className="text-amber-600" />
+                    ) : (
+                      <CheckCircle size={14} className="text-emerald-600" />
+                    )}
+                    <span className="font-semibold text-foreground">{COLLECTION_LABELS[key] || key}</span>
+                  </div>
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md text-[10px] font-bold",
+                    col.error ? "bg-red-100 text-red-700" : col.stopped ? "bg-amber-100 text-amber-700" : col.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+                  )}>
                     {col.error ? 'Error' : col.stopped ? 'Detenido' : col.active ? 'Activo' : 'En espera'}
-                  </Badge>
-                </Group>
+                  </span>
+                </div>
               ))}
-            </Stack>
-          </ScrollArea.Autosize>
-        </>
-      )}
+            </div>
+          </div>
+        )}
 
-      <Divider mt="md" mb="md" />
-
-      <Group justify="flex-end" gap="sm">
-        <Button variant="subtle" size="sm" onClick={onClose}>Cerrar</Button>
-        <Button
-          size="sm"
-          leftSection={<ArrowsClockwise size={14} weight="bold" className={syncing ? 'spin-fast' : undefined} />}
-          onClick={onForceSync}
-          loading={syncing}
-          disabled={!status.online}
-        >
-          Forzar Resync
-        </Button>
-      </Group>
-    </Modal>
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+          <Button
+            disabled={!status.online || syncing}
+            onClick={onForceSync}
+            className="gap-1.5"
+          >
+            <ArrowsClockwise size={14} className={syncing ? 'animate-spin' : ''} />
+            Forzar Resync
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

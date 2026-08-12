@@ -1,243 +1,160 @@
-/**
- * ClienteExpandableHeader
- * Chevron flotante sobre línea divisora que expande los datos del cliente.
- * Reutilizado en SidebarDetails y SidebarReservaDetail.
- */
-import { useState } from 'react';
-import { Box, Stack, Text, Group, ActionIcon, Collapse, Autocomplete, Button } from '@mantine/core';
-import { CaretDown, PencilSimple, Users, Copy as CopyIcon, Check, X } from '@phosphor-icons/react';
-import { sileo } from 'sileo';
-import { useRxClientes } from '../../../hooks/useRxClientes';
+import { useState } from'react';
+import { CaretDown, PencilSimple, Users, Copy as CopyIcon, Check, X } from'@phosphor-icons/react';
+import { showToast } from'@/lib/toast';
+import { useRxClientes } from'../../../hooks/useRxClientes';
+import { Button } from'@/components/ui/button';
+import { ClienteSelector } from'@/components/Common/ClienteSelector';
+
+const TIPO_CLIENTE_LABEL: Record<string, string> = {
+ persona_natural:'Persona natural',
+ juridico:'Jurídico',
+ extranjero:'Extranjero',
+ agencia:'Agencia',
+};
 
 interface ClienteExpandableHeaderProps {
-  /** Nombre del cliente tal como aparece en la comanda/reserva */
-  clienteNombre: string | undefined;
-  /** Si true, muestra el botón de editar (lápiz) */
-  showEditButton?: boolean;
-  /** Callback para abrir el modal de edición */
-  onEdit?: () => void;
-  /** Callback para cambiar el cliente vinculado */
-  onChangeCliente?: (nombre: string, id: string) => void;
+ clienteNombre: string | undefined;
+ showEditButton?: boolean;
+ onEdit?: () => void;
+ onChangeCliente?: (nombre: string, id: string) => void;
 }
 
 export function ClienteExpandableHeader({
-  clienteNombre,
-  showEditButton = false,
-  onEdit,
-  onChangeCliente,
+ clienteNombre,
+ showEditButton = false,
+ onEdit,
+ onChangeCliente,
 }: ClienteExpandableHeaderProps) {
-  const [expanded, setExpanded] = useState(false);
-  const [isChanging, setIsChanging] = useState(false);
-  const [tempValue, setTempValue] = useState('');
-  const { clientes } = useRxClientes();
+ const [expanded, setExpanded] = useState(false);
+ const [isChanging, setIsChanging] = useState(false);
+ const [tempValue, setTempValue] = useState('');
+ const { clientes } = useRxClientes();
 
-  const cd = clientes.find(c => c.nombre === clienteNombre);
-  const isSystemCliente = cd?.id === '99999999999' || clienteNombre === 'Consumidor Final';
+ const cd = clientes.find(c => c.nombre === clienteNombre);
+ const isSystemCliente = cd?.id ==='99999999999'|| clienteNombre ==='Consumidor Final';
 
-  const rows = [
-    { label: 'Nombre',        value: clienteNombre || 'Público General' },
-    { label: 'Identificación', value: cd?.dni      || '—' },
-    { label: 'Teléfono',      value: cd?.telefono  || '—' },
-    { label: 'Email',         value: cd?.email     || '—' },
-  ];
+ const datosRows = [
+ { label:'Nombre', value: clienteNombre ||'Público General'},
+ { label:'Tipo', value: cd?.tipo_cliente ? (TIPO_CLIENTE_LABEL[cd.tipo_cliente] ?? cd.tipo_cliente) :'—'},
+ { label:'Identificación', value: cd?.dni ||'—'},
+ { label:'Teléfono', value: cd?.telefono ||'—'},
+ { label:'Email', value: cd?.email ||'—'},
+ { label:'Dirección', value: cd?.direccion ||'—'},
+ ];
 
-  const handleCopy = () => {
-    const text = `Cliente: ${clienteNombre || 'Público General'}\n` +
-                 `Identificación: ${cd?.dni || '—'}\n` +
-                 `Teléfono: ${cd?.telefono || '—'}\n` +
-                 `Email: ${cd?.email || '—'}`;
-    navigator.clipboard.writeText(text);
-    sileo.success({
-      title: 'Datos copiados',
-      description: 'Los datos del cliente se copiaron al portapapeles.'
-    });
-  };
+ const facturacionRows = [
+ { label:'Nombre facturación', value: cd?.nombre_factura ||'—'},
+ { label:'Documento', value: cd?.numero_doc ? (cd.tipo_doc ?`${cd.tipo_doc.toUpperCase()}: ${cd.numero_doc}`: cd.numero_doc) :'—'},
+ { label:'Dirección fiscal', value: cd?.direccion_fiscal ||'—'},
+ { label:'Email facturación', value: cd?.email_factura ||'—'},
+ ];
 
-  return (
-    <>
-      {/* Panel expandible — crece hacia abajo, encima del chevron */}
-      <Collapse in={expanded}>
-        <Box px="md" pb="xs" pt="xs">
-          {isChanging ? (
-            <Box w="100%">
-              <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Cambiar Cliente de la Cuenta
-              </Text>
-              <Group gap="xs" align="center" w="100%" wrap="nowrap">
-                <Autocomplete
-                  placeholder="Escribe o busca el cliente..."
-                  size="sm"
-                  variant="filled"
-                  radius="md"
-                  data={clientes.map(c => c.nombre)}
-                  value={tempValue}
-                  onChange={setTempValue}
-                  style={{ flex: 1 }}
-                  comboboxProps={{ withinPortal: true, zIndex: 10000 }}
-                  styles={{
-                    input: {
-                      backgroundColor: 'var(--pos-bg)',
-                      border: '1px solid var(--pos-border)'
-                    },
-                    dropdown: {
-                      borderRadius: '12px',
-                      boxShadow: 'var(--mantine-shadow-xl)',
-                      border: '1px solid var(--pos-border)'
-                    }
-                  }}
-                  onOptionSubmit={(val) => {
-                    const matched = clientes.find(c => c.nombre === val);
-                    if (onChangeCliente) {
-                      onChangeCliente(val, matched?.id || '');
-                      setIsChanging(false);
-                    }
-                  }}
-                />
-                <ActionIcon
-                  variant="filled"
-                  color="myColor"
-                  size="md"
-                  radius="md"
-                  onClick={() => {
-                    if (tempValue.trim() && onChangeCliente) {
-                      const matched = clientes.find(c => c.nombre.trim().toLowerCase() === tempValue.trim().toLowerCase());
-                      onChangeCliente(matched ? matched.nombre : tempValue.trim(), matched ? matched.id : '');
-                      setIsChanging(false);
-                    }
-                  }}
-                  disabled={!tempValue.trim()}
-                >
-                  <Check size={18} weight="bold" />
-                </ActionIcon>
-                <ActionIcon
-                  variant="light"
-                  color="gray"
-                  size="md"
-                  radius="md"
-                  onClick={() => setIsChanging(false)}
-                >
-                  <X size={18} weight="bold" />
-                </ActionIcon>
-              </Group>
-            </Box>
-          ) : (
-            <Stack gap={4}>
-              <Stack gap={1}>
-                {rows.map(r => (
-                  <Text key={r.label} size="sm" c="var(--pos-text)" style={{ userSelect: 'text' }}>
-                    <Text component="span" size="sm" c="dimmed" fw={600}>{r.label}: </Text>
-                    {r.value}
-                  </Text>
-                ))}
-                {cd?.notas && (
-                  <Text size="sm" c="var(--pos-text)" style={{ userSelect: 'text' }}>
-                    <Text component="span" size="sm" c="dimmed" fw={600}>Notas: </Text>
-                    {cd.notas}
-                  </Text>
-                )}
-              </Stack>
+ const tieneFacturacion = cd && (cd.nombre_factura || cd.numero_doc || cd.direccion_fiscal || cd.email_factura);
 
-              {/* Botonera de tres acciones premium */}
-              <Group gap="xs" mt="sm" w="100%">
-                {!isSystemCliente && showEditButton && onEdit && (
-                  <Button
-                    variant="light"
-                    color="myColor"
-                    size="xs"
-                    radius="md"
-                    leftSection={<PencilSimple size={14} weight="bold" />}
-                    onClick={onEdit}
-                    fw={700}
-                    style={{ flex: 1 }}
-                  >
-                    Editar
-                  </Button>
-                )}
-                {onChangeCliente && (
-                  <Button
-                    variant="light"
-                    color="orange"
-                    size="xs"
-                    radius="md"
-                    leftSection={<Users size={14} weight="bold" />}
-                    onClick={() => {
-                      setTempValue(clienteNombre || '');
-                      setIsChanging(true);
-                    }}
-                    fw={700}
-                    style={{ flex: 1 }}
-                  >
-                    Cambiar
-                  </Button>
-                )}
-                <Button
-                  variant="light"
-                  color="gray"
-                  size="xs"
-                  radius="md"
-                  leftSection={<CopyIcon size={14} weight="bold" />}
-                  onClick={handleCopy}
-                  fw={700}
-                  style={{ flex: 1 }}
-                >
-                  Copiar
-                </Button>
-              </Group>
-            </Stack>
-          )}
-        </Box>
-      </Collapse>
+ const handleCopy = () => {
+ const lines = [
+ ...datosRows.map(r =>`${r.label}: ${r.value}`),
+ ...(tieneFacturacion ? ['','Facturación:', ...facturacionRows.map(r =>`${r.label}: ${r.value}`)] : []),
+ ];
+ navigator.clipboard.writeText(lines.join('\n'));
+ showToast.success('Datos copiados','Los datos del cliente se copiaron al portapapeles.');
+ };
 
-      {/* Divider con chevron flotante — siempre al fondo */}
-      <Box
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: 14,
-          marginTop: 2,
-        }}
-      >
-        <Box
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: 0,
-            right: 0,
-            height: 1,
-            backgroundColor: 'var(--pos-border)',
-          }}
-        />
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          radius="xl"
-          onClick={() => setExpanded(v => !v)}
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            width: 20,
-            height: 20,
-            minWidth: 20,
-            minHeight: 20,
-            border: '1px solid var(--ui-primary)',
-            backgroundColor: 'var(--ui-primary-soft)',
-            padding: 0,
-            opacity: 0.7,
-          }}
-        >
-          <CaretDown
-            size={10}
-            weight="bold"
-            color="var(--ui-primary)"
-            style={{
-              transition: 'transform 200ms ease',
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}
-          />
-        </ActionIcon>
-      </Box>
-    </>
-  );
+ return (
+ <div className="flex flex-col w-full">
+ {expanded && (
+ <div className="p-3 bg-muted rounded-xl border border-border my-2 flex flex-col gap-2">
+ {isChanging ? (
+ <div className="flex flex-col gap-2">
+ <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+ Cambiar Cliente de la Cuenta
+ </span>
+ <div className="flex items-start gap-2">
+ <ClienteSelector
+ value={tempValue}
+ onChange={setTempValue}
+ placeholder="Buscar cliente o escribir nombre..."
+ className="flex-1"
+ />
+ <Button
+ type="button"size="icon"disabled={!tempValue.trim()}
+ onClick={() => {
+ if (tempValue.trim() && onChangeCliente) {
+ const matched = clientes.find(c => c.nombre.trim().toLowerCase() === tempValue.trim().toLowerCase());
+ onChangeCliente(matched ? matched.nombre : tempValue.trim(), matched ? matched.id :'');
+ setIsChanging(false);
+ }
+ }}
+ className="w-9 h-9 rounded-lg shrink-0">
+ <Check size={16} weight="bold"/>
+ </Button>
+ <Button
+ type="button"size="icon"variant="secondary"onClick={() => setIsChanging(false)}
+ className="w-9 h-9 rounded-lg shrink-0">
+ <X size={16} weight="bold"/>
+ </Button>
+ </div>
+ </div>
+ ) : (
+ <div className="flex flex-col gap-3">
+ <div className="flex flex-col gap-1 text-xs text-muted-foreground font-medium">
+ {datosRows.map(r => (
+ <div key={r.label} className="flex justify-between gap-2">
+ <span className="text-muted-foreground font-bold shrink-0">{r.label}:</span>
+ <span className="font-semibold text-foreground text-right truncate">{r.value}</span>
+ </div>
+ ))}
+ </div>
+
+ {tieneFacturacion && (
+ <div className="flex flex-col gap-1 text-xs text-muted-foreground font-medium pt-2 border-t border-border/60">
+ <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mb-0.5">Facturación</span>
+ {facturacionRows.map(r => (
+ <div key={r.label} className="flex justify-between gap-2">
+ <span className="text-muted-foreground font-bold shrink-0">{r.label}:</span>
+ <span className="font-semibold text-foreground text-right truncate">{r.value}</span>
+ </div>
+ ))}
+ </div>
+ )}
+
+ <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+ {!isSystemCliente && showEditButton && onEdit && (
+ <button
+ type="button"onClick={onEdit}
+ className="flex-1 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ <PencilSimple size={14} /> Editar
+ </button>
+ )}
+ {onChangeCliente && (
+ <button
+ type="button"onClick={() => {
+ setTempValue(clienteNombre ||'');
+ setIsChanging(true);
+ }}
+ className="flex-1 py-1.5 rounded-lg bg-amber-50 text-amber-700 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ <Users size={14} /> Cambiar
+ </button>
+ )}
+ <button
+ type="button"onClick={handleCopy}
+ className="flex-1 py-1.5 rounded-lg bg-border text-foreground font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ <CopyIcon size={14} /> Copiar
+ </button>
+ </div>
+ </div>
+ )}
+ </div>
+ )}
+
+ <div className="relative flex items-center justify-center my-1">
+ <div className="w-full h-[1px] bg-border"/>
+ <button
+ type="button"onClick={() => setExpanded(v => !v)}
+ className="absolute w-5 h-5 rounded-full bg-card border border-primary text-primary flex items-center justify-center cursor-pointer shadow-2xs">
+ <CaretDown size={10} weight="bold"className={expanded ?'rotate-180 transition-transform':'transition-transform'} />
+ </button>
+ </div>
+ </div>
+ );
 }

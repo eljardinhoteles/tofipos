@@ -1,810 +1,504 @@
-// @ts-nocheck
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from'react';
 import {
-  Box, Stack, Group, Text, ActionIcon,
-  Badge, ScrollArea, Divider, NumberInput, Button, ThemeIcon, Paper, Modal, TextInput, SimpleGrid
-} from '@mantine/core';
+ ArrowLeft, Users, Receipt, CurrencyCircleDollar, Check,
+ Printer, Plus, Minus
+} from'@phosphor-icons/react';
+import type { Mesa, ComandaItem } from'../../../db/database';
+import { showToast } from'@/lib/toast';
+import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { calcularTotalesComanda } from'../../../lib/taxUtils';
+import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
+import { generarPrecuentaDividida } from'../../../services/printTemplateEngine';
+import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import {
-  ArrowLeft, ArrowRight, Receipt, Users, CurrencyCircleDollar, Check,
-  Printer
-} from '@phosphor-icons/react';
-import type { Mesa, ComandaItem } from '../../../db/database';
-import { sileo } from 'sileo';
-import { useIvaActivo } from '../../../hooks/useIvaActivo';
-import { calcularTotalesComanda } from '../../../lib/taxUtils';
-import { TicketPreviewModal } from '../../Common/TicketPreviewModal';
-import { generarPrecuentaDividida } from '../../../services/printTemplateEngine';
-import { useRxMenuCatalog } from '../../../hooks/useRxMenuCatalog';
-import {
-  initVerticalRxDb,
-  createRxPago,
-  updateRxComanda,
-  updateRxComandaItem,
-  updateRxMesa
-} from '../../../db/rxdb';
+ initVerticalRxDb,
+ createRxVenta,
+ updateRxComanda,
+ updateRxComandaItem,
+ updateRxMesa
+} from'../../../db/rxdb';
+import { cn } from'@/lib/utils';
+import { Input } from'@/components/ui/input';
+import { Label } from'@/components/ui/label';
 
 interface SidebarSplitProps {
-  selectedMesa: Mesa;
-  activeComanda: any;
-  comandaItems: any[];
-  onBack: () => void;
-  onSuccess: () => void;
+ selectedMesa: Mesa;
+ activeComanda: any;
+ comandaItems: any[];
+ onBack: () => void;
+ onSuccess: () => void;
 }
 
 export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack, onSuccess }: SidebarSplitProps) {
-  const [splitMethod, setSplitMethod] = useState<'iguales' | 'productos' | 'monto' | null>(null);
-  const [saldoInicialSplit, setSaldoInicialSplit] = useState<number>(0);
+ const [splitMethod, setSplitMethod] = useState<'iguales'|'productos'|'monto'| null>(null);
+ const [saldoInicialSplit, setSaldoInicialSplit] = useState<number>(0);
+ const [selectedItems, setSelectedItems] = useState<{id: string, qtyToPay: number}[]>([]);
+ const [personas, setPersonas] = useState(2);
+ const [selectedPersonaIdx, setSelectedPersonaIdx] = useState<number | null>(null);
+ const [paidPersonaIndexes, setPaidPersonaIndexes] = useState<number[]>([]);
+ const [montoCustom, setMontoCustom] = useState<number |''>('');
+ const [cobrarModalState, setCobrarModalState] = useState<{
+ monto: number;
+ label: string;
+ itemsPagados?: any[];
+ onSuccessCallback?: () => void;
+ } | null>(null);
 
-  // === ESTADOS PARA "POR PRODUCTOS" ===
-  const [selectedItems, setSelectedItems] = useState<{id: string, qtyToPay: number}[]>([]);
+ const [payerName, setPayerName] = useState<string>('');
+ const [previewTicketText, setPreviewTicketText] = useState<string | null>(null);
+ const [pagos, setPagos] = useState<any[]>([]);
 
-  // === ESTADOS PARA "PARTES IGUALES" ===
-  const [personas, setPersonas] = useState(2);
-  const [selectedPersonaIdx, setSelectedPersonaIdx] = useState<number | null>(null);
-  const [paidPersonaIndexes, setPaidPersonaIndexes] = useState<number[]>([]);
+ useEffect(() => {
+ if (!activeComanda?.id) {
+ setPagos([]);
+ return;
+ }
 
-  // === ESTADOS PARA "MONTO" ===
-  const [montoCustom, setMontoCustom] = useState<number | ''>('');
+ let sub: { unsubscribe: () => void } | null = null;
+ let alive = true;
 
-  // === ESTADO DE COBRO UNIFICADO ===
-  const [cobrarModalState, setCobrarModalState] = useState<{
-    monto: number;
-    label: string;
-    itemsPagados?: any[];
-    onSuccessCallback?: () => void;
-  } | null>(null);
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ const query = rxDb.pagos.find({
+ selector: { comanda_id: activeComanda.id, _deleted: false }
+ });
+ const docs = await query.exec();
+ if (!alive) return;
+ setPagos(docs.map((doc: any) => doc.toJSON()));
+ sub = query.$.subscribe((docs: any[]) => {
+ setPagos(docs.map((doc: any) => doc.toJSON()));
+ });
+ };
 
-  const [payerName, setPayerName] = useState<string>('');
-  const [previewTicketText, setPreviewTicketText] = useState<string | null>(null);
-  const [pagos, setPagos] = useState<any[]>([]);
+ run().catch(console.error);
 
-  useEffect(() => {
-    if (!activeComanda?.id) {
-      setPagos([]);
-      return;
-    }
+ return () => {
+ alive = false;
+ sub?.unsubscribe();
+ };
+ }, [activeComanda?.id]);
 
-    let sub: { unsubscribe: () => void } | null = null;
-    let alive = true;
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ const { menuItems } = useRxMenuCatalog();
 
-    const run = async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      const query = rxDb.pagos.find({
-        selector: { comanda_id: activeComanda.id, _deleted: false }
-      });
-      const docs = await query.exec();
-      if (!alive) return;
-      setPagos(docs.map((doc: any) => doc.toJSON()));
-      sub = query.$.subscribe((docs: any[]) => {
-        setPagos(docs.map((doc: any) => doc.toJSON()));
-      });
-    };
+ const totalesOriginales = useMemo(() => {
+ return calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
+ }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
-    run().catch(console.error);
+ const totalOriginal = totalesOriginales.total;
+ const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ const saldoPendiente = Math.max(0, totalOriginal - totalPagado);
 
-    return () => {
-      alive = false;
-      sub?.unsubscribe();
-    };
-  }, [activeComanda?.id]);
+ const hasNonProductPayments = useMemo(() => {
+ return pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
+ }, [pagos]);
 
-  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
-  const { menuItems } = useRxMenuCatalog();
+ const montoPorPersona = useMemo(() => saldoInicialSplit / personas, [saldoInicialSplit, personas]);
 
-  // Cálculos Base centralizados
-  const totalesOriginales = useMemo(() => {
-    return calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
-  }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
+ const totalesSeleccionados = useMemo(() => {
+ if (selectedItems.length === 0) return { subtotalNeto: 0, ivaTotal: 0, total: 0 };
+ const itemsTemporales = selectedItems.map(si => {
+ const item = comandaItems.find(i => i.id === si.id);
+ return { ...item, cantidad: si.qtyToPay } as ComandaItem;
+ });
+ return calcularTotalesComanda(itemsTemporales, menuItems, ivaPorcentaje, preciosConIva);
+ }, [selectedItems, comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
+ const selectSplitMethod = (method:'iguales'|'productos'|'monto') => {
+ setSplitMethod(method);
+ setSaldoInicialSplit(saldoPendiente);
+ setSelectedPersonaIdx(null);
+ setPaidPersonaIndexes([]);
+ setMontoCustom('');
+ setSelectedItems([]);
+ };
 
-  const totalOriginal = totalesOriginales.total;
+ const procesarPagoSimple = async (
+ monto: number,
+ itemsPagados?: any[],
+ label?: string,
+ onSuccessCallback?: () => void,
+ nameOfPayer?: string
+ ) => {
+ if (!activeComanda) return;
+ try {
+ // Sin método: la división de cuenta en Mesas ya no elige método de pago
+ // — se define después al anclar en Centro de Ventas.
+ const labelDivision = nameOfPayer?.trim()
+ ?`Dividido - ${nameOfPayer.trim()}${itemsPagados && itemsPagados.length > 0 ?'(Productos)':''}`:`Dividido - ${label ||'Parte'}${itemsPagados && itemsPagados.length > 0 ?'(Productos)':''}`;
+ await createRxVenta({
+ id: crypto.randomUUID(),
+ origen:'mesa',
+ tipo:'directa',
+ cliente_id: activeComanda.cliente_id || undefined,
+ cliente_nombre: nameOfPayer?.trim() || activeComanda.cliente || undefined,
+ referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio} · ${labelDivision}`,
+ comanda_id: activeComanda.id,
+ organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
+ }, monto);
 
-  const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
-  const saldoPendiente = Math.max(0, totalOriginal - totalPagado);
+ if (itemsPagados && itemsPagados.length > 0) {
+ for (const item of itemsPagados) {
+ const comandaItem = comandaItems.find(i => i.id === item.id);
+ if (comandaItem) {
+ await updateRxComandaItem(item.id, {
+ pagado_cantidad: (comandaItem.pagado_cantidad || 0) + item.qtyToPay
+ });
+ }
+ }
+ }
 
-  const hasNonProductPayments = useMemo(() => {
-    return pagos.some(p => {
-      // Un pago NO es de productos si no tiene tipo_division o no contiene '(Productos)'
-      return !p.tipo_division || !p.tipo_division.includes('(Productos)');
-    });
-  }, [pagos]);
+ showToast.success('Pago y Ticket',`Cobro registrado por $${monto.toFixed(2)}.`);
 
-  const montoPorPersona = useMemo(() => {
-    return saldoInicialSplit / personas;
-  }, [saldoInicialSplit, personas]);
+ const labelText = nameOfPayer?.trim() || label ||'Parte';
+ const itemsMapeados = (itemsPagados || []).map(si => {
+ const item = comandaItems.find(i => i.id === si.id);
+ if (!item) return si;
+ return { ...item, qtyToPay: si.qtyToPay || si.cantidad || 1 };
+ });
 
-  const totalesSeleccionados = useMemo(() => {
-    if (selectedItems.length === 0) return { subtotalNeto: 0, ivaTotal: 0, total: 0 };
-    const itemsTemporales = selectedItems.map(si => {
-      const item = comandaItems.find(i => i.id === si.id);
-      return {
-        ...item,
-        cantidad: si.qtyToPay
-      } as ComandaItem;
-    });
-    return calcularTotalesComanda(itemsTemporales, menuItems, ivaPorcentaje, preciosConIva);
-  }, [selectedItems, comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
+ const ticketText = generarPrecuentaDividida(
+ activeComanda,
+ itemsMapeados,
+ selectedMesa.nombre,
+ labelText,
+ monto,
+ ivaPorcentaje
+ );
+ setPreviewTicketText(ticketText);
 
-  const selectSplitMethod = (method: 'iguales' | 'productos' | 'monto') => {
-    setSplitMethod(method);
-    setSaldoInicialSplit(saldoPendiente);
-    setSelectedPersonaIdx(null);
-    setPaidPersonaIndexes([]);
-    setMontoCustom('');
-    setSelectedItems([]);
-  };
+ if (onSuccessCallback) onSuccessCallback();
 
-  const procesarPagoSimple = async (
-    monto: number,
-    itemsPagados?: any[],
-    label?: string,
-    onSuccessCallback?: () => void,
-    nameOfPayer?: string
-  ) => {
-    if (!activeComanda) return;
-    try {
-      // 1. Registrar pago único (sistema externo por defecto)
-      await createRxPago({
-        id: crypto.randomUUID(),
-        comanda_id: activeComanda.id,
-        monto,
-        metodo_pago: 'efectivo',
-        fecha: new Date().toISOString(),
-        tipo_division: nameOfPayer?.trim()
-          ? `Dividido - ${nameOfPayer.trim()}${itemsPagados && itemsPagados.length > 0 ? ' (Productos)' : ''}`
-          : `Dividido - ${label || 'Parte'}${itemsPagados && itemsPagados.length > 0 ? ' (Productos)' : ''}`,
-        organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') || ''
-      } as any);
+ setSelectedItems([]);
+ setMontoCustom('');
+ setCobrarModalState(null);
 
-      // 2. Si se pagaron items, actualizar su pagado_cantidad
-      if (itemsPagados && itemsPagados.length > 0) {
-        for (const item of itemsPagados) {
-          const comandaItem = comandaItems.find(i => i.id === item.id);
-          if (comandaItem) {
-            await updateRxComandaItem(item.id, {
-              pagado_cantidad: (comandaItem.pagado_cantidad || 0) + item.qtyToPay
-            });
-          }
-        }
-      }
+ const rxDb = await initVerticalRxDb();
+ const pagosActualizados = await rxDb.pagos.find({
+ selector: { comanda_id: activeComanda.id, _deleted: false }
+ }).exec();
+ const nuevoTotalPagado = pagosActualizados.reduce((acc, p) => acc + p.monto, 0);
 
-      const descPayer = nameOfPayer?.trim() ? ` de ${nameOfPayer.trim()}` : '';
-      sileo.success({ 
-        title: 'Pago y Ticket', 
-        description: `Cobro${descPayer} por $${monto.toFixed(2)} registrado e impreso.` 
-      });
+ if (Math.abs(totalOriginal - nuevoTotalPagado) < 0.05 || nuevoTotalPagado >= totalOriginal) {
+ await updateRxComanda(activeComanda.id, {
+ estado:'cerrado',
+ mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
+ updated_at: new Date().toISOString()
+ });
+ await updateRxMesa(selectedMesa.id, { estado:'libre'});
+ showToast.success('Cuenta Pagada','El saldo pendiente ha sido cubierto en su totalidad.');
+ onSuccess();
+ }
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error al registrar el pago');
+ }
+ };
 
-      // Generar y mostrar el ticket virtual pagado de la cuenta dividida
-      const labelText = nameOfPayer?.trim() || label || 'Parte';
-      
-      const itemsMapeados = (itemsPagados || []).map(si => {
-        const item = comandaItems.find(i => i.id === si.id);
-        if (!item) return si;
-        return {
-          ...item,
-          qtyToPay: si.qtyToPay || si.cantidad || 1
-        };
-      });
+ return (
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
+ <div className="flex items-center gap-3">
+ <button
+ type="button"onClick={splitMethod ? () => setSplitMethod(null) : onBack}
+ className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ <ArrowLeft size={18} weight="bold"/>
+ </button>
+ <div className="flex flex-col">
+ <h3 className="font-extrabold text-base text-foreground leading-tight">Dividir Cuenta</h3>
+ <span className="text-[10px] font-bold text-muted-foreground">
+ {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{activeComanda?.folio}
+ </span>
+ </div>
+ </div>
+ </header>
 
-      const ticketText = generarPrecuentaDividida(
-        activeComanda,
-        itemsMapeados,
-        selectedMesa.nombre,
-        labelText,
-        monto,
-        ivaPorcentaje
-      );
-      setPreviewTicketText(ticketText);
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ {splitMethod && (
+ <div className="flex flex-col gap-1">
+ <Label className="text-xs font-bold text-foreground/80">Nombre de quien paga (Opcional)</Label>
+ <Input
+ type="text"placeholder="Ej: Juan Pérez"value={payerName}
+ onChange={(e) => setPayerName(e.target.value)}
+ />
+ </div>
+ )}
 
-      if (onSuccessCallback) {
-        onSuccessCallback();
-      }
+ {!splitMethod ? (
+ <div className="flex flex-col gap-4">
+ <div className="p-6 rounded-2xl bg-primary/10 border border-primary/20 flex flex-col items-center gap-1 text-center">
+ <span className="text-[10px] font-black uppercase tracking-wider text-primary">Total a Dividir</span>
+ <span className="text-3xl font-black text-primary">${saldoPendiente.toFixed(2)}</span>
+ </div>
 
-      // Resetear estados
-      setSelectedItems([]);
-      setMontoCustom('');
-      setCobrarModalState(null);
+ <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Métodos de división</span>
 
-      // 3. Verificar si se completó el total
-      const rxDb = await initVerticalRxDb();
-      const pagosActualizados = await rxDb.pagos.find({
-        selector: { comanda_id: activeComanda.id, _deleted: false }
-      }).exec();
-      const nuevoTotalPagado = pagosActualizados.reduce((acc, p) => acc + p.monto, 0);
-      
-      if (Math.abs(totalOriginal - nuevoTotalPagado) < 0.05 || nuevoTotalPagado >= totalOriginal) {
-        await updateRxComanda(activeComanda.id, {
-          estado: 'cerrado',
-          mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
-          updated_at: new Date().toISOString()
-        });
-        await updateRxMesa(selectedMesa.id, { estado: 'libre' });
-        sileo.success({ title: 'Cuenta Pagada', description: 'El saldo pendiente ha sido cubierto en su totalidad.' });
-        onSuccess();
-      }
-    } catch (error) {
-      console.error(error);
-      sileo.error({ title: 'Error al registrar el pago' });
-    }
-  };
+ <button
+ type="button"onClick={() => selectSplitMethod('iguales')}
+ className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
+ <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+ <Users size={20} />
+ </div>
+ <div className="flex flex-col">
+ <span className="font-extrabold text-sm text-foreground">Partes iguales</span>
+ <span className="text-xs text-muted-foreground">Divide el saldo entre N personas por igual.</span>
+ </div>
+ </button>
 
-  return (
-    <Box h="100%" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white' }}>
-      {/* Header Fijo */}
-      <Box p="lg" pb="md" style={{ borderBottom: '1px solid var(--pos-border)', backgroundColor: 'white' }}>
-        <Group justify="space-between" mb="xs">
-          <Group gap="sm">
-            <ActionIcon variant="subtle" color="gray" onClick={splitMethod ? () => setSplitMethod(null) : onBack}>
-              <ArrowLeft size={20} />
-            </ActionIcon>
-            <Stack gap={0}>
-              <Text size="lg" fw={800}>Dividir Cuenta</Text>
-              <Text size="xs" c="dimmed">
-                {selectedMesa.nombre.replace('Mesa ', 'Mesa #')} - Cuenta #{activeComanda?.folio} {activeComanda?.cliente ? `- ${activeComanda.cliente}` : ''}
-              </Text>
-            </Stack>
-          </Group>
-        </Group>
-      </Box>
+ <button
+ type="button"disabled={hasNonProductPayments}
+ onClick={() => !hasNonProductPayments && selectSplitMethod('productos')}
+ className={cn("p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors",
+ hasNonProductPayments ?"opacity-50 cursor-not-allowed":"cursor-pointer")}
+ >
+ <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+ <Receipt size={20} />
+ </div>
+ <div className="flex flex-col">
+ <span className="font-extrabold text-sm text-foreground">Por productos</span>
+ <span className="text-xs text-muted-foreground">Elige los artículos que paga cada persona.</span>
+ </div>
+ </button>
 
-      {/* Contenido principal */}
-      <ScrollArea flex={1} p="lg">
-        {splitMethod && (
-          <Box mb="md">
-            <TextInput
-              label="Nombre de quien paga (Opcional)"
-              placeholder="Ej: Juan Pérez"
-              value={payerName}
-              onChange={(e) => setPayerName(e.currentTarget.value)}
-              radius="md"
-              size="sm"
-              styles={{
-                label: { fontWeight: 700, fontSize: '12.5px', color: '#475569', marginBottom: '4px' }
-              }}
-            />
-          </Box>
-        )}
+ <button
+ type="button"onClick={() => selectSplitMethod('monto')}
+ className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
+ <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+ <CurrencyCircleDollar size={20} />
+ </div>
+ <div className="flex flex-col">
+ <span className="font-extrabold text-sm text-foreground">Monto fijo</span>
+ <span className="text-xs text-muted-foreground">Registra un pago rápido por una cantidad específica.</span>
+ </div>
+ </button>
+ </div>
+ ) : (
+ <>
+ {splitMethod ==='iguales'&& (
+ <div className="flex flex-col gap-4">
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold text-foreground/80 text-center">¿Entre cuántas personas?</Label>
+ <div className="grid grid-cols-6 gap-1.5">
+ {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+ <button
+ key={num}
+ type="button"onClick={() => { setPersonas(num); setSelectedPersonaIdx(null); setPaidPersonaIndexes([]); }}
+ className={cn("h-10 rounded-xl font-black text-sm transition-colors cursor-pointer",
+ personas === num ?"bg-primary text-primary-foreground":"bg-muted text-foreground/80")}
+ >
+ {num}
+ </button>
+ ))}
+ </div>
+ </div>
 
-        {!splitMethod ? (
-          <Stack gap="md" pt="md">
-            {/* Total a Dividir */}
-            <Paper
-              p="md"
-              radius="lg"
-              shadow="none"
-              style={{
-                background: 'var(--ui-primary-soft)',
-                border: '1px solid var(--ui-border-strong)',
-              }}
-            >
-              <Stack gap={2} align="center">
-                <Text size="xs" fw={700} c="myColor.8" tt="uppercase" lts={1}>
-                  Total a Dividir
-                </Text>
-                <Text size="32px" fw={900} c="myColor.9" style={{ lineHeight: 1.1 }}>
-                  ${saldoPendiente.toFixed(2)}
-                </Text>
-                {totalPagado > 0 && (
-                  <Text size="xs" c="dimmed" fw={500} mt={4}>
-                    Pagado: ${totalPagado.toFixed(2)} / Total: ${totalOriginal.toFixed(2)}
-                  </Text>
-                )}
-              </Stack>
-            </Paper>
+ <div className="flex flex-col gap-2">
+ {Array.from({ length: personas }).map((_, idx) => {
+ const isPaid = paidPersonaIndexes.includes(idx);
+ const isSelected = selectedPersonaIdx === idx;
+ return (
+ <div
+ key={idx}
+ onClick={() => !isPaid && setSelectedPersonaIdx(isSelected ? null : idx)}
+ className={cn("p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
+ isPaid ?"bg-emerald-50 border-emerald-300": isSelected ?"bg-primary/10 border-primary":"bg-card border-border")}
+ >
+ <div className="flex items-center gap-3">
+ <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isPaid ?"bg-emerald-600 text-white":"bg-muted text-foreground/80")}>
+ {isPaid ? <Check size={16} /> : idx + 1}
+ </div>
+ <div className="flex flex-col">
+ <span className="font-extrabold text-xs text-foreground">Persona {idx + 1}</span>
+ <span className="font-bold text-xs text-primary">${montoPorPersona.toFixed(2)}</span>
+ </div>
+ </div>
+ </div>
+ );
+ })}
+ </div>
+ </div>
+ )}
 
-            <Box mt="xs">
-              <Text size="xs" c="dimmed" fw={700} tt="uppercase" lts={0.5}>Métodos de división</Text>
-            </Box>
+ {splitMethod ==='monto'&& (
+ <div className="flex flex-col gap-3">
+ <Label className="text-xs font-bold text-foreground/80">Monto a Pagar</Label>
+ <Input
+ type="number"step="0.01"placeholder="0.00"value={montoCustom}
+ onChange={(e) => setMontoCustom(parseFloat(e.target.value) ||'')}
+ className="h-12 px-4 text-lg font-black"/>
+ </div>
+ )}
 
-            {/* Partes Iguales */}
-            <Paper
-              p="sm"
-              radius="lg"
-              withBorder
-              shadow="none"
-              className="tap"
-              onClick={() => selectSplitMethod('iguales')}
-              style={{
-                borderColor: 'var(--pos-border)',
-                backgroundColor: 'white',
-                cursor: 'pointer',
-                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
-              }}
-            >
-              <Group wrap="nowrap" align="center" gap="sm">
-                <ThemeIcon size={38} radius="md" variant="light" color="myColor" style={{ flexShrink: 0 }}>
-                  <Users size={20} weight="duotone" />
-                </ThemeIcon>
-                <Stack gap={0} style={{ flex: 1 }}>
-                  <Text fw={800} size="sm">Partes iguales</Text>
-                  <Text size="11px" c="dimmed" fw={500} style={{ lineHeight: 1.2 }}>
-                    Divide el saldo entre N personas por igual.
-                  </Text>
-                </Stack>
-                <ArrowRight size={16} weight="bold" color="var(--pos-text-muted)" style={{ opacity: 0.5 }} />
-              </Group>
-            </Paper>
+ {splitMethod ==='productos'&& (
+ <div className="flex flex-col gap-3">
+ <span className="text-xs font-bold text-foreground/80">Selecciona lo que deseas pagar ahora:</span>
+ <div className="flex flex-col gap-2">
+ {comandaItems.filter(item => (item.cantidad - (item.pagado_cantidad || 0)) > 0).map(item => {
+ const qtyPendiente = item.cantidad - (item.pagado_cantidad || 0);
+ const selectedQty = selectedItems.find(si => si.id === item.id)?.qtyToPay || 0;
+ return (
+ <div key={item.id} className="p-3 rounded-xl bg-muted border border-border flex items-center justify-between">
+ <div className="flex flex-col">
+ <span className="font-extrabold text-xs text-foreground">{item.nombre}</span>
+ <span className="text-[10px] text-muted-foreground font-bold">Pendientes: {qtyPendiente} • ${item.precio.toFixed(2)} c/u</span>
+ </div>
 
-            {/* Por Productos */}
-            <Paper
-              p="sm"
-              radius="lg"
-              withBorder
-              shadow="none"
-              className={hasNonProductPayments ? '' : 'tap'}
-              onClick={hasNonProductPayments ? undefined : () => selectSplitMethod('productos')}
-              style={{
-                borderColor: 'var(--pos-border)',
-                backgroundColor: hasNonProductPayments ? '#f8fafc' : 'white',
-                opacity: hasNonProductPayments ? 0.6 : 1,
-                cursor: hasNonProductPayments ? 'not-allowed' : 'pointer',
-                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
-              }}
-            >
-              <Group wrap="nowrap" align="center" gap="sm">
-                <ThemeIcon size={38} radius="md" variant="light" color="green" style={{ flexShrink: 0 }}>
-                  <Receipt size={20} weight="duotone" />
-                </ThemeIcon>
-                <Stack gap={0} style={{ flex: 1 }}>
-                  <Text fw={800} size="sm">Por productos</Text>
-                  <Text size="11px" c="dimmed" fw={500} style={{ lineHeight: 1.2 }}>
-                    {hasNonProductPayments 
-                      ? 'No disponible (ya hay pagos globales).' 
-                      : 'Elige los artículos que paga cada persona.'}
-                  </Text>
-                </Stack>
-                <ArrowRight size={16} weight="bold" color="var(--pos-text-muted)" style={{ opacity: 0.5 }} />
-              </Group>
-            </Paper>
+ <div className="flex items-center gap-2">
+ {selectedQty > 0 && (
+ <button
+ type="button"onClick={() => {
+ setSelectedItems(prev => {
+ const existing = prev.find(si => si.id === item.id);
+ if (existing && existing.qtyToPay > 1) {
+ return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay - 1 } : si);
+ }
+ return prev.filter(si => si.id !== item.id);
+ });
+ }}
+ className="w-7 h-7 rounded-lg bg-destructive/10 text-destructive font-extrabold flex items-center justify-center cursor-pointer">
+ <Minus size={14} />
+ </button>
+ )}
+ <span className="font-black text-xs w-4 text-center">{selectedQty}</span>
+ <button
+ type="button"disabled={selectedQty >= qtyPendiente}
+ onClick={() => {
+ setSelectedItems(prev => {
+ const existing = prev.find(si => si.id === item.id);
+ if (existing) {
+ return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay + 1 } : si);
+ }
+ return [...prev, { id: item.id, qtyToPay: 1 }];
+ });
+ }}
+ className="w-7 h-7 rounded-lg bg-primary text-primary-foreground font-extrabold flex items-center justify-center cursor-pointer disabled:opacity-30">
+ <Plus size={14} />
+ </button>
+ </div>
+ </div>
+ );
+ })}
+ </div>
+ </div>
+ )}
+ </>
+ )}
+ </main>
 
-            {/* Monto Fijo */}
-            <Paper
-              p="sm"
-              radius="lg"
-              withBorder
-              shadow="none"
-              className="tap"
-              onClick={() => selectSplitMethod('monto')}
-              style={{
-                borderColor: 'var(--pos-border)',
-                backgroundColor: 'white',
-                cursor: 'pointer',
-                transition: 'transform var(--ease-fast), opacity var(--ease-fast), background-color var(--ease-fast)',
-              }}
-            >
-              <Group wrap="nowrap" align="center" gap="sm">
-                <ThemeIcon size={38} radius="md" variant="light" color="violet" style={{ flexShrink: 0 }}>
-                  <CurrencyCircleDollar size={20} weight="duotone" />
-                </ThemeIcon>
-                <Stack gap={0} style={{ flex: 1 }}>
-                  <Text fw={800} size="sm">Monto fijo</Text>
-                  <Text size="11px" c="dimmed" fw={500} style={{ lineHeight: 1.2 }}>
-                    Registra un pago rápido por una cantidad específica.
-                  </Text>
-                </Stack>
-                <ArrowRight size={16} weight="bold" color="var(--pos-text-muted)" style={{ opacity: 0.5 }} />
-              </Group>
-            </Paper>
-          </Stack>
-        ) : (
-          <>
-            {splitMethod === 'iguales' && (
-              <Stack gap="xl">
-                <Box>
-                  <Text fw={700} mb="sm" ta="center">¿Entre cuántas personas?</Text>
-                  <SimpleGrid cols={6} spacing="xs">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                      <Button
-                        key={num}
-                        variant={personas === num ? 'filled' : 'default'}
-                        color="myColor"
-                        radius="md"
-                        size="md"
-                        h={40}
-                        p={0}
-                        style={{ fontSize: '16px', fontWeight: 900 }}
-                        onClick={() => {
-                          setPersonas(num);
-                          setSelectedPersonaIdx(null);
-                          setPaidPersonaIndexes([]);
-                        }}
-                      >
-                        {num}
-                      </Button>
-                    ))}
-                  </SimpleGrid>
-                </Box>
+ {/* Footers Fijos */}
+ {splitMethod ==='monto'&& (
+ <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
+ <button
+ type="button"disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
+ onClick={() => {
+ const montoVal = Number(montoCustom);
+ if (montoVal > 0) {
+ const label = payerName.trim() ||"Pago Parcial";
+ const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoVal, ivaPorcentaje);
+ setPreviewTicketText(text);
+ }
+ }}
+ className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
+ <Printer size={16} /> Pre-cuenta
+ </button>
+ <button
+ type="button"disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
+ onClick={() => setCobrarModalState({ monto: Number(montoCustom), label:'Pago Parcial'})}
+ className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
+ Cobrar Monto
+ </button>
+ </footer>
+ )}
 
-                <Divider variant="dashed" />
+ {splitMethod ==='iguales'&& (
+ <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
+ <button
+ type="button"disabled={selectedPersonaIdx === null}
+ onClick={() => {
+ if (selectedPersonaIdx !== null) {
+ const label = payerName.trim() ||`Persona ${selectedPersonaIdx + 1}`;
+ const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoPorPersona, ivaPorcentaje);
+ setPreviewTicketText(text);
+ }
+ }}
+ className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
+ <Printer size={16} /> Pre-cuenta
+ </button>
+ <button
+ type="button"disabled={selectedPersonaIdx === null}
+ onClick={() => {
+ if (selectedPersonaIdx !== null) {
+ const idx = selectedPersonaIdx;
+ setCobrarModalState({
+ monto: montoPorPersona,
+ label:`Persona ${idx + 1}`,
+ onSuccessCallback: () => {
+ setPaidPersonaIndexes(prev => [...prev, idx]);
+ setSelectedPersonaIdx(null);
+ }
+ });
+ }
+ }}
+ className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
+ Cobrar parte
+ </button>
+ </footer>
+ )}
 
-                <Stack gap="sm">
-                  {Array.from({ length: personas }).map((_, idx) => {
-                    const isPaid = paidPersonaIndexes.includes(idx);
-                    const isSelected = selectedPersonaIdx === idx;
-                    return (
-                      <Paper
-                        key={idx}
-                        p="md"
-                        radius="lg"
-                        withBorder
-                        bg={isSelected ? 'blue.0' : 'white'}
-                        className={`split-persona-card${isSelected ? ' split-persona-card--selected' : ''}${isPaid ? ' split-persona-card--paid' : ''}`}
-                        onClick={() => {
-                          if (!isPaid) {
-                            setSelectedPersonaIdx(isSelected ? null : idx);
-                          }
-                        }}
-                      >
-                        <Group gap="md">
-                          <ThemeIcon
-                            size={40}
-                            radius="xl"
-                            variant={isPaid ? 'filled' : isSelected ? 'filled' : 'light'}
-                            color={isPaid ? 'green' : 'blue'}
-                          >
-                            {isPaid ? <Check size={20} weight="bold" /> : <Users size={20} weight="bold" />}
-                          </ThemeIcon>
-                          <Box>
-                            <Text fw={700} c={isPaid ? 'green.8' : 'var(--pos-text)'}>
-                              Persona {idx + 1}
-                            </Text>
-                            <Text size="sm" fw={800} c={isPaid ? 'green.9' : 'blue.9'}>
-                              ${montoPorPersona.toFixed(2)}
-                            </Text>
-                          </Box>
-                        </Group>
-                        {isPaid ? (
-                          <Badge color="green" variant="light" size="lg" radius="md">
-                            Pagado
-                          </Badge>
-                        ) : isSelected ? (
-                          <Badge color="myColor" variant="filled" size="lg" radius="md">
-                            Seleccionado
-                          </Badge>
-                        ) : (
-                          <Badge color="gray" variant="light" size="lg" radius="md">
-                            Pendiente
-                          </Badge>
-                        )}
-                      </Paper>
-                    );
-                  })}
-                </Stack>
-              </Stack>
-            )}
+ {splitMethod ==='productos'&& selectedItems.length > 0 && (
+ <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
+ <button
+ type="button"onClick={() => {
+ const label = payerName.trim() ||"Cuenta por Productos";
+ const itemsMapeados = selectedItems.map(si => {
+ const item = comandaItems.find(i => i.id === si.id);
+ return { ...item, qtyToPay: si.qtyToPay };
+ });
+ const text = generarPrecuentaDividida(activeComanda, itemsMapeados, selectedMesa.nombre, label, totalesSeleccionados.total, ivaPorcentaje);
+ setPreviewTicketText(text);
+ }}
+ className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+ <Printer size={16} /> Pre-cuenta
+ </button>
+ <button
+ type="button"onClick={() => setCobrarModalState({ monto: totalesSeleccionados.total, label:'Pago de Productos', itemsPagados: selectedItems })}
+ className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer shadow-xs">
+ Cobrar (${totalesSeleccionados.total.toFixed(2)})
+ </button>
+ </footer>
+ )}
 
-            {splitMethod === 'monto' && (
-              <Stack gap="xl">
-                <Box>
-                  <Paper p="sm" mb="sm" radius="md" withBorder shadow="none" style={{ backgroundColor: 'var(--mantine-color-myColor-0)' }}>
-                    <Group justify="space-between">
-                      <Text fw={700} size="xs" tt="uppercase" c="myColor.8">Total de la cuenta</Text>
-                      <Text fw={900} size="lg" c="myColor.9">${saldoPendiente.toFixed(2)}</Text>
-                    </Group>
-                  </Paper>
-                  <NumberInput
-                    label="Monto a Pagar"
-                    description="Ingresa el valor y registra el pago directo"
-                    placeholder="0.00"
-                    size="xl"
-                    radius="md"
-                    prefix="$"
-                    decimalScale={2}
-                    fixedDecimalScale
-                    hideControls
-                    value={montoCustom}
-                    onChange={(val) => setMontoCustom(val === '' ? '' : Number(val))}
-                    max={saldoPendiente}
-                    styles={{ input: { fontSize: '24px', fontWeight: 900, height: '60px' } }}
-                  />
-                </Box>
-              </Stack>
-            )}
+ {/* Modal de cobro */}
+ {cobrarModalState && (
+ <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
+ <div className="bg-card rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col gap-4">
+ <h3 className="font-extrabold text-base text-foreground">Cobrar e Imprimir</h3>
+ <div className="p-4 rounded-xl bg-muted border border-border text-center flex flex-col gap-0.5">
+ <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monto</span>
+ <span className="font-black text-2xl text-emerald-600">${cobrarModalState.monto.toFixed(2)}</span>
+ </div>
+ <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+ <button
+ type="button"onClick={() => setCobrarModalState(null)}
+ className="px-4 py-2 rounded-lg bg-muted text-foreground/80 font-bold text-xs cursor-pointer">
+ Cancelar
+ </button>
+ <button
+ type="button"onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.itemsPagados, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
+ className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs cursor-pointer shadow-xs">
+ Cobrar e Imprimir
+ </button>
+ </div>
+ </div>
+ </div>
+ )}
 
-            {splitMethod === 'productos' && (
-              <Stack gap="xl">
-                <Box>
-                  <Text fw={700} mb="xs">Selecciona lo que deseas pagar ahora:</Text>
-                  <Stack gap="xs">
-                    {comandaItems.filter(item => (item.cantidad - (item.pagado_cantidad || 0)) > 0).map(item => {
-                      const qtyPendiente = item.cantidad - (item.pagado_cantidad || 0);
-                      const selectedQty = selectedItems.find(si => si.id === item.id)?.qtyToPay || 0;
-                      const isFullySelected = selectedQty >= qtyPendiente;
-                      
-                      return (
-                        <Paper key={item.id} p="sm" radius="md" withBorder shadow="none" bg="white" style={{ opacity: isFullySelected ? 0.6 : 1 }}>
-                          <Group justify="space-between">
-                            <Box>
-                              <Text fw={600} size="sm">{item.nombre}</Text>
-                              <Text size="xs" c="dimmed">Pendientes: {qtyPendiente} • ${item.precio.toFixed(2)} c/u</Text>
-                            </Box>
-                            
-                            <Group gap="xs">
-                              {selectedQty > 0 && (
-                                <ActionIcon 
-                                  variant="light" 
-                                  color="red"
-                                  onClick={() => {
-                                    setSelectedItems(prev => {
-                                      const existing = prev.find(si => si.id === item.id);
-                                      if (existing && existing.qtyToPay > 1) {
-                                        return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay - 1 } : si);
-                                      }
-                                      return prev.filter(si => si.id !== item.id);
-                                    });
-                                  }}
-                                >
-                                  -
-                                </ActionIcon>
-                              )}
-                              <Text fw={700} w={20} ta="center">{selectedQty}</Text>
-                              <ActionIcon 
-                                variant="light" 
-                                color="myColor"
-                                disabled={isFullySelected}
-                                onClick={() => {
-                                  setSelectedItems(prev => {
-                                    const existing = prev.find(si => si.id === item.id);
-                                    if (existing) {
-                                      return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay + 1 } : si);
-                                    }
-                                    return [...prev, { id: item.id, qtyToPay: 1 }];
-                                  });
-                                }}
-                              >
-                                +
-                              </ActionIcon>
-                            </Group>
-                          </Group>
-                        </Paper>
-                      );
-                    })}
-                  </Stack>
-                </Box>
-              </Stack>
-            )}
-          </>
-        )}
-      </ScrollArea>
-
-      {/* Footer Fijo para Monto Fijo */}
-      {splitMethod === 'monto' && (
-        <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)', backgroundColor: 'white' }}>
-          <Stack gap="sm">
-            <Group grow gap="sm">
-              <Button
-                size="lg"
-                radius="md"
-                color="orange"
-                variant="light"
-                leftSection={<Printer size={20} />}
-                disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
-                onClick={() => {
-                  const montoVal = Number(montoCustom);
-                  if (montoVal > 0) {
-                    const label = payerName.trim() || "Pago Parcial";
-                    const text = generarPrecuentaDividida(
-                      activeComanda,
-                      [],
-                      selectedMesa.nombre,
-                      label,
-                      montoVal,
-                      ivaPorcentaje
-                    );
-                    setPreviewTicketText(text);
-                  }
-                }}
-              >
-                Pre-cuenta
-              </Button>
-              <Button
-                size="lg"
-                radius="md"
-                color="green"
-                disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
-                onClick={() => {
-                  setCobrarModalState({
-                    monto: Number(montoCustom),
-                    label: 'Pago Parcial (Monto Fijo)'
-                  });
-                }}
-              >
-                Cobrar Monto
-              </Button>
-            </Group>
-          </Stack>
-        </Box>
-      )}
-
-      {/* Footer Fijo para Partes Iguales */}
-      {splitMethod === 'iguales' && (
-        <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)', backgroundColor: 'white' }}>
-          <Stack gap="sm">
-            <Group grow gap="sm">
-              <Button
-                size="lg"
-                radius="md"
-                color="orange"
-                variant="light"
-                leftSection={<Printer size={20} />}
-                disabled={selectedPersonaIdx === null}
-                onClick={() => {
-                  if (selectedPersonaIdx !== null) {
-                    const label = payerName.trim() || `Persona ${selectedPersonaIdx + 1}`;
-                    const text = generarPrecuentaDividida(
-                      activeComanda,
-                      [],
-                      selectedMesa.nombre,
-                      label,
-                      montoPorPersona,
-                      ivaPorcentaje
-                    );
-                    setPreviewTicketText(text);
-                  }
-                }}
-              >
-                Pre-cuenta
-              </Button>
-              <Button
-                size="lg"
-                radius="md"
-                color="green"
-                disabled={selectedPersonaIdx === null}
-                onClick={() => {
-                  if (selectedPersonaIdx !== null) {
-                    const idx = selectedPersonaIdx;
-                    setCobrarModalState({
-                      monto: montoPorPersona,
-                      label: `Persona ${idx + 1}`,
-                      onSuccessCallback: () => {
-                        setPaidPersonaIndexes(prev => [...prev, idx]);
-                        setSelectedPersonaIdx(null);
-                      }
-                    });
-                  }
-                }}
-              >
-                Cobrar parte
-              </Button>
-            </Group>
-          </Stack>
-        </Box>
-      )}
-
-      {/* Footer Fijo para Selección por Productos */}
-      {splitMethod === 'productos' && selectedItems.length > 0 && (
-        <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)', backgroundColor: 'white' }}>
-          <Box p="md" style={{ borderRadius: '16px', border: '1px solid var(--pos-border)', backgroundColor: 'var(--ui-primary-soft)' }}>
-            <Text fw={700} size="sm" mb="sm">Ticket Actual</Text>
-            <Stack gap={4}>
-              {selectedItems.map(si => {
-                const item = comandaItems.find(i => i.id === si.id);
-                if (!item) return null;
-                return (
-                  <Group key={si.id} justify="space-between">
-                    <Text size="xs" fw={600}>{si.qtyToPay}x {item.nombre}</Text>
-                    <Text size="xs" fw={700}>${(item.precio * si.qtyToPay).toFixed(2)}</Text>
-                  </Group>
-                );
-              })}
-              <Divider my={8} />
-              <Group justify="space-between">
-                <Text fw={800} size="sm">TOTAL A COBRAR</Text>
-                <Text fw={900} size="lg" c="myColor">
-                  ${totalesSeleccionados.total.toFixed(2)}
-                </Text>
-              </Group>
-              <Group grow mt="sm" gap="sm">
-                <Button 
-                  size="lg" 
-                  radius="md" 
-                  color="orange" 
-                  variant="light"
-                  leftSection={<Printer size={20} />}
-                  onClick={() => {
-                    if (selectedItems.length > 0) {
-                      const label = payerName.trim() || "Cuenta por Productos";
-                      const itemsMapeados = selectedItems.map(si => {
-                        const item = comandaItems.find(i => i.id === si.id);
-                        return {
-                          ...item,
-                          qtyToPay: si.qtyToPay
-                        };
-                      });
-                      const text = generarPrecuentaDividida(
-                        activeComanda,
-                        itemsMapeados,
-                        selectedMesa.nombre,
-                        label,
-                        totalesSeleccionados.total,
-                        ivaPorcentaje
-                      );
-                      setPreviewTicketText(text);
-                    }
-                  }}
-                >
-                  Pre-cuenta
-                </Button>
-                <Button 
-                  size="lg" 
-                  radius="md" 
-                  color="green" 
-                  onClick={() => {
-                    setCobrarModalState({
-                      monto: totalesSeleccionados.total,
-                      label: 'Pago de Productos Seleccionados',
-                      itemsPagados: selectedItems
-                    });
-                  }}
-                >
-                  Cobrar Lista
-                </Button>
-              </Group>
-            </Stack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Modal de Cobro Unificado e Impresión */}
-      <Modal
-        opened={cobrarModalState !== null}
-        onClose={() => {
-          setCobrarModalState(null);
-        }}
-        title={<Text size="lg" fw={800}>Cobrar e Imprimir</Text>}
-        centered
-        radius="lg"
-        padding="xl"
-        zIndex={2000}
-      >
-        {cobrarModalState !== null && (
-          <Stack gap="md">
-            <Box p="md" style={{ borderRadius: '12px', border: '1px solid var(--pos-border)', backgroundColor: 'rgba(0,0,0,0.02)' }}>
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase">Monto a Cobrar ({cobrarModalState.label})</Text>
-              <Text fw={900} size="28px" c="green.9" mt={4}>
-                ${cobrarModalState.monto.toFixed(2)}
-              </Text>
-            </Box>
-
-            <Text size="sm" c="dimmed" style={{ lineHeight: 1.5 }}>
-              Se registrará el pago en el sistema local y se imprimirá el comprobante correspondiente. La transacción financiera se procesa de forma externa.
-            </Text>
-
-            <Stack gap="sm" mt="md">
-              <Button
-                size="lg"
-                radius="md"
-                color="green"
-                leftSection={<Printer size={20} />}
-                onClick={() => {
-                  procesarPagoSimple(
-                    cobrarModalState.monto,
-                    cobrarModalState.itemsPagados,
-                    cobrarModalState.label,
-                    cobrarModalState.onSuccessCallback,
-                    payerName
-                  );
-                }}
-              >
-                Cobrar e Imprimir
-              </Button>
-              <Button variant="light" color="gray" size="lg" radius="md" onClick={() => {
-                setCobrarModalState(null);
-              }}>
-                Cancelar
-              </Button>
-            </Stack>
-          </Stack>
-        )}
-      </Modal>
-
-      <TicketPreviewModal
-        opened={previewTicketText !== null}
-        onClose={() => setPreviewTicketText(null)}
-        title="Previsualización de Ticket"
-        content={previewTicketText || ''}
-      />
-    </Box>
-  );
+ <TicketPreviewModal
+ opened={previewTicketText !== null}
+ onClose={() => setPreviewTicketText(null)}
+ title="Precuenta Dividida"content={previewTicketText ||''}
+ />
+ </div>
+ );
 }

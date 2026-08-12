@@ -60,6 +60,7 @@ export interface RxComanda {
   factura_nota?: string
   confirmada: boolean
   confirmada_at?: string
+  cantidades_snapshot?: string | null
   total: number
   personas?: number
   created_at: string
@@ -83,6 +84,12 @@ export interface RxComandaItem {
   es_bebida?: boolean | null
   estado: ComandaItemEstado
   pagado_cantidad?: number
+  // Cantidad del item que se decidió no cobrar (cortesía / error de cocina /
+  // descuento puntual), con motivo obligatorio para trazabilidad. Se resta
+  // del total a cobrar en el checkout, pero el item sigue apareciendo en el
+  // detalle de la comanda tal como se sirvió.
+  cortesia_cantidad?: number | null
+  cortesia_motivo?: string | null
   created_at?: string
   updated_at: string
   organization_id: string
@@ -210,6 +217,8 @@ export interface RxMenuItem {
   _modified: string
 }
 
+export type TipoCliente = 'persona_natural' | 'juridico' | 'extranjero' | 'agencia'
+
 export interface RxCliente {
   id: string
   nombre: string
@@ -218,6 +227,13 @@ export interface RxCliente {
   direccion?: string
   dni?: string
   notas?: string
+  tipo_cliente?: TipoCliente
+  // Datos de facturación (pueden ser distintos al nombre del cliente)
+  nombre_factura?: string
+  tipo_doc?: 'cedula' | 'ruc' | 'pasaporte' | 'otro'
+  numero_doc?: string
+  direccion_fiscal?: string
+  email_factura?: string
   created_at: string
   organization_id: string
   _deleted: boolean
@@ -228,11 +244,188 @@ export interface RxPago {
   id: string
   comanda_id: string
   monto: number
-  metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'otros'
+  // Nullable: null/undefined mientras metodo_definido es false. Mesas ya no
+  // elige método al cerrar — se define después, al anclar en Centro de Ventas.
+  metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'otros' | null
+  metodo_definido?: boolean
   fecha: string
   tipo_division?: string
   factura_nro?: string
   factura_nota?: string
+  // Quién cobró (id de usuario/mesero) — capturado al momento del cobro rápido.
+  usuario_id?: string
+  // Detalle de comprobante: se completa después, en el anclaje desde Centro de
+  // Ventas, no en el momento del cobro (para no interrumpir el servicio).
+  tarjeta_red?: string
+  transferencia_banco?: string
+  transferencia_referencia?: string
+  anclado?: boolean
+  anclado_at?: string
+  anclado_por?: string
+  // Anulación: el cobro nunca debió contar (error, duplicado). Se excluye de
+  // los totales pero NO se borra — sigue visible con su motivo.
+  anulado?: boolean
+  anulado_motivo?: string
+  anulado_at?: string
+  anulado_por?: string
+  // Reembolso: el cobro fue real pero se devolvió total o parcialmente
+  // después (cancelación/cambio de fecha en reservas de hotel). No anula la
+  // transacción — solo resta del total efectivo. Una sola vez por cobro.
+  monto_reembolsado?: number
+  reembolso_motivo?: string
+  reembolso_at?: string
+  reembolso_por?: string
+  // 3er check de estado en Centro de Ventas: conciliación con número de
+  // factura del sistema contable externo. Independiente del anclaje.
+  facturado?: boolean
+  numero_factura?: string
+  facturado_at?: string
+  facturado_por?: string
+  // Comprobante adjunto (foto/PDF) subido a Supabase Storage — solo se
+  // guarda la URL pública, nunca el binario, en RxDB.
+  comprobante_url?: string
+  organization_id: string
+  _deleted: boolean
+  _modified: string
+}
+
+// 'pago_credito': liquidación (total o parcial) de un cobro tipo 'credito'
+// existente — ver `credito_id`. Es un cobro_reserva más, con método de pago
+// real (nunca 'credito_agencia'), que resta del saldo pendiente del crédito
+// original sin modificarlo ni borrarlo (mismo espíritu que reembolso: se
+// suma un movimiento nuevo, no se edita el histórico).
+export type TipoCobroReserva = 'anticipo' | 'pago_total' | 'credito' | 'pago_credito'
+
+// Cobro asociado a una reserva de hotel (anticipo, pago total o crédito de
+// agencia). Separado de `pagos` porque las reservas no tienen comanda propia
+// al momento de cobrar el anticipo. Mismo patrón de "registro rápido +
+// anclaje" que RxPago.
+export interface RxCobroReserva {
+  id: string
+  reserva_id: string
+  cliente_id?: string
+  monto: number
+  metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'credito_agencia' | 'otros'
+  tipo: TipoCobroReserva
+  // Solo presente cuando tipo='pago_credito': id del cobro_reserva
+  // tipo='credito' que esta liquidación está pagando. Permite varias
+  // liquidaciones parciales apuntando al mismo crédito.
+  credito_id?: string
+  tarjeta_red?: string
+  transferencia_banco?: string
+  transferencia_referencia?: string
+  fecha: string
+  usuario_id?: string
+  // Metadatos opcionales de contexto (fechas de estadía y descripción libre),
+  // visibles para cualquier tipo de transacción, no solo hotel.
+  check_in?: string
+  check_out?: string
+  descripcion?: string
+  anclado?: boolean
+  anclado_at?: string
+  anclado_por?: string
+  // Ver comentario equivalente en RxPago: anular = nunca debió contar;
+  // reembolsar = fue real pero se devolvió (común en cambios de fecha o
+  // cancelaciones de reserva de hotel).
+  anulado?: boolean
+  anulado_motivo?: string
+  anulado_at?: string
+  anulado_por?: string
+  monto_reembolsado?: number
+  reembolso_motivo?: string
+  reembolso_at?: string
+  reembolso_por?: string
+  // 3er check de estado en Centro de Ventas: conciliación con número de
+  // factura del sistema contable externo. Independiente del anclaje.
+  facturado?: boolean
+  numero_factura?: string
+  facturado_at?: string
+  facturado_por?: string
+  // Comprobante adjunto (foto/PDF) subido a Supabase Storage — solo se
+  // guarda la URL pública, nunca el binario, en RxDB.
+  comprobante_url?: string
+  organization_id: string
+  _deleted: boolean
+  _modified: string
+}
+
+// Las 4 vías de cobro del negocio como origen fijo de una venta.
+// De dónde sale la venta.
+export type VentaOrigen = 'mesa' | 'reserva_restaurante' | 'reserva_hotel'
+// Cómo se cobra — independiente del origen: cualquier origen puede ser
+// directa (se cobra al momento) o crédito (queda pendiente, se liquida
+// después contra una agencia/empresa corporativa).
+export type VentaTipo = 'directa' | 'credito'
+
+export type VentaMovimientoTipo = 'ajuste' | 'pago' | 'reembolso' | 'anclar' | 'facturar' | 'anular' | 'marcar_credito' | 'comentario'
+
+// Un evento inmutable en el historial de una venta — nunca se edita, solo
+// se agregan más. 'ajuste' con monto positivo es cómo nace el monto total
+// de la venta (la creación inicial es su primer ajuste). 'marcar_credito'
+// registra el paso de tipo='directa' a tipo='credito' (ej. una venta
+// operativa que termina facturándose a una agencia/empresa) — de una sola
+// vía, no existe el movimiento inverso: si se marcó por error, se anula la
+// venta y se crea una nueva en vez de revertir el historial. Embebido
+// dentro de RxVenta.movimientos (no colección propia): RxDB community
+// limita a 13 colecciones locales simultáneas, así que el historial vive
+// como array dentro del mismo documento en vez de una tabla de detalle
+// separada.
+export interface RxVentaMovimiento {
+  id: string
+  tipo: VentaMovimientoTipo
+  // Presente en ajuste/pago/reembolso; ausente en anclar/facturar/anular.
+  monto?: number
+  metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'credito_agencia' | 'otros'
+  tarjeta_red?: string
+  transferencia_banco?: string
+  transferencia_referencia?: string
+  motivo?: string
+  numero_factura?: string
+  comprobante_url?: string
+  fecha: string
+  usuario_id?: string
+  // Única excepción al "nunca se edita, solo se agrega": anular un
+  // movimiento puntual (se cargó mal un dato) reescribe ESTE campo sobre el
+  // movimiento existente — el registro nunca se borra ni se toca en nada
+  // más (monto, motivo, fecha quedan intactos como evidencia), solo se
+  // excluye de los cálculos derivados (ver useVentasConMovimientos).
+  anulado?: boolean
+  anulado_motivo?: string
+  anulado_at?: string
+  anulado_por?: string
+}
+
+// Venta: unidad de negocio (Centro de Ventas v2). Reemplaza el enfoque de
+// RxPago/RxCobroReserva como "pago único inmutable" — la venta es identidad
+// + origen + un array de movimientos embebidos. Su monto total, saldo y
+// estado (anclado/facturado/anulado) se derivan sumando/inspeccionando
+// `movimientos`, nunca son campos propios. Así una venta puede aumentar
+// (ajuste), pagarse en partes (pago), reembolsarse (reembolso) o cambiar de
+// estado — todo trazable con fecha, en vez de flags sueltos sobre un monto
+// fijo. RxDB no soporta bien mutar sub-arrays vía update parcial con
+// conflictos concurrentes, pero el volumen de movimientos por venta es bajo
+// (decenas, no miles) así que reescribir el array completo en cada
+// `agregarVentaMovimiento` es aceptable.
+export interface RxVenta {
+  id: string
+  origen: VentaOrigen
+  tipo: VentaTipo
+  cliente_id?: string
+  // Nombre libre cuando no hay cliente_id (comanda.cliente texto libre,
+  // huésped de hotel escrito a mano, etc.)
+  cliente_nombre?: string
+  // Descripción visible en la lista: "Mesa 3 · #45", "Reserva de hotel — Juan Pérez"...
+  referencia?: string
+  // Vínculo opcional al origen real cuando existe (comanda_id de Mesas).
+  comanda_id?: string
+  // Documento de la venta en sí (factura, confirmación de reserva, etc.) —
+  // distinto del comprobante de cada movimiento (RxVentaMovimiento.comprobante_url,
+  // que es el respaldo de un pago/ajuste/reembolso puntual).
+  documento_url?: string
+  documento_nombre?: string
+  movimientos: RxVentaMovimiento[]
+  created_at: string
+  usuario_id?: string
   organization_id: string
   _deleted: boolean
   _modified: string
@@ -335,7 +528,7 @@ const comandaSchema = {
 } as const
 
 const comandaItemSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -349,6 +542,8 @@ const comandaItemSchema = {
     nota: { type: ['string', 'null'] },
     estado: { type: 'string', enum: ['pendiente', 'listo'] },
     pagado_cantidad: { type: ['number', 'null'] },
+    cortesia_cantidad: { type: ['number', 'null'] },
+    cortesia_motivo: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -482,7 +677,7 @@ const menuItemSchema = {
 } as const
 
 const clienteSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -493,34 +688,185 @@ const clienteSchema = {
     direccion: { type: ['string', 'null'] },
     dni: { type: ['string', 'null'] },
     notas: { type: ['string', 'null'] },
+    tipo_cliente: { type: ['string', 'null'], enum: ['persona_natural', 'juridico', 'extranjero', 'agencia', null] },
+    nombre_factura: { type: ['string', 'null'] },
+    tipo_doc: { type: ['string', 'null'] },
+    numero_doc: { type: ['string', 'null'] },
+    direccion_fiscal: { type: ['string', 'null'] },
+    email_factura: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
   },
   required: ['id', 'nombre', 'created_at', 'organization_id', '_deleted', '_modified'],
-  indexes: ['nombre', 'organization_id', '_modified']
+  indexes: ['nombre', 'organization_id', '_modified'],
 } as const
 
 const pagoSchema = {
-  version: 0,
+  version: 6,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: { type: 'string', maxLength: 100 },
     comanda_id: { type: 'string' },
     monto: { type: 'number' },
-    metodo_pago: { type: 'string', enum: ['efectivo', 'tarjeta', 'transferencia', 'otros'] },
+    // Nullable: al cerrar la mesa en Mesas ya no se elige método — llega
+    // "pendiente de definir" y se completa al anclar en Centro de Ventas.
+    // No es un método más del enum, es la ausencia de definición.
+    metodo_pago: { type: ['string', 'null'], enum: ['efectivo', 'tarjeta', 'transferencia', 'otros', null] },
+    // No-nullable (indexable): true una vez que se eligió el método real.
+    metodo_definido: { type: 'boolean' },
     fecha: { type: 'string' },
     tipo_division: { type: 'string' },
     factura_nro: { type: 'string' },
     factura_nota: { type: 'string' },
+    usuario_id: { type: ['string', 'null'] },
+    tarjeta_red: { type: ['string', 'null'] },
+    transferencia_banco: { type: ['string', 'null'] },
+    transferencia_referencia: { type: ['string', 'null'] },
+    // No-nullable: RxDB no permite indexar campos con tipo ['boolean','null'].
+    // Default false vía migrationStrategy para los pagos existentes.
+    anclado: { type: 'boolean' },
+    anclado_at: { type: ['string', 'null'] },
+    anclado_por: { type: ['string', 'null'] },
+    anulado: { type: 'boolean' },
+    anulado_motivo: { type: ['string', 'null'] },
+    anulado_at: { type: ['string', 'null'] },
+    anulado_por: { type: ['string', 'null'] },
+    monto_reembolsado: { type: 'number' },
+    reembolso_motivo: { type: ['string', 'null'] },
+    reembolso_at: { type: ['string', 'null'] },
+    reembolso_por: { type: ['string', 'null'] },
+    // 3er check de estado en Centro de Ventas: número de factura con el que
+    // se concilió esta transacción contra el sistema contable externo.
+    // No-nullable (indexable): true una vez que se registró la factura.
+    facturado: { type: 'boolean' },
+    numero_factura: { type: ['string', 'null'] },
+    facturado_at: { type: ['string', 'null'] },
+    facturado_por: { type: ['string', 'null'] },
+    // Comprobante adjunto (foto/PDF), subido a Supabase Storage — solo se
+    // guarda la URL pública. No se indexa: opcional y no se filtra por él.
+    comprobante_url: { type: ['string', 'null'] },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
   },
-  required: ['id', 'comanda_id', 'monto', 'metodo_pago', 'fecha', 'organization_id', '_deleted', '_modified'],
-  indexes: ['comanda_id', 'fecha', 'organization_id', '_modified']
+  required: ['id', 'comanda_id', 'monto', 'fecha', 'metodo_definido', 'anclado', 'anulado', 'monto_reembolsado', 'facturado', 'organization_id', '_deleted', '_modified'],
+  // metodo_pago no se indexa: es nullable ahora (RxDB no permite indexar
+  // campos nullable). Se filtra por metodo_definido en su lugar.
+  indexes: ['comanda_id', 'fecha', 'organization_id', '_modified', 'metodo_definido', 'anclado', 'anulado', 'facturado']
+} as const
+
+const cobroReservaSchema = {
+  version: 6,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    reserva_id: { type: 'string' },
+    cliente_id: { type: ['string', 'null'] },
+    monto: { type: 'number' },
+    metodo_pago: { type: 'string', enum: ['efectivo', 'tarjeta', 'transferencia', 'credito_agencia', 'otros'] },
+    tipo: { type: 'string', enum: ['anticipo', 'pago_total', 'credito', 'pago_credito'] },
+    // Solo en tipo='pago_credito': id del cobro_reserva tipo='credito' que
+    // se está liquidando (total o parcialmente).
+    credito_id: { type: ['string', 'null'] },
+    tarjeta_red: { type: ['string', 'null'] },
+    transferencia_banco: { type: ['string', 'null'] },
+    transferencia_referencia: { type: ['string', 'null'] },
+    fecha: { type: 'string' },
+    usuario_id: { type: ['string', 'null'] },
+    check_in: { type: ['string', 'null'] },
+    check_out: { type: ['string', 'null'] },
+    descripcion: { type: ['string', 'null'] },
+    // No-nullable: mismo motivo que en pagoSchema (RxDB no indexa campos nullable).
+    anclado: { type: 'boolean' },
+    anclado_at: { type: ['string', 'null'] },
+    anclado_por: { type: ['string', 'null'] },
+    anulado: { type: 'boolean' },
+    anulado_motivo: { type: ['string', 'null'] },
+    anulado_at: { type: ['string', 'null'] },
+    anulado_por: { type: ['string', 'null'] },
+    monto_reembolsado: { type: 'number' },
+    reembolso_motivo: { type: ['string', 'null'] },
+    reembolso_at: { type: ['string', 'null'] },
+    reembolso_por: { type: ['string', 'null'] },
+    // 3er check de estado en Centro de Ventas: número de factura con el que
+    // se concilió esta transacción contra el sistema contable externo.
+    facturado: { type: 'boolean' },
+    numero_factura: { type: ['string', 'null'] },
+    facturado_at: { type: ['string', 'null'] },
+    facturado_por: { type: ['string', 'null'] },
+    // Comprobante adjunto (foto/PDF), subido a Supabase Storage — solo se
+    // guarda la URL pública. No se indexa: opcional y no se filtra por él.
+    comprobante_url: { type: ['string', 'null'] },
+    organization_id: { type: 'string' },
+    _deleted: { type: 'boolean' },
+    _modified: { type: 'string' }
+  },
+  required: ['id', 'reserva_id', 'monto', 'metodo_pago', 'tipo', 'fecha', 'anclado', 'anulado', 'monto_reembolsado', 'facturado', 'organization_id', '_deleted', '_modified'],
+  // cliente_id no se indexa: es opcional (['string','null']) y RxDB no permite
+  // indexar campos nullable. El filtro por cliente se hace en memoria sobre
+  // la suscripción completa (ver useRxCobrosReserva + CobrosTab).
+  indexes: ['reserva_id', 'fecha', 'organization_id', '_modified', 'anclado', 'facturado']
+} as const
+
+// Sub-esquema embebido — un movimiento dentro de RxVenta.movimientos.
+// No es colección propia (ver comentario en RxVentaMovimiento).
+const ventaMovimientoSubSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    tipo: { type: 'string', enum: ['ajuste', 'pago', 'reembolso', 'anclar', 'facturar', 'anular', 'marcar_credito', 'comentario'] },
+    monto: { type: ['number', 'null'] },
+    metodo_pago: { type: ['string', 'null'], enum: ['efectivo', 'tarjeta', 'transferencia', 'credito_agencia', 'otros', null] },
+    tarjeta_red: { type: ['string', 'null'] },
+    transferencia_banco: { type: ['string', 'null'] },
+    transferencia_referencia: { type: ['string', 'null'] },
+    motivo: { type: ['string', 'null'] },
+    numero_factura: { type: ['string', 'null'] },
+    comprobante_url: { type: ['string', 'null'] },
+    fecha: { type: 'string' },
+    usuario_id: { type: ['string', 'null'] },
+    anulado: { type: ['boolean', 'null'] },
+    anulado_motivo: { type: ['string', 'null'] },
+    anulado_at: { type: ['string', 'null'] },
+    anulado_por: { type: ['string', 'null'] }
+  },
+  required: ['id', 'tipo', 'fecha']
+} as const
+
+const ventaSchema = {
+  version: 4,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: { type: 'string', maxLength: 100 },
+    // De dónde sale la venta.
+    origen: { type: 'string', enum: ['mesa', 'reserva_restaurante', 'reserva_hotel'] },
+    // Cómo se cobra — independiente del origen (ver comentario en RxVenta).
+    tipo: { type: 'string', enum: ['directa', 'credito'] },
+    cliente_id: { type: ['string', 'null'] },
+    cliente_nombre: { type: ['string', 'null'] },
+    referencia: { type: ['string', 'null'] },
+    comanda_id: { type: ['string', 'null'] },
+    // Documento de la venta (factura, confirmación de reserva) — distinto
+    // del comprobante por movimiento (ver ventaMovimientoSubSchema).
+    documento_url: { type: ['string', 'null'] },
+    documento_nombre: { type: ['string', 'null'] },
+    movimientos: { type: 'array', items: ventaMovimientoSubSchema },
+    created_at: { type: 'string' },
+    usuario_id: { type: ['string', 'null'] },
+    organization_id: { type: 'string' },
+    _deleted: { type: 'boolean' },
+    _modified: { type: 'string' }
+  },
+  required: ['id', 'origen', 'tipo', 'movimientos', 'created_at', 'organization_id', '_deleted', '_modified'],
+  // cliente_id y comanda_id no se indexan: son opcionales (['string','null'])
+  // y RxDB no permite indexar campos nullable. El filtro por cliente/comanda
+  // se hace en memoria sobre la suscripción completa (ver useVentasConMovimientos).
+  indexes: ['organization_id', '_modified', 'origen', 'tipo']
 } as const
 
 const ajusteIvaSchema = {
@@ -569,6 +915,7 @@ export type VerticalCollections = {
   habitacion_cuentas: RxCollection<RxHabitacionCuenta>
   reservas: RxCollection<RxReserva>
   pagos: RxCollection<RxPago>
+  ventas: RxCollection<RxVenta>
   ajustes_iva: RxCollection<RxAjusteIva>
   usuarios: RxCollection<RxUsuario>
   menu_items: RxCollection<RxMenuItem>
@@ -742,6 +1089,11 @@ function itemChangeSummary(before: any, patch: Partial<RxComandaItem>) {
   if (typeof patch.nota === 'string' && patch.nota !== (before?.nota ?? '')) {
     changes.push(`nota actualizada`)
   }
+  if (typeof patch.cortesia_cantidad === 'number' && patch.cortesia_cantidad !== (before?.cortesia_cantidad ?? 0)) {
+    changes.push(patch.cortesia_cantidad > 0
+      ? `cortesía: ${patch.cortesia_cantidad} unidad(es) — ${patch.cortesia_motivo || 'sin motivo'}`
+      : 'cortesía removida')
+  }
   if (changes.length === 0) {
     return `Actualizó el ítem ${before?.nombre || before?.id || 'desconocido'}`
   }
@@ -757,7 +1109,20 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
   }))
 
   const collectionsConfig: Record<string, any> = {
-    clientes: { schema: clienteSchema },
+    clientes: {
+      schema: clienteSchema,
+      migrationStrategies: {
+        1: (oldDoc: any) => ({
+          ...oldDoc,
+          tipo_cliente: oldDoc.tipo_cliente ?? 'persona_natural',
+          nombre_factura: oldDoc.nombre_factura ?? null,
+          tipo_doc: oldDoc.tipo_doc ?? null,
+          numero_doc: oldDoc.numero_doc ?? null,
+          direccion_fiscal: oldDoc.direccion_fiscal ?? null,
+          email_factura: oldDoc.email_factura ?? null,
+        }),
+      },
+    },
     categorias: { schema: categoriaSchema },
     mesas: { schema: mesaSchema },
     comandas: {
@@ -771,11 +1136,105 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         3: (oldDoc: any) => ({ ...oldDoc, sincronizado: oldDoc.habitacion_cuenta_id ? false : null })
       }
     },
-    comanda_items: { schema: comandaItemSchema },
+    comanda_items: {
+      schema: comandaItemSchema,
+      migrationStrategies: {
+        // v0 → v1: agrega cortesía por item (cantidad no cobrada + motivo)
+        1: (oldDoc: any) => ({ ...oldDoc, cortesia_cantidad: 0, cortesia_motivo: null }),
+      }
+    },
     pisos: { schema: pisoSchema },
     habitacion_cuentas: { schema: habitacionCuentaSchema },
     reservas: { schema: reservaSchema },
-    pagos: { schema: pagoSchema },
+    pagos: {
+      schema: pagoSchema,
+      migrationStrategies: {
+        // v0 → v1: agrega campos de detalle de comprobante + trazabilidad de anclaje.
+        // Nulos por defecto: el registro rápido existente no los llenaba.
+        1: (oldDoc: any) => ({
+          ...oldDoc,
+          usuario_id: oldDoc.usuario_id ?? null,
+          tarjeta_red: oldDoc.tarjeta_red ?? null,
+          transferencia_banco: oldDoc.transferencia_banco ?? null,
+          transferencia_referencia: oldDoc.transferencia_referencia ?? null,
+          anclado: oldDoc.anclado ?? false,
+          anclado_at: oldDoc.anclado_at ?? null,
+          anclado_por: oldDoc.anclado_por ?? null,
+        }),
+        // v1 → v2: agrega anulación y reembolso.
+        2: (oldDoc: any) => ({
+          ...oldDoc,
+          anulado: oldDoc.anulado ?? false,
+          anulado_motivo: oldDoc.anulado_motivo ?? null,
+          anulado_at: oldDoc.anulado_at ?? null,
+          anulado_por: oldDoc.anulado_por ?? null,
+          monto_reembolsado: oldDoc.monto_reembolsado ?? 0,
+          reembolso_motivo: oldDoc.reembolso_motivo ?? null,
+          reembolso_at: oldDoc.reembolso_at ?? null,
+          reembolso_por: oldDoc.reembolso_por ?? null,
+        }),
+        // v2 → v3: pagos existentes ya tenían método elegido en el momento
+        // del cobro (flujo previo), así que quedan con metodo_definido=true
+        // y su metodo_pago tal cual. Solo los pagos nuevos (creados desde el
+        // checkout ya simplificado) nacen con metodo_definido=false.
+        3: (oldDoc: any) => ({
+          ...oldDoc,
+          metodo_definido: oldDoc.metodo_definido ?? (oldDoc.metodo_pago != null),
+        }),
+        // v3 → v4: bump sin cambio de datos. Fuerza reconstrucción del
+        // schema en cachés locales que quedaron con una v3 previa a la
+        // definición final (mismo caso que usuarios v2→v3 más abajo).
+        4: (oldDoc: any) => oldDoc,
+        // v4 → v5: 3er check de estado — conciliación con número de factura.
+        5: (oldDoc: any) => ({
+          ...oldDoc,
+          facturado: oldDoc.facturado ?? false,
+          numero_factura: oldDoc.numero_factura ?? (oldDoc.factura_nro || null),
+          facturado_at: oldDoc.facturado_at ?? null,
+          facturado_por: oldDoc.facturado_por ?? null,
+        }),
+        // v5 → v6: adjunto de comprobante (Centro de Ventas).
+        6: (oldDoc: any) => ({
+          ...oldDoc,
+          comprobante_url: oldDoc.comprobante_url ?? null,
+        }),
+      },
+    },
+    // cobros_reserva: retirada del registro activo de colecciones — RxDB
+    // community limita a 13 colecciones locales simultáneas y ya no recibe
+    // nuevos registros (reemplazada por `ventas`). Su tabla y datos en
+    // Supabase NO se tocan ni se borran, solo dejamos de abrirla localmente.
+    ventas: {
+      schema: ventaSchema,
+      migrationStrategies: {
+        // v0 → v1: agrega 'marcar_credito' al enum de movimientos[].tipo —
+        // passthrough, ningún documento existente usa ese valor todavía.
+        1: (oldDoc: any) => oldDoc,
+        // v1 → v2: documento de venta (factura/confirmación) — separado del
+        // comprobante por movimiento, que ya vivía en cada RxVentaMovimiento.
+        2: (oldDoc: any) => ({
+          ...oldDoc,
+          documento_url: oldDoc.documento_url ?? null,
+          documento_nombre: oldDoc.documento_nombre ?? null,
+        }),
+        // v2 → v3: agrega 'comentario' al enum de movimientos[].tipo —
+        // passthrough, ningún documento existente usa ese valor todavía.
+        3: (oldDoc: any) => oldDoc,
+        // v3 → v4: agrega anulado/anulado_motivo/anulado_at/anulado_por a
+        // cada movimiento — permite anular un movimiento puntual (se cargó
+        // mal) sin borrarlo, en vez de solo poder anular la venta entera.
+        4: (oldDoc: any) => ({
+          ...oldDoc,
+          movimientos: (oldDoc.movimientos ?? []).map((m: any) => ({
+            ...m,
+            anulado: m.anulado ?? false,
+            anulado_motivo: m.anulado_motivo ?? null,
+            anulado_at: m.anulado_at ?? null,
+            anulado_por: m.anulado_por ?? null,
+          })),
+        }),
+      },
+    },
     ajustes_iva: { schema: ajusteIvaSchema },
     usuarios: {
       schema: usuarioSchema,
@@ -828,6 +1287,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     if (!clean.updated_at) clean.updated_at = clean.created_at || new Date().toISOString()
     if (!clean.estado) clean.estado = 'pendiente'
     if (clean.pagado_cantidad === null) clean.pagado_cantidad = 0
+    if (clean.cortesia_cantidad === null || clean.cortesia_cantidad === undefined) clean.cortesia_cantidad = 0
     return clean
   }
 
@@ -854,7 +1314,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
   let pushEnabled = false
   const markInitialSyncDone = () => { pushEnabled = true }
 
-  const makePushHandler = (tableName: string, filterRow?: (doc: Record<string, unknown>) => boolean) =>
+  const makePushHandler = (tableName: string, transformRow?: (doc: Record<string, unknown>) => Record<string, unknown>) =>
     async (rows: Array<{ newDocumentState: any; assumedMasterState: any }>) => {
       if (!pushEnabled) throw new Error('push suspendido: esperando sincronización inicial')
       // Offline: no intentar push, lanzar para que RxDB reintente después
@@ -862,7 +1322,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
 
       const toUpsert = rows
         .map(r => ({ ...r.newDocumentState }))
-        .filter(doc => !filterRow || filterRow(doc))
+        .map(doc => transformRow ? transformRow(doc) : doc)
         .map(doc => stripUndefined(doc))
 
       if (toUpsert.length === 0) return []
@@ -1069,6 +1529,23 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     push: { batchSize: 100 }
   }), makePushHandler('pagos'))
 
+  const sanitizeVentaDoc = (doc: Record<string, unknown>) => {
+    const clean = { ...doc }
+    delete clean.documento_nombre
+    delete clean.documento_url
+    return clean
+  }
+
+  const ventas = patchPush(replicateSupabase({
+    ...replicaBase,
+    tableName: 'ventas',
+    client: supabase,
+    collection: db.ventas,
+    replicationIdentifier: `ventas-supabase-${orgId}`,
+    pull: { batchSize: 100, queryBuilder, modifier: stripUndefined },
+    push: { batchSize: 100 }
+  }), makePushHandler('ventas', sanitizeVentaDoc))
+
   const ajustesIva = patchPush(replicateSupabase({
     ...replicaBase,
     tableName: 'ajustes_iva',
@@ -1120,7 +1597,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     push: { batchSize: 100 }
   }), makePushHandler('menu_items'))
 
-  const allReplications = [clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ajustesIva, usuarios, menuItems]
+  const allReplications = [clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ventas, ajustesIva, usuarios, menuItems]
 
   // Espera el primer pull de TODAS las colecciones antes de habilitar el push.
   // Si el dispositivo está offline o el pull inicial falla, no bloqueamos para
@@ -1136,7 +1613,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
       markInitialSyncDone()
     })
 
-  return { clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ajustesIva, usuarios, menuItems }
+  return { clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ventas, ajustesIva, usuarios, menuItems }
 }
 
 function stopVerticalReplication() {
@@ -1725,8 +2202,18 @@ export async function createRxPago(input: Omit<RxPago, '_deleted' | '_modified'>
   const db = await initVerticalRxDb()
   const now = new Date().toISOString()
   const orgId = input.organization_id || getActiveOrgIdStrict()
+  // Si no se pasa metodo_pago, el cobro nace "pendiente de definir" (Mesas
+  // ya no elige método al cerrar). Si sí se pasa (ej. split de cuenta que
+  // aún fuerza 'efectivo'), queda como definido desde ya.
+  const metodoDefinido = input.metodo_definido ?? (input.metodo_pago != null)
   const created = await db.pagos.insert({
     ...input,
+    metodo_pago: input.metodo_pago ?? null,
+    metodo_definido: metodoDefinido,
+    anclado: input.anclado ?? false,
+    anulado: input.anulado ?? false,
+    monto_reembolsado: input.monto_reembolsado ?? 0,
+    facturado: input.facturado ?? false,
     organization_id: orgId,
     _deleted: false,
     _modified: now
@@ -1762,6 +2249,231 @@ export async function updateRxPago(id: string, patch: Partial<RxPago>) {
     after: { ...before, ...patch },
     source: 'rxdb'
   })
+  return result
+}
+
+// Borrado real (no anular) de un pago — SOLO dev mode. En producción un
+// cobro nunca se elimina, se anula (ver updateRxPago con anulado=true) para
+// conservar el rastro contable; esto es exclusivamente para limpiar
+// transacciones de prueba durante desarrollo. doc.remove() marca
+// _deleted=true, que sí se replica a Supabase (a diferencia de un remove
+// masivo por colección — ver resetLocalDatabase más abajo, ese caso es
+// distinto porque no queremos que se replique).
+export async function deleteRxPago(id: string) {
+  if (!import.meta.env.DEV) throw new Error('deleteRxPago solo está disponible en desarrollo')
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.pagos.findOne(id).exec(true)
+  const before = doc?.toJSON()
+  await doc.remove()
+  await createAuditLog({
+    entity: 'pago',
+    entityId: id,
+    action: 'delete',
+    summary: `[DEV] Se eliminó el pago ${id}`,
+    before,
+    source: 'rxdb'
+  })
+}
+
+// Crea una venta junto con su primer movimiento: un 'ajuste' por el monto
+// inicial, embebido directo en `movimientos`. Es el único punto de entrada
+// para nacer una venta — nunca se inserta una venta sin al menos un
+// movimiento, porque el monto total se deriva de los movimientos, no es un
+// campo propio.
+export async function createRxVenta(
+  ventaInput: Omit<RxVenta, '_deleted' | '_modified' | 'created_at' | 'movimientos'> & { created_at?: string },
+  montoInicial: number,
+  movimientoExtra?: Partial<Omit<RxVentaMovimiento, 'id' | 'tipo' | 'monto'>>
+) {
+  const db = await initVerticalRxDb()
+  const now = new Date().toISOString()
+  const orgId = ventaInput.organization_id || getActiveOrgIdStrict()
+
+  const primerMovimiento: RxVentaMovimiento = {
+    id: crypto.randomUUID(),
+    tipo: 'ajuste',
+    monto: montoInicial,
+    fecha: now,
+    ...movimientoExtra,
+  }
+
+  const venta = await db.ventas.insert({
+    ...ventaInput,
+    movimientos: [primerMovimiento],
+    created_at: ventaInput.created_at || now,
+    organization_id: orgId,
+    _deleted: false,
+    _modified: now
+  } as RxVenta)
+
+  await createAuditLog({
+    entity: 'venta',
+    entityId: venta.id,
+    action: 'create',
+    summary: `Se registró una venta de $${montoInicial.toFixed(2)} (${venta.origen})`,
+    after: venta.toJSON(),
+    source: 'rxdb'
+  })
+
+  return venta
+}
+
+// Actualiza campos propios de la venta (no del historial) — documento de
+// venta (factura, confirmación de reserva) y/o cliente asociado. Distinto
+// de agregarVentaMovimiento: esto edita el documento directamente, no
+// agrega un evento al historial (el cambio de cliente no es un movimiento
+// de dinero, es una corrección de datos).
+export async function updateRxVenta(id: string, patch: Partial<Pick<RxVenta, 'documento_url' | 'documento_nombre' | 'cliente_id' | 'cliente_nombre'>>) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.ventas.findOne(id).exec(true)
+  const before = doc?.toJSON()
+  const result = await doc.update({
+    $set: {
+      ...patch,
+      _modified: new Date().toISOString()
+    }
+  } as any)
+  await createAuditLog({
+    entity: 'venta',
+    entityId: id,
+    action: 'update',
+    summary: `Se actualizó la venta ${id}`,
+    before,
+    after: result.toJSON(),
+    source: 'rxdb'
+  })
+  return result
+}
+
+// Agrega un movimiento al historial de una venta existente — pago,
+// reembolso, ajuste (aumentar/disminuir el monto), o cambio de estado
+// (anclar/facturar/anular). Nunca edita movimientos previos, solo agrega al
+// array `movimientos` del documento (ver comentario en RxVenta sobre por
+// qué el historial vive embebido en vez de en colección propia).
+export async function agregarVentaMovimiento(
+  input: { venta_id: string } & Omit<RxVentaMovimiento, 'id' | 'fecha'> & { fecha?: string }
+) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.ventas.findOne(input.venta_id).exec(true)
+  const before = doc?.toJSON()
+
+  const movimiento: RxVentaMovimiento = {
+    id: crypto.randomUUID(),
+    tipo: input.tipo,
+    monto: input.monto,
+    metodo_pago: input.metodo_pago,
+    tarjeta_red: input.tarjeta_red,
+    transferencia_banco: input.transferencia_banco,
+    transferencia_referencia: input.transferencia_referencia,
+    motivo: input.motivo,
+    numero_factura: input.numero_factura,
+    comprobante_url: input.comprobante_url,
+    fecha: input.fecha || new Date().toISOString(),
+    usuario_id: input.usuario_id,
+  }
+
+  const result = await doc.update({
+    $set: {
+      movimientos: [...(before?.movimientos ?? []), movimiento],
+      // 'marcar_credito' es de una sola vía: además de quedar en el
+      // historial, actualiza el tipo de la venta para que el resto de la
+      // UI (filtros, listados) la trate como crédito de ahí en adelante.
+      ...(input.tipo === 'marcar_credito' ? { tipo: 'credito' as const } : {}),
+      _modified: new Date().toISOString()
+    }
+  } as any)
+
+  await createAuditLog({
+    entity: 'venta',
+    entityId: input.venta_id,
+    action: ['anclar', 'facturar', 'anular', 'marcar_credito'].includes(input.tipo) ? 'status_change' : 'update',
+    summary: `Movimiento '${input.tipo}' en venta ${input.venta_id}` + (input.monto != null ? ` por $${input.monto.toFixed(2)}` : ''),
+    before,
+    after: result.toJSON(),
+    source: 'rxdb'
+  })
+
+  return result
+}
+
+// Anula un movimiento puntual del historial (se cargó un dato mal) sin
+// borrarlo — única excepción al "nunca se edita, solo se agrega" del resto
+// del modelo. El movimiento queda visible con su motivo de anulación, mismo
+// espíritu que anular una venta completa: el registro nunca desaparece.
+export async function anularVentaMovimiento(ventaId: string, movimientoId: string, motivo: string, usuarioId?: string) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.ventas.findOne(ventaId).exec(true)
+  const before = doc?.toJSON()
+  const now = new Date().toISOString()
+
+  const movimientos = (before?.movimientos ?? []).map((m: any) =>
+    m.id === movimientoId
+      ? { ...m, anulado: true, anulado_motivo: motivo, anulado_at: now, anulado_por: usuarioId }
+      : m
+  )
+
+  const result = await doc.update({
+    $set: {
+      movimientos,
+      _modified: now
+    }
+  } as any)
+
+  await createAuditLog({
+    entity: 'venta',
+    entityId: ventaId,
+    action: 'status_change',
+    summary: `Se anuló el movimiento ${movimientoId} de la venta ${ventaId}: ${motivo}`,
+    before,
+    after: result.toJSON(),
+    source: 'rxdb'
+  })
+
+  return result
+}
+
+// Adjunta, reemplaza o quita (comprobanteUrl=null) el comprobante de un
+// movimiento ya existente — para cuando se olvidó subirlo al registrar el
+// pago/ajuste/reembolso original, o hace falta cargarlo de nuevo. Igual que
+// anularVentaMovimiento, es una excepción puntual al "solo agregar":
+// únicamente toca comprobante_url, el resto del movimiento queda intacto.
+// NOTA: hoy solo desvincula la URL guardada en RxDB — no borra el archivo
+// del storage real (mockup con localStorage, ver src/lib/comprobantes.ts).
+// Cuando haya un storage real, agregar aquí el borrado del objeto remoto.
+export async function adjuntarComprobanteMovimiento(ventaId: string, movimientoId: string, comprobanteUrl: string | null) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.ventas.findOne(ventaId).exec(true)
+  const before = doc?.toJSON()
+  const now = new Date().toISOString()
+
+  const movimientos = (before?.movimientos ?? []).map((m: any) =>
+    m.id === movimientoId ? { ...m, comprobante_url: comprobanteUrl } : m
+  )
+
+  const result = await doc.update({
+    $set: {
+      movimientos,
+      _modified: now
+    }
+  } as any)
+
+  await createAuditLog({
+    entity: 'venta',
+    entityId: ventaId,
+    action: 'update',
+    summary: comprobanteUrl
+      ? `Se adjuntó comprobante al movimiento ${movimientoId} de la venta ${ventaId}`
+      : `Se quitó el comprobante del movimiento ${movimientoId} de la venta ${ventaId}`,
+    before,
+    after: result.toJSON(),
+    source: 'rxdb'
+  })
+
   return result
 }
 

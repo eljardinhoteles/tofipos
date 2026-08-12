@@ -1,175 +1,141 @@
-import { useState } from 'react'
-import dayjs from 'dayjs'
-import 'dayjs/locale/es'
+import { useState } from'react';
+import dayjs from'dayjs';
+import'dayjs/locale/es';
+import { X, Calendar, User, Receipt, Bed } from'@phosphor-icons/react';
+import { type Mesa } from'../../../../db/database';
+import { showToast } from'@/lib/toast';
+import { createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
+import { Textarea } from'@/components/ui/textarea';
+import { Label } from'@/components/ui/label';
+import { Button } from'@/components/ui/button';
+import { DatePickerField } from'@/components/ui/date-picker-field';
+import { ClienteSelector } from'@/components/Common/ClienteSelector';
 
-dayjs.locale('es')
-import { Box, Stack, Group, Text, Button, ActionIcon, ScrollArea, Autocomplete, Textarea } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
-import { XIcon, CalendarIcon, UserIcon, ReceiptIcon, BedIcon } from '@phosphor-icons/react'
-import { type Mesa } from '../../../../db/database'
-import { useForm } from '@mantine/form'
-import { sileo } from 'sileo'
-import { createRxHabitacionCuenta, updateRxMesa } from '../../../../db/rxdb'
-import { useRxClientes } from '../../../../hooks/useRxClientes'
+dayjs.locale('es');
 
 export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onClose: () => void }) {
-  const [isLoading, setIsLoading] = useState(false)
-  const today = new Date().toISOString().split('T')[0]
+ const [isLoading, setIsLoading] = useState(false);
+ const [huesped, setHuesped] = useState('');
+ const [checkIn, setCheckIn] = useState(dayjs().format('YYYY-MM-DD'));
+ const [checkOut, setCheckOut] = useState('');
+ const [notas, setNotas] = useState('');
+ const [clienteSeleccionado, setClienteSeleccionado] = useState<RxCliente | null>(null);
 
-  const { clientes } = useRxClientes()
-  const clienteOptions = clientes.map(c => c.nombre)
+ const handleSubmit = async (e: React.FormEvent) => {
+ e.preventDefault();
+ if (!huesped.trim()) {
+ showToast.error('Ingresa el nombre del huésped');
+ return;
+ }
 
-  const form = useForm({
-    initialValues: {
-      huesped: '',
-      rango: [new Date(), null] as [Date | null, Date | null],
-      notas: '',
-    },
-    validate: {
-      huesped: (v) => v.trim() ? null : 'Ingresa el nombre del huésped',
-      rango: (v) => v[0] ? null : 'Selecciona al menos la fecha de entrada',
-    }
-  })
+ setIsLoading(true);
+ try {
+ const clienteMatch = clienteSeleccionado?.nombre.trim().toLowerCase() === huesped.trim().toLowerCase()
+ ? clienteSeleccionado
+ : null;
+ const cuentaId = crypto.randomUUID();
+ const now = new Date().toISOString();
 
-  const handleSubmit = async (values: typeof form.values) => {
-    setIsLoading(true)
-    try {
-      const checkIn = values.rango[0] ? dayjs(values.rango[0]).format('YYYY-MM-DD') : today
-      const checkOut = values.rango[1] ? dayjs(values.rango[1]).format('YYYY-MM-DD') : undefined
-      const clienteMatch = clientes.find(c => c.nombre.trim().toLowerCase() === values.huesped.trim().toLowerCase())
-      const cuentaId = crypto.randomUUID()
-      const now = new Date().toISOString()
+ await createRxHabitacionCuenta({
+ id: cuentaId,
+ mesa_id: selectedMesa.id,
+ huesped: huesped.trim(),
+ cliente_id: clienteMatch?.id,
+ check_in: checkIn,
+ check_out: checkOut || undefined,
+ estado:'activa',
+ notas: notas.trim() || undefined,
+ organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ created_at: now,
+ updated_at: now,
+ });
 
-      await createRxHabitacionCuenta({
-        id: cuentaId,
-        mesa_id: selectedMesa.id,
-        huesped: values.huesped.trim(),
-        cliente_id: clienteMatch?.id,
-        check_in: checkIn,
-        check_out: checkOut,
-        estado: 'activa',
-        notas: values.notas.trim() || undefined,
-        organization_id: localStorage.getItem('pos_active_org_id') || '',
-        created_at: now,
-        updated_at: now,
-      })
+ await updateRxMesa(selectedMesa.id, { estado:'ocupada'});
+ showToast.success('Cuenta abierta',`${selectedMesa.nombre} — ${huesped}`);
+ onClose();
+ } catch (error) {
+ console.error('Error al abrir cuenta:', error);
+ showToast.error('Error al abrir cuenta', error instanceof Error ? error.message :'Error desconocido');
+ } finally {
+ setIsLoading(false);
+ }
+ };
 
-      await updateRxMesa(selectedMesa.id, { estado: 'ocupada' })
-      sileo.success({ title: 'Cuenta abierta', description: `${selectedMesa.nombre} — ${values.huesped}` })
-    } catch (error) {
-      console.error('Error al abrir cuenta:', error)
-      sileo.error({ title: 'Error al abrir cuenta', description: error instanceof Error ? error.message : 'Error desconocido' })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+ return (
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-primary md:text-primary-foreground">
+ <div className="flex items-center gap-3">
+ <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-primary text-primary-foreground md:bg-primary-foreground/15">
+ <Bed size={20} weight="bold"/>
+ </div>
+ <div className="flex flex-col">
+ <h3 className="font-extrabold text-base leading-tight md:text-primary-foreground">Iniciar Cuenta</h3>
+ <span className="text-[10px] font-bold text-muted-foreground md:text-primary-foreground/70">
+ Habitación #{selectedMesa.nombre.replace(/\D/g,'') || selectedMesa.nombre}
+ </span>
+ </div>
+ </div>
 
-  return (
-    <Box h="100%" className="hab-sidebar">
-      <Box p="lg" className="hab-sidebar__header">
-        <Group justify="space-between">
-          <Group gap="md">
-            <Box className="hab-sidebar__icon hab-sidebar__icon--checkin">
-              <BedIcon size={22} weight="bold" color="white" />
-            </Box>
-            <Stack gap={0}>
-              <Text size="lg" fw={800} c="var(--pos-text)" className="hab-sidebar__title">
-                Iniciar Cuenta
-              </Text>
-              <Text size="11px" c="dimmed" fw={700} className="hab-sidebar__eyebrow">
-                Habitación #{selectedMesa.nombre.replace(/\D/g, '') || selectedMesa.nombre}
-              </Text>
-            </Stack>
-          </Group>
-          <ActionIcon variant="light" color="gray" onClick={onClose} size="lg" radius="xl" className="hab-sidebar__close-button">
-            <XIcon size={18} />
-          </ActionIcon>
-        </Group>
-      </Box>
+ <Button variant="ghost"size="icon-lg"onClick={onClose} className="rounded-xl text-muted-foreground md:text-primary-foreground">
+ <X size={18} weight="bold"/>
+ </Button>
+ </header>
 
-      <ScrollArea flex={1} p="lg">
-        <form id="checkin-form" onSubmit={form.onSubmit(handleSubmit)}>
-          <Stack gap="md">
-            <Box>
-              <Group gap="xs" mb={12}>
-                <UserIcon size={16} weight="bold" color="var(--ui-primary)" />
-                <Text size="xs" fw={700} c="dimmed" className="hab-sidebar__section-label">
-                  Nombre del huésped
-                </Text>
-              </Group>
-              <Autocomplete
-                placeholder="Buscar cliente o escribir nombre..."
-                size="lg"
-                radius="md"
-                leftSection={<UserIcon size={18} />}
-                data={clienteOptions}
-                maxDropdownHeight={300}
-                comboboxProps={{ withinPortal: true, zIndex: 10000 }}
-                classNames={{ input: 'ui-input-tokenized', dropdown: 'ui-dropdown-tokenized' }}
-                {...form.getInputProps('huesped')}
-              />
-            </Box>
+ <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+ <div className="flex flex-col gap-1">
+ <Label className="flex items-center gap-1.5">
+ <User size={14} className="text-primary"/> Nombre del huésped *
+ </Label>
+ <ClienteSelector
+ value={huesped}
+ onChange={(nombre) => {
+ setHuesped(nombre);
+ setClienteSeleccionado(null);
+ }}
+ onSelect={setClienteSeleccionado}
+ placeholder="Buscar cliente o escribir nombre..."
+ />
+ </div>
 
-            <Box>
-              <Group gap="xs" mb={12}>
-                <CalendarIcon size={16} weight="bold" color="var(--ui-primary)" />
-                <Text size="xs" fw={700} c="dimmed" className="hab-sidebar__section-label">
-                  Periodo de Estancia
-                </Text>
-              </Group>
-              <DatePickerInput
-                type="range"
-                placeholder="Check-in — Check-out"
-                size="lg"
-                radius="md"
-                leftSection={<CalendarIcon size={18} />}
-                locale="es"
-                clearable
-                minDate={new Date()}
-                classNames={{ input: 'ui-input-tokenized' }}
-                {...form.getInputProps('rango')}
-              />
-            </Box>
+ <div className="grid grid-cols-2 gap-3">
+ <div className="flex flex-col gap-1">
+ <Label className="flex items-center gap-1.5">
+ <Calendar size={14} className="text-primary"/> Check-in
+ </Label>
+ <DatePickerField
+ value={checkIn}
+ onChange={setCheckIn}
+ />
+ </div>
 
-            <Box>
-              <Group gap="xs" mb={12}>
-                <ReceiptIcon size={16} weight="bold" color="var(--ui-primary)" />
-                <Text size="xs" fw={700} c="dimmed" className="hab-sidebar__section-label">
-                  Notas / Observaciones
-                </Text>
-              </Group>
-              <Textarea
-                placeholder="Observaciones de la estancia..."
-                size="lg"
-                radius="md"
-                rows={3}
-                classNames={{ input: 'ui-input-tokenized' }}
-                {...form.getInputProps('notas')}
-              />
-            </Box>
-          </Stack>
-        </form>
-      </ScrollArea>
+ <div className="flex flex-col gap-1">
+ <Label className="flex items-center gap-1.5">
+ <Calendar size={14} className="text-primary"/> Check-out
+ </Label>
+ <DatePickerField
+ value={checkOut}
+ onChange={setCheckOut}
+ />
+ </div>
+ </div>
 
-      <Box p="lg" className="hab-sidebar__footer">
-        <Group grow gap="sm">
-          <Button
-            type="submit"
-            form="checkin-form"
-            color="myColor"
-            size="lg"
-            radius="md"
-            leftSection={<BedIcon size={18} weight="bold" />}
-            loading={isLoading}
-            fw={900}
-          >
-            Abrir Cuenta
-          </Button>
-          <Button variant="light" color="red" size="lg" radius="md" onClick={onClose} fw={800}>
-            Cancelar
-          </Button>
-        </Group>
-      </Box>
-    </Box>
-  )
+ <div className="flex flex-col gap-1">
+ <Label className="flex items-center gap-1.5">
+ <Receipt size={14} className="text-primary"/> Notas / Observaciones
+ </Label>
+ <Textarea
+ rows={3}
+ placeholder="Observaciones de la estancia..."value={notas}
+ onChange={(e) => setNotas(e.target.value)}
+ />
+ </div>
+
+ <Button
+ type="submit"disabled={isLoading || !huesped.trim()}
+ className="mt-4 w-full py-3.5 flex items-center justify-center gap-2">
+ <Bed size={18} weight="bold"/> Abrir Cuenta
+ </Button>
+ </form>
+ </div>
+ );
 }

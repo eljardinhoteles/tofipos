@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Badge, Box, Button, Divider, Grid, Group, Paper, Stack, Text, TextInput } from '@mantine/core';
 import { Building, FloppyDisk } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { sileo } from 'sileo';
+import { showToast } from '@/lib/toast';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import AjustesUsuarios from './AjustesUsuarios';
 
 type OrgForm = {
@@ -71,11 +73,11 @@ export default function AjustesOrganizacion() {
 
   const handleSave = async () => {
     if (!orgId) {
-      sileo.error({ title: 'Sin organización', description: 'Primero vincula o crea una organización.' });
+      showToast.error('Sin organización', 'Primero vincula o crea una organización.');
       return;
     }
     if (!form.nombre.trim()) {
-      sileo.error({ title: 'Nombre requerido' });
+      showToast.error('Nombre requerido');
       return;
     }
 
@@ -93,134 +95,111 @@ export default function AjustesOrganizacion() {
       if (error) throw error;
 
       localStorage.setItem('pos_org_name_cached', form.nombre.trim());
-      sileo.success({ title: 'Organización actualizada' });
+      showToast.success('Organización actualizada');
     } catch (error) {
       console.error('Error al guardar organización:', error);
-      sileo.error({ title: 'Error al guardar', description: 'Revisa que la tabla organizaciones tenga ruc, telefono y direccion.' });
+      showToast.error('Error al guardar', 'Revisa que la tabla organizaciones tenga ruc, telefono y direccion.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Stack gap="lg" py="xl">
-      <Paper withBorder p="xl" radius="lg" style={{ backgroundColor: 'var(--pos-surface)' }}>
-        <Group justify="space-between" align="center">
-          <Group gap="md">
-            <Box p={10} style={{ borderRadius: 12, backgroundColor: 'var(--ui-primary-soft)' }}>
-              <Building size={22} color="var(--ui-primary)" weight="fill" />
-            </Box>
-            <Box>
-              <Text fw={900} size="lg">Organización</Text>
-              <Text size="sm" c="dimmed">
-                Datos del establecimiento y administración de usuarios en un mismo lugar.
-              </Text>
-            </Box>
-          </Group>
-          <Button
-            leftSection={<FloppyDisk size={18} weight="bold" />}
-            color="myColor"
-            radius="md"
-            onClick={handleSave}
-            loading={saving}
-            disabled={loading || !orgId}
-          >
-            Guardar
+    <div className="flex flex-col gap-6 py-6">
+      <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Building size={22} weight="fill" />
+            </div>
+            <div className="flex flex-col">
+              <h3 className="font-extrabold text-base text-foreground">Organización</h3>
+              <p className="text-xs text-muted-foreground">Datos del establecimiento y administración del local.</p>
+            </div>
+          </div>
+
+          <Button size="sm" disabled={saving || loading || !orgId} onClick={handleSave}>
+            <FloppyDisk size={16} weight="bold" /> Guardar
           </Button>
-        </Group>
+        </div>
 
-        <Divider my="md" />
+        <div className="w-full h-[1px] bg-border" />
 
-        <Grid>
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <TextInput
-              label="Nombre de Organización"
-              value={form.nombre}
-              onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))}
-              placeholder="Ej. Hotel Valle de Guadalupe"
-              radius="md"
-              size="md"
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+            <Label className="text-xs font-bold">Nombre de Organización *</Label>
+            <Input
+              type="text"
               required
+              placeholder="Ej. Hotel Valle de Guadalupe"
+              value={form.nombre}
+              onChange={(e) => setForm(prev => ({ ...prev, nombre: e.target.value }))}
+              className="h-9 text-xs font-semibold"
             />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <TextInput
-              label="RUC"
-              value={form.ruc}
-              onChange={(e) => setForm((prev) => ({ ...prev, ruc: e.target.value }))}
+          </div>
+
+          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+            <Label className="text-xs font-bold">RUC</Label>
+            <Input
+              type="text"
               placeholder="Ej. 1790012345001"
-              radius="md"
-              size="md"
+              value={form.ruc}
+              onChange={(e) => setForm(prev => ({ ...prev, ruc: e.target.value }))}
+              className="h-9 text-xs"
             />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <TextInput
-              label="Teléfono"
-              value={form.telefono}
-              onChange={(e) => setForm((prev) => ({ ...prev, telefono: e.target.value }))}
+          </div>
+
+          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+            <Label className="text-xs font-bold">Teléfono</Label>
+            <Input
+              type="text"
               placeholder="Ej. +593 99 123 4567"
-              radius="md"
-              size="md"
+              value={form.telefono}
+              onChange={(e) => setForm(prev => ({ ...prev, telefono: e.target.value }))}
+              className="h-9 text-xs"
             />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12 }}>
-            <TextInput
-              label="Dirección"
-              value={form.direccion}
-              onChange={(e) => setForm((prev) => ({ ...prev, direccion: e.target.value }))}
+          </div>
+
+          <div className="flex flex-col gap-1 col-span-2">
+            <Label className="text-xs font-bold">Dirección</Label>
+            <Input
+              type="text"
               placeholder="Ej. Av. Principal 123 y Calle 4"
-              radius="md"
-              size="md"
+              value={form.direccion}
+              onChange={(e) => setForm(prev => ({ ...prev, direccion: e.target.value }))}
+              className="h-9 text-xs"
             />
-          </Grid.Col>
-        </Grid>
-      </Paper>
+          </div>
+        </div>
+      </div>
 
-      {!orgId && (
-        <Paper withBorder p="md" radius="md" bg="gray.0">
-          <Text fw={700}>Sin organización activa</Text>
-          <Text size="sm" c="dimmed">Vincula un hotel antes de editar los datos del comercio.</Text>
-        </Paper>
-      )}
-
-      <Paper withBorder p="xl" radius="lg" style={{ backgroundColor: 'var(--pos-surface)' }}>
-        <Group justify="space-between" align="center" mb="md">
-          <Box>
-            <Text fw={900} size="lg">Usuario conectado</Text>
-            <Text size="sm" c="dimmed">
-              Sesión activa en este dispositivo.
-            </Text>
-          </Box>
-          {connectedUser ? (
-            <Badge color="myColor" variant="filled">
+      <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <h3 className="font-extrabold text-base text-foreground">Usuario conectado</h3>
+            <p className="text-xs text-muted-foreground">Sesión activa en este dispositivo.</p>
+          </div>
+          {connectedUser && (
+            <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground font-extrabold text-xs uppercase">
               {connectedUser.rol}
-            </Badge>
-          ) : (
-            <Badge color="gray" variant="light">
-              Sin sesión
-            </Badge>
+            </span>
           )}
-        </Group>
+        </div>
 
-        <Divider my="md" />
+        <div className="w-full h-[1px] bg-border" />
 
         {connectedUser ? (
-          <Stack gap={4}>
-            <Text fw={800} size="md">{connectedUser.nombre}</Text>
-            <Text size="sm" c="dimmed">Rol: {connectedUser.rol}</Text>
-            <Text size="sm" c="dimmed">Correo: {connectedUser.email || 'N/A'}</Text>
-            {adminUser?.email && (
-              <Text size="sm" c="dimmed">Administrador Supabase: {adminUser.email}</Text>
-            )}
-          </Stack>
+          <div className="flex flex-col gap-1 text-xs">
+            <span className="font-extrabold text-foreground text-sm">{connectedUser.nombre}</span>
+            <span className="text-muted-foreground font-semibold">Rol: {connectedUser.rol}</span>
+            <span className="text-muted-foreground font-semibold">Correo: {connectedUser.email || 'N/A'}</span>
+          </div>
         ) : (
-          <Text size="sm" c="dimmed">
-            No hay una sesión activa todavía.
-          </Text>
+          <span className="text-xs text-muted-foreground font-semibold">No hay una sesión activa todavía.</span>
         )}
-      </Paper>
+      </div>
 
       <AjustesUsuarios />
-    </Stack>
+    </div>
   );
 }

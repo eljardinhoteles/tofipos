@@ -1,5 +1,5 @@
 import type { ReactNode, CSSProperties } from 'react';
-import { Box, Group } from '@mantine/core';
+import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
   children: ReactNode;
@@ -12,40 +12,19 @@ interface PageHeaderProps {
 export function PageHeader({
   children,
   className,
-  height = 56,
-  px = 'xl',
   style,
 }: PageHeaderProps) {
   return (
-    <Box
-      h={height}
-      px={px}
-      className={className}
-      style={{
-        borderBottom: '1px solid var(--pos-border)',
-        backgroundColor: 'var(--pos-surface)',
-        display: 'flex',
-        alignItems: 'center',
-        flexShrink: 0,
-        position: 'relative',
-        zIndex: 100,
-        ...style,
-      }}
+    <header
+      className={cn(
+        "h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 z-10 w-full",
+        className
+      )}
+      style={style}
     >
-      <Box
-        className="header-scroll-x hide-scrollbar"
-        style={{
-          width: '100%',
-          minWidth: 0,
-          display: 'flex',
-          alignItems: 'center',
-          height: '100%',
-        }}
-      >
-        <Group wrap="nowrap" gap="md" style={{ minWidth: '100%', flexWrap: 'nowrap', width: '100%' }}>
-          {children}
-        </Group>
-      </Box>
-    </Box>
+      <div className="w-full flex items-center gap-4 min-w-0">
+        {children}
+      </div>
+    </header>
   );
 }

@@ -1,241 +1,112 @@
-// @ts-nocheck
-import { useEffect, useState, useMemo } from 'react';
-import {
-  Box, Stack, Group, Text, Button, ActionIcon,
-  ScrollArea, Paper, ThemeIcon, Center, Badge, Loader
-} from '@mantine/core';
-import { ArrowLeft, Door, Check } from '@phosphor-icons/react';
-import type { Comanda } from '../../../db/database';
-import { sileo } from 'sileo';
-
-import { useIvaActivo } from '../../../hooks/useIvaActivo';
-import { calcularTotalesComanda } from '../../../lib/taxUtils';
-import { initVerticalRxDb, updateRxComanda, updateRxMesa } from '../../../db/rxdb';
+import { useEffect, useState, useMemo } from'react';
+import { ArrowLeft, Door, Check } from'@phosphor-icons/react';
+import type { Comanda } from'../../../db/database';
+import { showToast } from'@/lib/toast';
+import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { calcularTotalesComanda } from'../../../lib/taxUtils';
+import { initVerticalRxDb, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
 
 interface SidebarEnviarHabitacionProps {
-  activeComanda: Comanda;
-  onBack: () => void;
-  onSuccess: () => void;
+ activeComanda: Comanda;
+ onBack: () => void;
+ onSuccess: () => void;
 }
 
 export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: SidebarEnviarHabitacionProps) {
-  const [selectedCuentaId, setSelectedCuentaId] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [menuItems, setMenuItems] = useState<any[]>([]);
-  const [cuentasActivas, setCuentasActivas] = useState<any[]>([]);
-  const [mesasHabitacion, setMesasHabitacion] = useState<any[]>([]);
-  const [comandaItems, setComandaItems] = useState<any[]>([]);
+ const [selectedCuentaId, setSelectedCuentaId] = useState<string | null>(null);
+ const [isProcessing, setIsProcessing] = useState(false);
+ const [menuItems] = useState<any[]>([]);
+ const [cuentasActivas, setCuentasActivas] = useState<any[]>([]);
+ const [comandaItems, setComandaItems] = useState<any[]>([]);
 
-  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
 
-  useEffect(() => {
-    let alive = true;
-    let unsubs: Array<(() => void) | null> = [];
+ useEffect(() => {
+ let alive = true;
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
 
-    const run = async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
+ const docsCuentas = await rxDb.habitacion_cuentas.find({ selector: { estado:'activa', _deleted: { $ne: true } } }).exec();
+ if (alive) setCuentasActivas(docsCuentas.map((doc: any) => doc.toJSON()));
 
-      const loadMenu = async () => {
-        const docs = await rxDb.menu_items.find({ selector: { _deleted: false } }).exec();
-        if (alive) setMenuItems(docs.map((doc: any) => doc.toJSON()));
-      };
-      const loadCuentas = async () => {
-        const docs = await rxDb.habitacion_cuentas.find({ selector: { estado: 'activa', _deleted: false } }).exec();
-        if (alive) setCuentasActivas(docs.map((doc: any) => doc.toJSON()));
-      };
-      const loadMesas = async () => {
-        const ids = cuentasActivas.map((c: any) => c.mesa_id);
-        if (!ids.length) {
-          if (alive) setMesasHabitacion([]);
-          return;
-        }
-        const docs = await rxDb.mesas.find({ selector: { id: { $in: ids }, _deleted: false } }).exec();
-        if (alive) setMesasHabitacion(docs.map((doc: any) => doc.toJSON()));
-      };
-      const loadItems = async () => {
-        const docs = await rxDb.comanda_items.find({ selector: { comanda_id: activeComanda.id, _deleted: false } }).exec();
-        if (alive) setComandaItems(docs.map((doc: any) => doc.toJSON()));
-      };
+ const docsItems = await rxDb.comanda_items.find({ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } } }).exec();
+ if (alive) setComandaItems(docsItems.map((doc: any) => doc.toJSON()));
+ };
+ run().catch(console.error);
+ return () => { alive = false; };
+ }, [activeComanda.id]);
 
-      await Promise.all([loadMenu(), loadCuentas(), loadItems()]);
-      await loadMesas();
+ const totales = useMemo(
+ () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
+ [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
+ );
 
-      unsubs = [
-        rxDb.menu_items.find({ selector: { _deleted: false } }).$.subscribe((docs: any[]) => {
-          setMenuItems(docs.map((doc: any) => doc.toJSON()));
-        }) as any,
-        rxDb.habitacion_cuentas.find({ selector: { estado: 'activa', _deleted: false } }).$.subscribe((docs: any[]) => {
-          setCuentasActivas(docs.map((doc: any) => doc.toJSON()));
-        }) as any,
-        rxDb.comanda_items.find({ selector: { comanda_id: activeComanda.id, _deleted: false } }).$.subscribe((docs: any[]) => {
-          setComandaItems(docs.map((doc: any) => doc.toJSON()));
-        }) as any
-      ];
-    };
+ const handleEnviar = async () => {
+ if (!selectedCuentaId) return;
+ setIsProcessing(true);
+ try {
+ await updateRxComanda(activeComanda.id, {
+ habitacion_cuenta_id: selectedCuentaId,
+ total: totales.total,
+ confirmada: true,
+ sincronizado: true,
+ });
 
-    run().catch(console.error);
+ await updateRxMesa(activeComanda.mesa_id, { estado:'libre'});
+ showToast.success('Cargo enviado a habitación');
+ onSuccess();
+ } catch {
+ showToast.error('Error al enviar cargo');
+ } finally {
+ setIsProcessing(false);
+ }
+ };
 
-    return () => {
-      alive = false;
-      unsubs.forEach((unsub) => unsub?.());
-    };
-  }, [activeComanda.id]);
+ return (
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
+ <div className="flex items-center gap-3">
+ <button type="button"onClick={onBack} className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
+ <ArrowLeft size={18} />
+ </button>
+ <div className="flex flex-col">
+ <h3 className="font-extrabold text-base text-foreground leading-tight">Enviar a Habitación</h3>
+ <span className="text-[10px] font-bold text-muted-foreground">Comanda #{activeComanda.folio}</span>
+ </div>
+ </div>
+ </header>
 
-  useEffect(() => {
-    let alive = true;
-    const run = async () => {
-      if (!cuentasActivas.length) {
-        if (alive) setMesasHabitacion([]);
-        return;
-      }
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      const ids = cuentasActivas.map((c: any) => c.mesa_id);
-      const docs = await rxDb.mesas.find({ selector: { id: { $in: ids }, _deleted: false } }).exec();
-      if (alive) setMesasHabitacion(docs.map((doc: any) => doc.toJSON()));
-    };
-    run().catch(console.error);
-    return () => {
-      alive = false;
-    };
-  }, [cuentasActivas]);
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+ {cuentasActivas.map((cuenta) => {
+ const isSelected = selectedCuentaId === cuenta.id;
+ return (
+ <div
+ key={cuenta.id}
+ onClick={() => setSelectedCuentaId(cuenta.id)}
+ className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer ${
+ isSelected ?'bg-primary/10 border-primary':'bg-muted border-border'}`}
+ >
+ <div className="flex items-center gap-3">
+ <Door size={20} className={isSelected ?'text-primary':'text-muted-foreground'} />
+ <div className="flex flex-col">
+ <span className="font-extrabold text-xs text-foreground">{cuenta.huesped}</span>
+ <span className="text-[10px] text-muted-foreground font-semibold">Habitación activa</span>
+ </div>
+ </div>
+ </div>
+ );
+ })}
+ </main>
 
-  const getMesaNombre = (mesaId: string) => mesasHabitacion.find(m => m.id === mesaId)?.nombre || mesaId;
-
-  // Cálculos financieros centralizados por item
-  const totales = useMemo(
-    () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
-    [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
-  );
-
-  const total = totales.total;
-
-  const handleEnviar = async () => {
-    if (!selectedCuentaId) return;
-    setIsProcessing(true);
-    try {
-      const cuenta = cuentasActivas.find(c => c.id === selectedCuentaId);
-      if (!cuenta) throw new Error('Cuenta no encontrada');
-
-      await updateRxComanda(activeComanda.id, {
-        habitacion_cuenta_id: selectedCuentaId,
-        confirmada: true,
-        sincronizado: true,
-      });
-
-      await updateRxMesa(activeComanda.mesa_id, { estado: 'libre' });
-
-      sileo.success({
-        title: 'Cargo enviado a habitación',
-        description: `Comanda #${activeComanda.folio} cargada a ${getMesaNombre(cuenta?.mesa_id || '')} — ${cuenta?.huesped}`,
-      });
-
-      onSuccess();
-    } catch {
-      sileo.error({ title: 'Error al enviar cargo' });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <Box h="100%" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'white' }}>
-      <Box p="lg" style={{ borderBottom: '1px solid var(--pos-border)' }}>
-        <Group gap="sm">
-          <ActionIcon variant="subtle" color="gray" onClick={onBack}>
-            <ArrowLeft size={20} />
-          </ActionIcon>
-          <Stack gap={0}>
-            <Text size="lg" fw={800}>Enviar a Habitación</Text>
-            <Text size="xs" c="dimmed">Comanda #{activeComanda.folio}</Text>
-          </Stack>
-        </Group>
-      </Box>
-
-      <ScrollArea flex={1} p="lg">
-        {cuentasActivas.length === 0 ? (
-          <Center py={60}>
-            <Stack align="center" gap="md">
-              <ThemeIcon size={64} radius="xl" variant="light" color="gray">
-                <Door size={28} />
-              </ThemeIcon>
-              <Stack align="center" gap={4}>
-                <Text fw={700} c="var(--pos-text)">Sin cuentas activas</Text>
-                <Text size="sm" c="dimmed" ta="center">
-                  No hay habitaciones con cuenta abierta. Abre una cuenta desde el piso "Habitaciones".
-                </Text>
-              </Stack>
-            </Stack>
-          </Center>
-        ) : (
-          <Stack gap="sm">
-            <Paper p="md" radius="md" withBorder style={{ backgroundColor: 'var(--mantine-color-myColor-0)', borderColor: 'var(--mantine-color-myColor-2)' }}>
-              <Group justify="space-between" align="center">
-                <Text size="sm" fw={700} c="myColor.8">Total a cargar</Text>
-                <Text size="28px" fw={900} c="myColor.9">${total.toFixed(2)}</Text>
-              </Group>
-            </Paper>
-            <Text size="sm" fw={600} c="dimmed">
-              Seleccione una habitación para aplicar el cargo:
-            </Text>
-
-            {cuentasActivas.map((cuenta) => {
-              const isSelected = selectedCuentaId === cuenta.id;
-              return (
-                <Paper
-                  key={cuenta.id}
-                  p="md"
-                  radius="md"
-                  withBorder
-                  onClick={() => setSelectedCuentaId(cuenta.id)}
-                  style={{
-                    cursor: 'pointer',
-                    border: isSelected ? '2px solid var(--mantine-color-myColor-6)' : '1px solid var(--pos-border)',
-                    backgroundColor: isSelected ? 'var(--mantine-color-myColor-0)' : 'white',
-                    transition: 'border 0.15s, background-color 0.15s',
-                    boxShadow: 'none',
-                  }}
-                >
-                  <Group justify="space-between">
-                    <Group gap="sm">
-                      <ThemeIcon size={40} radius="xl" color={isSelected ? 'blue' : 'gray'} variant={isSelected ? 'filled' : 'light'}>
-                        <Door size={20} />
-                      </ThemeIcon>
-                      <Stack gap={2}>
-                        <Text fw={800} size="sm">{getMesaNombre(cuenta.mesa_id)}</Text>
-                        <Text size="xs" c="dimmed">{cuenta.huesped}</Text>
-                      </Stack>
-                    </Group>
-                    <Stack gap={4} align="flex-end">
-                      <Badge size="xs" color="green" variant="light">Activa</Badge>
-                      <Text size="xs" c="dimmed">
-                        Desde {new Date(cuenta.check_in).toLocaleDateString()}
-                      </Text>
-                    </Stack>
-                  </Group>
-                </Paper>
-              );
-            })}
-          </Stack>
-        )}
-      </ScrollArea>
-
-      <Box p="lg" style={{ borderTop: '1px solid var(--pos-border)' }}>
-        <Button
-          size="lg"
-          radius="md"
-          fullWidth
-          color="myColor"
-          leftSection={isProcessing ? <Loader size={20} color="white" /> : <Check size={24} />}
-          disabled={!selectedCuentaId || isProcessing}
-          onClick={handleEnviar}
-          h={70}
-          style={{ fontSize: '18px', fontWeight: 900 }}
-        >
-          Confirmar Cargo
-        </Button>
-      </Box>
-    </Box>
-  );
+ <footer className="p-4 border-t border-border">
+ <button
+ type="button"disabled={!selectedCuentaId || isProcessing}
+ onClick={handleEnviar}
+ className="w-full py-3.5 rounded-xl bg-primary disabled:opacity-40 text-primary-foreground font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+ <Check size={18} weight="bold"/> Confirmar Cargo (${totales.total.toFixed(2)})
+ </button>
+ </footer>
+ </div>
+ );
 }

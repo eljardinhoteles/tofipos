@@ -1,4 +1,10 @@
-import { Modal, Stack, Text, Paper, Group, Badge, Divider } from '@mantine/core';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 
 interface SidebarPagosModalProps {
   opened: boolean;
@@ -9,44 +15,49 @@ interface SidebarPagosModalProps {
 
 export function SidebarPagosModal({ opened, onClose, pagos, totalPagado }: SidebarPagosModalProps) {
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={<Text size="lg" fw={800}>Historial de Pagos</Text>}
-      centered
-      zIndex={2000}
-    >
-      <Stack gap="md">
-        {pagos.length === 0 ? (
-          <Text c="dimmed" ta="center" py="xl">No hay pagos registrados todavía.</Text>
-        ) : (
-          pagos.map((pago) => (
-            <Paper key={pago.id} withBorder p="sm" radius="md">
-              <Group justify="space-between">
-                <Stack gap={0}>
-                  <Text fw={700}>
-                    {pago.tipo_division 
-                      ? pago.tipo_division.replace('Dividido - ', '') 
-                      : 'Pago Registrado'}
-                  </Text>
-                  <Text size="xs" c="dimmed">{new Date(pago.fecha).toLocaleString()}</Text>
+    <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
+        <DialogHeader className="border-b border-border pb-3 text-left">
+          <DialogTitle className="font-extrabold text-base text-foreground">
+            Historial de Pagos
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Listado de pagos realizados para la comanda actual.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+          {pagos.length === 0 ? (
+            <span className="text-xs text-muted-foreground font-semibold text-center py-6">
+              No hay pagos registrados todavía.
+            </span>
+          ) : (
+            pagos.map((pago) => (
+              <div key={pago.id} className="p-3 rounded-xl bg-muted border border-border flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="font-extrabold text-xs text-foreground">
+                    {pago.tipo_division ? pago.tipo_division.replace('Dividido - ', '') : 'Pago Registrado'}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-semibold">
+                    {new Date(pago.fecha).toLocaleString()}
+                  </span>
                   {pago.factura_nro && (
-                    <Badge variant="light" color="myColor" size="xs" mt={4} style={{ width: 'fit-content' }}>
+                    <span className="w-fit px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[9px] mt-1">
                       Factura: {pago.factura_nro}
-                    </Badge>
+                    </span>
                   )}
-                </Stack>
-                <Text fw={900} c="green.8">${pago.monto.toFixed(2)}</Text>
-              </Group>
-            </Paper>
-          ))
-        )}
-        <Divider my="sm" />
-        <Group justify="space-between">
-          <Text fw={700}>Total Pagado</Text>
-          <Text fw={900} size="xl" c="green.8">${totalPagado.toFixed(2)}</Text>
-        </Group>
-      </Stack>
-    </Modal>
+                </div>
+                <span className="font-black text-sm text-emerald-600">${pago.monto.toFixed(2)}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-border font-extrabold text-sm">
+          <span className="text-foreground">Total Pagado</span>
+          <span className="text-emerald-600 text-base font-black">${totalPagado.toFixed(2)}</span>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

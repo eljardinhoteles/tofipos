@@ -1,232 +1,170 @@
-import { useRef, useState } from 'react';
-import { Modal, Stack, Group, Text, Button, FileButton, Table, ScrollArea, Badge, Alert, Progress } from '@mantine/core';
-import { UploadSimple, Download, Warning, CheckCircle } from '@phosphor-icons/react';
-import { sileo } from 'sileo';
-import { parseMenuCsv, MENU_CSV_TEMPLATE, type MenuCsvRow } from '../../lib/menuCsvImport';
-import { createRxCategoria, createRxMenuItem } from '../../db/rxdb';
-import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
+import { useRef, useState } from'react';
+import { UploadSimple, Download, X } from'@phosphor-icons/react';
+import { showToast } from'@/lib/toast';
+import { parseMenuCsv, MENU_CSV_TEMPLATE, type MenuCsvRow } from'../../lib/menuCsvImport';
+import { createRxCategoria, createRxMenuItem } from'../../db/rxdb';
+import { useRxMenuCatalog } from'../../hooks/useRxMenuCatalog';
+import { Button } from'@/components/ui/button';
 
 interface Props {
-  opened: boolean;
-  onClose: () => void;
+ opened: boolean;
+ onClose: () => void;
 }
 
 export function ImportarMenuCsvModal({ opened, onClose }: Props) {
-  const { categorias: dbCategorias } = useRxMenuCatalog();
-  const [rows, setRows] = useState<MenuCsvRow[]>([]);
-  const [headerErrors, setHeaderErrors] = useState<string[]>([]);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const resetRef = useRef<() => void>(null);
+ const { categorias: dbCategorias } = useRxMenuCatalog();
+ const [rows, setRows] = useState<MenuCsvRow[]>([]);
+ const [, setHeaderErrors] = useState<string[]>([]);
+ const [fileName, setFileName] = useState<string | null>(null);
+ const [importing, setImporting] = useState(false);
+ const [, setProgress] = useState(0);
+ const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validRows = rows.filter(r => r.errors.length === 0);
-  const invalidRows = rows.filter(r => r.errors.length > 0);
-  const newCategoryNames = [...new Set(
-    validRows
-      .map(r => r.categoria)
-      .filter(nombre => !dbCategorias.some(c => c.nombre.toLowerCase() === nombre.toLowerCase()))
-  )];
+ if (!opened) return null;
 
-  const handleFile = async (file: File | null) => {
-    if (!file) return;
-    setFileName(file.name);
-    const text = await file.text();
-    const parsed = parseMenuCsv(text);
-    setRows(parsed.rows);
-    setHeaderErrors(parsed.headerErrors);
-  };
+ const validRows = rows.filter(r => r.errors.length === 0);
+ const newCategoryNames = [...new Set(
+ validRows
+ .map(r => r.categoria)
+ .filter(nombre => !dbCategorias.some(c => c.nombre.toLowerCase() === nombre.toLowerCase()))
+ )];
 
-  const handleDescargarPlantilla = () => {
-    // BOM UTF-8 para que Excel detecte los acentos correctamente
-    const blob = new Blob(['﻿' + MENU_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_productos.csv';
-    a.rel = 'noopener';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    window.setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 0);
-  };
+ const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+ const file = e.target.files?.[0];
+ if (!file) return;
+ setFileName(file.name);
+ const text = await file.text();
+ const parsed = parseMenuCsv(text);
+ setRows(parsed.rows);
+ setHeaderErrors(parsed.headerErrors);
+ };
 
-  const handleReset = () => {
-    setRows([]);
-    setHeaderErrors([]);
-    setFileName(null);
-    setProgress(0);
-    resetRef.current?.();
-  };
+ const handleDescargarPlantilla = () => {
+ const blob = new Blob(['\uFEFF'+ MENU_CSV_TEMPLATE], { type:'text/csv;charset=utf-8;'});
+ const url = URL.createObjectURL(blob);
+ const a = document.createElement('a');
+ a.href = url;
+ a.download ='plantilla_productos.csv';
+ document.body.appendChild(a);
+ a.click();
+ document.body.removeChild(a);
+ URL.revokeObjectURL(url);
+ };
 
-  const handleClose = () => {
-    if (importing) return;
-    handleReset();
-    onClose();
-  };
+ const handleReset = () => {
+ setRows([]);
+ setHeaderErrors([]);
+ setFileName(null);
+ setProgress(0);
+ if (fileInputRef.current) fileInputRef.current.value ='';
+ };
 
-  const handleImportar = async () => {
-    if (validRows.length === 0) return;
-    setImporting(true);
-    setProgress(0);
-    try {
-      const orgId = localStorage.getItem('pos_active_org_id') || '';
-      const categoriaIdPorNombre = new Map<string, string>(
-        dbCategorias.map(c => [c.nombre.toLowerCase(), c.id])
-      );
+ const handleImportar = async () => {
+ if (validRows.length === 0) return;
+ setImporting(true);
+ setProgress(0);
+ try {
+ const orgId = localStorage.getItem('pos_active_org_id') ||'';
+ const categoriaIdPorNombre = new Map<string, string>(
+ dbCategorias.map(c => [c.nombre.toLowerCase(), c.id])
+ );
 
-      // Crear categorías nuevas primero
-      for (const nombre of newCategoryNames) {
-        const creada = await createRxCategoria({ id: crypto.randomUUID(), nombre, organization_id: orgId });
-        categoriaIdPorNombre.set(nombre.toLowerCase(), creada.id);
-      }
+ for (const nombre of newCategoryNames) {
+ const creada = await createRxCategoria({ id: crypto.randomUUID(), nombre, organization_id: orgId });
+ categoriaIdPorNombre.set(nombre.toLowerCase(), creada.id);
+ }
 
-      let done = 0;
-      let failed = 0;
-      for (const row of validRows) {
-        const categoriaId = categoriaIdPorNombre.get(row.categoria.toLowerCase());
-        try {
-          await createRxMenuItem({
-            id: crypto.randomUUID(),
-            nombre: row.nombre,
-            precio: row.precio,
-            categoria_id: categoriaId || '',
-            categoria_nombre: row.categoria,
-            activo: row.activo,
-            es_bebida: row.es_bebida,
-            modificadores: [],
-            descripcion: row.descripcion,
-            iva_modalidad: row.iva_modalidad,
-            iva_porcentaje: row.iva_modalidad === 'especifico' ? row.iva_porcentaje : undefined,
-            organization_id: orgId,
-          });
-        } catch {
-          failed++;
-        }
-        done++;
-        setProgress(Math.round((done / validRows.length) * 100));
-      }
+ let done = 0;
+ let failed = 0;
+ for (const row of validRows) {
+ const categoriaId = categoriaIdPorNombre.get(row.categoria.toLowerCase());
+ try {
+ await createRxMenuItem({
+ id: crypto.randomUUID(),
+ nombre: row.nombre,
+ precio: row.precio,
+ categoria_id: categoriaId ||'',
+ categoria_nombre: row.categoria,
+ activo: row.activo,
+ es_bebida: row.es_bebida,
+ modificadores: [],
+ descripcion: row.descripcion,
+ iva_modalidad: row.iva_modalidad,
+ iva_porcentaje: row.iva_modalidad ==='especifico'? row.iva_porcentaje : undefined,
+ organization_id: orgId,
+ });
+ } catch {
+ failed++;
+ }
+ done++;
+ setProgress(Math.round((done / validRows.length) * 100));
+ }
 
-      if (failed > 0) {
-        sileo.error({ title: 'Importación parcial', description: `${done - failed} productos creados, ${failed} fallaron.` });
-      } else {
-        sileo.success({ title: 'Importación completa', description: `${done} productos creados.` });
-      }
-      handleReset();
-      onClose();
-    } finally {
-      setImporting(false);
-    }
-  };
+ if (failed > 0) {
+ showToast.error('Importación parcial',`${done - failed} productos creados, ${failed} fallaron.`);
+ } else {
+ showToast.success('Importación completa',`${done} productos creados.`);
+ }
+ handleReset();
+ onClose();
+ } finally {
+ setImporting(false);
+ }
+ };
 
-  return (
-    <Modal
-      opened={opened}
-      onClose={handleClose}
-      title={
-        <Group gap="xs">
-          <UploadSimple size={22} weight="duotone" color="var(--ui-primary)" />
-          <Text fw={800} size="md">Importar productos vía CSV</Text>
-        </Group>
-      }
-      centered
-      radius="xl"
-      size="lg"
-    >
-      <Stack gap="md">
-        {rows.length === 0 && (
-          <>
-            <Text size="sm" c="dimmed">
-              Sube un archivo CSV con columnas: <b>nombre, precio, categoria</b> (requeridas) y opcionalmente
-              descripcion, es_bebida, activo, iva_modalidad (sistema/especifico/exento), iva_porcentaje.
-              Las categorías que no existan se crean automáticamente.
-            </Text>
-            <Group>
-              <FileButton resetRef={resetRef} onChange={handleFile} accept=".csv,text/csv">
-                {(props) => <Button {...props} leftSection={<UploadSimple size={16} />} radius="md">Seleccionar archivo CSV</Button>}
-              </FileButton>
-              <Button variant="subtle" leftSection={<Download size={16} />} radius="md" onClick={handleDescargarPlantilla}>
-                Descargar plantilla
-              </Button>
-            </Group>
-          </>
-        )}
+ return (
+ <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
+ <div className="bg-card rounded-2xl shadow-xl w-full max-w-lg p-6 flex flex-col gap-4">
+ <div className="flex items-center justify-between border-b border-border pb-3">
+ <div className="flex items-center gap-2">
+ <UploadSimple size={20} className="text-primary"/>
+ <h3 className="font-extrabold text-base text-foreground">Importar productos vía CSV</h3>
+ </div>
+ <Button variant="ghost"size="icon"className="h-7 w-7"onClick={onClose}>
+ <X size={16} />
+ </Button>
+ </div>
 
-        {headerErrors.length > 0 && (
-          <Alert color="red" icon={<Warning size={18} />} title="No se pudo leer el archivo">
-            {headerErrors.join(' ')}
-          </Alert>
-        )}
-
-        {rows.length > 0 && (
-          <>
-            <Group justify="space-between">
-              <Text size="sm" fw={600}>{fileName}</Text>
-              <Button variant="subtle" size="xs" onClick={handleReset} disabled={importing}>Elegir otro archivo</Button>
-            </Group>
-
-            <Group gap="xs">
-              <Badge color="green" variant="light" leftSection={<CheckCircle size={12} />}>{validRows.length} válidos</Badge>
-              {invalidRows.length > 0 && <Badge color="red" variant="light">{invalidRows.length} con errores</Badge>}
-              {newCategoryNames.length > 0 && (
-                <Badge color="blue" variant="light">{newCategoryNames.length} categorías nuevas</Badge>
-              )}
-            </Group>
-
-            <ScrollArea h={280} offsetScrollbars>
-              <Table striped highlightOnHover stickyHeader>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>#</Table.Th>
-                    <Table.Th>Nombre</Table.Th>
-                    <Table.Th>Precio</Table.Th>
-                    <Table.Th>Categoría</Table.Th>
-                    <Table.Th>Estado</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {rows.map((row) => (
-                    <Table.Tr key={row.rowNumber} style={row.errors.length > 0 ? { backgroundColor: 'var(--mantine-color-red-0)' } : undefined}>
-                      <Table.Td>{row.rowNumber}</Table.Td>
-                      <Table.Td>{row.nombre || <i>—</i>}</Table.Td>
-                      <Table.Td>${row.precio.toFixed(2)}</Table.Td>
-                      <Table.Td>
-                        {row.categoria}
-                        {newCategoryNames.includes(row.categoria) && (
-                          <Badge ml={6} size="xs" color="blue" variant="light">nueva</Badge>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        {row.errors.length === 0
-                          ? <Badge size="xs" color="green" variant="light">OK</Badge>
-                          : <Text size="xs" c="red">{row.errors.join('; ')}</Text>}
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-
-            {importing && <Progress value={progress} animated size="sm" radius="xl" />}
-
-            <Group justify="flex-end">
-              <Button variant="subtle" onClick={handleClose} disabled={importing} radius="md">Cancelar</Button>
-              <Button
-                onClick={handleImportar}
-                loading={importing}
-                disabled={validRows.length === 0}
-                radius="md"
-                color="myColor"
-              >
-                Importar {validRows.length} producto{validRows.length === 1 ? '' : 's'}
-              </Button>
-            </Group>
-          </>
-        )}
-      </Stack>
-    </Modal>
-  );
+ {rows.length === 0 ? (
+ <div className="flex flex-col gap-3">
+ <p className="text-xs text-muted-foreground">
+ Sube un archivo CSV con columnas: <b>nombre, precio, categoria</b> (requeridas).
+ </p>
+ <input
+ ref={fileInputRef}
+ type="file"accept=".csv,text/csv"onChange={handleFile}
+ className="hidden"id="csv-file-input"/>
+ <div className="flex items-center gap-2">
+ <label
+ htmlFor="csv-file-input"className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 cursor-pointer">
+ <UploadSimple size={16} /> Seleccionar archivo
+ </label>
+ <Button variant="secondary"onClick={handleDescargarPlantilla}>
+ <Download size={16} /> Descargar plantilla
+ </Button>
+ </div>
+ </div>
+ ) : (
+ <div className="flex flex-col gap-3">
+ <div className="flex justify-between items-center text-xs font-bold text-foreground">
+ <span>{fileName}</span>
+ <button type="button"onClick={handleReset} className="text-primary">Cambiar</button>
+ </div>
+ <div className="max-h-60 overflow-y-auto border border-border rounded-xl p-2">
+ <span className="text-xs font-bold text-emerald-600">{validRows.length} filas válidas para importar</span>
+ </div>
+ <div className="flex justify-end gap-2 pt-2">
+ <Button variant="outline"size="sm"onClick={onClose}>Cancelar</Button>
+ <Button
+ size="sm"disabled={importing || validRows.length === 0}
+ onClick={handleImportar}
+ >
+ Importar ({validRows.length})
+ </Button>
+ </div>
+ </div>
+ )}
+ </div>
+ </div>
+ );
 }

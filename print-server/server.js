@@ -221,7 +221,7 @@ const app = express();
 // CORS abierto en origin: las tablets acceden por IP:puerto directo, sin un
 // origen fijo conocido de antemano. La seguridad real la da el token
 // (requireToken), no CORS.
-app.use(cors({ methods: ['GET', 'POST'], allowedHeaders: ['Content-Type', 'X-Print-Token'] }));
+app.use(cors({ methods: ['GET', 'POST', 'PUT', 'DELETE'], allowedHeaders: ['Content-Type', 'X-Print-Token'] }));
 app.use(express.json());
 
 app.get('/health', (req, res) => {

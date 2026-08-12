@@ -1,103 +1,81 @@
-import { createPortal } from 'react-dom';
-import { 
-  Group, 
-  Button, 
-} from '@mantine/core';
-import { 
-  Gear, 
-  Plus, 
-} from '@phosphor-icons/react';
-import { useAuth } from '../../context/AuthContext';
-import { useMediaQuery } from '@mantine/hooks';
-import { FilterChips } from '../Common/FilterChips';
+import { createPortal } from'react-dom';
+import { Gear, Plus } from'@phosphor-icons/react';
+import { useAuth } from'../../context/AuthContext';
+import { FilterChips } from'../Common/FilterChips';
+import { cn } from'@/lib/utils';
 
 interface MesasControlsProps {
-  availablePisos: string[];
-  selectedPiso: string;
-  onPisoChange: (piso: string) => void;
-  onOpenManage: () => void;
-  onOpenAddTable: () => void;
-  isEditMode: boolean;
-  onToggleEditMode: () => void;
-  hideChips?: boolean;
+ availablePisos: string[];
+ selectedPiso: string;
+ onPisoChange: (piso: string) => void;
+ onOpenManage: () => void;
+ onOpenAddTable: () => void;
+ isEditMode: boolean;
+ onToggleEditMode: () => void;
+ hideChips?: boolean;
 }
 
 export function MesasControls({ 
-  availablePisos, 
-  selectedPiso, 
-  onPisoChange, 
-  onOpenManage, 
-  onOpenAddTable,
-  isEditMode,
-  onToggleEditMode,
-  hideChips
+ availablePisos, 
+ selectedPiso, 
+ onPisoChange, 
+ onOpenManage, 
+ onOpenAddTable,
+ isEditMode,
+ onToggleEditMode,
+ hideChips
 }: MesasControlsProps) {
-  const { currentMesero } = useAuth();
-  const isMobile = useMediaQuery('(max-width: 768px)');
-  
-  const esAdmin = currentMesero?.rol === 'admin';
-  const mostrarEdicion = esAdmin && !isMobile;
+ const { currentMesero } = useAuth();
+ 
+ const esAdmin = currentMesero?.rol ==='admin';
+ const mostrarEdicion = esAdmin;
 
-  const leftPortal = document.getElementById('floating-actions-left');
-  const rightPortal = document.getElementById('floating-actions-right');
-  const subheaderPortal = document.getElementById('subheader-portal');
-  
-  return (
-    <>
-      {/* ── HEADER: Selector de Pisos como Chips ────────────────── */}
-      {!hideChips && createPortal(
-        <FilterChips
-          value={selectedPiso}
-          onChange={onPisoChange}
-          options={availablePisos.map((piso) => ({ value: piso, label: piso }))}
-          scrollable
-        />,
-        subheaderPortal || document.body
-      )}
+ const leftPortal = document.getElementById('floating-actions-left');
+ const rightPortal = document.getElementById('floating-actions-right');
+ const subheaderPortal = document.getElementById('subheader-portal');
+ 
+ return (
+ <>
+ {!hideChips && subheaderPortal && createPortal(
+ <FilterChips
+ value={selectedPiso}
+ onChange={onPisoChange}
+ options={availablePisos.map((piso) => ({ value: piso, label: piso }))}
+ scrollable
+ />,
+ subheaderPortal
+ )}
 
-      {/* ── FLOATING: Acciones Izquierda ──────────────────────── */}
-      {mostrarEdicion && isEditMode && leftPortal && createPortal(
-        <Group gap="sm">
-          <Button 
-            variant="filled" 
-            radius="xl" 
-            size="md"
-            leftSection={<Plus size={18} weight="bold" />}
-            onClick={onOpenAddTable}
-            className="mesas-controls__floating-button"
-          >
-            Mesa
-          </Button>
-          <Button 
-            variant="filled" 
-            radius="xl" 
-            size="md"
-            leftSection={<Plus size={18} weight="bold" />}
-            onClick={onOpenManage}
-            className="mesas-controls__floating-button"
-          >
-            Piso
-          </Button>
-        </Group>,
-        leftPortal
-      )}
+ {mostrarEdicion && isEditMode && leftPortal && createPortal(
+ <div className="flex items-center gap-2">
+ <button
+ type="button"onClick={onOpenAddTable}
+ className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
+ <Plus size={16} weight="bold"/> Mesa
+ </button>
+ <button
+ type="button"onClick={onOpenManage}
+ className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
+ <Plus size={16} weight="bold"/> Piso
+ </button>
+ </div>,
+ leftPortal
+ )}
 
-      {/* ── FLOATING: Acciones Derecha ───────────────────────── */}
-      {mostrarEdicion && rightPortal && createPortal(
-        <Group gap="sm">
-          <Button
-            variant={isEditMode ? "filled" : "default"}
-            radius="xl"
-            size="md"
-            onClick={onToggleEditMode}
-            leftSection={<Gear size={18} weight={isEditMode ? "bold" : "regular"} />}
-            className={isEditMode ? 'mesas-controls__floating-button mesas-controls__floating-button--active' : 'mesas-controls__floating-button'}
-          >
-            {isEditMode ? "Listo" : "Editar Mesas"}
-          </Button>
-        </Group>,
-        rightPortal
-      )}
-    </>
-  );
+ {mostrarEdicion && rightPortal && createPortal(
+ <div className="flex items-center gap-2">
+ <button
+ type="button"onClick={onToggleEditMode}
+ className={cn("h-9 px-4 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border shadow-2xs",
+ isEditMode
+ ?"bg-foreground text-background border-foreground":"bg-card text-foreground border-border")}
+ >
+ <Gear size={16} weight={isEditMode ?"bold":"regular"} />
+ {isEditMode ?"Listo":"Editar Mesas"}
+ </button>
+ </div>,
+ rightPortal
+ )}
+ </>
+ );
 }

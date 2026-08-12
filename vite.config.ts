@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 // import basicSsl from '@vitejs/plugin-basic-ssl'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
@@ -8,11 +9,14 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   resolve: {
     alias: {
-      'sileo': fileURLToPath(new URL('./src/utils/sileo-adapter.tsx', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'sileo': fileURLToPath(new URL('./src/utils/sileo-adapter.tsx', import.meta.url)),
+      'dexie': fileURLToPath(new URL('./node_modules/dexie', import.meta.url))
     }
   },
   plugins: [
     react(),
+    tailwindcss(),
     // basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',

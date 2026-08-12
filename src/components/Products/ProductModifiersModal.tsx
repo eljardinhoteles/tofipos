@@ -1,194 +1,180 @@
-import { useState, useEffect } from 'react';
-import { Modal, Stack, Text, Group, Button, Badge, rem, ScrollArea } from '@mantine/core';
-import { ArrowLeftIcon, CheckIcon } from '@phosphor-icons/react';
-import { useMediaQuery } from '@mantine/hooks';
+import { useState, useEffect } from'react';
+import { ArrowLeft, Check } from'@phosphor-icons/react';
+import { cn } from'@/lib/utils';
+import { Button } from'@/components/ui/button';
+import {
+ Dialog,
+ DialogContent,
+ DialogTitle,
+ DialogDescription,
+} from'@/components/ui/dialog';
 
 interface ProductModifiersModalProps {
-  opened: boolean;
-  onClose: () => void;
-  product: any;
-  onConfirm: (selectedOptions: string[]) => void;
+ opened: boolean;
+ onClose: () => void;
+ product: any;
+ onConfirm: (selectedOptions: string[]) => void;
 }
 
 export function ProductModifiersModal({
-  opened,
-  onClose,
-  product,
-  onConfirm
+ opened,
+ onClose,
+ product,
+ onConfirm
 }: ProductModifiersModalProps) {
-  const isMobile = useMediaQuery('(max-width: 48em)');
-  const [selections, setSelections] = useState<{ [groupId: string]: string[] }>({});
-  const [currentStep, setCurrentStep] = useState(0);
+ const [selections, setSelections] = useState<{ [groupId: string]: string[] }>({});
+ const [currentStep, setCurrentStep] = useState(0);
 
-  useEffect(() => {
-    if (opened && product) {
-      const initial: { [groupId: string]: string[] } = {};
-      product.modificadores?.forEach((group: any) => {
-        initial[group.nombre] = [];
-      });
-      setSelections(initial);
-      setCurrentStep(0);
-    }
-  }, [opened, product]);
+ useEffect(() => {
+ if (opened && product) {
+ const initial: { [groupId: string]: string[] } = {};
+ product.modificadores?.forEach((group: any) => {
+ initial[group.nombre] = [];
+ });
+ setSelections(initial);
+ setCurrentStep(0);
+ }
+ }, [opened, product]);
 
-  if (!product) return null;
+ if (!opened || !product) return null;
 
-  const modificadores = product.modificadores || [];
-  if (modificadores.length === 0) return null;
+ const modificadores = product.modificadores || [];
+ if (modificadores.length === 0) return null;
 
-  const currentGroup = modificadores[currentStep];
-  const selectedOpts = selections[currentGroup.nombre] || [];
-  const isLastStep = currentStep === modificadores.length - 1;
-  const canProceed = !currentGroup.obligatorio || selectedOpts.length > 0;
+ return (
+ <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+ <ProductModifiersDialogContent
+ product={product}
+ modificadores={modificadores}
+ currentStep={currentStep}
+ setCurrentStep={setCurrentStep}
+ selections={selections}
+ setSelections={setSelections}
+ onConfirm={onConfirm}
+ onClose={onClose}
+ />
+ </Dialog>
+ );
+}
 
-  const toggle = (option: string) => {
-    setSelections(prev => {
-      const current = prev[currentGroup.nombre] || [];
-      if (currentGroup.multi) {
-        return {
-          ...prev,
-          [currentGroup.nombre]: current.includes(option)
-            ? current.filter(o => o !== option)
-            : [...current, option]
-        };
-      }
-      return { ...prev, [currentGroup.nombre]: [option] };
-    });
-  };
+interface ProductModifiersDialogContentProps {
+ product: any;
+ modificadores: any[];
+ currentStep: number;
+ setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
+ selections: { [groupId: string]: string[] };
+ setSelections: React.Dispatch<React.SetStateAction<{ [groupId: string]: string[] }>>;
+ onConfirm: (selectedOptions: string[]) => void;
+ onClose: () => void;
+}
 
-  const handleNext = () => {
-    if (!canProceed) return;
-    if (!isLastStep) {
-      setCurrentStep(s => s + 1);
-    } else {
-      const all: string[] = [];
-      Object.values(selections).forEach(opts => all.push(...opts));
-      onConfirm(all);
-      onClose();
-    }
-  };
+function ProductModifiersDialogContent({
+ product,
+ modificadores,
+ currentStep,
+ setCurrentStep,
+ selections,
+ setSelections,
+ onConfirm,
+ onClose,
+}: ProductModifiersDialogContentProps) {
 
-  return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={
-        <Group gap="xs" wrap="nowrap">
-          <Text fw={800} size="md" truncate>{product.nombre}</Text>
-          {modificadores.length > 1 && (
-            <Text size="sm" c="dimmed" fw={600} style={{ flexShrink: 0 }}>
-              {currentStep + 1}/{modificadores.length}
-            </Text>
-          )}
-        </Group>
-      }
-      centered
-      radius="xl"
-      size={isMobile ? '100%' : 'sm'}
-      zIndex={2000}
-      styles={{
-        header: { borderBottom: '1px solid var(--pos-border)', paddingBottom: rem(12) },
-        body: { 
-          padding: rem(16),
-          ...(isMobile ? {
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            overflow: 'hidden',
-          } : {}),
-        },
-        content: { 
-          overflow: 'hidden',
-          backgroundColor: 'var(--pos-bg)',
-          border: '1px solid var(--pos-border)',
-          ...(isMobile ? {
-            height: 'calc(100dvh - 32px)',
-            width: 'calc(100vw - 32px)',
-            margin: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-          } : {}),
-        }
-      }}
-    >
-      <Stack gap="md" style={isMobile ? { flex: 1, minHeight: 0 } : undefined}>
-        {/* Group label */}
-        <Group justify="space-between" align="center" style={{ flexShrink: 0 }}>
-          <Text fw={700} size="lg">{currentGroup.nombre}</Text>
-          <Badge
-            color={currentGroup.obligatorio ? 'red' : 'gray'}
-            variant="light"
-            size="sm"
-            radius="sm"
-          >
-            {currentGroup.obligatorio ? 'Requerido' : 'Opcional'}
-          </Badge>
-        </Group>
+ const currentGroup = modificadores[currentStep];
+ const selectedOpts = selections[currentGroup.nombre] || [];
+ const isLastStep = currentStep === modificadores.length - 1;
+ const canProceed = !currentGroup.obligatorio || selectedOpts.length > 0;
 
-        {/* Options — large tap targets */}
-        <ScrollArea
-          offsetScrollbars
-          style={isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: 300 }}
-        >
-          <Stack gap="xs" pb="xs">
-            {currentGroup.opciones.map((option: string) => {
-              const selected = selectedOpts.includes(option);
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => toggle(option)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 16px',
-                    borderRadius: 14,
-                    border: `2px solid ${selected ? 'var(--mantine-color-myColor-5)' : 'var(--pos-border)'}`,
-                    backgroundColor: selected ? 'var(--mantine-color-myColor-0)' : 'white',
-                    cursor: 'pointer',
-                    width: '100%',
-                    transition: 'border-color 0.15s, background-color 0.15s',
-                    WebkitTapHighlightColor: 'transparent',
-                    userSelect: 'none',
-                  }}
-                >
-                  <Text size="md" fw={selected ? 700 : 500} c={selected ? 'blue' : 'var(--pos-text)'}>
-                    {option}
-                  </Text>
-                  {selected && <CheckIcon size={18} weight="bold" color="var(--mantine-color-myColor-5)" />}
-                </button>
-              );
-            })}
-          </Stack>
-        </ScrollArea>
+ const toggle = (option: string) => {
+ setSelections(prev => {
+ const current = prev[currentGroup.nombre] || [];
+ if (currentGroup.multi) {
+ return {
+ ...prev,
+ [currentGroup.nombre]: current.includes(option)
+ ? current.filter(o => o !== option)
+ : [...current, option]
+ };
+ }
+ return { ...prev, [currentGroup.nombre]: [option] };
+ });
+ };
 
-        {/* Footer */}
-        <Group justify="space-between" pt="xs" style={{ borderTop: '1px solid var(--pos-border)', flexShrink: 0 }}>
-          <Button
-            variant="subtle"
-            color="gray"
-            size="md"
-            disabled={currentStep === 0}
-            onClick={() => setCurrentStep(s => s - 1)}
-            leftSection={<ArrowLeftIcon size={16} weight="bold" />}
-          >
-            Atrás
-          </Button>
+ const handleNext = () => {
+ if (!canProceed) return;
+ if (!isLastStep) {
+ setCurrentStep(s => s + 1);
+ } else {
+ const all: string[] = [];
+ Object.values(selections).forEach(opts => all.push(...opts));
+ onConfirm(all);
+ onClose();
+ }
+ };
 
-          <Button
-            color={isLastStep ? 'teal' : 'blue'}
-            size="md"
-            fw={700}
-            disabled={!canProceed}
-            onClick={handleNext}
-            rightSection={isLastStep ? <CheckIcon size={16} weight="bold" /> : undefined}
-          >
-            {isLastStep ? 'Agregar' : 'Siguiente'}
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  );
+ return (
+ <DialogContent className="max-w-sm overflow-hidden flex flex-col p-5 gap-4">
+ {/* Header */}
+ <div className="flex items-center justify-between border-b border-border pb-3">
+ <DialogTitle asChild>
+ <div className="flex items-center gap-2 truncate">
+ <h3 className="font-extrabold text-sm text-foreground truncate">{product.nombre}</h3>
+ {modificadores.length > 1 && (
+ <span className="text-xs font-semibold text-muted-foreground shrink-0">
+ {currentStep + 1}/{modificadores.length}
+ </span>
+ )}
+ </div>
+ </DialogTitle>
+ </div>
+ <DialogDescription className="sr-only">Selecciona los modificadores del producto</DialogDescription>
+
+ {/* Group Label */}
+ <div className="flex items-center justify-between">
+ <h4 className="font-extrabold text-base text-foreground">{currentGroup.nombre}</h4>
+ <span className={cn("px-2 py-0.5 rounded-md font-bold text-[10px]",
+ currentGroup.obligatorio ?"bg-destructive/10 text-destructive":"bg-muted text-muted-foreground")}>
+ {currentGroup.obligatorio ?'Requerido':'Opcional'}
+ </span>
+ </div>
+
+ {/* Options List */}
+ <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
+ {currentGroup.opciones.map((option: string) => {
+ const selected = selectedOpts.includes(option);
+ return (
+ <button
+ key={option}
+ type="button"onClick={() => toggle(option)}
+ className={cn("w-full px-4 py-3 rounded-xl border-2 font-semibold text-sm flex items-center justify-between transition-all cursor-pointer select-none active:scale-98 text-left",
+ selected
+ ?"bg-primary/10 border-primary text-primary":"bg-card border-border text-foreground")}
+ >
+ <span>{option}</span>
+ {selected && <Check size={18} weight="bold"className="text-primary"/>}
+ </button>
+ );
+ })}
+ </div>
+
+ {/* Footer Buttons */}
+ <div className="flex items-center justify-between pt-3 border-t border-border">
+ <Button
+ type="button"variant="ghost"disabled={currentStep === 0}
+ onClick={() => setCurrentStep(s => s - 1)}
+ className="text-muted-foreground text-xs font-bold gap-1">
+ <ArrowLeft size={16} weight="bold"/> Atrás
+ </Button>
+
+ <Button
+ type="button"disabled={!canProceed}
+ onClick={handleNext}
+ className={cn("font-bold text-xs gap-1.5",
+ isLastStep ?"bg-emerald-600 text-white":"")}
+ >
+ <span>{isLastStep ?'Agregar':'Siguiente'}</span>
+ {isLastStep && <Check size={16} weight="bold"/>}
+ </Button>
+ </div>
+ </DialogContent>
+ );
 }
