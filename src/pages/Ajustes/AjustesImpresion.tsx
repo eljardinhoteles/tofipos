@@ -27,7 +27,7 @@ const ROLE_LABELS: Record<PrinterRole, { label: string; icon: React.ElementType 
 export default function AjustesImpresion() {
  const [serverOk, setServerOk] = useState<boolean | null>(null);
  const [serverQueue, setServerQueue] = useState<number | null>(null);
- const [serverUrl, setServerUrl] = useState('http://127.0.0.1:18181');
+ const [, setServerUrl] = useState('http://127.0.0.1:18181');
  const [serverUrlInput, setServerUrlInput] = useState('http://127.0.0.1:18181');
  const [, setLastAction] = useState('Sin verificar');
  const [tokenInput, setTokenInput] = useState('');
