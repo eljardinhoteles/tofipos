@@ -8,6 +8,7 @@ import {
  getPrintServerStatus,
  testPrintServerPrinter,
  savePrintToken,
+ savePrintServerUrl,
  listSystemPrinters,
  listConfiguredPrinters,
  addConfiguredPrinter,
@@ -27,6 +28,7 @@ export default function AjustesImpresion() {
  const [serverOk, setServerOk] = useState<boolean | null>(null);
  const [serverQueue, setServerQueue] = useState<number | null>(null);
  const [serverUrl, setServerUrl] = useState('http://127.0.0.1:18181');
+ const [serverUrlInput, setServerUrlInput] = useState('http://127.0.0.1:18181');
  const [, setLastAction] = useState('Sin verificar');
  const [tokenInput, setTokenInput] = useState('');
 
@@ -37,7 +39,9 @@ export default function AjustesImpresion() {
  const [testingId, setTestingId] = useState<string | null>(null);
 
  useEffect(() => {
- setServerUrl(localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181');
+ const storedUrl = localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181';
+ setServerUrl(storedUrl);
+ setServerUrlInput(storedUrl);
  setTokenInput(localStorage.getItem('pos_print_server_token') ||'');
  }, []);
 
@@ -76,6 +80,16 @@ export default function AjustesImpresion() {
  refreshStatus();
  loadCatalog();
  }, []);
+
+ const handleSaveServerUrl = async () => {
+ savePrintServerUrl(serverUrlInput);
+ const storedUrl = localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181';
+ setServerUrl(storedUrl);
+ setServerUrlInput(storedUrl);
+ showToast.success('URL guardada','Este dispositivo ahora apunta a ese print server.');
+ await loadCatalog();
+ await refreshStatus();
+ };
 
  const handleSaveToken = async () => {
  savePrintToken(tokenInput);
@@ -185,9 +199,20 @@ export default function AjustesImpresion() {
  </div>
  </div>
 
- <div className="p-3 rounded-xl bg-muted border border-border flex flex-col gap-1 text-xs">
- <span className="text-muted-foreground font-bold">URL activa</span>
- <span className="font-mono font-bold text-foreground">{serverUrl}</span>
+ <div className="flex flex-col gap-1.5">
+ <span className="text-xs text-muted-foreground font-bold">URL del print server</span>
+ <div className="flex items-center gap-3">
+ <Input
+ type="text"placeholder="http://192.168.0.137:18181"value={serverUrlInput}
+ onChange={(e) => setServerUrlInput(e.target.value)}
+ className="flex-1 text-xs font-mono"/>
+ <Button size="sm"onClick={handleSaveServerUrl}>
+ Guardar URL
+ </Button>
+ </div>
+ <span className="text-[11px] text-muted-foreground">
+ En este dispositivo usa 127.0.0.1. En celulares/tablets de la misma red, usa la IP local de la PC con el print server (ej: 192.168.0.137).
+ </span>
  </div>
  </div>
 

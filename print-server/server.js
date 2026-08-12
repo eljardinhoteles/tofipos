@@ -83,18 +83,50 @@ function requireToken(req, res, next) {
 // roles activos, y varias impresoras pueden compartir el mismo rol (se
 // imprime en todas).
 
+// Las impresoras ESC/POS no entienden UTF-8: interpretan cada byte contra una
+// página de códigos de 8 bits propia. Mandamos "ESC t 2" para seleccionar
+// CP850 (Multilingual/Latin-1) — la página estándar en firmwares EPSON con
+// soporte de tildes y Ñ — y traducimos el texto a esos bytes antes de enviarlo.
+// Solo cubre los caracteres que realmente aparecen en tickets en español;
+// cualquier otro carácter no mapeado cae a '?' en vez de corromper el resto.
+const CP850_MAP = {
+  'á': 0xa0, 'é': 0x82, 'í': 0xa1, 'ó': 0xa2, 'ú': 0xa3,
+  'Á': 0xb5, 'É': 0x90, 'Í': 0xd6, 'Ó': 0xe0, 'Ú': 0xe9,
+  'ñ': 0xa4, 'Ñ': 0xa5,
+  'ü': 0x81, 'Ü': 0x9a,
+  '¿': 0xa8, '¡': 0xad,
+  '€': 0xd5,
+};
+
+function encodeCp850(text) {
+  const out = Buffer.alloc(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const code = ch.codePointAt(0);
+    if (code < 0x80) {
+      out[i] = code;
+    } else if (CP850_MAP[ch] !== undefined) {
+      out[i] = CP850_MAP[ch];
+    } else {
+      out[i] = 0x3f; // '?' — carácter fuera de la tabla soportada
+    }
+  }
+  return out;
+}
+
 function printRawToPrinterName(printerName, content) {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
     // ESC/POS: reset size, feed 5 lines then full cut (GS V 65 5)
+    const selectCp850 = Buffer.from([0x1b, 0x74, 0x02]); // ESC t 2 — página CP850
     const resetAndCut = Buffer.from([
       0x1b, 0x21, 0x00,  // SIZE_NORMAL
       0x1b, 0x45, 0x00,  // BOLD_OFF
       0x1b, 0x61, 0x00,  // ALIGN_LEFT
       0x1d, 0x56, 0x41, 0x05, // GS V 65 5 — feed 5 lines + full cut
     ]);
-    const contentBuf = Buffer.from(content, 'utf8');
-    fs.writeFileSync(tmpFile, Buffer.concat([contentBuf, resetAndCut]));
+    const contentBuf = encodeCp850(content);
+    fs.writeFileSync(tmpFile, Buffer.concat([selectCp850, contentBuf, resetAndCut]));
     console.log(`[deliver] printer name: ${printerName}, tmp: ${tmpFile}`);
 
     // Send raw bytes directly via WinAPI WritePrinter — bypasses GDI/fonts/margins

@@ -5,6 +5,7 @@ import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SidebarPagosModal } from'./SidebarPagosModal';
 import { generarTicketPago, generarPrecuenta } from'../../../services/printTemplateEngine';
+import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
@@ -255,6 +256,21 @@ export function SidebarReceiptViewer({
  setPreviewContent(content);
  setPreviewTitle(esComandaEnHabitacionActiva ?`Imprimir Precuenta - ${selectedMesa.nombre}`:`Reimprimir Recibo - ${selectedMesa.nombre}`);
  setPreviewOpened(true);
+ if (esComandaEnHabitacionActiva) {
+ queueReceiptPrint({
+ comanda: activeComanda,
+ items: comandaItems,
+ mesaNombre: selectedMesa.nombre,
+ ivaPorcentaje,
+ habitacionNombre: habitacionMesa?.nombre,
+ }).catch(err => console.warn('print server offline', err));
+ } else {
+ queueReprintTicket({
+ rawText: content,
+ mesaNombre: selectedMesa.nombre,
+ comanda: activeComanda,
+ }).catch(err => console.warn('print server offline', err));
+ }
  }}
  >
  <Printer size={18} weight="bold"className="mr-1.5"/> {esComandaEnHabitacionActiva ?'Imprimir Precuenta':'Reimprimir'}

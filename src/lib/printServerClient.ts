@@ -32,6 +32,12 @@ export function savePrintToken(token: string) {
   localStorage.setItem('pos_print_server_token', token.trim());
 }
 
+export function savePrintServerUrl(url: string) {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (trimmed) localStorage.setItem('pos_print_server_url', trimmed);
+  else localStorage.removeItem('pos_print_server_url');
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${getBaseUrl()}${path}`, {
     headers: {
@@ -110,6 +116,20 @@ export async function queueReceiptPrint(params: {
     body: JSON.stringify({
       kind: 'receipt',
       title: `Precuenta - ${mesaNombre}`,
+      payload: { comanda, mesaNombre },
+      raw_text: rawText,
+    }),
+  });
+}
+
+/** Reimpresión de un ticket/recibo ya generado (p.ej. con generarTicketPago), sin regenerar el contenido. */
+export async function queueReprintTicket(params: { rawText: string; mesaNombre: string; comanda: Comanda }) {
+  const { rawText, mesaNombre, comanda } = params;
+  return requestJson('/jobs', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'receipt',
+      title: `Reimpresión - ${mesaNombre}`,
       payload: { comanda, mesaNombre },
       raw_text: rawText,
     }),
