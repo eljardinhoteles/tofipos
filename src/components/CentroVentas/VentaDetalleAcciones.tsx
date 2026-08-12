@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  Receipt, Prohibit, ArrowCounterClockwise, Paperclip, UploadSimple, Trash, Plus,
-  CurrencyDollar, ArrowUp, ArrowDown, CheckCircle, FileText, XCircle, CreditCard, ChatText,
+  Receipt, Prohibit, ArrowCounterClockwise, Paperclip, Trash, Plus,
+  CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
   Table, ForkKnife, BedIcon,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';

@@ -7,7 +7,6 @@ import { useDbEpoch } from'../hooks/useDbEpoch';
 import { useRxClientes } from'../hooks/useRxClientes';
 import { Card, CardContent, CardHeader } from'@/components/ui/card';
 import { Badge } from'@/components/ui/badge';
-import { Button } from'@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar as CalendarPicker } from'@/components/ui/calendar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from'@/components/ui/chart';

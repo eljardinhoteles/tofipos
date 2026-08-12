@@ -758,7 +758,7 @@ const pagoSchema = {
   indexes: ['comanda_id', 'fecha', 'organization_id', '_modified', 'metodo_definido', 'anclado', 'anulado', 'facturado']
 } as const
 
-const cobroReservaSchema = {
+export const cobroReservaSchema = {
   version: 6,
   primaryKey: 'id',
   type: 'object',

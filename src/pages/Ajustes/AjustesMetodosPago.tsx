@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Bank, CreditCard, Plus, X } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { showToast } from '@/lib/toast';
 import { useMetodosPagoConfig } from '../../hooks/useMetodosPagoConfig';
 

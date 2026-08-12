@@ -378,9 +378,9 @@ export default function CentroVentasV2() {
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-muted-foreground truncate font-medium">{item.venta.referencia || 'Sin referencia'}</span>
                             <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                              {item.textoComentarios && <ChatText size={12} className="text-blue-600" title={`Comentario: ${item.textoComentarios}`} />}
-                              {item.comprobanteUrl && <Paperclip size={12} className="text-primary" title="Tiene comprobante" />}
-                              {item.facturado && <Receipt size={12} weight="fill" className="text-emerald-600" title="Facturado" />}
+                              {item.textoComentarios && <div title={`Comentario: ${item.textoComentarios}`}><ChatText size={12} className="text-blue-600" /></div>}
+                              {item.comprobanteUrl && <div title="Tiene comprobante"><Paperclip size={12} className="text-primary" /></div>}
+                              {item.facturado && <div title="Facturado"><Receipt size={12} weight="fill" className="text-emerald-600" /></div>}
                             </div>
                           </div>
                         </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from'react';
-import { MagnifyingGlass, User, Clock, Bed, ForkKnife, Calendar, CheckCircle, XCircle, Receipt } from'@phosphor-icons/react';
+import { MagnifyingGlass, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt } from'@phosphor-icons/react';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
