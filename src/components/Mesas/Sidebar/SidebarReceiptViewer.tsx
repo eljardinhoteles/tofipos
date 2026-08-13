@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from'react';
 import { X, Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
+import { ComandaItemRow } from'./ComandaItemRow';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SidebarPagosModal } from'./SidebarPagosModal';
@@ -191,35 +192,10 @@ export function SidebarReceiptViewer({
  </div>
  </div>
 
- {/* Lista de Ítems — mismo patrón que ComandaItemRow: badge cuadrado + zebra */}
  <main className="flex-1 overflow-y-auto">
- {comandaItems.map((item, index) => {
- const isOdd = index % 2 === 1;
- return (
- <div key={item.id} className={cn("flex items-center gap-3 w-full px-4 py-3", isOdd &&"bg-muted/70")}>
- <div className="w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
- {item.cantidad}
- </div>
- <div className="flex flex-col flex-1 min-w-0">
- <div className="flex items-center justify-between gap-2">
- <span className="font-bold text-sm text-foreground truncate">{item.nombre}</span>
- <span className="font-black text-sm text-foreground shrink-0">
- ${(item.precio * item.cantidad).toFixed(2)}
- </span>
- </div>
- {item.modificadores && item.modificadores.length > 0 && (
- <div className="flex items-center gap-1 flex-wrap mt-0.5">
- {item.modificadores.map((mod: string, i: number) => (
- <span key={`${mod}-${i}`} className="px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground font-medium text-[10px]">
- {mod}
- </span>
+ {comandaItems.map((item, index) => (
+ <ComandaItemRow key={item.id} item={item} index={index} />
  ))}
- </div>
- )}
- </div>
- </div>
- );
- })}
  </main>
 
  {/* Totales y Acciones — mismo bloque que SidebarDetails */}

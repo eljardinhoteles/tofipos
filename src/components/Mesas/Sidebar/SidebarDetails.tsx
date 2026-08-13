@@ -11,9 +11,10 @@ import { SidebarCloseCuentaModal } from'./SidebarCloseCuentaModal';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
-import { createRxVenta, updateRxComanda, updateRxComandaItem, updateRxMesa } from'../../../db/rxdb';
+import { createRxVenta, updateRxComanda, updateRxComandaItem, updateRxMesa, anularComandaItem } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { useUI } from'../../../context/UIContext';
+import { useAuth } from'../../../context/AuthContext';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { queueKitchenPrint, queueReceiptPrint } from'../../../lib/printServerClient';
 import { generarPrecuenta } from'../../../services/printTemplateEngine';
@@ -62,6 +63,11 @@ export function SidebarDetails({
  // usuario alcance a revisar/cancelar.
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [editingItem, setEditingItem] = useState<any | null>(null);
+ // Flujo inline de anulación de un ítem ya confirmado (bloqueado): mismo
+ // patrón "confirmando + motivo" que MovimientoHistorialCard.tsx.
+ const [anulandoItem, setAnulandoItem] = useState(false);
+ const [anularMotivo, setAnularMotivo] = useState('');
+ const { currentMesero } = useAuth();
  const [showPagosModal, setShowPagosModal] = useState(false);
 
  const [closeCuentaModalOpen, setCloseCuentaModalOpen] = useState(false);
@@ -154,10 +160,31 @@ export function SidebarDetails({
  setEditCantidad(editingItem.cantidad);
  setEditPrecio(editingItem.precio);
  }
+ // Cambiar de ítem (o cerrar el panel) cancela cualquier flujo de
+ // anulación a medio llenar, para no arrastrar un motivo viejo al ítem nuevo.
+ setAnulandoItem(false);
+ setAnularMotivo('');
  }, [editingItem]);
+
+ // Un ítem queda bloqueado (no editable/borrable) cuando ya formaba parte
+ // del último lote confirmado a cocina — evita que ediciones locales
+ // desincronicen lo que la cocina ya está preparando. Items agregados
+ // después de esa confirmación (aún no enviados) siguen libres. Un ítem ya
+ // anulado no cuenta como "bloqueado": es un estado terminal propio.
+ const esItemBloqueado = (item: any) =>
+ !!activeComanda?.confirmada &&
+ !!activeComanda?.confirmada_at &&
+ !!item?.created_at &&
+ item.created_at <= activeComanda.confirmada_at &&
+ !item?.anulado;
 
  const handleUpdateItem = async () => {
  if (!editingItem) return;
+ if (esItemBloqueado(editingItem)) {
+ showToast.error('Error','Este ítem ya fue enviado a cocina y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ setEditingItem(null);
+ return;
+ }
  if (editingItem.pagado_cantidad && editingItem.pagado_cantidad > 0) {
  showToast.error('Error','No se puede modificar un producto con unidades pagadas.');
  setEditingItem(null);
@@ -168,15 +195,19 @@ export function SidebarDetails({
  precio: editPrecio
  });
 
- if (activeComanda?.confirmada) {
- await updateRxComanda(activeComanda.id, { confirmada: false });
- }
-
+ // Nota: ya no se resetea `confirmada` aquí. Este punto solo se alcanza
+ // para ítems SIN bloquear (nuevos, no enviados aún a cocina) — editarlos
+ // no debe tumbar la confirmación de lo que ya está en cocina.
  setEditingItem(null);
  };
 
  const handleDeleteItem = async () => {
  if (!editingItem) return;
+ if (esItemBloqueado(editingItem)) {
+ showToast.error('Error','Este ítem ya fue enviado a cocina y no puede eliminarse. Use "Anular ítem" si ya no está disponible.');
+ setEditingItem(null);
+ return;
+ }
  if (editingItem.pagado_cantidad && editingItem.pagado_cantidad > 0) {
  showToast.error('Error','No se puede eliminar un producto con unidades pagadas.');
  setEditingItem(null);
@@ -184,10 +215,19 @@ export function SidebarDetails({
  }
  await updateRxComandaItem(editingItem.id, { _deleted: true });
 
- if (activeComanda?.confirmada) {
- await updateRxComanda(activeComanda.id, { confirmada: false });
- }
+ // Nota: ya no se resetea `confirmada` aquí — ver comentario en handleUpdateItem.
+ setEditingItem(null);
+ };
 
+ const handleAnularItem = async () => {
+ if (!editingItem) return;
+ if (!anularMotivo.trim()) {
+ showToast.error('Error','Debe indicar un motivo para anular el ítem.');
+ return;
+ }
+ await anularComandaItem(editingItem.id, anularMotivo.trim(), currentMesero?.id);
+ setAnulandoItem(false);
+ setAnularMotivo('');
  setEditingItem(null);
  };
 
@@ -202,10 +242,14 @@ export function SidebarDetails({
 
  const handleUpdateModifiers = async (selected: string[]) => {
  if (!editingItem) return;
- await updateRxComandaItem(editingItem.id, { modificadores: selected });
- if (activeComanda?.confirmada) {
- await updateRxComanda(activeComanda.id, { confirmada: false });
+ if (esItemBloqueado(editingItem)) {
+ showToast.error('Error','Este ítem ya fue enviado a cocina y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ setEditingModifiers(false);
+ setEditingItem(null);
+ return;
  }
+ await updateRxComandaItem(editingItem.id, { modificadores: selected });
+ // Nota: ya no se resetea `confirmada` aquí — ver comentario en handleUpdateItem.
  setEditingModifiers(false);
  setEditingItem(null);
  };
@@ -279,6 +323,15 @@ export function SidebarDetails({
  const itemsNuevos = useMemo(() => [...itemsRealmenteNuevos, ...itemsConCantidadExtra], [itemsRealmenteNuevos, itemsConCantidadExtra]);
  const hayItemsNuevos = itemsNuevos.length > 0;
 
+ // Ítems anulados después del último "Confirmar"/"Adicional" — se adjuntan
+ // como sección final del próximo ticket de Adicional que se imprima (no
+ // disparan una impresión aparte solo por anularse).
+ const itemsAnuladosDesdeUltimaConfirmacion = useMemo(() => activeComanda?.confirmada_at
+ ? comandaItems.filter(item =>
+ item.anulado && item.anulado_at && item.anulado_at > activeComanda.confirmada_at
+ )
+ : [], [activeComanda?.confirmada_at, comandaItems]);
+
  const handlePrintPrecuenta = () => {
  const content = generarPrecuenta(
  activeComanda,
@@ -337,7 +390,9 @@ export function SidebarDetails({
  withBebida(itemsNuevos),
  selectedMesa.nombre,
  true,
- linkedMesa?.nombre
+ linkedMesa?.nombre,
+ false,
+ withBebida(itemsAnuladosDesdeUltimaConfirmacion)
  );
  setPreviewContent(content);
  setPreviewTitle(`Adicional Cocina - ${selectedMesa.nombre}`);
@@ -355,6 +410,7 @@ export function SidebarDetails({
  mesaNombre: selectedMesa.nombre,
  esAdicional: true,
  habitacionNombre: linkedMesa?.nombre,
+ itemsAnulados: withBebida(itemsAnuladosDesdeUltimaConfirmacion),
  }).catch(err => console.warn('print server offline', err));
  });
  setPreviewOpened(true);
@@ -553,6 +609,7 @@ export function SidebarDetails({
  item={item}
  index={index}
  isSelected={editingItem?.id === item.id}
+ isLocked={esItemBloqueado(item)}
  onClick={() => setEditingItem(item)}
  />
  ))}
@@ -623,7 +680,7 @@ export function SidebarDetails({
  </Button>
  <Button
  variant="secondary"className="w-full font-bold text-primary bg-primary/10"onClick={() => onAction(selectedMesa,'cuenta')}
- disabled={total === 0}
+ disabled={total === 0 || !activeComanda?.confirmada}
  >
  <Check size={18} weight="bold"className="mr-1.5"/>
  Pedir Cuenta
@@ -637,7 +694,7 @@ export function SidebarDetails({
  }
  setShowRoomChargeModal(true);
  }}
- disabled={comandaItems.length === 0}
+ disabled={comandaItems.length === 0 || !activeComanda?.confirmada}
  >
  <Bed size={18} weight="bold"className="mr-1.5"/> Cargar Hab.
  </Button>
@@ -675,6 +732,65 @@ export function SidebarDetails({
  </div>
  )}
  </>
+ ) : editingItem.anulado ? (
+ // Estado terminal: un ítem anulado no admite ninguna acción más,
+ // solo se muestra el motivo/fecha de la anulación.
+ <div className="flex flex-col gap-3">
+ <div className="flex items-center justify-between">
+ <span className="font-extrabold text-xs text-destructive">Ítem Anulado</span>
+ <Button variant="ghost"size="icon"className="h-6 w-6"onClick={() => setEditingItem(null)}>
+ <X size={14} />
+ </Button>
+ </div>
+ <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex flex-col gap-1">
+ <span className="text-sm font-bold text-foreground line-through">{editingItem.nombre}</span>
+ {editingItem.anulado_motivo && (
+ <span className="text-xs text-muted-foreground">Motivo: {editingItem.anulado_motivo}</span>
+ )}
+ {editingItem.anulado_at && (
+ <span className="text-[10px] text-muted-foreground">
+ {new Date(editingItem.anulado_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(editingItem.anulado_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
+ </span>
+ )}
+ </div>
+ <Button variant="outline"className="w-full font-bold"onClick={() => setEditingItem(null)}>
+ Cerrar
+ </Button>
+ </div>
+ ) : esItemBloqueado(editingItem) ? (
+ // Ítem ya confirmado/enviado a cocina: no se edita ni se borra, solo
+ // se puede anular (con motivo) si ya no está disponible.
+ <div className="flex flex-col gap-3">
+ <div className="flex items-center justify-between">
+ <span className="font-extrabold text-xs text-foreground">{editingItem.nombre}</span>
+ <Button variant="ghost"size="icon"className="h-6 w-6"onClick={() => setEditingItem(null)}>
+ <X size={14} />
+ </Button>
+ </div>
+ <p className="text-[11px] text-muted-foreground">
+ Este ítem ya fue enviado a cocina y no puede modificarse. Si ya no está disponible, anúlalo.
+ </p>
+ {!anulandoItem ? (
+ <Button
+ variant="destructive"className="w-full bg-destructive/10 text-destructive"onClick={() => setAnulandoItem(true)}
+ >
+ <Trash size={14} className="mr-1"/> Anular ítem
+ </Button>
+ ) : (
+ <div className="flex items-center gap-2">
+ <Input
+ type="text"placeholder="Motivo de anulación"value={anularMotivo}
+ onChange={(e) => setAnularMotivo(e.target.value)}
+ className="h-8 text-xs flex-1"/>
+ <Button type="button"variant="destructive"size="sm"onClick={handleAnularItem} className="h-8 text-xs font-bold shrink-0">
+ Confirmar
+ </Button>
+ <Button type="button"variant="ghost"size="sm"onClick={() => { setAnulandoItem(false); setAnularMotivo(''); }} className="h-8 text-xs shrink-0">
+ Cancelar
+ </Button>
+ </div>
+ )}
+ </div>
  ) : (
  <div className="flex flex-col gap-3">
  <div className="flex items-center justify-between">

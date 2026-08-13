@@ -1,4 +1,5 @@
 import { memo } from'react';
+import { Lock } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 
 export interface ComandaItemData {
@@ -8,6 +9,8 @@ export interface ComandaItemData {
  precio: number;
  modificadores?: string[];
  pagado_cantidad?: number;
+ anulado?: boolean;
+ anulado_motivo?: string | null;
 }
 
 interface ComandaItemRowProps {
@@ -15,11 +18,16 @@ interface ComandaItemRowProps {
  index: number;
  onClick?: () => void;
  isSelected?: boolean;
+ // Ítem ya confirmado/enviado a cocina — no editable/borrable normalmente,
+ // solo anulable. Calculado por el padre (esItemBloqueado), este componente
+ // no conoce confirmada_at ni ninguna lógica de negocio.
+ isLocked?: boolean;
 }
 
-export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClick, isSelected }: ComandaItemRowProps) {
+export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClick, isSelected, isLocked }: ComandaItemRowProps) {
  const pagado = item.pagado_cantidad || 0;
  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
+ const isAnulado = !!item.anulado;
  const isReadOnly = !onClick;
  const isOdd = index % 2 === 1;
 
@@ -27,21 +35,25 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  <div className="flex items-center gap-3 w-full px-4 py-3">
  {/* Badge de cantidad */}
  <div className={cn("w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0",
- isFullyPaid ?"bg-emerald-100 border-emerald-300 text-emerald-800":"bg-muted border-border text-foreground")}>
+ isAnulado ?"bg-destructive/10 border-destructive/30 text-destructive": isFullyPaid ?"bg-emerald-100 border-emerald-300 text-emerald-800":"bg-muted border-border text-foreground")}>
  {item.cantidad}
  </div>
 
  {/* Contenido */}
  <div className="flex flex-col flex-1 min-w-0">
  <div className="flex items-center justify-between gap-2">
- <span className="font-bold text-sm text-foreground truncate">{item.nombre}</span>
+ <span className={cn("font-bold text-sm truncate flex items-center gap-1.5",
+ isAnulado ?"line-through text-muted-foreground":"text-foreground")}>
+ {isLocked && !isAnulado && <Lock size={11} weight="bold"className="text-muted-foreground shrink-0"/>}
+ {item.nombre}
+ </span>
  <span className={cn("font-black text-sm shrink-0",
- isFullyPaid ?"line-through text-muted-foreground":"text-foreground")}>
+ (isAnulado || isFullyPaid) ?"line-through text-muted-foreground":"text-foreground")}>
  ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
  </span>
  </div>
 
- {(item.modificadores?.length || pagado > 0 || item.cantidad > 1) ? (
+ {(item.modificadores?.length || pagado > 0 || item.cantidad > 1 || isAnulado) ? (
  <div className="flex items-center justify-between gap-2 mt-0.5">
  <div className="flex items-center gap-1 flex-wrap">
  {item.modificadores && item.modificadores.length > 0 &&
@@ -51,6 +63,11 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  </span>
  ))
  }
+ {isAnulado && (
+ <span className="px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-destructive">
+ ANULADO
+ </span>
+ )}
  {pagado > 0 && (
  <span className={cn("px-1.5 py-0.5 rounded font-bold text-[10px] text-white",
  isFullyPaid ?"bg-emerald-600":"bg-amber-600")}>
@@ -65,12 +82,16 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  )}
  </div>
  ) : null}
+
+ {isAnulado && item.anulado_motivo && (
+ <span className="text-[10px] text-muted-foreground mt-0.5 truncate">Motivo: {item.anulado_motivo}</span>
+ )}
  </div>
  </div>
  );
 
  return (
- <div className={cn("w-full transition-opacity", isFullyPaid &&"opacity-60")}>
+ <div className={cn("w-full transition-opacity", (isFullyPaid || isAnulado) &&"opacity-60")}>
  {isReadOnly ? (
  <div className={cn("w-full text-left transition-colors", isOdd &&"bg-muted/70")}>
  {content}

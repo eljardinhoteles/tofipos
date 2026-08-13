@@ -148,6 +148,7 @@ interface PrintableItem extends Partial<ComandaItem> {
   cantidad: number;
   qtyToPay?: number;
   es_bebida?: boolean;
+  anulado_motivo?: string | null;
 }
 
 /**
@@ -161,6 +162,7 @@ export function generarComandaCocina(
   esAdicional = false,
   habitacionNombre?: string,
   forPrinter = false,
+  itemsAnulados?: PrintableItem[],
 ): string {
   // Shorthand: only emit ESC/POS sequences when printing
   const p = (cmd: string) => forPrinter ? cmd : '';
@@ -302,6 +304,32 @@ export function generarComandaCocina(
     t += notasBlock();
   }
 
+  // Sección final: ítems anulados desde la última confirmación (se acabó
+  // el insumo, error de cocina). No se borran del sistema — aquí solo se
+  // avisa a cocina para que no los prepare / deje de prepararlos.
+  if (itemsAnulados && itemsAnulados.length > 0) {
+    if (forPrinter) {
+      t += p(POS.CUT_PARTIAL);
+    } else {
+      t += `${'='.repeat(48)}\n`;
+      t += `${' '.repeat(16)}RECORTAR AQUI${' '.repeat(19)}\n`;
+      t += `${'='.repeat(48)}\n\n`;
+    }
+    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
+    t += `*** ITEMS ANULADOS ***\n`;
+    t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT);
+    t += `${'='.repeat(48)}\n\n`;
+    itemsAnulados.forEach(item => {
+      t += p(POS.BOLD_ON);
+      t += `${item.cantidad}  ${item.nombre.toUpperCase()} — ANULADO\n`;
+      t += p(POS.BOLD_OFF);
+      if (item.anulado_motivo) {
+        t += `   Motivo: ${item.anulado_motivo}\n`;
+      }
+      t += '\n';
+    });
+  }
+
   return t;
 }
 
@@ -353,8 +381,10 @@ export function generarPrecuenta(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Items ───────────────────────────────────────────────────────
+  // Los ítems anulados no se cobran ni se muestran: esta precuenta es para
+  // que el cliente revise lo que va a pagar, no un registro interno.
   let subtotal = 0;
-  items.forEach(item => {
+  items.filter(item => !item.anulado).forEach(item => {
     const itemTotal = item.precio * item.cantidad;
     subtotal += itemTotal;
     t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
@@ -454,7 +484,7 @@ export function generarPrecuentaConsolidadaHabitacion(
     t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
     t += `${'-'.repeat(W)}\n`;
 
-    items.forEach(item => {
+    items.filter(item => !item.anulado).forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       granSubtotal += itemTotal;
       t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
@@ -534,7 +564,7 @@ export function generarTicketReserva(
     t += `Cant  -  Detalle  -  Total\n\n`;
 
     let subtotal = 0;
-    items.forEach(item => {
+    items.filter(item => !item.anulado).forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       subtotal += itemTotal;
       t += `${item.cantidad} - ${item.nombre.toUpperCase()} - $${itemTotal.toFixed(2)}\n`;
@@ -629,7 +659,7 @@ export function generarTicketPago(
 
   // ── Items ───────────────────────────────────────────────────────
   let subtotal = 0;
-  items.forEach(item => {
+  items.filter(item => !item.anulado).forEach(item => {
     const itemTotal = item.precio * item.cantidad;
     subtotal += itemTotal;
     t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
@@ -731,7 +761,7 @@ export function generarPrecuentaDividida(
   // ── Items ───────────────────────────────────────────────────────
   let subtotal = 0;
   if (items && items.length > 0) {
-    items.forEach(item => {
+    items.filter(item => !item.anulado).forEach(item => {
       const qty = item.qtyToPay || item.cantidad || 1;
       const itemTotal = item.precio * qty;
       subtotal += itemTotal;

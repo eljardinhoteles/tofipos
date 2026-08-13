@@ -86,7 +86,10 @@ export function calcularTotalesComanda(
   const menuMap = new Map<string, MenuItem>();
   menuItems.forEach(item => menuMap.set(item.id, item));
   
-  comandaItems.forEach(item => {
+  // Los ítems anulados (se acabó el insumo, error de cocina) nunca se
+  // cobran: se excluyen de todos los totales derivados (subtotal, IVA,
+  // saldo pendiente, montos de división, etc.) en todo el sistema.
+  comandaItems.filter(item => !item.anulado).forEach(item => {
     // 1. Obtener el MenuItem de referencia para conocer sus impuestos
     const menuItem = menuMap.get(item.item_id);
     

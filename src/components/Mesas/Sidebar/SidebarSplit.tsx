@@ -343,7 +343,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <div className="flex flex-col gap-3">
  <span className="text-xs font-bold text-foreground/80">Selecciona lo que deseas pagar ahora:</span>
  <div className="flex flex-col gap-2">
- {comandaItems.filter(item => (item.cantidad - (item.pagado_cantidad || 0)) > 0).map(item => {
+ {comandaItems.filter(item => !item.anulado && (item.cantidad - (item.pagado_cantidad || 0)) > 0).map(item => {
  const qtyPendiente = item.cantidad - (item.pagado_cantidad || 0);
  const selectedQty = selectedItems.find(si => si.id === item.id)?.qtyToPay || 0;
  return (

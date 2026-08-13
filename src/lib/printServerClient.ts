@@ -155,9 +155,10 @@ export async function queueKitchenPrint(params: {
   mesaNombre: string;
   esAdicional?: boolean;
   habitacionNombre?: string;
+  itemsAnulados?: ComandaItem[];
 }) {
-  const { comanda, items, mesaNombre, esAdicional = false, habitacionNombre } = params;
-  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre, true);
+  const { comanda, items, mesaNombre, esAdicional = false, habitacionNombre, itemsAnulados = [] } = params;
+  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre, true, itemsAnulados as any);
   return requestJson('/jobs', {
     method: 'POST',
     body: JSON.stringify({
@@ -169,6 +170,7 @@ export async function queueKitchenPrint(params: {
         esAdicional,
         habitacionNombre,
         items,
+        itemsAnulados,
       },
       raw_text: rawText,
     }),

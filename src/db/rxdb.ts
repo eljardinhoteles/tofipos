@@ -90,6 +90,14 @@ export interface RxComandaItem {
   // detalle de la comanda tal como se sirvió.
   cortesia_cantidad?: number | null
   cortesia_motivo?: string | null
+  // Anulación puntual: el item ya fue confirmado/enviado a cocina, pero ya
+  // no está disponible (se acabó, error de cocina). Nunca se borra — queda
+  // visible tachado con su motivo, para trazabilidad. Mismo patrón que
+  // RxPago/RxVentaMovimiento.anulado.
+  anulado?: boolean
+  anulado_motivo?: string | null
+  anulado_at?: string | null
+  anulado_por?: string | null
   created_at?: string
   updated_at: string
   organization_id: string
@@ -528,7 +536,7 @@ const comandaSchema = {
 } as const
 
 const comandaItemSchema = {
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -544,6 +552,10 @@ const comandaItemSchema = {
     pagado_cantidad: { type: ['number', 'null'] },
     cortesia_cantidad: { type: ['number', 'null'] },
     cortesia_motivo: { type: ['string', 'null'] },
+    anulado: { type: 'boolean' },
+    anulado_motivo: { type: ['string', 'null'] },
+    anulado_at: { type: ['string', 'null'] },
+    anulado_por: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -1141,6 +1153,15 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
       migrationStrategies: {
         // v0 → v1: agrega cortesía por item (cantidad no cobrada + motivo)
         1: (oldDoc: any) => ({ ...oldDoc, cortesia_cantidad: 0, cortesia_motivo: null }),
+        // v1 → v2: agrega anulado/anulado_motivo/anulado_at/anulado_por —
+        // anular un ítem puntual ya enviado a cocina sin borrarlo.
+        2: (oldDoc: any) => ({
+          ...oldDoc,
+          anulado: oldDoc.anulado ?? false,
+          anulado_motivo: oldDoc.anulado_motivo ?? null,
+          anulado_at: oldDoc.anulado_at ?? null,
+          anulado_por: oldDoc.anulado_por ?? null,
+        }),
       }
     },
     pisos: { schema: pisoSchema },
@@ -1288,6 +1309,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     if (!clean.estado) clean.estado = 'pendiente'
     if (clean.pagado_cantidad === null) clean.pagado_cantidad = 0
     if (clean.cortesia_cantidad === null || clean.cortesia_cantidad === undefined) clean.cortesia_cantidad = 0
+    if (clean.anulado === null || clean.anulado === undefined) clean.anulado = false
     return clean
   }
 
@@ -1313,6 +1335,24 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
   // colecciones terminó (ver esperarSyncInicial más abajo).
   let pushEnabled = false
   const markInitialSyncDone = () => { pushEnabled = true }
+
+  // Salvavidas contra deadlock: si al arrancar hay cambios locales
+  // pendientes de push (ej. se editó algo justo antes de recargar), RxDB
+  // intenta subirlos como parte de SU PROPIO ciclo de arranque, antes de
+  // que awaitInitialReplication() resuelva. El guard de arriba rechaza ese
+  // push con una excepción — pero esa misma excepción hace que RxDB nunca
+  // termine de marcar el arranque como completo, así que
+  // awaitInitialReplication() se queda colgada para siempre y el guard
+  // nunca se libera solo. Este timeout rompe ese círculo: si el pull
+  // inicial no logró desbloquear el push en un tiempo razonable, se
+  // habilita de todas formas (mismo criterio que el catch() de abajo,
+  // solo que sin depender de que la promesa llegue a resolver/rechazar).
+  setTimeout(() => {
+    if (!pushEnabled) {
+      console.warn('[RxDB] timeout esperando sincronización inicial, habilitando push de todas formas')
+      markInitialSyncDone()
+    }
+  }, 8000)
 
   const makePushHandler = (tableName: string, transformRow?: (doc: Record<string, unknown>) => Record<string, unknown>) =>
     async (rows: Array<{ newDocumentState: any; assumedMasterState: any }>) => {
@@ -1979,6 +2019,39 @@ export async function updateRxComandaItem(id: string, patch: Partial<RxComandaIt
     summary: itemChangeSummary(before, patch),
     before,
     after: { ...before, ...patch },
+    source: 'rxdb'
+  })
+  return result
+}
+
+// Anula un ítem puntual ya confirmado/enviado a cocina (se acabó el insumo,
+// error de cocina). Nunca se borra — se marca `anulado` con motivo
+// obligatorio, igual que anularVentaMovimiento. Función dedicada (no vía
+// updateRxComandaItem) para que el audit log quede como 'status_change'
+// inequívoco, no un 'update' genérico.
+export async function anularComandaItem(itemId: string, motivo: string, usuarioId?: string) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.comanda_items.findOne(itemId).exec(true)
+  const before = doc?.toJSON()
+  const now = new Date().toISOString()
+  const result = await doc.update({
+    $set: {
+      anulado: true,
+      anulado_motivo: motivo,
+      anulado_at: now,
+      anulado_por: usuarioId,
+      updated_at: now,
+      _modified: now
+    }
+  } as any)
+  await createAuditLog({
+    entity: 'comanda_item',
+    entityId: itemId,
+    action: 'status_change',
+    summary: `Anuló el ítem ${before?.nombre || itemId}: ${motivo}`,
+    before,
+    after: result.toJSON(),
     source: 'rxdb'
   })
   return result

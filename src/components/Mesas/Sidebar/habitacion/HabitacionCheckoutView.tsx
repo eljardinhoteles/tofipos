@@ -138,7 +138,7 @@ export function HabitacionCheckoutView({
 
     const comandasConItems = comandasSeleccionadas.map(c => ({
       comanda: c,
-      items: (itemsByComanda[c.id] || []).filter(item => {
+      items: (itemsByComanda[c.id] || []).filter(item => !item.anulado).filter(item => {
         const draft = cortesiaDrafts[item.id];
         const cantidadCortesia = draft ? draft.cantidad : (item.cortesia_cantidad || 0);
         return cantidadCortesia < item.cantidad;
@@ -268,9 +268,11 @@ export function HabitacionCheckoutView({
                   className={cn("border-b border-border last:border-b-0", isOdd &&"bg-muted/70")}
                 >
                   <div className="flex items-stretch">
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleSeleccion(c.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSeleccion(c.id); } }}
                       className="flex-1 px-4 py-3 flex items-center gap-3 text-left cursor-pointer"
                     >
                       <Checkbox checked={isSelected} className="pointer-events-none shrink-0" />
@@ -280,7 +282,7 @@ export function HabitacionCheckoutView({
                           {new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(c.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
                         </span>
                       </div>
-                    </button>
+                    </div>
 
                     <CollapsibleTrigger
                       className="pl-2 pr-4 flex items-center gap-1.5 text-muted-foreground cursor-pointer shrink-0"
@@ -300,9 +302,11 @@ export function HabitacionCheckoutView({
 
                   <CollapsibleContent>
                     <div className="px-4 pb-3 flex flex-col gap-2 border-t border-border/60 pt-3">
-                      {items.length === 0 ? (
+                      {/* Los ítems anulados no se muestran aquí: ya no se cobran,
+                          no tiene sentido aplicarles cortesía. */}
+                      {items.filter(item => !item.anulado).length === 0 ? (
                         <span className="text-[11px] text-muted-foreground">Sin items.</span>
-                      ) : items.map((item) => {
+                      ) : items.filter(item => !item.anulado).map((item) => {
                         const draft = cortesiaDrafts[item.id] || { cantidad: 0, motivo:''};
                         const enCortesia = draft.cantidad > 0;
                         return (
