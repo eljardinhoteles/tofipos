@@ -19,6 +19,7 @@ import { showToast } from'@/lib/toast';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
 import { generarReporteCocinaConsolidado } from'../../../services/printTemplateEngine';
+import { queueRawKitchenPrint } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { A4ReportPreviewModal } from'../../Common/A4ReportPreviewModal';
 import type { Comanda, HabitacionCuenta } from'../../../db/database';
@@ -47,6 +48,7 @@ export function SidebarKitchenReport({
  const [a4PreviewOpened, setA4PreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
+ const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [loading, setLoading] = useState(false);
 
  const activeMesas = (allMesas ?? [])
@@ -109,8 +111,12 @@ export function SidebarKitchenReport({
 
  setReportData(mesasData);
  if (tipo ==='80mm') {
+ const rawText = generarReporteCocinaConsolidado(mesasData);
  setPreviewTitle('Reporte Consolidado de Cocina');
- setPreviewContent(generarReporteCocinaConsolidado(mesasData));
+ setPreviewContent(rawText);
+ setPreviewOnPrint(() => () => {
+ queueRawKitchenPrint(rawText,'Reporte Consolidado de Cocina').catch(err => console.warn('print server offline', err));
+ });
  setPreviewOpened(true);
  } else {
  setA4PreviewOpened(true);
@@ -232,6 +238,7 @@ export function SidebarKitchenReport({
  onClose={() => setPreviewOpened(false)}
  title={previewTitle}
  content={previewContent}
+ onPrint={previewOnPrint ?? undefined}
  />
 
  <A4ReportPreviewModal

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from'react';
-import { X, CaretDown, Gift, Receipt, CreditCard } from'@phosphor-icons/react';
+import { X, CaretDown, Gift, Receipt, CreditCard, Printer } from'@phosphor-icons/react';
 import { type Mesa, type HabitacionCuenta } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa } from'../../../../db/rxdb';
@@ -9,6 +9,10 @@ import { Button } from'@/components/ui/button';
 import { Checkbox } from'@/components/ui/checkbox';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from'@/components/ui/collapsible';
 import { cn } from'@/lib/utils';
+import { useIvaActivo } from'../../../../hooks/useIvaActivo';
+import { generarPrecuentaConsolidadaHabitacion } from'../../../../services/printTemplateEngine';
+import { queueReprintTicket } from'../../../../lib/printServerClient';
+import { TicketPreviewModal } from'../../../Common/TicketPreviewModal';
 
 // Cambios pendientes de cortesía por item, mantenidos en memoria hasta que se
 // confirma el cobro — así el cajero puede ajustar varios items sin disparar
@@ -32,12 +36,19 @@ export function HabitacionCheckoutView({
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [payerName, setPayerName] = useState(cuenta.huesped ||'');
+  const { porcentaje: ivaPorcentaje } = useIvaActivo();
 
   const [comandas, setComandas] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [itemsByComanda, setItemsByComanda] = useState<Record<string, any[]>>({});
   const [expandedComandaId, setExpandedComandaId] = useState<string | null>(null);
   const [cortesiaDrafts, setCortesiaDrafts] = useState<Record<string, CortesiaDraft>>({});
+
+  // Preview consolidado que el huésped revisa antes de confirmar el cobro.
+  // El cierre real en base de datos (handleFinalizar) solo corre cuando el
+  // usuario confirma la impresión en el modal (tras la cuenta regresiva).
+  const [previewOpened, setPreviewOpened] = useState(false);
+  const [previewContent, setPreviewContent] = useState('');
 
   const roomNum = selectedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || selectedMesa.nombre.replace(/\D/g,'') || selectedMesa.nombre;
 
@@ -119,6 +130,36 @@ export function HabitacionCheckoutView({
     }));
   };
 
+  // Botón "Imprimir": solo arma y muestra el comprobante consolidado para
+  // que el huésped lo revise, sin afectar el estado de las comandas. Es
+  // independiente de "Cobrar" — se puede imprimir varias veces sin cobrar.
+  const handleImprimirConsolidado = () => {
+    if (comandasSeleccionadas.length === 0) return;
+
+    const comandasConItems = comandasSeleccionadas.map(c => ({
+      comanda: c,
+      items: (itemsByComanda[c.id] || []).filter(item => {
+        const draft = cortesiaDrafts[item.id];
+        const cantidadCortesia = draft ? draft.cantidad : (item.cortesia_cantidad || 0);
+        return cantidadCortesia < item.cantidad;
+      }).map(item => {
+        const draft = cortesiaDrafts[item.id];
+        const cantidadCortesia = draft ? draft.cantidad : (item.cortesia_cantidad || 0);
+        return { ...item, cantidad: item.cantidad - cantidadCortesia };
+      }),
+    }));
+
+    const content = generarPrecuentaConsolidadaHabitacion(
+      comandasConItems,
+      selectedMesa.nombre,
+      ivaPorcentaje,
+      selectedMesa.nombre,
+    );
+    setPreviewContent(content);
+    setPreviewOpened(true);
+  };
+
+  // Botón "Cobrar": cierra directo, sin preview ni confirmación adicional.
   const handleFinalizar = async () => {
     if (comandasSeleccionadas.length === 0) return;
 
@@ -336,14 +377,37 @@ export function HabitacionCheckoutView({
           </div>
         </div>
 
-        <Button
-          type="button" disabled={isProcessing || comandasSeleccionadas.length === 0}
-          onClick={handleFinalizar}
-          className="w-full font-bold"
-        >
-          <CreditCard size={18} weight="bold" className="mr-1.5" /> Cobrar
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
+            onClick={handleImprimirConsolidado}
+            className="w-full font-bold"
+          >
+            <Printer size={18} weight="bold" className="mr-1.5" /> Imprimir
+          </Button>
+          <Button
+            type="button" disabled={isProcessing || comandasSeleccionadas.length === 0}
+            onClick={handleFinalizar}
+            className="w-full font-bold"
+          >
+            <CreditCard size={18} weight="bold" className="mr-1.5" /> Cobrar
+          </Button>
+        </div>
       </footer>
+
+      <TicketPreviewModal
+        opened={previewOpened}
+        onClose={() => setPreviewOpened(false)}
+        title={`Precuenta Consolidada - ${selectedMesa.nombre}`}
+        content={previewContent}
+        onPrint={() => {
+          queueReprintTicket({
+            rawText: previewContent,
+            mesaNombre: selectedMesa.nombre,
+            comanda: comandasSeleccionadas[0],
+          }).catch(err => console.warn('print server offline', err));
+        }}
+      />
     </div>
   );
 }

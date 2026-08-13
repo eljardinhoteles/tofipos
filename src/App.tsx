@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 import { showToast } from '@/lib/toast';
+import { setOrgCache } from './lib/orgCache';
 
 export default function App() {
   const {
@@ -62,13 +63,13 @@ export default function App() {
 
       supabase
         .from('organizaciones')
-        .select('nombre')
+        .select('nombre, ruc, telefono, direccion')
         .eq('id', activeOrganizationId)
         .maybeSingle()
         .then(({ data }) => {
           if (alive && data?.nombre) {
             setOrganizacionNombre(data.nombre);
-            localStorage.setItem('pos_org_name_cached', data.nombre);
+            setOrgCache(data);
           }
         });
     }

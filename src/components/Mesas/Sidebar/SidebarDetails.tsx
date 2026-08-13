@@ -57,6 +57,10 @@ export function SidebarDetails({
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
+ // Acción real de impresión, disparada por el modal recién tras la cuenta
+ // regresiva (no al abrir el preview) — evita imprimir antes de que el
+ // usuario alcance a revisar/cancelar.
+ const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [editingItem, setEditingItem] = useState<any | null>(null);
  const [showPagosModal, setShowPagosModal] = useState(false);
 
@@ -284,7 +288,7 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Pre-cuenta - ${selectedMesa.nombre}`);
- setPreviewOpened(true);
+ setPreviewOnPrint(() => () => {
  queueReceiptPrint({
  comanda: activeComanda,
  items: comandaItems,
@@ -292,6 +296,8 @@ export function SidebarDetails({
  ivaPorcentaje,
  habitacionNombre: linkedMesa?.nombre,
  }).catch(err => console.warn('print server offline', err));
+ });
+ setPreviewOpened(true);
  };
 
  const handleConfirmOrder = async () => {
@@ -305,6 +311,16 @@ export function SidebarDetails({
  confirmada_at: ahora,
  cantidades_snapshot: JSON.stringify(snapshot)
  });
+ const content = generarComandaCocina(
+ activeComanda,
+ withBebida(comandaItems),
+ selectedMesa.nombre,
+ false,
+ linkedMesa?.nombre
+ );
+ setPreviewContent(content);
+ setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
+ setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(comandaItems),
@@ -312,6 +328,8 @@ export function SidebarDetails({
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
  }).catch(err => console.warn('print server offline', err));
+ });
+ setPreviewOpened(true);
  showToast.success('Orden Confirmada','La comanda fue enviada a cocina.');
  } else if (hayItemsNuevos) {
  const content = generarComandaCocina(
@@ -323,7 +341,6 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Adicional Cocina - ${selectedMesa.nombre}`);
- setPreviewOpened(true);
  const nuevoSnapshot = Object.fromEntries(
  comandaItems.map(item => [item.id, item.cantidad])
  );
@@ -331,6 +348,7 @@ export function SidebarDetails({
  confirmada_at: new Date().toISOString(),
  cantidades_snapshot: JSON.stringify(nuevoSnapshot)
  });
+ setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(itemsNuevos),
@@ -338,6 +356,8 @@ export function SidebarDetails({
  esAdicional: true,
  habitacionNombre: linkedMesa?.nombre,
  }).catch(err => console.warn('print server offline', err));
+ });
+ setPreviewOpened(true);
  } else {
  const content = generarComandaCocina(
  activeComanda,
@@ -348,7 +368,7 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
- setPreviewOpened(true);
+ setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(comandaItems),
@@ -356,6 +376,8 @@ export function SidebarDetails({
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
  }).catch(err => console.warn('print server offline', err));
+ });
+ setPreviewOpened(true);
  }
  };
 
@@ -880,6 +902,7 @@ export function SidebarDetails({
  onClose={() => setPreviewOpened(false)}
  title={previewTitle}
  content={previewContent}
+ onPrint={previewOnPrint ?? undefined}
  />
 
  <ProductModifiersModal

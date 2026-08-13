@@ -6,6 +6,7 @@ import { SidebarEnviarHabitacion } from'./SidebarEnviarHabitacion';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
+import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { initVerticalRxDb, createRxVenta, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
@@ -35,6 +36,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
+ const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [onCloseCallback, setOnCloseCallback] = useState<(() => void) | null>(null);
 
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
@@ -140,6 +142,13 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  );
  setPreviewContent(content);
  setPreviewTitle(`Recibo de Pago - ${selectedMesa.nombre}`);
+ setPreviewOnPrint(() => () => {
+ queueReprintTicket({
+ rawText: content,
+ mesaNombre: selectedMesa.nombre,
+ comanda: activeComanda,
+ }).catch(err => console.warn('print server offline', err));
+ });
  setOnCloseCallback(() => () => onSuccess());
  setPreviewOpened(true);
 
@@ -161,6 +170,16 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  );
  setPreviewContent(content);
  setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
+ setPreviewOnPrint(() => () => {
+ queueReceiptPrint({
+ comanda: activeComanda,
+ items: comandaItems,
+ mesaNombre: selectedMesa.nombre,
+ ivaPorcentaje,
+ pagos,
+ habitacionNombre,
+ }).catch(err => console.warn('print server offline', err));
+ });
  setOnCloseCallback(null);
  setPreviewOpened(true);
  };
@@ -264,6 +283,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  }}
  title={previewTitle}
  content={previewContent}
+ onPrint={previewOnPrint ?? undefined}
  />
  </div>
  );

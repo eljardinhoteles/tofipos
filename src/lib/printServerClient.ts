@@ -136,6 +136,19 @@ export async function queueReprintTicket(params: { rawText: string; mesaNombre: 
   });
 }
 
+/** Envía texto crudo ya formateado (p.ej. un reporte consolidado) al rol 'kitchen', sin comanda puntual asociada. */
+export async function queueRawKitchenPrint(rawText: string, title = 'Reporte de Cocina') {
+  return requestJson('/jobs', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'kitchen',
+      title,
+      payload: {},
+      raw_text: rawText,
+    }),
+  });
+}
+
 export async function queueKitchenPrint(params: {
   comanda: Comanda;
   items: ComandaItem[];

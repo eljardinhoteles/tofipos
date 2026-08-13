@@ -31,6 +31,7 @@ export function SidebarReceiptViewer({
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
+ const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [pagos, setPagos] = useState<any[]>([]);
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
@@ -255,7 +256,7 @@ export function SidebarReceiptViewer({
  );
  setPreviewContent(content);
  setPreviewTitle(esComandaEnHabitacionActiva ?`Imprimir Precuenta - ${selectedMesa.nombre}`:`Reimprimir Recibo - ${selectedMesa.nombre}`);
- setPreviewOpened(true);
+ setPreviewOnPrint(() => () => {
  if (esComandaEnHabitacionActiva) {
  queueReceiptPrint({
  comanda: activeComanda,
@@ -271,6 +272,8 @@ export function SidebarReceiptViewer({
  comanda: activeComanda,
  }).catch(err => console.warn('print server offline', err));
  }
+ });
+ setPreviewOpened(true);
  }}
  >
  <Printer size={18} weight="bold"className="mr-1.5"/> {esComandaEnHabitacionActiva ?'Imprimir Precuenta':'Reimprimir'}
@@ -299,6 +302,7 @@ export function SidebarReceiptViewer({
  onClose={() => setPreviewOpened(false)}
  title={previewTitle}
  content={previewContent}
+ onPrint={previewOnPrint ?? undefined}
  />
  </div>
  );

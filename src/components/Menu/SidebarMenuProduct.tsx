@@ -9,6 +9,7 @@ import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Switch } from'@/components/ui/switch';
 import { Button } from'@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function SidebarMenuProduct() {
  const { selectedMenuProductId, setMenuView, setSelectedMenuProductId, openConfirm } = useUI();
@@ -24,6 +25,7 @@ export function SidebarMenuProduct() {
  const [ivaModalidad, setIvaModalidad] = useState<'sistema'|'especifico'|'exento'>('sistema');
  const [ivaPorcentaje, setIvaPorcentaje] = useState(15);
  const [nombreError, setNombreError] = useState('');
+ const [isNuevaCategoria, setIsNuevaCategoria] = useState(false);
 
  useEffect(() => {
  let alive = true;
@@ -210,44 +212,72 @@ export function SidebarMenuProduct() {
  className="h-9 text-xs font-semibold"/>
  {nombreError && <span className="text-[10px] text-destructive font-bold">{nombreError}</span>}
  </div>
+  <div className="grid grid-cols-2 gap-3">
+  <div className="flex flex-col gap-1.5">
+  <Label className="text-xs font-bold">Categoría</Label>
+  {!isNuevaCategoria ? (
+  <Select
+  value={categoria}
+  onValueChange={val => {
+  if (val === '__new__') {
+  setIsNuevaCategoria(true);
+  setCategoria('');
+  } else {
+  setCategoria(val);
+  }
+  }}>
+  <SelectTrigger className="h-9 px-3 text-xs font-semibold rounded-2xl bg-input/50 border-transparent w-full">
+  <SelectValue placeholder="Selecciona..." />
+  </SelectTrigger>
+  <SelectContent>
+  {dbCategorias.map(c => (
+  <SelectItem key={c.id} value={c.nombre} className="text-xs font-medium">{c.nombre}</SelectItem>
+  ))}
+  <SelectItem value="__new__" className="text-xs font-bold text-primary">+ Nueva categoría</SelectItem>
+  </SelectContent>
+  </Select>
+  ) : (
+  <div className="relative">
+  <Input
+  type="text"placeholder="Nueva categoría"value={categoria}
+  onChange={e => setCategoria(e.target.value)}
+  className="h-9 pr-8 text-xs font-semibold"/>
+  <button type="button" onClick={() => { setIsNuevaCategoria(false); setCategoria(''); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
+  <X size={14} weight="bold" />
+  </button>
+  </div>
+  )}
+  </div>
+  <div className="flex flex-col gap-1.5">
+  <Label className="text-xs font-bold">Precio ($)</Label>
+  <Input
+  type="number"step="0.01"min={0}
+  placeholder="0.00"value={precio ||''}
+  onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
+  className="h-9 text-xs font-bold"/>
+  </div>
+  </div>
 
- <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Categoría</Label>
- <Input
- type="text"placeholder="General"value={categoria}
- onChange={e => setCategoria(e.target.value)}
- className="h-9 text-xs font-semibold"/>
- </div>
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Precio ($)</Label>
- <Input
- type="number"step="0.01"min={0}
- placeholder="0.00"value={precio ||''}
- onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
- className="h-9 text-xs font-bold"/>
- </div>
- </div>
+  <div className="flex items-center gap-2">
+  <Switch id="esBebida"checked={esBebida} onCheckedChange={setEsBebida} />
+  <Label htmlFor="esBebida"className="text-xs font-bold cursor-pointer">
+  Es Bebida (imprime en barra)
+  </Label>
+  </div>
 
- <div className="flex items-center gap-2">
- <Switch id="esBebida"checked={esBebida} onCheckedChange={setEsBebida} />
- <Label htmlFor="esBebida"className="text-xs font-bold cursor-pointer">
- Es Bebida (imprime en barra)
- </Label>
- </div>
-
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Modalidad IVA</Label>
- <select
- value={ivaModalidad}
- onChange={e => setIvaModalidad(e.target.value as any)}
- className="h-9 px-3 text-xs bg-input/50 border border-transparent rounded-2xl focus:outline-none focus:border-ring font-semibold">
- <option value="sistema">IVA General del Sistema</option>
- <option value="especifico">Tasa de IVA Específica</option>
- <option value="exento">Exento de IVA (0%)</option>
- </select>
- </div>
-
+  <div className="flex flex-col gap-1.5">
+  <Label className="text-xs font-bold">Modalidad IVA</Label>
+  <Select value={ivaModalidad} onValueChange={val => setIvaModalidad(val as any)}>
+  <SelectTrigger className="h-9 px-3 text-xs font-semibold rounded-2xl bg-input/50 border-transparent w-full">
+  <SelectValue placeholder="Selecciona..." />
+  </SelectTrigger>
+  <SelectContent>
+  <SelectItem value="sistema" className="text-xs font-medium">IVA General del Sistema</SelectItem>
+  <SelectItem value="especifico" className="text-xs font-medium">Tasa de IVA Específica</SelectItem>
+  <SelectItem value="exento" className="text-xs font-medium">Exento de IVA (0%)</SelectItem>
+  </SelectContent>
+  </Select>
+  </div>
  {/* Grupos de modificadores (ej:"Tipo de papas"-> Fritas / Doradas) */}
  <div className="flex flex-col gap-2">
  <div className="flex items-center justify-between">

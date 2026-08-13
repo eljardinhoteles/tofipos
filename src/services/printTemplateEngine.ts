@@ -1,5 +1,6 @@
 // @ts-nocheck
 import type { Comanda, ComandaItem, Pago } from '../db/database';
+import { getOrgCache } from '../lib/orgCache';
 
 /**
  * Servicio de Formateo y Generación de Documentos de Impresión Térmica
@@ -15,7 +16,35 @@ const DEFAULT_CONFIG: PrinterConfig = {
 };
 
 export function cleanHabitacionName(name: string): string {
-  return name.replace(/^(HAB(ITACI[OÓ]N)?\s*:?\s*)/i, '').trim();
+  return name.replace(/^(HAB(ITACI[OÓ]N)?\.?\s*:?\s*)/i, '').trim();
+}
+
+/**
+ * Separa "Hab. 1 (Cabaña Jacuzzi)" en tipo ("CABAÑA JACUZZI") y número ("1"),
+ * para el bloque de cabecera "TIPO  NUM" de comandas/tickets con habitación.
+ */
+function splitHabitacionTipoNum(habitacionNombre: string): string {
+  const tipo = habitacionNombre.match(/\(([^)]+)\)/)?.[1]?.trim().toUpperCase();
+  const num = habitacionNombre.match(/Hab\.?\s*(\d+)/i)?.[1] ?? habitacionNombre.replace(/\D/g, '');
+  return tipo ? `${tipo}  ${num}` : cleanHabitacionName(habitacionNombre).toUpperCase();
+}
+
+/** Línea de checkboxes en blanco para marcar a mano la forma de pago usada. */
+function formaPagoLine(width: number = DEFAULT_CONFIG.columns): string {
+  return `Tarjeta:[  ]  Transferencia:[  ]  Efectivo:[  ]`.substring(0, width);
+}
+
+/**
+ * Bloque de datos de facturación a llenar a mano: cada campo en su propia
+ * línea, con una línea de guiones completa debajo para escribir el dato.
+ */
+function datosFacturacionBlock(width: number = DEFAULT_CONFIG.columns): string {
+  const campos = ['Razon Social:', 'RUC/CI/PS:', 'Correo:', 'Telefono:', 'Direccion:'];
+  let s = `*Datos de facturacion (obligatorio):\n`;
+  campos.forEach(campo => {
+    s += `${campo}\n${'-'.repeat(width)}\n`;
+  });
+  return s;
 }
 
 // ESC/POS command helpers
@@ -142,21 +171,21 @@ export function generarComandaCocina(
 
   const cleanMesa = mesaNombre.toUpperCase().replace('MESA ', 'MESA #');
 
-  // Header: mesa enmarcada en tamaño gigante
+  // Header: si hay habitación, va arriba; la mesa debajo. Ambas líneas en el
+  // mismo tamaño grande (2x) para que no se vea angosta/desbalanceada.
   t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
   t += `------------------------\n`;
-  t += `    ${cleanMesa}\n`;
+  if (habitacionNombre) {
+    t += `${splitHabitacionTipoNum(habitacionNombre)}\n`;
+    t += `${cleanMesa}\n`;
+  } else {
+    t += `    ${cleanMesa}\n`;
+  }
   t += `------------------------\n`;
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
 
   t += p(POS.ALIGN_LEFT);
   t += `ORDEN: #${comanda.folio}\n`;
-
-  if (habitacionNombre) {
-    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
-    t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
-    t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
-  }
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
 
   if (esAdicional) {
@@ -248,15 +277,15 @@ export function generarComandaCocina(
     }
     t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
     t += `------------------------\n`;
-    t += `    ${cleanMesa}\n`;
+    if (habitacionNombre) {
+      t += `${splitHabitacionTipoNum(habitacionNombre)}\n`;
+      t += `${cleanMesa}\n`;
+    } else {
+      t += `    ${cleanMesa}\n`;
+    }
     t += `------------------------\n`;
     t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
     t += `ORDEN: #${comanda.folio}\n`;
-    if (habitacionNombre) {
-      t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
-      t += `HAB: ${cleanHabitacionName(habitacionNombre).toUpperCase()}\n`;
-      t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
-    }
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
@@ -264,9 +293,9 @@ export function generarComandaCocina(
     } else {
       t += `${'='.repeat(48)}\n\n`;
     }
-    t += p(POS.ALIGN_CENTER) + p(POS.SIZE_2X) + p(POS.BOLD_ON);
+    t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON);
     t += `BEBIDAS / BAR\n`;
-    t += p(POS.BOLD_OFF) + p(POS.SIZE_NORMAL) + p(POS.ALIGN_LEFT) + '\n';
+    t += p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT) + '\n';
     t += imprimirGrupo(itemsBebida);
     t += notasBlock();
   } else if (itemsCocina.length === 0) {
@@ -296,7 +325,7 @@ export function generarPrecuenta(
   if (forPrinter) t += POS.INIT;
 
   // ── Encabezado ──────────────────────────────────────────────────
-  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
   t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
   t += `${orgName.toUpperCase()}\n`;
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
@@ -366,18 +395,106 @@ export function generarPrecuenta(
 
   // ── Datos de facturación ────────────────────────────────────────
   t += `\n${'-'.repeat(W)}\n`;
-  t += `*Datos de facturacion (obligatorio):\n`;
-  t += `Razon Social: ${'-'.repeat(W - 14)}\n`;
-  t += `RUC/CI/PS:    ${'-'.repeat(W - 14)}\n`;
-  t += `Correo:       ${'-'.repeat(W - 14)}\n`;
-  t += `Telefono:     ${'-'.repeat(W - 14)}\n`;
-  t += `Direccion:    ${'-'.repeat(W - 14)}\n`;
+  t += datosFacturacionBlock(W);
 
   // ── Pie ─────────────────────────────────────────────────────────
   t += `\n`;
   t += p(POS.ALIGN_CENTER);
   t += `Documento interno sin validez tributaria.\n`;
   t += p(POS.ALIGN_LEFT);
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `${formaPagoLine(W)}\n`;
+  t += `${'-'.repeat(W)}\n`;
+  t += '\n\n\n';
+
+  return t;
+}
+
+/**
+ * 2b. PRECUENTA CONSOLIDADA DE HABITACIÓN
+ * Junta todas las comandas seleccionadas del checkout de habitación en un
+ * solo documento, cada una con su propio detalle, y el total general al
+ * final — para que el huésped revise todo su consumo antes de pagar.
+ */
+export function generarPrecuentaConsolidadaHabitacion(
+  comandas: Array<{ comanda: Comanda; items: PrintableItem[] }>,
+  mesaNombre: string,
+  ivaPercent: number = 15,
+  habitacionNombre?: string,
+  forPrinter = false,
+): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
+  let t = '';
+
+  if (forPrinter) t += POS.INIT;
+
+  // ── Encabezado ──────────────────────────────────────────────────
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `${orgName.toUpperCase()}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_LEFT);
+  t += `${'-'.repeat(W)}\n`;
+
+  t += justifyBetween('PRECUENTA CONSOLIDADA', new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
+  if (habitacionNombre) {
+    t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
+  }
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Una sección por comanda ─────────────────────────────────────
+  let granSubtotal = 0;
+  comandas.forEach(({ comanda, items }) => {
+    const fechaComanda = comanda.created_at ? new Date(comanda.created_at).toLocaleDateString('es-ES') : '';
+    t += p(POS.BOLD_ON);
+    t += `Comanda #${comanda.folio}${fechaComanda ? ` (${fechaComanda})` : ''}\n`;
+    t += p(POS.BOLD_OFF);
+    t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
+    t += `${'-'.repeat(W)}\n`;
+
+    items.forEach(item => {
+      const itemTotal = item.precio * item.cantidad;
+      granSubtotal += itemTotal;
+      t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
+      if (item.modificadores && item.modificadores.length > 0) {
+        item.modificadores.forEach((mod: string) => {
+          t += `     * ${mod.toUpperCase()}\n`;
+        });
+      }
+      if (item.nota) {
+        t += `     NOTA: ${item.nota.toUpperCase()}\n`;
+      }
+    });
+    t += '\n';
+  });
+
+  // ── Totales ─────────────────────────────────────────────────────
+  const ivaFactor = ivaPercent / 100;
+  const ivaTotal = granSubtotal * ivaFactor;
+  const totalGeneral = granSubtotal + ivaTotal;
+
+  t += `${'-'.repeat(W)}\n`;
+  t += justifyBetween('Subtotal:', `$${granSubtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${ivaTotal.toFixed(2)}`, W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+  t += p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += justifyBetween('A PAGAR:', `$${totalGeneral.toFixed(2)}`, W) + '\n';
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+
+  // ── Datos de facturación ────────────────────────────────────────
+  t += `\n${'-'.repeat(W)}\n`;
+  t += datosFacturacionBlock(W);
+
+  // ── Pie ─────────────────────────────────────────────────────────
+  t += `\n`;
+  t += p(POS.ALIGN_CENTER);
+  t += `Documento interno sin validez tributaria.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `${formaPagoLine(W)}\n`;
+  t += `${'-'.repeat(W)}\n`;
   t += '\n\n\n';
 
   return t;
@@ -468,20 +585,29 @@ export function generarTicketPago(
   mesaNombre: string,
   ivaPercent: number = 15,
   width: number = DEFAULT_CONFIG.columns,
-  habitacionNombre?: string
+  habitacionNombre?: string,
+  forPrinter = false,
 ): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = width;
   let t = '';
 
-  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
-  t += alignCenter(orgName.toUpperCase(), width) + '\n';
-  t += alignCenter('Calle de las Flores #123', width) + '\n';
-  t += alignCenter('Quito - Ecuador', width) + '\n';
-  t += alignCenter('Teléfono: 099-999-9999', width) + '\n';
-  t += alignCenter('RUC: 17929381001', width) + '\n';
-  t += drawDivider('=', width) + '\n';
+  if (forPrinter) t += POS.INIT;
 
-  t += alignCenter('*** COMPROBANTE DE COMPRA ***', width) + '\n';
-  t += justifyBetween(`Ticket: #${comanda.folio}`, `Mesa: ${mesaNombre}`, width) + '\n';
+  // ── Encabezado ──────────────────────────────────────────────────
+  const org = getOrgCache();
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `${(org.nombre || 'EL JARDIN').toUpperCase()}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_LEFT);
+  if (org.direccion) t += `${org.direccion}\n`;
+  if (org.telefono) t += `Teléfono: ${org.telefono}\n`;
+  if (org.ruc) t += `RUC: ${org.ruc}\n`;
+  t += `${'-'.repeat(W)}\n`;
+
+  // ── Info de la orden ────────────────────────────────────────────
+  t += justifyBetween(`TICKET #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
   }
@@ -493,62 +619,66 @@ export function generarTicketPago(
     // Si es un cliente registrado, mostrar más info si estuviera disponible, o DNI
     t += `C.I. / RUC: ${activeComandaClient}\n`;
   }
+  t += `${'-'.repeat(W)}\n`;
 
-  t += justifyBetween(
-    `Fecha: ${new Date().toLocaleDateString('es-ES')}`,
-    `Hora: ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`,
-    width
-  ) + '\n';
-  t += drawDivider('-', width) + '\n';
+  // ── Cabecera de columnas ────────────────────────────────────────
+  t += p(POS.BOLD_ON);
+  t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
+  t += p(POS.BOLD_OFF);
+  t += `${'-'.repeat(W)}\n`;
 
-  t += justifyBetween('Cant  Descripcion', 'Total', width) + '\n';
-  t += drawDivider('-', width) + '\n';
-
+  // ── Items ───────────────────────────────────────────────────────
   let subtotal = 0;
   items.forEach(item => {
     const itemTotal = item.precio * item.cantidad;
     subtotal += itemTotal;
-    t += formatProductRow(item.cantidad, item.nombre, itemTotal, width) + '\n';
-
+    t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
     if (item.modificadores && item.modificadores.length > 0) {
       item.modificadores.forEach((mod: string) => {
-        t += `   * ${mod}\n`;
+        t += `     * ${mod.toUpperCase()}\n`;
       });
     }
   });
 
-  t += drawDivider('-', width) + '\n';
+  t += `${'-'.repeat(W)}\n`;
 
+  // ── Totales ─────────────────────────────────────────────────────
   const ivaFactor = ivaPercent / 100;
   const iva = subtotal * ivaFactor;
   const total = subtotal + iva;
 
-  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, width) + '\n';
-  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, width) + '\n';
-  t += justifyBetween('TOTAL TICKET:', `$${total.toFixed(2)}`, width) + '\n';
+  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+  t += p(POS.BOLD_ON);
+  t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
+  t += p(POS.BOLD_OFF);
 
-  t += drawDivider('-', width) + '\n';
-
-  // Desglose de Pagos
-  t += alignCenter('DESGLOSE DE PAGO', width) + '\n';
+  // ── Desglose de pagos ───────────────────────────────────────────
+  t += `${'-'.repeat(W)}\n`;
+  t += `DESGLOSE DE PAGO:\n`;
   let totalPagado = 0;
   pagos.forEach(pago => {
     // metodo_pago puede venir null: el checkout ya no elige método al
     // cerrar, se define después al anclar en Centro de Ventas.
     const metodoLabel = pago.metodo_pago ? pago.metodo_pago.toUpperCase() : 'PENDIENTE DE DEFINIR';
-    t += justifyBetween(`${metodoLabel}:`, `$${pago.monto.toFixed(2)}`, width) + '\n';
+    t += justifyBetween(`${metodoLabel}:`, `$${pago.monto.toFixed(2)}`, W) + '\n';
     totalPagado += pago.monto;
   });
-
-  // Vuelto / Cambio si aplica
   if (totalPagado > total) {
     const cambio = totalPagado - total;
-    t += justifyBetween('CAMBIO / VUELTO:', `$${cambio.toFixed(2)}`, width) + '\n';
+    t += justifyBetween('CAMBIO / VUELTO:', `$${cambio.toFixed(2)}`, W) + '\n';
   }
 
-  t += drawDivider('=', width) + '\n';
-  t += alignCenter('¡Muchas gracias por su visita!', width) + '\n';
-  t += alignCenter('Documento interno del sistema', width) + '\n';
+  // ── Pie ─────────────────────────────────────────────────────────
+  t += `\n${'-'.repeat(W)}\n`;
+  t += p(POS.ALIGN_CENTER);
+  t += `¡Muchas gracias por su visita!\n`;
+  t += `Documento interno sin validez tributaria.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `${formaPagoLine(W)}\n`;
+  t += `${'-'.repeat(W)}\n`;
   t += '\n\n\n';
 
   return t;
@@ -571,7 +701,7 @@ export function generarPrecuentaDividida(
   if (forPrinter) t += POS.INIT;
 
   // ── Encabezado ──────────────────────────────────────────────────
-  const orgName = (typeof localStorage !== 'undefined' ? localStorage.getItem('pos_org_name_cached') : '') || 'EL JARDIN';
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
   t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
   t += `${orgName.toUpperCase()}\n`;
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
@@ -636,18 +766,16 @@ export function generarPrecuentaDividida(
 
   // ── Datos de facturación ────────────────────────────────────────
   t += `\n${'-'.repeat(W)}\n`;
-  t += `*Datos de facturacion (obligatorio):\n`;
-  t += `Razon Social: ${'-'.repeat(W - 14)}\n`;
-  t += `RUC/CI/PS:    ${'-'.repeat(W - 14)}\n`;
-  t += `Correo:       ${'-'.repeat(W - 14)}\n`;
-  t += `Telefono:     ${'-'.repeat(W - 14)}\n`;
-  t += `Direccion:    ${'-'.repeat(W - 14)}\n`;
+  t += datosFacturacionBlock(W);
 
   // ── Pie ─────────────────────────────────────────────────────────
   t += `\n`;
   t += p(POS.ALIGN_CENTER);
   t += `Documento interno sin validez tributaria.\n`;
   t += p(POS.ALIGN_LEFT);
+  t += `\n${'-'.repeat(W)}\n`;
+  t += `${formaPagoLine(W)}\n`;
+  t += `${'-'.repeat(W)}\n`;
   t += '\n\n\n';
 
   return t;

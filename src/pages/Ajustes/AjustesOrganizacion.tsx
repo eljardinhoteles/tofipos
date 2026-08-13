@@ -3,6 +3,7 @@ import { Building, FloppyDisk } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '@/lib/toast';
+import { setOrgCache } from '../../lib/orgCache';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ export default function AjustesOrganizacion() {
           telefono: data?.telefono || '',
           direccion: data?.direccion || '',
         });
+        setOrgCache(data || {});
       } catch (error) {
         console.error('Error cargando organización:', error);
       } finally {
@@ -94,7 +96,12 @@ export default function AjustesOrganizacion() {
       const { error } = await supabase.from('organizaciones').update(payload).eq('id', orgId);
       if (error) throw error;
 
-      localStorage.setItem('pos_org_name_cached', form.nombre.trim());
+      setOrgCache({
+        nombre: form.nombre.trim(),
+        ruc: form.ruc.trim(),
+        telefono: form.telefono.trim(),
+        direccion: form.direccion.trim(),
+      });
       showToast.success('Organización actualizada');
     } catch (error) {
       console.error('Error al guardar organización:', error);

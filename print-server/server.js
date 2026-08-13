@@ -202,9 +202,31 @@ function printersForJob(job) {
   return state.printers.filter(p => p.active && (p.roles || []).includes(job.kind));
 }
 
-async function processQueue() {
+// Lock explícito: varios requests a /jobs pueden llegar casi simultáneos
+// (doble click, reintento de red, etc.) y cada uno llama a processQueue().
+// Sin este lock, dos llamadas concurrentes recorren la misma cola a la vez
+// y terminan imprimiendo el mismo job más de una vez. Con el lock, la
+// segunda llamada espera a que termine la primera y luego revisa la cola
+// otra vez (por si quedó algo nuevo encolado mientras tanto).
+let queueLock = Promise.resolve();
+
+function processQueue() {
+  const run = queueLock.then(() => processQueueInner());
+  // Swallow errors here para que el lock nunca quede "roto": el error real
+  // se propaga igual al caller a través de `run`, que es lo que se retorna.
+  queueLock = run.catch(() => {});
+  return run;
+}
+
+async function processQueueInner() {
   while (true) {
-    const job = state.queue.find(j => j.status !== 'done');
+    // Solo procesamos jobs recién encolados. Un job 'failed' NO se
+    // reintenta solo — se queda visible en la cola hasta que el usuario
+    // pida explícitamente reimprimir (POST /jobs/:id/reprint), que sí lo
+    // vuelve a poner en 'queued'. Esto evita que fallos viejos (impresora
+    // offline durante una prueba, etc.) se disparen todos de golpe en la
+    // siguiente impresión exitosa.
+    const job = state.queue.find(j => j.status === 'queued');
     if (!job) break;
 
     job.status = 'printing';
@@ -382,6 +404,22 @@ app.post('/jobs/flush', requireToken, async (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
+});
+
+// Cola actual (normalmente solo quedan jobs 'failed', ya que 'done' se
+// limpia solo y 'queued'/'printing' son transitorios).
+app.get('/jobs', requireToken, (req, res) => {
+  res.json({ ok: true, jobs: state.queue });
+});
+
+// Descarta un job de la cola sin reintentarlo (p.ej. un 'failed' viejo de
+// una prueba que ya no tiene sentido reimprimir).
+app.delete('/jobs/:id', requireToken, (req, res) => {
+  const before = state.queue.length;
+  state.queue = state.queue.filter(j => j.id !== req.params.id);
+  if (state.queue.length === before) return res.status(404).json({ ok: false, error: 'job not found' });
+  saveState();
+  res.json({ ok: true });
 });
 
 const PORT = 18181;

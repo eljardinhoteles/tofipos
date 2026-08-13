@@ -9,6 +9,7 @@ import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { generarPrecuentaDividida } from'../../../services/printTemplateEngine';
+import { queueReprintTicket } from'../../../lib/printServerClient';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import {
  initVerticalRxDb,
@@ -46,6 +47,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
 
  const [payerName, setPayerName] = useState<string>('');
  const [previewTicketText, setPreviewTicketText] = useState<string | null>(null);
+ const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [pagos, setPagos] = useState<any[]>([]);
 
  useEffect(() => {
@@ -167,6 +169,13 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  ivaPorcentaje
  );
  setPreviewTicketText(ticketText);
+ setPreviewOnPrint(() => () => {
+ queueReprintTicket({
+ rawText: ticketText,
+ mesaNombre: selectedMesa.nombre,
+ comanda: activeComanda,
+ }).catch(err => console.warn('print server offline', err));
+ });
 
  if (onSuccessCallback) onSuccessCallback();
 
@@ -397,6 +406,9 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  const label = payerName.trim() ||"Pago Parcial";
  const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoVal, ivaPorcentaje);
  setPreviewTicketText(text);
+ setPreviewOnPrint(() => () => {
+ queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
+ });
  }
  }}
  className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
@@ -420,6 +432,9 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  const label = payerName.trim() ||`Persona ${selectedPersonaIdx + 1}`;
  const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoPorPersona, ivaPorcentaje);
  setPreviewTicketText(text);
+ setPreviewOnPrint(() => () => {
+ queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
+ });
  }
  }}
  className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
@@ -457,6 +472,9 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  });
  const text = generarPrecuentaDividida(activeComanda, itemsMapeados, selectedMesa.nombre, label, totalesSeleccionados.total, ivaPorcentaje);
  setPreviewTicketText(text);
+ setPreviewOnPrint(() => () => {
+ queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
+ });
  }}
  className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
  <Printer size={16} /> Pre-cuenta
@@ -498,6 +516,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  opened={previewTicketText !== null}
  onClose={() => setPreviewTicketText(null)}
  title="Precuenta Dividida"content={previewTicketText ||''}
+ onPrint={previewOnPrint ?? undefined}
  />
  </div>
  );
