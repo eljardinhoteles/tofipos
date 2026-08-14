@@ -8,6 +8,7 @@ export default function AjustesMantenimiento() {
  const [resetting, setResetting] = useState(false);
 
  const handleReset = async () => {
+ if (resetting) return;
  if (!activeOrganizationId) {
  showToast.error('Sin organización activa','Vincula un hotel antes de ejecutar el reset.');
  return;
@@ -26,10 +27,12 @@ export default function AjustesMantenimiento() {
  body: JSON.stringify({ organization_id: activeOrganizationId }),
  });
 
- const data = await res.json().catch(() => ({}));
  if (!res.ok) {
+ const data = await res.json().catch(() => ({}));
  throw new Error(data?.error ||'No se pudo limpiar el remoto.');
  }
+
+ await res.json().catch(() => ({}));
 
  await desvincularDispositivo();
  showToast.success('Base limpia','Se reinició el remoto y el dispositivo local.');

@@ -175,6 +175,16 @@ export async function resolverComprobanteUrlAsync(url: string): Promise<string> 
 }
 
 /**
+ * Limpia todas las URLs de objetos creadas localmente para liberar memoria.
+ */
+export function limpiarCacheComprobantes() {
+  localUrlCache.forEach((url) => {
+    URL.revokeObjectURL(url);
+  });
+  localUrlCache.clear();
+}
+
+/**
  * Versión síncrona para compatibilidad rápida de renderizado de componentes.
  */
 export function resolverComprobanteUrl(url: string): string {

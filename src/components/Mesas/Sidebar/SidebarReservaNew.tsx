@@ -75,29 +75,32 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  }, []);
 
  useEffect(() => {
- async function load() {
- if (selectedReservaId) {
- const rxDb = await initVerticalRxDb();
- const r = await rxDb.reservas.findOne(selectedReservaId).exec();
- if (r) {
- setIsEditMode(true);
- const data = r.toJSON();
- setNombre(data.nombre);
- setPersonas(data.personas);
- setFecha(data.fecha);
- setHora(data.hora);
- setZonaId(data.zona_id ||'');
- setNota(data.nota ||'');
- }
- } else if (nuevaReservaPreset) {
- if (nuevaReservaPreset.fecha) setFecha(toISO(nuevaReservaPreset.fecha));
- if (nuevaReservaPreset.zonaId) setZonaId(nuevaReservaPreset.zonaId);
- setNuevaReservaPreset(null);
- }
- setDataLoaded(true);
- }
- load();
- }, [selectedReservaId]);
+  let alive = true;
+  async function load() {
+  if (selectedReservaId) {
+  const rxDb = await initVerticalRxDb();
+  const r = await rxDb.reservas.findOne(selectedReservaId).exec();
+  if (!alive) return;
+  if (r) {
+  setIsEditMode(true);
+  const data = r.toJSON();
+  setNombre(data.nombre);
+  setPersonas(data.personas);
+  setFecha(data.fecha);
+  setHora(data.hora);
+  setZonaId(data.zona_id ||'');
+  setNota(data.nota ||'');
+  }
+  } else if (nuevaReservaPreset) {
+  if (nuevaReservaPreset.fecha) setFecha(toISO(nuevaReservaPreset.fecha));
+  if (nuevaReservaPreset.zonaId) setZonaId(nuevaReservaPreset.zonaId);
+  setNuevaReservaPreset(null);
+  }
+  if (alive) setDataLoaded(true);
+  }
+  load();
+  return () => { alive = false; };
+  }, [selectedReservaId, nuevaReservaPreset, setNuevaReservaPreset]);
 
  if (!dataLoaded) return null;
 

@@ -59,7 +59,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getInitialSession();
 
     // 2. Escuchar cambios de autenticación de Supabase
+    let alive = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (!alive) return;
       setAdminSession(currentSession);
       setAdminUser(currentSession?.user ?? null);
       setIsLoading(false);
@@ -70,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (savedMeseroId) {
       initVerticalRxDb().then(async rxDb => {
         const mesero = await rxDb.usuarios.findOne(savedMeseroId).exec();
+        if (!alive) return;
         if (mesero && mesero.toJSON().activo) {
           setCurrentMesero(mesero.toJSON() as UsuarioLocal);
         } else {
@@ -81,11 +84,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return () => {
+      alive = false;
       subscription.unsubscribe();
     };
   }, []);
 
   useEffect(() => {
+    let alive = true;
     if (!activeOrganizationId || currentMesero) return;
 
     const savedMeseroId = localStorage.getItem('pos_current_mesero_id');
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initVerticalRxDb().then(async rxDb => {
       const mesero = await rxDb.usuarios.findOne(savedMeseroId).exec();
+      if (!alive) return;
       if (mesero && mesero.toJSON().activo) {
         setCurrentMesero(mesero.toJSON() as UsuarioLocal);
       } else {
@@ -103,6 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }).catch(err => {
       console.error('Error al restaurar mesero local:', err);
     });
+
+    return () => { alive = false; };
   }, [activeOrganizationId, currentMesero]);
 
   // Bootstrap: si el admin del dispositivo aún no tiene perfil en `usuarios`

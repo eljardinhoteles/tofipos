@@ -105,7 +105,7 @@ export function TableSidebar({
         const doc = await rxDb.comandas.findOne(viewingComandaId).exec();
         if (alive) setHistoricalComanda(doc ? doc.toJSON() : null);
       } else {
-        setHistoricalComanda(null);
+        if (alive) setHistoricalComanda(null);
       }
 
       if (selectedMesa) {
