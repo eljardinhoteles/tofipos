@@ -194,6 +194,17 @@ export function SidebarReceiptViewer({
  </div>
  </div>
 
+ {isAnulada && activeComanda?.motivo_anulacion && (
+      <div className="px-4 py-2.5 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900 shrink-0">
+        <span className="text-[10px] font-bold uppercase text-red-600 dark:text-red-400 tracking-wider block mb-0.5">
+          Motivo de Anulación
+        </span>
+        <p className="text-xs text-red-800 dark:text-red-300 font-medium leading-relaxed">
+          {activeComanda.motivo_anulacion}
+        </p>
+      </div>
+    )}
+
  <main className="flex-1 overflow-y-auto">
  {comandaItems.map((item, index) => (
  <ComandaItemRow key={item.id} item={item} index={index} />
