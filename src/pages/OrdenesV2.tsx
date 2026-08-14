@@ -262,9 +262,9 @@ export default function OrdenesV2() {
   </span>
   )}
 
-   <div className="w-[1px] h-6 bg-border shrink-0"/>
+   <div className="w-[1px] h-6 bg-border shrink-0 hidden md:block"/>
 
-   <div className="relative w-64 shrink-0">
+   <div className="relative w-64 shrink-0 hidden md:block">
      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
      <Input
        type="text" placeholder="Buscar en órdenes..." value={searchQuery}
@@ -272,7 +272,7 @@ export default function OrdenesV2() {
        className="pl-9 h-9 text-xs"/>
    </div>
 
-   <div className="w-[1px] h-6 bg-border shrink-0"/>
+   <div className="w-[1px] h-6 bg-border shrink-0 hidden md:block"/>
 
    <div
    ref={scrollContainerRef}

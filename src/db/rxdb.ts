@@ -1119,7 +1119,13 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
   const db = await withSuppressedDexieWarning(() => createRxDatabase({
     name,
     storage: getRxStorageDexie(),
-    multiInstance: true
+    multiInstance: true,
+    // React StrictMode remonta efectos (doble mount en dev) y un HMR de Vite
+    // puede recargar este módulo perdiendo el singleton `verticalDbPromise`
+    // en memoria mientras la instancia física anterior sigue viva en la
+    // pestaña. RxDB detecta el nombre "duplicado" y lanza DB8 aunque el
+    // flujo (vincular/re-vincular dispositivo) sea legítimo.
+    ignoreDuplicate: true
   }))
 
   const collectionsConfig: Record<string, any> = {
