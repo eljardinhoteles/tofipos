@@ -23,6 +23,7 @@ export interface VentaConMovimientos {
   // contenido de comentario desde la lista, sin abrir el detalle.
   textoComentarios: string
   fechaUltimoMovimiento: string
+  motivoAnulacion: string | null
 }
 
 function calcular(venta: RxVenta): VentaConMovimientos {
@@ -38,6 +39,7 @@ function calcular(venta: RxVenta): VentaConMovimientos {
   let numeroFactura: string | null = null
   let comprobanteUrl: string | null = null
   let metodoPago: string | null = null
+  let motivoAnulacion: string | null = null
   const comentarios: string[] = []
   const documentosAdjuntos: Array<{ id: string; url: string; nombre: string; origen: string }> = []
   const urlsVistas = new Set<string>()
@@ -67,7 +69,10 @@ function calcular(venta: RxVenta): VentaConMovimientos {
         numeroFactura = m.numero_factura;
       }
     }
-    else if (m.tipo === 'anular') anulado = true
+    else if (m.tipo === 'anular') {
+      anulado = true
+      if (m.motivo) motivoAnulacion = m.motivo
+    }
     else if (m.tipo === 'comentario' && m.motivo) comentarios.push(m.motivo)
     
     if (m.comprobante_url && !urlsVistas.has(m.comprobante_url)) {
@@ -95,6 +100,7 @@ function calcular(venta: RxVenta): VentaConMovimientos {
     comprobanteUrl,
     metodoPago,
     documentosAdjuntos,
+    motivoAnulacion,
     textoComentarios: comentarios.join(' '),
     fechaUltimoMovimiento: ordenados[ordenados.length - 1]?.fecha ?? venta.created_at,
   }
