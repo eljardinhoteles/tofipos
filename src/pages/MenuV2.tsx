@@ -6,7 +6,8 @@ import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../hooks/useIvaActivo';
 import { createRxCategoria, updateRxCategoria } from'../db/rxdb';
 import { cn } from'@/lib/utils';
-import { Input } from'@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { CsvUploader } from '@/components/Menu/CsvUploader';
 
 export default function MenuV2() {
  const [searchQuery, setSearchQuery] = useState('');
@@ -60,12 +61,14 @@ export default function MenuV2() {
 
  <div className="w-[1px] h-6 bg-border shrink-0"/>
 
- <button
- type="button"onClick={() => setIsManageCategoriesOpen(true)}
- className="h-9 px-3 rounded-lg bg-muted text-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer">
- <SquaresFour size={18} />
- Categorías
- </button>
+        <button
+          type="button" onClick={() => setIsManageCategoriesOpen(true)}
+          className="h-9 px-3 rounded-lg bg-muted text-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer">
+          <SquaresFour size={18} />
+          Categorías
+        </button>
+
+        <CsvUploader />
  </div>
 
  {/* Buscador */}
