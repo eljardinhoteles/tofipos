@@ -83,6 +83,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  unsub = query.$.subscribe((docs: any[]) => {
  setPagos(docs.map((doc: any) => doc.toJSON()));
  }) as any;
+ if (!alive && unsub) unsub();
  };
  run().catch(console.error);
  return () => {
@@ -154,6 +155,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
 
  } catch (error) {
  showToast.error('Error al procesar el cobro');
+ } finally {
  setIsProcessing(false);
  }
  };

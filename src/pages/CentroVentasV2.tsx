@@ -87,6 +87,13 @@ function estadoPrincipalDe(item: VentaConMovimientos): EstadoPrincipal {
   return 'pendiente';
 }
 
+const toggleSet = <T,>(set: Set<T>, value: T, setter: (s: Set<T>) => void) => {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  setter(next);
+};
+
 export default function CentroVentasV2() {
   const { items } = useVentasConMovimientos();
 
@@ -99,13 +106,6 @@ export default function CentroVentasV2() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedVentaId, setSelectedVentaId] = useState<string | null>(null);
   const [registrando, setRegistrando] = useState(false);
-
-  const toggleSet = <T,>(set: Set<T>, value: T, setter: (s: Set<T>) => void) => {
-    const next = new Set(set);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    setter(next);
-  };
 
   const [displayLimit, setDisplayLimit] = useState(30);
 

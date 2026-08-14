@@ -17,6 +17,15 @@ import { Switch } from '@/components/ui/switch';
 const SECTION_KEYS = ['organizacion', 'metodos-pago', 'impresion', 'auditoria', 'iva', 'mantenimiento'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
 
+const SECTIONS = [
+  { value: 'organizacion', label: 'Organización' },
+  { value: 'metodos-pago', label: 'Métodos de Pago' },
+  { value: 'impresion', label: 'Impresión' },
+  { value: 'auditoria', label: 'Auditoría' },
+  { value: 'iva', label: 'IVA' },
+  { value: 'mantenimiento', label: 'Mantenimiento' },
+] as const;
+
 export default function AjustesV2() {
  const [activeSection, setActiveSection] = useState<SectionKey>('organizacion');
  const { ajustesIva } = useRxAjustesIva();
@@ -96,21 +105,12 @@ export default function AjustesV2() {
  }
  };
 
- const sections = [
- { value: 'organizacion', label: 'Organización' },
- { value: 'metodos-pago', label: 'Métodos de Pago' },
- { value: 'impresion', label: 'Impresión' },
- { value: 'auditoria', label: 'Auditoría' },
- { value: 'iva', label: 'IVA' },
- { value: 'mantenimiento', label: 'Mantenimiento' },
- ] as const;
-
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
  {/* Header Chips */}
  <header className="h-14 px-6 bg-card border-b border-border flex items-center shrink-0 shadow-xs">
  <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
- {sections.map((sec) => (
+ {SECTIONS.map((sec) => (
  <button
  key={sec.value}
  type="button"onClick={() => goToSection(sec.value)}

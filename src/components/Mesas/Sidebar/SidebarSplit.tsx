@@ -96,7 +96,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  return pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
  }, [pagos]);
 
- const montoPorPersona = useMemo(() => saldoInicialSplit / personas, [saldoInicialSplit, personas]);
+ const montoPorPersona = saldoInicialSplit / personas;
 
  const totalesSeleccionados = useMemo(() => {
  if (selectedItems.length === 0) return { subtotalNeto: 0, ivaTotal: 0, total: 0 };

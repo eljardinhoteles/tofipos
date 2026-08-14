@@ -6,14 +6,14 @@ export const toISO = (d: Date) => {
   return local.toISOString().split('T')[0];
 };
 
-export const STATUS_HEX: Record<Reserva['estado'], string> = {
+const STATUS_HEX: Record<Reserva['estado'], string> = {
   pendiente: '#f59e0b',
   confirmada: '#22c55e',
   cancelada: '#ef4444',
   completada: '#9ca3af',
 };
 
-export const STATUS_COLOR: Record<Reserva['estado'], string> = {
+const STATUS_COLOR: Record<Reserva['estado'], string> = {
   pendiente: 'yellow',
   confirmada: 'green',
   cancelada: 'red',

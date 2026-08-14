@@ -16,6 +16,11 @@ import { useRxComandas } from'../hooks/useRxComandas';
 import { calcularTotalesComanda } from'../lib/taxUtils';
 import { cn } from'@/lib/utils';
 
+const FILTER_TABS = [
+  { value: 'historico', label: 'Histórico' },
+  { value: 'anuladas', label: 'Anuladas' },
+];
+
 export default function OrdenesV2() {
  const [status, setStatus] = useState('historico');
  const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +84,11 @@ export default function OrdenesV2() {
  if (!active) return;
  setReservas(docs.map((doc: any) => doc.toJSON()));
  });
+ if (!active) {
+ itemsSub?.unsubscribe();
+ cuentasSub?.unsubscribe();
+ reservasSub?.unsubscribe();
+ }
  })().catch(err => console.warn('Error cargando RxDB para OrdenesV2:', err));
 
  return () => {
@@ -211,68 +221,63 @@ export default function OrdenesV2() {
     return range;
   }, [page, totalPages]);
 
- const filterTabs = [
-    { value: 'historico', label: 'Histórico' },
-    { value: 'anuladas', label: 'Anuladas' },
-  ];
-
- return (
- <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
- {/* Header */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
- <div className="flex items-center gap-3 shrink-0">
- <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
- <PopoverTrigger asChild>
- <button
- type="button"title="Filtrar por fecha"
- className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
- <Calendar size={18} />
- </button>
- </PopoverTrigger>
- <PopoverContent className="w-auto p-0" align="start">
- <CalendarPicker
- mode="range"
- selected={dateRange[0] ? { from: dateRange[0], to: dateRange[1] ?? undefined } : undefined}
- onSelect={(range) => {
- setDateRange([range?.from ?? null, range?.to ?? null]);
- if (range?.from && range?.to) setCalendarOpen(false);
- }}
- />
- {dateRange[0] && (
- <div className="p-3 border-t border-border flex justify-end">
- <button
- type="button"onClick={() => { setDateRange([null, null]); setCalendarOpen(false); }}
- className="text-xs font-bold text-muted-foreground cursor-pointer">
- Limpiar filtro
- </button>
- </div>
- )}
- </PopoverContent>
- </Popover>
-
- {dateRange[0] && (
- <span className="px-3 py-1 rounded-md bg-primary/10 text-primary text-xs font-bold border border-primary/30">
- {dayjs(dateRange[0]).format('DD/MM')}
- {dateRange[1] &&`- ${dayjs(dateRange[1]).format('DD/MM')}`}
- </span>
- )}
-
-  <div className="w-[1px] h-6 bg-border shrink-0"/>
-
-  <div className="relative w-64 shrink-0">
-    <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
-    <Input
-      type="text" placeholder="Buscar en órdenes..." value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="pl-9 h-9 text-xs"/>
+  return (
+  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
+  {/* Header */}
+  <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
+  <div className="flex items-center gap-3 shrink-0">
+  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+  <PopoverTrigger asChild>
+  <button
+  type="button"title="Filtrar por fecha"
+  className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
+  <Calendar size={18} />
+  </button>
+  </PopoverTrigger>
+  <PopoverContent className="w-auto p-0" align="start">
+  <CalendarPicker
+  mode="range"
+  selected={dateRange[0] ? { from: dateRange[0], to: dateRange[1] ?? undefined } : undefined}
+  onSelect={(range) => {
+  setDateRange([range?.from ?? null, range?.to ?? null]);
+  if (range?.from && range?.to) setCalendarOpen(false);
+  }}
+  />
+  {dateRange[0] && (
+  <div className="p-3 border-t border-border flex justify-end">
+  <button
+  type="button"onClick={() => { setDateRange([null, null]); setCalendarOpen(false); }}
+  className="text-xs font-bold text-muted-foreground cursor-pointer">
+  Limpiar filtro
+  </button>
   </div>
+  )}
+  </PopoverContent>
+  </Popover>
 
-  <div className="w-[1px] h-6 bg-border shrink-0"/>
+  {dateRange[0] && (
+  <span className="px-3 py-1 rounded-md bg-primary/10 text-primary text-xs font-bold border border-primary/30">
+  {dayjs(dateRange[0]).format('DD/MM')}
+  {dateRange[1] &&`- ${dayjs(dateRange[1]).format('DD/MM')}`}
+  </span>
+  )}
 
-  <div
-  ref={scrollContainerRef}
-  className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
-  {filterTabs.map((tab) => {
+   <div className="w-[1px] h-6 bg-border shrink-0"/>
+
+   <div className="relative w-64 shrink-0">
+     <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
+     <Input
+       type="text" placeholder="Buscar en órdenes..." value={searchQuery}
+       onChange={(e) => setSearchQuery(e.target.value)}
+       className="pl-9 h-9 text-xs"/>
+   </div>
+
+   <div className="w-[1px] h-6 bg-border shrink-0"/>
+
+   <div
+   ref={scrollContainerRef}
+   className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+   {FILTER_TABS.map((tab) => {
   const active = status === tab.value;
   return (
   <button

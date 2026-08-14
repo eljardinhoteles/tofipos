@@ -69,9 +69,7 @@ export default function MesasV2() {
 
  // Lista de nombres de pisos disponibles
  const availablePisos = useMemo(
- () => dbPisos.reduce<string[]>((pisos, piso) => (
- pisos.includes(piso.nombre) ? pisos : [...pisos, piso.nombre]
- ), []),
+  () => Array.from(new Set(dbPisos.map(p => p.nombre))),
  [dbPisos]
  );
 
@@ -146,6 +144,7 @@ export default function MesasV2() {
  if (!active) return;
  setAllCuentas(docs.map((doc: any) => doc.toJSON()));
  });
+ if (!active) cuentasSub?.unsubscribe();
  })().catch(err => console.warn('Error cargando RxDB para MesasV2:', err));
 
  return () => {
@@ -567,6 +566,7 @@ function ProductSelectorWrapper({ mesaId, onBack }: { mesaId: string | null; onB
  .filter((c: Comanda) => isOperativeComanda(c))[0] ?? null;
  setActiveComanda(operative);
  });
+ if (!active) sub?.unsubscribe();
  })().catch(err => console.warn('Error cargando comanda activa para selector:', err));
 
  return () => {

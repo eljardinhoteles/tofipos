@@ -13,6 +13,11 @@ import { initVerticalRxDb } from'../db/rxdb';
 import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
 
+const getWhatsAppLink = (telefono: string) => {
+  const cleanNumber = telefono.replace(/\D/g, '');
+  return cleanNumber ? `https://wa.me/${cleanNumber}` : null;
+};
+
 export default function ClientesV2() {
  const [searchQuery, setSearchQuery] = useState('');
  const [page, setPage] = useState(1);
@@ -92,11 +97,6 @@ export default function ClientesV2() {
  showToast.error('Cliente eliminado');
  }
  );
- };
-
- const getWhatsAppLink = (telefono: string) => {
- const cleanNumber = telefono.replace(/\D/g,'');
- return cleanNumber ?`https://wa.me/${cleanNumber}`: null;
  };
 
  return (
