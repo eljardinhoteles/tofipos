@@ -329,18 +329,18 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  alt={detailItem.nombre}
  className="w-full h-48 object-cover"/>
  <div className="p-6 flex flex-col gap-4">
- <div className="flex items-start justify-between gap-3">
- <div>
- <h3 className="font-extrabold text-lg text-foreground">{detailItem.nombre}</h3>
- <span className="text-xs font-semibold text-muted-foreground">{detailItem.categoria_nombre}</span>
- </div>
- <span className="text-xl font-black text-primary">
- ${(preciosConIva && detailItem.iva_modalidad === 'sistema'
- ? detailItem.precio * (1 + ivaPorcentaje / 100)
- : detailItem.precio
- ).toFixed(2)}
- </span>
- </div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-extrabold text-lg text-foreground">{detailItem.nombre}</h3>
+            <span className="text-xs font-semibold text-muted-foreground">{detailItem.categoria_nombre}</span>
+          </div>
+          <span className="text-xl font-black text-primary">
+            ${(!preciosConIva && detailItem.iva_modalidad === 'sistema'
+              ? detailItem.precio * (1 + ivaPorcentaje / 100)
+              : detailItem.precio
+            ).toFixed(2)}
+          </span>
+        </div>
 
  <div className="w-full h-[1px] bg-border"/>
 
@@ -402,7 +402,7 @@ interface ProductCardProps {
 const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva }: ProductCardProps) {
   const isSelected = currentQty > 0;
   
-  const finalPrice = preciosConIva && item.iva_modalidad === 'sistema'
+  const finalPrice = !preciosConIva && item.iva_modalidad === 'sistema'
     ? item.precio * (1 + ivaPorcentaje / 100)
     : item.precio;
 
