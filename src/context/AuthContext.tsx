@@ -313,8 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdminConfigured = !!adminUser && !!activeOrganizationId;
   const isAuthenticated = !!currentMesero;
 
-  return (
-    <AuthContext.Provider value={{
+  const contextValue = React.useMemo(() => ({
       adminUser,
       adminSession,
       isAdminConfigured,
@@ -329,7 +328,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logoutMesero,
       fetchOrganizacionesAdmin,
       isLoading
-    }}>
+  }), [
+      adminUser, adminSession, isAdminConfigured, activeOrganizationId,
+      currentMesero, isAuthenticated, isLoading
+  ]);
+
+  return (
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

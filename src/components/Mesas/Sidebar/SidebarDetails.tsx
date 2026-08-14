@@ -47,10 +47,12 @@ interface SidebarDetailsProps {
  onAction: (mesa: Mesa, action: string) => void;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export function SidebarDetails({
  selectedMesa,
  activeComanda: activeComandaProp,
- comandaItems = [],
+ comandaItems = EMPTY_ARRAY,
  onClose,
  onAddProduct,
  onAction,

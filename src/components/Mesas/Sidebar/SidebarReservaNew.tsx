@@ -112,6 +112,8 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  if (!fecha) return;
  setNombreError('');
 
+ const orgId = localStorage.getItem('pos_active_org_id') || '';
+
  setIsProcessing(true);
  try {
  showToast.info('Guardando reserva','Publicando cambios en la nube...');
@@ -139,7 +141,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  mesero:'Sistema', cliente: nombre.trim(),
  estado:'pendiente', total: 0,
  confirmada: true,
- organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ organization_id: orgId,
  created_at: now,
  updated_at: now,
  });
@@ -148,7 +150,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  zona_id: zonaId || undefined, estado:'confirmada',
  comanda_id: comandaId, abono: 0,
  nota: nota.trim() || undefined,
- organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ organization_id: orgId,
  created_at: now,
  updated_at: now,
  });

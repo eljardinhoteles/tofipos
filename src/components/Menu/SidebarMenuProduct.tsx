@@ -121,28 +121,29 @@ export function SidebarMenuProduct() {
  .map(g => ({ ...g, nombre: g.nombre.trim(), opciones: g.opciones.map(o => o.trim()).filter(Boolean) }))
  .filter(g => g.nombre.length > 0 && g.opciones.length > 0);
 
- let catId ='';
- let catNombre = categoria ||'General';
+ let catId = '';
+ let catNombre = categoria || 'General';
+ const orgId = localStorage.getItem('pos_active_org_id') || '';
 
  if (categoria) {
  const category = dbCategorias.find(c => c.nombre.toLowerCase() === categoria.toLowerCase());
  if (!category) {
  catId = crypto.randomUUID();
- await createRxCategoria({ id: catId, nombre: categoria, organization_id: localStorage.getItem('pos_active_org_id') ||''});
+ await createRxCategoria({ id: catId, nombre: categoria, organization_id: orgId });
  catNombre = categoria;
  } else {
  catId = category.id;
  catNombre = category.nombre;
  }
  } else {
- const generalCat = dbCategorias.find(c => c.nombre ==='General');
+ const generalCat = dbCategorias.find(c => c.nombre === 'General');
  if (!generalCat) {
  catId = crypto.randomUUID();
- await createRxCategoria({ id: catId, nombre:'General', organization_id: localStorage.getItem('pos_active_org_id') ||''});
+ await createRxCategoria({ id: catId, nombre: 'General', organization_id: orgId });
  } else {
  catId = generalCat.id;
  }
- catNombre ='General';
+ catNombre = 'General';
  }
 
  if (editingProduct) {
@@ -155,8 +156,8 @@ export function SidebarMenuProduct() {
  activo,
  es_bebida: esBebida,
  iva_modalidad: ivaModalidad,
- iva_porcentaje: ivaModalidad ==='especifico'? ivaPorcentaje : undefined,
- organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ iva_porcentaje: ivaModalidad === 'especifico' ? ivaPorcentaje : undefined,
+ organization_id: orgId,
  });
  showToast.success('Producto actualizado');
  } else {
@@ -170,8 +171,8 @@ export function SidebarMenuProduct() {
  es_bebida: esBebida,
  modificadores: modificadoresValidos,
  iva_modalidad: ivaModalidad,
- iva_porcentaje: ivaModalidad ==='especifico'? ivaPorcentaje : undefined,
- organization_id: localStorage.getItem('pos_active_org_id') ||'',
+ iva_porcentaje: ivaModalidad === 'especifico' ? ivaPorcentaje : undefined,
+ organization_id: orgId,
  });
  showToast.success('Producto creado');
  }

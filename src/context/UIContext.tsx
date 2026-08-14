@@ -117,8 +117,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('pos_sidebar_pinned', isPinned.toString());
   }, [isPinned]);
 
-  return (
-    <UIContext.Provider value={{
+  const contextValue = React.useMemo(() => ({
       isPinned,
       setIsPinned,
       selectedMesaId,
@@ -155,7 +154,15 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       setSelectedMenuProductId,
       selectedMesaEsHabitacion,
       setSelectedMesaEsHabitacion,
-    }}>
+  }), [
+      isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, confirmModal,
+      promptModal, checkoutView, viewingComandaId, reservaView, selectedReservaId,
+      reservaProductosComandaId, nuevaReservaPreset, menuView, selectedMenuProductId,
+      selectedMesaEsHabitacion
+  ]);
+
+  return (
+    <UIContext.Provider value={contextValue}>
       {children}
     </UIContext.Provider>
   );

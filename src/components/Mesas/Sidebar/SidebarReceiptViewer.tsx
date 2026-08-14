@@ -21,10 +21,12 @@ interface SidebarReceiptViewerProps {
  onAction: (mesa: Mesa, action: string) => void;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export function SidebarReceiptViewer({
  selectedMesa,
  activeComanda,
- comandaItems = [],
+ comandaItems = EMPTY_ARRAY,
  onClose,
  onAction: _onAction,
 }: SidebarReceiptViewerProps) {
