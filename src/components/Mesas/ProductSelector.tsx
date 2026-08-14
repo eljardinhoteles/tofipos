@@ -3,26 +3,28 @@ import { ArrowLeft, MagnifyingGlass, X, Star, Plus } from'@phosphor-icons/react'
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
-import { initVerticalRxDb } from'../../db/rxdb';
-import { useRxMenuCatalog } from'../../hooks/useRxMenuCatalog';
-import { cn } from'@/lib/utils';
-import { Input } from'@/components/ui/input';
-import { Button } from'@/components/ui/button';
+import { initVerticalRxDb } from '../../db/rxdb';
+import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
+import { useIvaActivo } from '../../hooks/useIvaActivo';
+import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
- Dialog,
- DialogContent,
- DialogTitle,
- DialogDescription,
-} from'@/components/ui/dialog';
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface ProductSelectorProps {
- activeComanda?: Comanda | null;
- onBack: () => void;
- hideBackButton?: boolean;
+  activeComanda?: Comanda | null;
+  onBack: () => void;
+  hideBackButton?: boolean;
 }
 
 export function ProductSelector({ activeComanda, onBack, hideBackButton = false }: ProductSelectorProps) {
- const [searchQueryInput, setSearchQueryInput] = useState('');
+  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+  const [searchQueryInput, setSearchQueryInput] = useState('');
  const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
 
  useEffect(() => {
@@ -304,6 +306,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  item={item}
  onAdd={handleAddProduct}
  currentQty={itemQuantities[item.id] || 0}
+ ivaPorcentaje={ivaPorcentaje}
+ preciosConIva={preciosConIva}
  />
  ))}
  </div>
@@ -330,7 +334,12 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  <h3 className="font-extrabold text-lg text-foreground">{detailItem.nombre}</h3>
  <span className="text-xs font-semibold text-muted-foreground">{detailItem.categoria_nombre}</span>
  </div>
- <span className="text-xl font-black text-primary">${detailItem.precio.toFixed(2)}</span>
+ <span className="text-xl font-black text-primary">
+ ${(preciosConIva && detailItem.iva_modalidad === 'sistema'
+ ? detailItem.precio * (1 + ivaPorcentaje / 100)
+ : detailItem.precio
+ ).toFixed(2)}
+ </span>
  </div>
 
  <div className="w-full h-[1px] bg-border"/>
@@ -383,46 +392,52 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 }
 
 interface ProductCardProps {
- item: MenuItem;
- onAdd: (item: MenuItem) => void;
- currentQty: number;
+  item: MenuItem;
+  onAdd: (item: MenuItem) => void;
+  currentQty: number;
+  ivaPorcentaje: number;
+  preciosConIva: boolean;
 }
 
-const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty }: ProductCardProps) {
- const isSelected = currentQty > 0;
+const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva }: ProductCardProps) {
+  const isSelected = currentQty > 0;
+  
+  const finalPrice = preciosConIva && item.iva_modalidad === 'sistema'
+    ? item.precio * (1 + ivaPorcentaje / 100)
+    : item.precio;
 
- return (
- <div
- onClick={() => onAdd(item)}
- className={cn("p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between select-none active:scale-98 min-h-[90px]",
- isSelected
- ?"bg-primary text-primary-foreground border-primary shadow-md":"bg-card text-foreground border-border")}
- >
- <span className={cn("font-bold text-xs line-clamp-2", isSelected ?"text-primary-foreground":"text-foreground")}>
- {item.nombre}
- </span>
+  return (
+    <div
+      onClick={() => onAdd(item)}
+      className={cn("p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between select-none active:scale-98 min-h-[90px]",
+        isSelected
+          ? "bg-primary text-primary-foreground border-primary shadow-md" : "bg-card text-foreground border-border")}
+    >
+      <span className={cn("font-bold text-xs line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+        {item.nombre}
+      </span>
 
- <div className="flex items-center justify-between mt-3">
- {isSelected ? (
- <span className="px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-xs">
- {currentQty}
- </span>
- ) : (
- <button
- type="button"onClick={async (e) => {
- e.stopPropagation();
- const rxDb = await initVerticalRxDb();
- await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
- }}
- className="text-muted-foreground/50 transition-colors cursor-pointer">
- <Star size={14} weight={item.favorito ?'fill':'bold'} className={item.favorito ?'text-amber-400':''} />
- </button>
- )}
+      <div className="flex items-center justify-between mt-3">
+        {isSelected ? (
+          <span className="px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-xs">
+            {currentQty}
+          </span>
+        ) : (
+          <button
+            type="button" onClick={async (e) => {
+              e.stopPropagation();
+              const rxDb = await initVerticalRxDb();
+              await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
+            }}
+            className="text-muted-foreground/50 transition-colors cursor-pointer">
+            <Star size={14} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
+          </button>
+        )}
 
- <span className={cn("font-black text-sm", isSelected ?"text-primary-foreground":"text-primary")}>
- ${item.precio.toFixed(2)}
- </span>
- </div>
- </div>
- );
+        <span className={cn("font-black text-sm", isSelected ? "text-primary-foreground" : "text-primary")}>
+          ${finalPrice.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
 });
