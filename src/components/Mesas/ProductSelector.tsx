@@ -76,7 +76,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const [modifyingItem, setModifyingItem] = useState<MenuItem | null>(null);
  const [rxComandaItems, setRxComandaItems] = useState<ComandaItem[]>([]);
 
- const { menuItems } = useRxMenuCatalog();
+ const { menuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
 
  useEffect(() => {
  let alive = true;
@@ -121,32 +121,46 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  }, [safeComandaItems]);
 
  const categories = useMemo(() => {
- const cats = new Set(safeMenuItems.map(i => i.categoria_nombre ||'Sin Categoría'));
- return Array.from(cats).sort((a, b) => a.localeCompare(b));
- }, [safeMenuItems]);
+ const cats = new Set(safeMenuItems.map(i => i.categoria_nombre || 'Sin Categoría'));
+ const orderMap = new Map(safeDbCategorias.map((c, idx) => [c.nombre, idx]));
+ 
+ return Array.from(cats).sort((a, b) => {
+ const orderA = orderMap.has(a) ? orderMap.get(a)! : 999999;
+ const orderB = orderMap.has(b) ? orderMap.get(b)! : 999999;
+ if (orderA !== orderB) return orderA - orderB;
+ return a.localeCompare(b);
+ });
+ }, [safeMenuItems, safeDbCategorias]);
 
  const filteredItems = useMemo(() => {
  const items = safeMenuItems.filter(item => {
  const matchesSearch = !searchQueryDebounced ||
  item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
 
- if (selectedCategory ==='Favoritos') {
+ if (selectedCategory === 'Favoritos') {
  return matchesSearch && item.favorito;
  }
 
  const matchesCategory = !selectedCategory ||
- (item.categoria_nombre ||'Sin Categoría') === selectedCategory;
+ (item.categoria_nombre || 'Sin Categoría') === selectedCategory;
  return matchesSearch && matchesCategory;
  });
 
+ const orderMap = new Map(safeDbCategorias.map((c, idx) => [c.nombre, idx]));
+
  return [...items].sort((a, b) => {
- const catA = a.categoria_nombre ||'';
- const catB = b.categoria_nombre ||'';
- const catComp = catA.localeCompare(catB);
- if (catComp !== 0) return catComp;
+ const catA = a.categoria_nombre || 'Sin Categoría';
+ const catB = b.categoria_nombre || 'Sin Categoría';
+ 
+ const orderA = orderMap.has(catA) ? orderMap.get(catA)! : 999999;
+ const orderB = orderMap.has(catB) ? orderMap.get(catB)! : 999999;
+ 
+ if (orderA !== orderB) return orderA - orderB;
+ if (catA !== catB) return catA.localeCompare(catB);
+ 
  return a.nombre.localeCompare(b.nombre);
  });
- }, [safeMenuItems, searchQueryDebounced, selectedCategory]);
+ }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias]);
 
  const groupedItems = useMemo(() => {
  const groups: { category: string; items: typeof filteredItems }[] = [];

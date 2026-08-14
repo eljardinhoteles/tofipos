@@ -154,6 +154,7 @@ export interface RxReserva {
 export interface RxCategoria {
   id: string
   nombre: string
+  orden?: number
   es_comida_incluida?: boolean
   organization_id: string
   _deleted: boolean
@@ -640,6 +641,7 @@ const categoriaSchema = {
   properties: {
     id: { type: 'string', maxLength: 100 },
     nombre: { type: 'string' },
+    orden: { type: 'number' },
     es_comida_incluida: { type: 'boolean' },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
@@ -2559,6 +2561,7 @@ export async function createRxCategoria(input: Omit<RxCategoria, '_deleted' | '_
   const orgId = input.organization_id || getActiveOrgIdStrict()
   const created = await db.categorias.insert({
     ...input,
+    orden: input.orden ?? 0,
     organization_id: orgId,
     _deleted: false,
     _modified: now

@@ -1,6 +1,6 @@
 import { useMemo, useState } from'react';
 import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
-import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour } from'@phosphor-icons/react';
+import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour, CaretUp, CaretDown } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../hooks/useIvaActivo';
@@ -44,6 +44,22 @@ export default function MenuV2() {
  setSelectedMenuProductId(product.id);
  setMenuView('producto');
  };
+
+ const handleMoveCategory = async (idx: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === safeDbCategorias.length - 1) return;
+
+    const newOrder = [...safeDbCategorias];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    
+    // Intercambiar
+    const temp = newOrder[idx];
+    newOrder[idx] = newOrder[targetIdx];
+    newOrder[targetIdx] = temp;
+
+    // Guardar el nuevo orden secuencial para todas
+    await Promise.all(newOrder.map((c, i) => updateRxCategoria(c.id, { orden: i })));
+  };
 
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
@@ -178,7 +194,7 @@ export default function MenuV2() {
  {safeDbCategorias.length === 0 ? (
  <div className="py-8 text-center text-xs text-muted-foreground">Sin categorías aún</div>
  ) : (
- safeDbCategorias.map((cat) => (
+ safeDbCategorias.map((cat, idx) => (
  <div
  key={cat.id}
  className={cn("flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors",
@@ -202,10 +218,26 @@ export default function MenuV2() {
  />
  ) : (
  <div className="flex items-center gap-2">
- <span className="font-semibold text-foreground">{cat.nombre}</span>
- {cat.es_comida_incluida && (
- <span className="px-1.5 py-0.5 rounded-xs bg-emerald-100 text-emerald-700 text-[10px] font-bold">Plan</span>
- )}
+    <div className="flex flex-col gap-0.5 mr-1">
+      <button 
+        type="button" 
+        onClick={() => handleMoveCategory(idx, 'up')}
+        disabled={idx === 0}
+        className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+        <CaretUp size={12} weight="bold" />
+      </button>
+      <button 
+        type="button" 
+        onClick={() => handleMoveCategory(idx, 'down')}
+        disabled={idx === safeDbCategorias.length - 1}
+        className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+        <CaretDown size={12} weight="bold" />
+      </button>
+    </div>
+    <span className="font-semibold text-foreground">{cat.nombre}</span>
+    {cat.es_comida_incluida && (
+      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-100 text-emerald-700 text-[10px] font-bold">Plan</span>
+    )}
  </div>
  )}
 

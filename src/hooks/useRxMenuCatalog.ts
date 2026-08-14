@@ -28,7 +28,11 @@ export function useRxMenuCatalog() {
         selector: { organization_id: orgId, _deleted: { $ne: true } }
       }).$.subscribe((docs: any[]) => {
         if (!alive) return
-        setCategorias(docs.map((doc: any) => doc.toJSON()))
+        const sortedCats = docs.map((doc: any) => doc.toJSON()).sort((a, b) => {
+          if ((a.orden ?? 0) !== (b.orden ?? 0)) return (a.orden ?? 0) - (b.orden ?? 0)
+          return (a.nombre || '').localeCompare(b.nombre || '')
+        })
+        setCategorias(sortedCats)
       })
     })().catch(() => {})
 
