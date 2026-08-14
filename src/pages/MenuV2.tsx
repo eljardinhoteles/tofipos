@@ -296,25 +296,27 @@ function MenuProductCardV2({ product, onEdit, isSelected }: any) {
  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">
  {product.category}
  </span>
- <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
- {ivaLabel}
- </span>
  </div>
  <h3 className="font-extrabold text-sm text-foreground line-clamp-2">
  {product.name}
  </h3>
  </div>
 
- <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+ <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
  <span className="text-base font-black text-foreground">
  ${product.price.toFixed(2)}
  </span>
+ <div className="flex items-center gap-2 shrink-0">
  {product.modificadores.length > 0 && (
  <div className="flex items-center gap-1 text-muted-foreground text-xs font-semibold">
  <List size={14} />
  <span>{product.modificadores.length}</span>
  </div>
  )}
+ <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+ {ivaLabel}
+ </span>
+ </div>
  </div>
  </div>
  );

@@ -170,6 +170,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const [textoComentario, setTextoComentario] = useState('');
   const [uploadingDocumento, setUploadingDocumento] = useState(false);
   const [docToDelete, setDocToDelete] = useState<{ id: string; url: string; nombre: string; origen: string } | null>(null);
+  const [confirmDeleteVenta, setConfirmDeleteVenta] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accion, setAccion] = useState<AccionId>('pago');
 
@@ -299,6 +300,24 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     }
   };
 
+  const handleDeleteVenta = async () => {
+    setSaving(true);
+    try {
+      const rxDb = await import('../../db/rxdb').then(m => m.initVerticalRxDb());
+      const doc = await rxDb.comandas.findOne(venta.id).exec();
+      if (doc) {
+        await doc.update({ $set: { _deleted: true, _modified: new Date().toISOString() } } as any);
+        showToast.success('Comanda borrada permanentemente');
+        setConfirmDeleteVenta(false);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast.error('Error al borrar la comanda');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUploadDocumento = async (file: File) => {
     const orgId = localStorage.getItem('pos_active_org_id') || '';
     setUploadingDocumento(true);
@@ -375,7 +394,19 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                   {venta.tipo === 'credito' ? <CreditCard size={12} weight="fill" className="mr-1" /> : null} {venta.tipo === 'credito' ? 'Crédito' : 'Directa'}
                 </Badge>
                 {item.facturado && <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50 font-bold text-xs px-2 py-0.5"><Receipt size={12} weight="fill" className="mr-1" /> Facturado</Badge>}
-                {item.anulado && <Badge variant="destructive" className="font-bold text-xs px-2 py-0.5"><Prohibit size={12} weight="fill" className="mr-1" /> Anulado</Badge>}
+                {item.anulado && (
+                  <div className="flex items-center gap-1.5 bg-destructive/10 rounded-full pr-1">
+                    <Badge variant="destructive" className="font-bold text-xs px-2 py-0.5 border-0"><Prohibit size={12} weight="fill" className="mr-1" /> Anulado</Badge>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteVenta(true)}
+                      className="p-1 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer mr-0.5"
+                      title="Borrar definitivamente"
+                    >
+                      <Trash size={14} weight="bold" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -526,6 +557,24 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                 className="text-xs font-bold gap-1"
               >
                 <Trash size={14} /> Eliminar documento
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de confirmación para borrar Venta definitivamente */}
+        <Dialog open={confirmDeleteVenta} onOpenChange={setConfirmDeleteVenta}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Borrar Comanda</DialogTitle>
+              <DialogDescription>
+                ¿Estás seguro de que deseas borrar permanentemente esta comanda y ocultarla de la lista? Esta acción no se puede deshacer.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setConfirmDeleteVenta(false)}>Cancelar</Button>
+              <Button type="button" variant="destructive" disabled={saving} onClick={handleDeleteVenta}>
+                {saving ? 'Borrando...' : 'Borrar definitivamente'}
               </Button>
             </DialogFooter>
           </DialogContent>

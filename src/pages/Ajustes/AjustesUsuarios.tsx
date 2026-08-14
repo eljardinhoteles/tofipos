@@ -147,13 +147,30 @@ export default function AjustesUsuarios() {
  );
  };
 
- if (!canManage) {
- return (
- <div className="bg-card p-6 rounded-2xl border border-border text-center font-bold text-muted-foreground text-xs">
- Solo los administradores pueden gestionar usuarios.
- </div>
- );
- }
+  if (!canManage) {
+    const expiredEmail = localStorage.getItem('pos_admin_email');
+    return (
+      <div className="bg-card p-6 rounded-2xl border border-border text-center flex flex-col items-center justify-center gap-4">
+        <div className="font-bold text-muted-foreground text-sm">
+          Solo los administradores pueden gestionar usuarios.
+        </div>
+        {expiredEmail && (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-xs text-muted-foreground max-w-xs">
+              Tu sesión de administrador ({expiredEmail}) expiró por inactividad de la plataforma. Para gestionar usuarios debes iniciar sesión nuevamente.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => {
+              // Limpiamos el admin email para obligar al re-login en la pantalla inicial
+              localStorage.removeItem('pos_admin_email');
+              window.location.href = '/';
+            }}>
+              Re-autenticar como Administrador
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
  return (
  <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">

@@ -65,6 +65,7 @@ export function GlobalModals() {
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
+                  if (promptModal.required && !promptValue.trim()) return;
                   promptModal.onConfirm(promptValue);
                   closePrompt();
                 }
@@ -75,7 +76,7 @@ export function GlobalModals() {
             <Button variant="outline" onClick={closePrompt}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={() => {
+            <Button variant="destructive" disabled={promptModal.required && !promptValue.trim()} onClick={() => {
               promptModal.onConfirm(promptValue);
               closePrompt();
             }}>

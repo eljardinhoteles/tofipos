@@ -31,11 +31,7 @@ export default function AjustesOrganizacion() {
     nombre: adminUser.email?.split('@')[0] || adminUser.email || 'Usuario',
     rol: 'admin',
     email: adminUser.email || '',
-  } : (persistedAdminEmail ? {
-    nombre: persistedAdminEmail.split('@')[0] || persistedAdminEmail,
-    rol: 'admin',
-    email: persistedAdminEmail,
-  } : null));
+  } : null);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);

@@ -12,6 +12,8 @@ import { initVerticalRxDb } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
+import { showToast } from'@/lib/toast';
+import { useUI } from'../../../context/UIContext';
 
 interface SidebarReceiptViewerProps {
  selectedMesa: Mesa;
@@ -38,6 +40,7 @@ export function SidebarReceiptViewer({
  const [pagos, setPagos] = useState<any[]>([]);
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
+ const { openConfirm } = useUI();
 
  useEffect(() => {
  let alive = true;
@@ -63,6 +66,27 @@ export function SidebarReceiptViewer({
  alive = false;
  };
  }, [activeComanda?.habitacion_cuenta_id]);
+
+ const handleDeleteVenta = async () => {
+   openConfirm(
+     'Borrar Comanda',
+     '¿Estás seguro de que deseas borrar permanentemente esta comanda? Esta acción no se puede deshacer.',
+     async () => {
+       try {
+         const rxDb = await initVerticalRxDb();
+         const doc = await rxDb.comandas.findOne(activeComanda.id).exec();
+         if (doc) {
+           await doc.update({ $set: { _deleted: true, _modified: new Date().toISOString() } } as any);
+           showToast.success('Comanda borrada permanentemente');
+           onClose();
+         }
+       } catch (e) {
+         console.error(e);
+         showToast.error('Error al borrar la comanda');
+       }
+     }
+   );
+ };
 
  useEffect(() => {
  let alive = true;
@@ -276,6 +300,15 @@ export function SidebarReceiptViewer({
  Ver Pagos
  </Button>
  )}
+ {isAnulada && (
+    <Button
+      variant="destructive"
+      className="w-full font-bold"
+      onClick={handleDeleteVenta}
+    >
+      Borrar permanentemente
+    </Button>
+  )}
  </div>
  </footer>
 

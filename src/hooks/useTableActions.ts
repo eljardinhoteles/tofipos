@@ -184,6 +184,7 @@ export function useTableActions() {
         title: 'Anular Mesa',
         label: 'Motivo de la anulación',
         placeholder: 'Escriba el motivo aquí (ej: error en pedido, cliente se retiró...)',
+        required: true,
         onConfirm: async (motivo) => {
           for (const comanda of activeComandas) {
             await updateRxComanda((comanda as any).id, {

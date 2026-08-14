@@ -25,9 +25,10 @@ interface UIContextType {
     label: string;
     placeholder: string;
     defaultValue?: string;
+    required?: boolean;
     onConfirm: (value: string) => void;
   };
-  openPrompt: (options: { title: string; label: string; placeholder: string; defaultValue?: string; onConfirm: (val: string) => void }) => void;
+  openPrompt: (options: { title: string; label: string; placeholder: string; defaultValue?: string; required?: boolean; onConfirm: (val: string) => void }) => void;
   closePrompt: () => void;
   checkoutView: boolean;
   setCheckoutView: (val: boolean) => void;
@@ -77,13 +78,12 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     onConfirm: () => { }
   });
 
-  const [promptModal, setPromptModal] = useState({
+  const [promptModal, setPromptModal] = useState<{ opened: boolean; title: string; label: string; placeholder: string; defaultValue?: string; required?: boolean; onConfirm: (val: string) => void }>({
     opened: false,
     title: '',
     label: '',
     placeholder: '',
-    defaultValue: '',
-    onConfirm: (_value: string) => { }
+    onConfirm: () => { }
   });
 
   const openConfirm = (title: string, message: string, onConfirm: () => void) => {
@@ -94,7 +94,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     setConfirmModal(prev => ({ ...prev, opened: false }));
   };
 
-  const openPrompt = (options: { title: string; label: string; placeholder: string; defaultValue?: string; onConfirm: (val: string) => void }) => {
+  const openPrompt = (options: { title: string; label: string; placeholder: string; defaultValue?: string; required?: boolean; onConfirm: (val: string) => void }) => {
     setPromptModal({
       opened: true,
       title: options.title,
