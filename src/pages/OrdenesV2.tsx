@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from'react';
-import { MagnifyingGlass, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt } from'@phosphor-icons/react';
+import { MagnifyingGlass, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Door } from'@phosphor-icons/react';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
@@ -117,21 +117,9 @@ export default function OrdenesV2() {
  return safeComandas.filter(comanda => {
  if (comanda.mesa_id?.startsWith('reserva_')) return false;
 
- let esComandaEnHabitacionActiva = false;
- if (comanda.habitacion_cuenta_id) {
- const cuenta = safeHabitacionCuentas.find(h => h.id === comanda.habitacion_cuenta_id);
- if (cuenta && cuenta.estado !=='cerrada') {
- esComandaEnHabitacionActiva = true;
- }
- }
-
- if (status ==='cargadas') {
- if (!esComandaEnHabitacionActiva) return false;
- if (comanda.estado ==='anulada') return false;
- } else if (status ==='historico') {
- // Muestra todas las órdenes activas y cobradas/cerradas de mesa/directas.
- // Excluye las cargadas a la habitación (mientras la habitación esté activa) y las anuladas.
- if (esComandaEnHabitacionActiva) return false;
+ if (status ==='historico') {
+ // Todas las órdenes no anuladas — incluye las cargadas a habitación
+ // (activa o cerrada). Se distinguen con un badge en la fila.
  if (comanda.estado ==='anulada') return false;
  } else if (status ==='anuladas') {
  if (comanda.estado !=='anulada') return false;
@@ -225,7 +213,6 @@ export default function OrdenesV2() {
 
  const filterTabs = [
     { value: 'historico', label: 'Histórico' },
-    { value: 'cargadas', label: 'Cargadas' },
     { value: 'anuladas', label: 'Anuladas' },
   ];
 
@@ -349,8 +336,15 @@ export default function OrdenesV2() {
   className="hover:bg-muted/50 cursor-pointer transition-colors"
   >
   <td className="px-6 py-3.5">
-  <div className="font-bold text-foreground truncate max-w-[150px]">
+  <div className="flex items-center gap-1.5">
+  <span className="font-bold text-foreground truncate max-w-[150px]">
   {mesa?.nombre || 'Mesa Eliminada'}
+  </span>
+  {habitacionCuenta && (
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold shrink-0">
+  <Door size={11} weight="bold" /> Habitación
+  </span>
+  )}
   </div>
   <div className="text-muted-foreground text-[11px] truncate max-w-[150px]">
   {clienteLabel || `Folio: ${comanda.folio}`}

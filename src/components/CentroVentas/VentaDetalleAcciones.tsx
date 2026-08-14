@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise, Paperclip, Trash, Plus,
   CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
-  Table, ForkKnife, BedIcon,
+  Table, ForkKnife, BedIcon, Door,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,18 +39,21 @@ const ORIGEN_LABEL: Record<VentaOrigen, string> = {
   mesa: 'Mesa',
   reserva_restaurante: 'Reserva restaurante',
   reserva_hotel: 'Reserva hotel',
+  habitacion: 'Checkout habitación',
 };
 
 const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
   mesa: Table,
   reserva_restaurante: ForkKnife,
   reserva_hotel: BedIcon,
+  habitacion: Door,
 };
 
 const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
   mesa: 'bg-blue-50 text-blue-700 border-blue-200',
   reserva_restaurante: 'bg-amber-50 text-amber-700 border-amber-200',
   reserva_hotel: 'bg-purple-50 text-purple-700 border-purple-200',
+  habitacion: 'bg-teal-50 text-teal-700 border-teal-200',
 };
 
 interface VentaDetalleAccionesProps {

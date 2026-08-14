@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from'react';
 import { X, CaretDown, Gift, Receipt, CreditCard, Printer } from'@phosphor-icons/react';
 import { type Mesa, type HabitacionCuenta } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
-import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa } from'../../../../db/rxdb';
+import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa, createRxVenta } from'../../../../db/rxdb';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -207,6 +207,24 @@ export function HabitacionCheckoutView({
       if (!quedanPendientes) {
         await updateRxHabitacionCuenta(cuenta.id, { estado:'cerrada', check_out: now.split('T')[0] });
         await updateRxMesa(selectedMesa.id, { estado:'libre'});
+      }
+
+      // Registra el cobro en Centro de Ventas — una sola venta consolidada
+      // por todo el checkout, sin importar cuántas comandas se cobraron a
+      // la vez. Sin esto, el checkout de habitación nunca generaba el
+      // registro que Centro de Ventas lista (a diferencia del checkout de
+      // mesa, que sí lo hacía vía createRxVenta).
+      if (total > 0.001) {
+        const folios = comandasSeleccionadas.map(c => `#${c.folio}`).join(', ');
+        await createRxVenta({
+          id: crypto.randomUUID(),
+          origen:'habitacion',
+          tipo:'directa',
+          cliente_id: cuenta.cliente_id || undefined,
+          cliente_nombre: payerName.trim() || cuenta.huesped || undefined,
+          referencia: `${selectedMesa.nombre} · Comandas ${folios}`,
+          organization_id: localStorage.getItem('pos_active_org_id') ||'',
+        }, total);
       }
 
       showToast.success('Checkout completado');

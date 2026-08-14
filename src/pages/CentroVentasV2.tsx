@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { MagnifyingGlass, Plus, Paperclip, Receipt, Receipt as ReceiptEmpty, CreditCard, ForkKnife, BedIcon, Table, Calendar, FunnelSimple, CaretDown, ChatText } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, Paperclip, Receipt, Receipt as ReceiptEmpty, CreditCard, ForkKnife, BedIcon, Table, Door, Calendar, FunnelSimple, CaretDown, ChatText } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -15,27 +15,31 @@ const ORIGEN_LABEL: Record<VentaOrigen, string> = {
   mesa: 'Mesa',
   reserva_restaurante: 'Reserva restaurante',
   reserva_hotel: 'Reserva hotel',
+  habitacion: 'Checkout habitación',
 };
 
 const ORIGEN_FILTER_LABEL: Record<VentaOrigen, string> = {
   mesa: 'Mesa',
   reserva_restaurante: 'Restaurante',
   reserva_hotel: 'Hotel',
+  habitacion: 'Habitación',
 };
 
 const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
   mesa: Table,
   reserva_restaurante: ForkKnife,
   reserva_hotel: BedIcon,
+  habitacion: Door,
 };
 
 const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
   mesa: 'bg-blue-50 text-blue-700 border-blue-200',
   reserva_restaurante: 'bg-amber-50 text-amber-700 border-amber-200',
   reserva_hotel: 'bg-purple-50 text-purple-700 border-purple-200',
+  habitacion: 'bg-teal-50 text-teal-700 border-teal-200',
 };
 
-const ORIGEN_FILTERS: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'reserva_hotel'];
+const ORIGEN_FILTERS: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'reserva_hotel', 'habitacion'];
 
 // Dropdown de estado: solo clasificadores de conciliación, combinables
 // entre sí. Directa/Crédito quedan como chips principales aparte.

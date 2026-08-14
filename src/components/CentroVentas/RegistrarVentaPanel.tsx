@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BedIcon, ForkKnife, Table, X, Paperclip, CheckCircle, CreditCard, UserPlus } from '@phosphor-icons/react';
+import { BedIcon, ForkKnife, Table, Door, X, Paperclip, CheckCircle, CreditCard, UserPlus } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,7 @@ const ORIGEN_OPTS: { value: VentaOrigen; label: string; icon: typeof Table }[] =
   { value: 'reserva_hotel', label: 'Reserva hotel', icon: BedIcon },
   { value: 'reserva_restaurante', label: 'Reserva restaurante', icon: ForkKnife },
   { value: 'mesa', label: 'Mesa', icon: Table },
+  { value: 'habitacion', label: 'Checkout habitación', icon: Door },
 ];
 
 const METODOS = ['efectivo', 'tarjeta', 'transferencia', 'otros'] as const;

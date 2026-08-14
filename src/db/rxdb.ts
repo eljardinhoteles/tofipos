@@ -359,7 +359,7 @@ export interface RxCobroReserva {
 
 // Las 4 vías de cobro del negocio como origen fijo de una venta.
 // De dónde sale la venta.
-export type VentaOrigen = 'mesa' | 'reserva_restaurante' | 'reserva_hotel'
+export type VentaOrigen = 'mesa' | 'reserva_restaurante' | 'reserva_hotel' | 'habitacion'
 // Cómo se cobra — independiente del origen: cualquier origen puede ser
 // directa (se cobra al momento) o crédito (queda pendiente, se liquida
 // después contra una agencia/empresa corporativa).
@@ -850,13 +850,13 @@ const ventaMovimientoSubSchema = {
 } as const
 
 const ventaSchema = {
-  version: 4,
+  version: 5,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: { type: 'string', maxLength: 100 },
     // De dónde sale la venta.
-    origen: { type: 'string', enum: ['mesa', 'reserva_restaurante', 'reserva_hotel'] },
+    origen: { type: 'string', enum: ['mesa', 'reserva_restaurante', 'reserva_hotel', 'habitacion'] },
     // Cómo se cobra — independiente del origen (ver comentario en RxVenta).
     tipo: { type: 'string', enum: ['directa', 'credito'] },
     cliente_id: { type: ['string', 'null'] },
@@ -1254,6 +1254,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
             anulado_por: m.anulado_por ?? null,
           })),
         }),
+        // v4 → v5: agrega 'habitacion' al enum de origen — passthrough,
+        // ningún documento existente usa ese valor todavía.
+        5: (oldDoc: any) => oldDoc,
       },
     },
     ajustes_iva: { schema: ajusteIvaSchema },
