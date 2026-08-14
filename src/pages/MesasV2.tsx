@@ -204,7 +204,7 @@ export default function MesasV2() {
  signature: string;
  }>());
 
- const mesaDerivedData = useMemo(() => {
+ const [mesaDerivedData, nextCache] = useMemo(() => {
  const comandaByMesaId = new Map<string, Comanda>();
  for (const c of allComandas) {
  if (isOperativeComanda(c) && !comandaByMesaId.has(c.mesa_id)) comandaByMesaId.set(c.mesa_id, c);
@@ -270,9 +270,12 @@ export default function MesasV2() {
  nextCache.set(mesa.id, { entry, signature });
  map.set(mesa.id, entry);
  }
- derivedCacheRef.current = nextCache;
- return map;
+ return [map, nextCache] as const;
  }, [mesasToShow, allComandas, allCuentas, allMesas, selectedPiso]);
+
+ useEffect(() => {
+ derivedCacheRef.current = nextCache;
+ }, [nextCache]);
 
  const handleSelectMesa = useCallback((mesa: { id: string }) => {
  setSelectedMesaEsHabitacion(isHabitacionesSeleccionado);
