@@ -444,14 +444,14 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           <VentaClienteCard venta={venta} />
 
           {/* Bloque 3.5: Motivo de Anulación */}
-          {item.anulado && item.venta.motivo_anulacion && (
+          {item.anulado && item.venta.anulado_motivo && (
             <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50">
               <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
                 <Prohibit size={14} weight="bold" />
                 <span className="text-[10px] font-extrabold uppercase tracking-wider">Motivo de Anulación</span>
               </div>
               <p className="text-xs font-medium text-red-800 dark:text-red-300 leading-relaxed">
-                {item.venta.motivo_anulacion}
+                {item.venta.anulado_motivo}
               </p>
             </div>
           )}

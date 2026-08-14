@@ -26,7 +26,6 @@ const EMPTY_FORM: OrgForm = {
 export default function AjustesOrganizacion() {
   const { currentMesero, adminUser } = useAuth();
   const orgId = currentMesero?.organization_id || localStorage.getItem('pos_active_org_id') || '';
-  const persistedAdminEmail = localStorage.getItem('pos_admin_email') || '';
   const connectedUser = currentMesero || (adminUser ? {
     nombre: adminUser.email?.split('@')[0] || adminUser.email || 'Usuario',
     rol: 'admin',
