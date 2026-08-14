@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { MagnifyingGlass, Plus, Paperclip, Receipt, Receipt as ReceiptEmpty, CreditCard, ForkKnife, BedIcon, Table, Door, Calendar, FunnelSimple, CaretDown, ChatText } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, Paperclip, Receipt, Receipt as ReceiptEmpty, CreditCard, ForkKnife, BedIcon, Table, Door, Calendar, FunnelSimple, CaretDown, ChatText, ArrowLeft } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -184,7 +184,7 @@ export default function CentroVentasV2() {
     <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Panel 1: buscador + filtros + lista de ventas */}
-        <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 bg-card", (selected || registrando) ? "w-2/5" : "flex-1")}>
+        <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 bg-card", (selected || registrando) ? "hidden md:flex md:w-2/5" : "flex-1")}>
           <div className="p-3 border-b border-border shrink-0 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -415,18 +415,36 @@ export default function CentroVentasV2() {
 
         {/* Panel 2: trabajo — detalle/acciones, formulario de registro, o estado vacío. Fijo, sin overlay. */}
         {registrando ? (
-          <main className="w-3/5 shrink-0 overflow-y-auto p-6">
-            <RegistrarVentaPanel
-              onCancel={() => setRegistrando(false)}
-              onSuccess={(ventaId) => { setRegistrando(false); setSelectedVentaId(ventaId); }}
-            />
+          <main className="w-full md:w-3/5 shrink-0 flex flex-col min-h-0 relative">
+            <div className="md:hidden flex items-center p-3 border-b border-border bg-card shrink-0">
+              <button 
+                onClick={() => setRegistrando(false)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={18} />
+                <span className="text-sm font-semibold">Volver a la lista</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <RegistrarVentaPanel
+                onCancel={() => setRegistrando(false)}
+                onSuccess={(ventaId) => { setRegistrando(false); setSelectedVentaId(ventaId); }}
+              />
+            </div>
           </main>
         ) : selected ? (
-          <main className="w-3/5 shrink-0 flex flex-col min-h-0">
+          <main className="w-full md:w-3/5 shrink-0 flex flex-col min-h-0 relative">
+            <div className="md:hidden flex items-center p-3 border-b border-border bg-card shrink-0">
+              <button 
+                onClick={() => setSelectedVentaId(null)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={18} />
+                <span className="text-sm font-semibold">Volver a la lista</span>
+              </button>
+            </div>
             <VentaDetalleAcciones item={selected} />
           </main>
         ) : (
-          <main className="flex-1 min-w-0 flex flex-col items-center justify-center gap-3 text-center px-6">
+          <main className="hidden md:flex flex-1 min-w-0 flex-col items-center justify-center gap-3 text-center px-6">
             <ReceiptEmpty size={40} className="text-muted-foreground/40" />
             <h2 className="text-foreground font-bold text-base">Selecciona una venta</h2>
             <p className="text-muted-foreground text-xs max-w-xs">
