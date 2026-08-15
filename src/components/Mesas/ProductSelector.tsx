@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, memo } from'react';
+import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
