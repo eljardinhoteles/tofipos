@@ -427,13 +427,13 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md" : "bg-card text-foreground border-border")}
     >
-      <span className={cn("font-bold text-xs line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+      <span className={cn("font-bold text-sm line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
         {item.nombre}
       </span>
 
       <div className="flex items-center justify-between mt-3">
         {isSelected ? (
-          <span className="px-2 py-0.5 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-xs">
+          <span className="px-2.5 py-1 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-sm">
             {currentQty}
           </span>
         ) : (
@@ -444,11 +444,11 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
               await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
             }}
             className="text-muted-foreground/50 transition-colors cursor-pointer">
-            <Star size={14} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
+            <Star size={16} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
           </button>
         )}
 
-        <span className={cn("font-black text-sm", isSelected ? "text-primary-foreground" : "text-primary")}>
+        <span className={cn("font-black text-base", isSelected ? "text-primary-foreground" : "text-primary")}>
           ${finalPrice.toFixed(2)}
         </span>
       </div>
