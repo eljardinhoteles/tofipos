@@ -732,8 +732,8 @@ label {
     gap: 20px !important;
   }
   .pos-menu-grid {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
   }
 }
 

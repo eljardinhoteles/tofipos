@@ -944,6 +944,11 @@ let verticalReplicationOrgId: string | null = null
 // `!verticalReplicationState` antes de que la primera termine de asignarlo,
 // arrancando la replicación por duplicado y dejándola en un estado roto.
 let initInFlight: Promise<RxDatabase<VerticalCollections>> | null = null
+// Lock contra resetLocalDatabase() corriendo en paralelo a una
+// inicialización: sin esto, initVerticalRxDbInner() puede leer
+// verticalDbPromise justo antes de que el reset la destruya, y terminar
+// devolviendo/operando sobre una instancia ya destruida (RxDB DB9).
+let resetInFlight: Promise<void> | null = null
 // Se resuelve cuando el primer pull de todas las colecciones de la
 // replicación activa completó (ver startVerticalReplication). La UI puede
 // esperar esta promesa tras vincular un dispositivo para no exponer una
@@ -1119,13 +1124,7 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
   const db = await withSuppressedDexieWarning(() => createRxDatabase({
     name,
     storage: getRxStorageDexie(),
-    multiInstance: true,
-    // React StrictMode remonta efectos (doble mount en dev) y un HMR de Vite
-    // puede recargar este módulo perdiendo el singleton `verticalDbPromise`
-    // en memoria mientras la instancia física anterior sigue viva en la
-    // pestaña. RxDB detecta el nombre "duplicado" y lanza DB8 aunque el
-    // flujo (vincular/re-vincular dispositivo) sea legítimo.
-    ignoreDuplicate: true
+    multiInstance: true
   }))
 
   const collectionsConfig: Record<string, any> = {
@@ -1682,6 +1681,11 @@ function stopVerticalReplication() {
 }
 
 export async function initVerticalRxDb() {
+  // Si hay un reset (desvinculación) en curso, esperarlo primero: si
+  // procediéramos ahora, podríamos capturar verticalDbPromise justo antes
+  // de que el reset la destruya y terminar devolviendo una instancia ya
+  // destruida (RxDB DB9).
+  if (resetInFlight) await resetInFlight
   // Si ya hay una inicialización en curso, todas las llamadas concurrentes
   // esperan esa misma promesa en vez de correr el bloque de abajo en paralelo.
   if (initInFlight) return initInFlight
@@ -1698,7 +1702,15 @@ async function initVerticalRxDbInner() {
     // compat flag para el reset viejo
   }
   if (!verticalDbPromise) {
-    verticalDbPromise = createVerticalRxDb()
+    const creation = createVerticalRxDb()
+    verticalDbPromise = creation
+    // Si la creación falla, limpiar el singleton: si quedara apuntando a una
+    // promesa rechazada, todos los initVerticalRxDb() posteriores (hooks de
+    // React incluidos) re-fallarían en cascada con el mismo error sin
+    // posibilidad de reintento.
+    creation.catch(() => {
+      if (verticalDbPromise === creation) verticalDbPromise = null
+    })
   }
 
   const db = await verticalDbPromise
@@ -1768,18 +1780,30 @@ export async function getVerticalRxDb() {
  * (Ese fue el bug que vació las organizaciones al vincular un dispositivo.)
  */
 export async function resetLocalDatabase() {
-  stopVerticalReplication()
-  if (verticalDbPromise) {
-    try {
-      const db = await verticalDbPromise
-      await db.remove()
-    } catch (e) {
-      console.warn('[RxDB] error destruyendo base local durante desvinculación:', e)
+  let releaseLock: () => void = () => {}
+  resetInFlight = new Promise<void>(resolve => { releaseLock = resolve })
+  try {
+    // Si una inicialización ya está en vuelo, dejarla terminar antes de
+    // destruir — evita destruir una DB a mitad de arranque de la replicación.
+    if (initInFlight) {
+      try { await initInFlight } catch { /* initVerticalRxDb ya loguea sus propios errores */ }
     }
+    stopVerticalReplication()
+    if (verticalDbPromise) {
+      try {
+        const db = await verticalDbPromise
+        await db.remove()
+      } catch (e) {
+        console.warn('[RxDB] error destruyendo base local durante desvinculación:', e)
+      }
+    }
+    verticalDbPromise = null
+    initInFlight = null
+    initialSyncPromise = null
+  } finally {
+    releaseLock()
+    resetInFlight = null
   }
-  verticalDbPromise = null
-  initInFlight = null
-  initialSyncPromise = null
   // Notifica a los hooks de React que la DB fue destruida y deben
   // re-suscribirse a la nueva instancia cuando se recree.
   bumpDbEpoch()
