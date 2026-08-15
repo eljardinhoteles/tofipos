@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, memo } from'react';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus } from'@phosphor-icons/react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
@@ -25,7 +26,20 @@ interface ProductSelectorProps {
 export function ProductSelector({ activeComanda, onBack, hideBackButton = false }: ProductSelectorProps) {
   const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
   const [searchQueryInput, setSearchQueryInput] = useState('');
- const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
+  const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
+  const [navbarSlot, setNavbarSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Buscar el slot una vez montado el componente
+    const el = document.getElementById('mobile-navbar-cart-action-slot');
+    if (el) setNavbarSlot(el);
+    else {
+      // Como el navbar a veces se renderiza después o está fuera de contexto, intentamos buscarlo de nuevo con un timeout corto
+      setTimeout(() => {
+        setNavbarSlot(document.getElementById('mobile-navbar-cart-action-slot'));
+      }, 100);
+    }
+  }, []);
 
  useEffect(() => {
  const handler = setTimeout(() => {
@@ -36,43 +50,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
- const touchStartX = useRef(0);
- const touchEndX = useRef(0);
-
- const handleTouchStart = (e: React.TouchEvent) => {
- touchStartX.current = e.targetTouches[0].clientX;
- touchEndX.current = e.targetTouches[0].clientX;
- };
-
- const handleTouchMove = (e: React.TouchEvent) => {
- touchEndX.current = e.targetTouches[0].clientX;
- };
-
- const handleTouchEnd = () => {
- const diffX = touchStartX.current - touchEndX.current;
- if (Math.abs(diffX) > 80) {
- const allCats = ['Todos','Favoritos', ...categories];
- const currentVal = selectedCategory ??'Todos';
- const currentIndex = allCats.indexOf(currentVal);
- if (currentIndex !== -1) {
- if (diffX > 0) {
- const nextIndex = Math.min(allCats.length - 1, currentIndex + 1);
- if (nextIndex !== currentIndex) {
- const nextVal = allCats[nextIndex];
- setSelectedCategory(nextVal ==='Todos'? null : nextVal);
- }
- } else {
- const prevIndex = Math.max(0, currentIndex - 1);
- if (prevIndex !== currentIndex) {
- const prevVal = allCats[prevIndex];
- setSelectedCategory(prevVal ==='Todos'? null : prevVal);
- }
- }
- }
- }
- };
-
- const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
  const [modifyingItem, setModifyingItem] = useState<MenuItem | null>(null);
  const [rxComandaItems, setRxComandaItems] = useState<ComandaItem[]>([]);
 
@@ -248,88 +226,130 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
- {/* HEADER PRINCIPAL */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-3">
- {!hideBackButton && (
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
- <ArrowLeft size={20} weight="bold"/>
- </button>
- )}
+  {/* HEADER PRINCIPAL */}
+  <header className="h-14 px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
+    <div className="relative flex-1">
+      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+      <Input
+        id="product-search-input"
+        type="text" placeholder="Buscar productos..." value={searchQueryInput}
+        onChange={(e) => setSearchQueryInput(e.target.value)}
+        className="w-full h-9 pl-9 pr-8 text-xs"/>
+      {searchQueryInput && (
+        <button
+          type="button" onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+          <X size={14} weight="bold"/>
+        </button>
+      )}
+    </div>
+  </header>
 
- <div className="relative flex-1">
- <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Buscar productos..."value={searchQueryInput}
- onChange={(e) => setSearchQueryInput(e.target.value)}
- className="w-full h-9 pl-9 pr-8"/>
- {searchQueryInput && (
- <button
- type="button"onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}
- className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
- <X size={14} weight="bold"/>
- </button>
- )}
- </div>
- </header>
+  {/* CONTENIDO PRINCIPAL */}
+  <div className="flex-1 relative flex flex-col min-h-0">
+    <main className="flex-1 overflow-y-auto p-4 pb-12 relative">
+      {(!selectedCategory && !searchQueryDebounced) ? (
+        /* HOME DE CATEGORÍAS */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('Favoritos')}
+            className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
+          >
+            <Star size={24} weight="fill" className="mb-1" />
+            <span className="font-extrabold text-[13px] text-center">Favoritos</span>
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-sm cursor-pointer"
+            >
+              <span className="font-extrabold text-[13px] text-center line-clamp-2 px-1">{cat}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* GRID DE PRODUCTOS */
+        filteredItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+            <div className="w-20 h-20 flex items-center justify-center">
+              <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
+            </div>
+            <h3 className="font-extrabold text-foreground text-base">Sin resultados</h3>
+            <p className="text-muted-foreground text-xs">No hay productos que coincidan con la búsqueda</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {groupedItems.map(group => (
+              <div key={group.category} className="flex flex-col gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
+                  {group.category}
+                </span>
+                <div className="pos-menu-grid">
+                  {group.items.map(item => (
+                    <ProductCardV2
+                      key={item.id}
+                      item={item}
+                      onAdd={handleAddProduct}
+                      currentQty={itemQuantities[item.id] || 0}
+                      ivaPorcentaje={ivaPorcentaje}
+                      preciosConIva={preciosConIva}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </main>
 
- {/* BARRA DE CATEGORÍAS */}
- <div className="h-12 px-6 bg-card border-b border-border flex items-center shrink-0 overflow-x-auto hide-scrollbar gap-2">
- {['Todos','Favoritos', ...categories].map((cat) => {
- const active = (selectedCategory ??'Todos') === cat;
- return (
- <button
- key={cat}
- type="button"onClick={() => setSelectedCategory(cat ==='Todos'? null : cat)}
- className={cn("px-3.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border",
- active
- ?"bg-primary text-primary-foreground border-primary shadow-xs":"bg-card text-muted-foreground border-border")}
- >
- {cat}
- </button>
- );
- })}
- </div>
+    {/* BOTÓN IZQUIERDO EN EL NAVBAR (Vía Portal) */}
+    {navbarSlot && (!hideBackButton || selectedCategory || searchQueryDebounced) && createPortal(
+      <button
+        type="button"
+        onClick={() => {
+          if (selectedCategory || searchQueryDebounced) {
+            setSelectedCategory(null);
+            setSearchQueryInput('');
+            setSearchQueryDebounced('');
+          } else {
+            onBack();
+          }
+        }}
+        className={cn(
+          "flex items-center justify-center w-14 h-14 rounded-full shadow-lg cursor-pointer active:scale-95 transition-all",
+          (selectedCategory || searchQueryDebounced)
+            ? "bg-orange-500 text-white shadow-orange-500/30"
+            : "bg-nav text-nav-foreground shadow-black/20"
+        )}
+      >
+        {(selectedCategory || searchQueryDebounced) ? (
+          <ForkKnife size={22} weight="fill" />
+        ) : (
+          <ArrowLeft size={22} weight="bold" />
+        )}
+      </button>,
+      navbarSlot
+    )}
 
- {/* GRID DE PRODUCTOS */}
- <main
- onTouchStart={handleTouchStart}
- onTouchMove={handleTouchMove}
- onTouchEnd={handleTouchEnd}
- className="flex-1 overflow-y-auto p-5 pb-24">
- {filteredItems.length === 0 ? (
- <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
- <div className="w-20 h-20 flex items-center justify-center">
- <img src="/no_resultado.webp"alt=""aria-hidden="true"className="w-full h-full object-contain"/>
- </div>
- <h3 className="font-extrabold text-foreground text-base">Sin resultados</h3>
- <p className="text-muted-foreground text-xs">No hay productos que coincidan con la búsqueda</p>
- </div>
- ) : (
- <div className="flex flex-col gap-6">
- {groupedItems.map(group => (
- <div key={group.category} className="flex flex-col gap-2">
- <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
- {group.category}
- </span>
- <div className="pos-menu-grid">
- {group.items.map(item => (
- <ProductCardV2
- key={item.id}
- item={item}
- onAdd={handleAddProduct}
- currentQty={itemQuantities[item.id] || 0}
- ivaPorcentaje={ivaPorcentaje}
- preciosConIva={preciosConIva}
- />
- ))}
- </div>
- </div>
- ))}
- </div>
- )}
- </main>
+    {/* BOTÓN DERECHO EN EL NAVBAR (Vía Portal) */}
+    {document.getElementById('mobile-navbar-cart-search-slot') && createPortal(
+      <button
+        type="button"
+        onClick={() => {
+          const input = document.getElementById('product-search-input');
+          if (input) input.focus();
+        }}
+        className="flex items-center justify-center w-14 h-14 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-95 transition-transform"
+      >
+        <MagnifyingGlass size={22} weight="bold" />
+      </button>,
+      document.getElementById('mobile-navbar-cart-search-slot')!
+    )}
+  </div>
 
  {/* MODAL DETALLES PRODUCTO */}
  <Dialog open={!!detailItem} onOpenChange={(open) => !open && setDetailItem(null)}>
