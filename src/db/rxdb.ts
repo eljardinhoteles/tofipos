@@ -70,6 +70,10 @@ export interface RxComanda {
   _deleted: boolean
   _modified: string
   sincronizado?: boolean
+  // Snapshot/override de IVA fijado para esta comanda puntual. `null`/`undefined`
+  // significa que sigue el IVA global activo en vivo (comportamiento histórico).
+  iva_porcentaje?: number | null
+  iva_precios_con_iva?: boolean | null
 }
 
 export interface RxComandaItem {
@@ -503,7 +507,7 @@ const mesaSchema = {
 } as const
 
 const comandaSchema = {
-  version: 3,
+  version: 4,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -530,7 +534,11 @@ const comandaSchema = {
     motivo_anulacion: { type: ['string', 'null'] },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
-    _modified: { type: 'string' }
+    _modified: { type: 'string' },
+    // Snapshot de IVA tomado al crear la comanda, editable luego a mano desde
+    // el detalle de la comanda. `null` = sigue el IVA global activo en vivo.
+    iva_porcentaje: { type: ['number', 'null'] },
+    iva_precios_con_iva: { type: ['boolean', 'null'] }
   },
   required: ['id', 'folio', 'mesa_id', 'mesero', 'estado', 'confirmada', 'total', 'created_at', 'updated_at', 'organization_id', '_deleted', '_modified'],
   indexes: ['folio', 'mesa_id', 'estado', 'organization_id', 'updated_at', '_modified']
@@ -1152,7 +1160,10 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v1 → v2: agrega cantidades_snapshot (nullable)
         2: (oldDoc: any) => ({ ...oldDoc, cantidades_snapshot: null }),
         // v2 → v3: agrega sincronizado para comandas vinculadas a habitación
-        3: (oldDoc: any) => ({ ...oldDoc, sincronizado: oldDoc.habitacion_cuenta_id ? false : null })
+        3: (oldDoc: any) => ({ ...oldDoc, sincronizado: oldDoc.habitacion_cuenta_id ? false : null }),
+        // v3 → v4: agrega override de IVA por comanda (snapshot al crear / edición manual).
+        // Comandas existentes quedan en null = siguen el IVA global activo, sin cambio de comportamiento.
+        4: (oldDoc: any) => ({ ...oldDoc, iva_porcentaje: null, iva_precios_con_iva: null })
       }
     },
     comanda_items: {
@@ -1948,6 +1959,17 @@ export async function diagnoseSyncState() {
   console.groupEnd()
 }
 
+// Lectura puntual (no reactiva) del IVA activo, para tomar un snapshot al
+// crear una comanda. Mismo fallback que el hook reactivo `useIvaActivo`.
+async function getIvaActivoSnapshot(db: Awaited<ReturnType<typeof initVerticalRxDb>>, orgId: string) {
+  const doc = await db.ajustes_iva.findOne({
+    selector: { activo: true, organization_id: orgId, _deleted: { $ne: true } }
+  }).exec()
+  if (!doc) return { porcentaje: 15, precios_con_iva: false }
+  const data = doc.toJSON() as any
+  return { porcentaje: data.porcentaje, precios_con_iva: !!data.precios_con_iva }
+}
+
 export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modified' | 'updated_at' | 'created_at' | 'total' | 'confirmada'> & {
   created_at?: string
   updated_at?: string
@@ -1957,6 +1979,12 @@ export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modi
   const db = await initVerticalRxDb()
   const now = new Date().toISOString()
   const orgId = input.organization_id || getActiveOrgIdStrict()
+  // Snapshot del IVA activo al momento de crear la comanda: así comandas ya
+  // abiertas no se ven afectadas si luego cambia el IVA global, y comandas
+  // nuevas siempre nacen con el IVA vigente en ese instante.
+  const ivaSnapshot = (input.iva_porcentaje === undefined && input.iva_precios_con_iva === undefined)
+    ? await getIvaActivoSnapshot(db, orgId)
+    : null
   const created = await db.comandas.insert({
     ...input,
     organization_id: orgId,
@@ -1964,6 +1992,8 @@ export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modi
     total: input.total ?? 0,
     created_at: input.created_at ?? now,
     updated_at: input.updated_at ?? now,
+    iva_porcentaje: input.iva_porcentaje ?? ivaSnapshot?.porcentaje ?? null,
+    iva_precios_con_iva: input.iva_precios_con_iva ?? ivaSnapshot?.precios_con_iva ?? null,
     _deleted: false,
     _modified: now
   } as RxComanda)

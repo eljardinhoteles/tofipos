@@ -212,7 +212,10 @@ export function AppLayoutV2() {
 
       {/* ÁREA PRINCIPAL V2 + nav móvil */}
       <div className="flex-1 h-full min-w-0 flex flex-col overflow-hidden">
-        <main className="flex-1 min-w-0 overflow-hidden relative">
+        <main
+          className="flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-200"
+          style={!isMobile && isSidebarVisible ? { paddingRight: 420 } : undefined}
+        >
           <div className="h-full w-full min-w-0 overflow-hidden relative">
             {(currentPath === '/ordenes' || currentPath.includes('/ordenes')) && <div className="h-full"><OrdenesV2 /></div>}
             {(currentPath === '/mesas' || currentPath.includes('/mesas')) && <div className="h-full"><MesasV2 /></div>}

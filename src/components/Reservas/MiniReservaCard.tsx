@@ -21,7 +21,8 @@ export function MiniReservaCard({
 
  return (
  <div
- onClick={onClick}
+ data-card
+ onClick={(e) => { e.stopPropagation(); onClick(); }}
  className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
  isHighlighted ?'border-primary ring-2 ring-primary/20':'border-border'} bg-card shadow-2xs`}
  >

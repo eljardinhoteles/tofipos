@@ -3,7 +3,7 @@ import { Printer, ArrowLeft, Door, Check } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { SidebarEnviarHabitacion } from'./SidebarEnviarHabitacion';
-import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
@@ -39,7 +39,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [onCloseCallback, setOnCloseCallback] = useState<(() => void) | null>(null);
 
- const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
  const { menuItems } = useRxMenuCatalog();
  const [cuentasActivas, setCuentasActivas] = useState(0);
  const [pagos, setPagos] = useState<any[]>([]);

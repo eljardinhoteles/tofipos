@@ -3,7 +3,8 @@ import { X, Plus, Printer, Trash, Minus, Check, Bed, Basket, CaretDown, Phone, E
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { ComandaItemRow } from'./ComandaItemRow';
-import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { useComandaIva } from'../../../hooks/useComandaIva';
+import { SidebarComandaIvaModal } from'./SidebarComandaIvaModal';
 import { useRxClientes } from'../../../hooks/useRxClientes';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SidebarPagosModal } from'./SidebarPagosModal';
@@ -233,7 +234,8 @@ export function SidebarDetails({
  setEditingItem(null);
  };
 
- const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
+ const [ivaModalOpen, setIvaModalOpen] = useState(false);
  const { menuItems } = useRxMenuCatalog();
 
  const [editingModifiers, setEditingModifiers] = useState(false);
@@ -638,10 +640,17 @@ export function SidebarDetails({
  <span>Subtotal</span>
  <span className="font-bold text-foreground">${subtotal.toFixed(2)}</span>
  </div>
- <div className="flex items-center justify-between">
- <span>IVA {ivaPorcentaje}%</span>
+ <button
+ type="button"
+ onClick={() => setIvaModalOpen(true)}
+ title="Cambiar el IVA de esta comanda"
+ className="flex items-center justify-between cursor-pointer hover:text-foreground transition-colors -mx-1 px-1 rounded-md"
+ >
+ <span className="underline decoration-dotted underline-offset-2">
+ IVA {ivaPorcentaje}%{ivaEsOverride ?' (fijo)':''}
+ </span>
  <span className="font-bold text-foreground">${ivaCalculado.toFixed(2)}</span>
- </div>
+ </button>
  <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
  <span className="text-base font-black text-foreground">Total</span>
  <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
@@ -845,6 +854,20 @@ export function SidebarDetails({
  onClose={() => setShowPagosModal(false)}
  pagos={pagos}
  totalPagado={totalPagado}
+ />
+
+ <SidebarComandaIvaModal
+ opened={ivaModalOpen}
+ onClose={() => setIvaModalOpen(false)}
+ currentPorcentaje={ivaPorcentaje}
+ esOverride={ivaEsOverride}
+ onConfirm={async (data) => {
+ if (!activeComanda) return;
+ await updateRxComanda(activeComanda.id, {
+ iva_porcentaje: data ? data.porcentaje : null,
+ iva_precios_con_iva: data ? data.preciosConIva : null,
+ });
+ }}
  />
 
  <SidebarCloseCuentaModal

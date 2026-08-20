@@ -6,7 +6,7 @@ import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
-import { useIvaActivo } from '../../hooks/useIvaActivo';
+import { useComandaIva } from '../../hooks/useComandaIva';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ interface ProductSelectorProps {
 }
 
 export function ProductSelector({ activeComanda, onBack, hideBackButton = false }: ProductSelectorProps) {
-  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+  const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
   const [navbarSlot, setNavbarSlot] = useState<HTMLElement | null>(null);
@@ -228,6 +228,26 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
   {/* HEADER PRINCIPAL */}
   <header className="h-14 px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
+    {!hideBackButton && (
+      <button
+        type="button" onClick={onBack}
+        className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
+        <ArrowLeft size={18} weight="bold"/>
+      </button>
+    )}
+    {(selectedCategory || searchQueryDebounced) && (
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedCategory(null);
+          setSearchQueryInput('');
+          setSearchQueryDebounced('');
+        }}
+        title="Volver a categorías"
+        className="w-9 h-9 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
+        <ForkKnife size={18} weight="fill"/>
+      </button>
+    )}
     <div className="relative flex-1">
       <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
       <Input

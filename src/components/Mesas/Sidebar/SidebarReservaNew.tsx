@@ -7,6 +7,7 @@ import { useUI } from'../../../context/UIContext';
 import { initVerticalRxDb, createRxReserva, updateRxReserva, createRxComanda } from'../../../db/rxdb';
 import { Button } from'@/components/ui/button';
 import { Input } from'@/components/ui/input';
+import { ClienteSelector } from'@/components/Common/ClienteSelector';
 import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { DatePickerField } from'@/components/ui/date-picker-field';
@@ -44,6 +45,8 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  const [nota, setNota] = useState('');
 
  const [nombre, setNombre] = useState('');
+ const [telefono, setTelefono] = useState('');
+ const [email, setEmail] = useState('');
  const [personas, setPersonas] = useState(2);
  const [fecha, setFecha] = useState<string>(() => toISO(new Date()));
  const [hora, setHora] = useState('19:00');
@@ -90,6 +93,8 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
   setHora(data.hora);
   setZonaId(data.zona_id ||'');
   setNota(data.nota ||'');
+  setTelefono(data.telefono ||'');
+  setEmail(data.email ||'');
   }
   } else if (nuevaReservaPreset) {
   if (nuevaReservaPreset.fecha) setFecha(toISO(nuevaReservaPreset.fecha));
@@ -129,6 +134,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  await updateRxReserva(reservaId, {
  nombre: nombre.trim(), fecha, hora, personas,
  zona_id: zonaId || undefined, nota: nota.trim() || undefined,
+ telefono: telefono || undefined, email: email || undefined,
  });
  } else {
  const now = new Date().toISOString();
@@ -150,6 +156,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  zona_id: zonaId || undefined, estado:'confirmada',
  comanda_id: comandaId, abono: 0,
  nota: nota.trim() || undefined,
+ telefono: telefono || undefined, email: email || undefined,
  organization_id: orgId,
  created_at: now,
  updated_at: now,
@@ -188,9 +195,14 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
  <div className="flex flex-col gap-1.5">
  <Label>Nombre del cliente *</Label>
- <Input
- type="text"placeholder="Ej: Juan Pérez"value={nombre}
- onChange={e => { setNombre(e.target.value); setNombreError(''); }}
+ <ClienteSelector
+ value={nombre}
+ placeholder="Buscar cliente o escribir nombre"
+ onChange={(v) => { setNombre(v); setNombreError(''); }}
+ onSelect={(cliente) => {
+ setTelefono(cliente.telefono ||'');
+ setEmail(cliente.email ||'');
+ }}
  />
  {nombreError && <span className="text-[10px] text-destructive font-bold">{nombreError}</span>}
  </div>

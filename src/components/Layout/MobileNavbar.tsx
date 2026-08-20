@@ -88,23 +88,27 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
  <nav className="flex items-center w-full max-w-md pointer-events-auto">
  {cart && cart.itemCount > 0 ? (
- /* Estado carrito: la píldora completa se transforma en resumen de comanda */
+ /* Estado carrito: Layout de 3 piezas idéntico al normal */
+ <div className="flex items-center justify-between w-full gap-3 h-14">
+ 
+ {/* IZQUIERDA: Slot para Categorías/Volver */}
+ <div id="mobile-navbar-cart-action-slot" onClick={e => e.stopPropagation()} className="shrink-0 flex items-center justify-center w-14 h-14"></div>
+ 
+ {/* CENTRO: Info de comanda */}
  <button
  type="button"onClick={onOpenCart}
- className="flex items-center gap-3 h-14 w-full pl-3 pr-2 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-[0.98] transition-transform min-w-0">
- <span className="flex items-center justify-center w-9 h-9 rounded-full bg-nav-foreground/15 shrink-0">
- <ShoppingCart size={18} weight="fill"/>
+ className="flex flex-col items-center justify-center flex-1 h-14 px-4 rounded-full bg-emerald-600 text-white shadow-[0_8px_16px_rgba(5,150,105,0.3)] border border-emerald-500/50 cursor-pointer active:scale-[0.96] transition-transform min-w-0">
+ <span className="text-[14px] font-extrabold truncate w-full text-center leading-tight">
+ {cart.mesaNombre}
  </span>
- <span className="flex flex-col items-start min-w-0 leading-tight flex-1">
- <span className="text-sm font-extrabold truncate w-full">{cart.mesaNombre}</span>
- <span className="text-[11px] text-nav-foreground/70 font-medium truncate w-full">
- {cart.itemCount} {cart.itemCount === 1 ?'producto':'productos'} · ${cart.total.toFixed(2)}
- </span>
- </span>
- <span className="flex items-center gap-1 h-10 pl-3 pr-3.5 rounded-full bg-nav-foreground/15 font-bold text-xs shrink-0">
- Ver comanda <ArrowRight size={14} />
+ <span className="text-[12px] text-emerald-50 font-medium truncate w-full text-center mt-0.5">
+ {cart.itemCount} {cart.itemCount === 1 ?'item':'items'} · ${cart.total.toFixed(2)}
  </span>
  </button>
+
+ {/* DERECHA: Slot para Buscar */}
+ <div id="mobile-navbar-cart-search-slot" onClick={e => e.stopPropagation()} className="shrink-0 flex items-center justify-center w-14 h-14"></div>
+ </div>
  ) : (
  /* Estado normal: Menú, Mesas y Sync como 3 botones independientes */
  <div className="flex items-center justify-between w-full gap-3">
