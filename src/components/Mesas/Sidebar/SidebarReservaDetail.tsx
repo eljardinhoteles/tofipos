@@ -164,8 +164,11 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  try {
  const orgId = localStorage.getItem('pos_active_org_id') || '';
  const now = new Date().toISOString();
+ const rxDb = await initVerticalRxDb();
+ const nextFolio = (await rxDb.comandas.find().exec()).length + 1;
  const nueva = await createRxComanda({
  id: crypto.randomUUID(),
+ folio: nextFolio,
  mesa_id: 'reserva_' + reserva.id,
  mesa_nombre: 'Reserva',
  mesero: 'Sistema',

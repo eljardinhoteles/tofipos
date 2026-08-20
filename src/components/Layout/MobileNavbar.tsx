@@ -24,8 +24,6 @@ import {
  ArrowsClockwise,
  UserGear,
  SignOut,
- ShoppingCart,
- ArrowRight,
 } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 import { useAuth } from'../../context/AuthContext';
