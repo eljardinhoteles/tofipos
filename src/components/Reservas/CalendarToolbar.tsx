@@ -1,7 +1,10 @@
+import { useState } from'react';
 import { CaretLeft, CaretRight, Plus, MagnifyingGlass, XCircle } from'@phosphor-icons/react';
 import { type Reserva } from'../../db/database';
 import { STATUS_LABEL } from'./reservaUtils';
 import { Input } from'@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
+import { Calendar } from'@/components/ui/calendar';
 
 interface CalendarToolbarProps {
  startDate: Date;
@@ -19,6 +22,8 @@ interface CalendarToolbarProps {
 }
 
 export function CalendarToolbar({
+ startDate,
+ setStartDate,
  visibleDates,
  shiftDays,
  goToday,
@@ -30,43 +35,63 @@ export function CalendarToolbar({
  onResultClick,
  onNewReserva
 }: CalendarToolbarProps) {
+ const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
  return (
- <header className="h-14 px-6 bg-background border-b border-border flex items-center justify-between shadow-xs shrink-0 z-10 w-full">
- <div className="flex items-center gap-3 w-full justify-between">
- <div className="flex items-center gap-2">
+ <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
+ <div className="flex items-center gap-3 shrink-0">
  <button
- type="button"onClick={onNewReserva}
- className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-xs transition-colors">
+ type="button"title="Nueva reserva"onClick={onNewReserva}
+ className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
  <Plus size={18} weight="bold"/>
  </button>
 
- <div className="w-[1px] h-6 bg-border"/>
+ <div className="w-[1px] h-6 bg-border shrink-0"/>
 
  <button
- type="button"onClick={() => shiftDays(-1)}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ type="button"title="Días anteriores"onClick={() => shiftDays(-1)}
+ className="w-9 h-9 rounded-lg bg-muted active:scale-95 text-muted-foreground flex items-center justify-center transition-all cursor-pointer">
  <CaretLeft size={16} weight="bold"/>
  </button>
 
- <span className="font-extrabold text-sm text-foreground px-2 capitalize">
+ <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+ <PopoverTrigger asChild>
+ <button
+ type="button"
+ className="font-extrabold text-sm text-foreground px-2 capitalize rounded-lg hover:bg-muted transition-colors cursor-pointer"
+ >
  {visibleDates[0]?.toLocaleDateString('es-ES', { month:'long', year:'numeric'})}
- </span>
+ </button>
+ </PopoverTrigger>
+ <PopoverContent className="w-auto p-0" align="start">
+ <Calendar
+ mode="single"
+ selected={startDate}
+ defaultMonth={startDate}
+ onSelect={(date) => {
+ if (!date) return;
+ date.setHours(0, 0, 0, 0);
+ setStartDate(date);
+ setMonthPickerOpen(false);
+ }}
+ />
+ </PopoverContent>
+ </Popover>
 
  <button
  type="button"onClick={goToday}
- className="px-3 py-1.5 rounded-lg bg-muted text-foreground font-bold text-xs cursor-pointer transition-colors">
+ className="px-3 py-1.5 rounded-lg bg-muted active:scale-95 text-foreground font-bold text-xs transition-all cursor-pointer">
  Hoy
  </button>
 
  <button
- type="button"onClick={() => shiftDays(1)}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ type="button"title="Días siguientes"onClick={() => shiftDays(1)}
+ className="w-9 h-9 rounded-lg bg-muted active:scale-95 text-muted-foreground flex items-center justify-center transition-all cursor-pointer">
  <CaretRight size={16} weight="bold"/>
  </button>
  </div>
 
- <div className="relative w-64">
+ <div className="relative w-64 shrink-0">
  <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
  <Input
  type="text"placeholder="Buscar reserva..."value={search}
@@ -103,7 +128,6 @@ export function CalendarToolbar({
  ))}
  </div>
  )}
- </div>
  </div>
  </header>
  );

@@ -146,7 +146,10 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  mesa_nombre:'Reserva',
  mesero:'Sistema', cliente: nombre.trim(),
  estado:'pendiente', total: 0,
- confirmada: true,
+ // Nace sin confirmar: el pedido anticipado de la reserva todavía no se
+ // envió a cocina. Al asignar mesa, el mesero revisa la comanda y recién
+ // ahí confirma — mismo flujo que cualquier mesa abierta manualmente.
+ confirmada: false,
  organization_id: orgId,
  created_at: now,
  updated_at: now,

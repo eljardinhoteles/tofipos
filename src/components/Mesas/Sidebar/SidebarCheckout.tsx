@@ -8,7 +8,7 @@ import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
-import { initVerticalRxDb, createRxVenta, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
+import { initVerticalRxDb, createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { Button } from'@/components/ui/button';
 
@@ -44,6 +44,10 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  const [cuentasActivas, setCuentasActivas] = useState(0);
  const [pagos, setPagos] = useState<any[]>([]);
  const [habitacionNombre, setHabitacionNombre] = useState<string | undefined>(undefined);
+ // Venta ya existente sobre esta comanda (p.ej. abonos registrados desde
+ // una reserva antes de asignar mesa) — si existe, el cobro se hace sobre
+ // ella en vez de crear una venta paralela que duplique el cobro.
+ const [ventaExistente, setVentaExistente] = useState<any | null>(null);
 
  useEffect(() => {
  let alive = true;
@@ -92,27 +96,130 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  };
  }, [activeComanda?.id]);
 
+ useEffect(() => {
+ if (!activeComanda?.id) {
+ setVentaExistente(null);
+ return;
+ }
+ let alive = true;
+ let unsub: { unsubscribe: () => void } | null = null;
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ const query = rxDb.ventas.find({ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } } });
+ const docs = await query.exec();
+ if (!alive) return;
+ // Puede haber más de una si ya se cobró y reabrió — se toma la más
+ // reciente sin anular como la vigente a reutilizar.
+ const vigente = docs
+ .map((d: any) => d.toJSON())
+ .filter((v: any) => !(v.movimientos ?? []).some((m: any) => m.tipo === 'anular'))
+ .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+ setVentaExistente(vigente || null);
+ unsub = query.$.subscribe((docs: any[]) => {
+ const vigente = docs
+ .map((d: any) => d.toJSON())
+ .filter((v: any) => !(v.movimientos ?? []).some((m: any) => m.tipo === 'anular'))
+ .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+ setVentaExistente(vigente || null);
+ });
+ };
+ run().catch(console.error);
+ return () => {
+ alive = false;
+ unsub?.unsubscribe();
+ };
+ }, [activeComanda?.id]);
+
  const totales = useMemo(() => {
  return calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva);
  }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
  const total = totales.total;
- const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ // Suma tanto los pagos legacy (colección `pagos`, checkout directo de
+ // mesa) como los movimientos 'pago'/'reembolso' de la venta ya existente
+ // (p.ej. abonos registrados desde la reserva antes de asignar mesa) — sin
+ // esto los abonos previos quedaban invisibles al cobrar en Mesas.
+ const totalPagadoVenta = useMemo(() => {
+ if (!ventaExistente?.movimientos) return 0;
+ return ventaExistente.movimientos.reduce((acc: number, m: any) => {
+ if (m.anulado) return acc;
+ if (m.tipo === 'pago') return acc + (m.monto ?? 0);
+ if (m.tipo === 'reembolso') return acc - (m.monto ?? 0);
+ return acc;
+ }, 0);
+ }, [ventaExistente]);
+ const totalPagado = useMemo(
+ () => pagos.reduce((acc, p) => acc + p.monto, 0) + totalPagadoVenta,
+ [pagos, totalPagadoVenta]
+ );
  const saldoPendiente = Math.max(0, total - totalPagado);
 
  const canFinalize = saldoPendiente > 0.001;
+
+ // Movimientos 'pago' de la venta existente, normalizados al shape Pago[]
+ // que esperan generarPrecuenta/generarTicketPago — para que la precuenta
+ // y el recibo final muestren los abonos previos (p.ej. de una reserva).
+ const abonosPrevios = useMemo(() => {
+ const orgId = localStorage.getItem('pos_active_org_id') ||'';
+ return (ventaExistente?.movimientos ?? [])
+ .filter((m: any) => !m.anulado && m.tipo ==='pago')
+ .map((m: any) => ({
+ id: m.id,
+ comanda_id: activeComanda?.id,
+ monto: m.monto ?? 0,
+ metodo_pago: m.metodo_pago ?? null,
+ fecha: m.fecha,
+ organization_id: orgId,
+ }));
+ }, [ventaExistente, activeComanda?.id]);
 
  const handleFinalize = async () => {
  if (!activeComanda) return;
  setIsProcessing(true);
  try {
  const fecha = new Date().toISOString();
+ const orgId = localStorage.getItem('pos_active_org_id') ||'';
  const pObj = {
  id: crypto.randomUUID(),
  comanda_id: activeComanda.id,
  monto: saldoPendiente,
  fecha,
- organization_id: localStorage.getItem('pos_active_org_id') ||''};
+ organization_id: orgId,
+ };
+
+ // Aislado en su propio try/catch: si registrar el saldo en la venta
+ // falla (p.ej. la venta no se sincronizó todavía), NO debe bloquear el
+ // cierre de la comanda ni la liberación de la mesa más abajo — eso es
+ // lo operativamente crítico, el ajuste se puede corregir después a
+ // mano en Centro de Ventas.
+ try {
+ if (ventaExistente) {
+ // Ya hay una venta sobre esta comanda (p.ej. abonos de reserva
+ // previos a asignar mesa): se completa esa misma venta en vez de
+ // crear una paralela — así el abono ya pagado se descuenta y el
+ // historial de Centro de Ventas queda en un solo lugar. Igual que
+ // el flujo sin reserva (rama `else`), cerrar cuenta deja el saldo
+ // pendiente como un 'ajuste' — NO se auto-cobra con un 'pago'
+ // aquí, el cobro real se ancla después en Centro de Ventas.
+ // Los 'ajuste' se SUMAN para formar montoTotal (ver
+ // useVentasConMovimientos), así que se agrega solo el delta entre
+ // el total real (pudo cambiar si se sumaron productos tras la
+ // reserva) y lo ya ajustado — nunca el saldo íntegro, o el total
+ // quedaría duplicado.
+ const yaAjustado = (ventaExistente.movimientos ?? [])
+ .filter((m: any) => !m.anulado && m.tipo ==='ajuste')
+ .reduce((acc: number, m: any) => acc + (m.monto ?? 0), 0);
+ const deltaAjuste = total - yaAjustado;
+ if (Math.abs(deltaAjuste) > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaExistente.id,
+ tipo:'ajuste',
+ monto: deltaAjuste,
+ motivo:'Ajuste al cerrar cuenta',
+ });
+ }
+ } else {
  await createRxVenta({
  id: crypto.randomUUID(),
  origen:'mesa',
@@ -121,8 +228,13 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  cliente_nombre: activeComanda.cliente || undefined,
  referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio}`,
  comanda_id: activeComanda.id,
- organization_id: pObj.organization_id,
+ organization_id: orgId,
  }, saldoPendiente);
+ }
+ } catch (ventaError) {
+ console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
+ showToast.error('Aviso','La mesa se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
+ }
 
  await updateRxComanda(activeComanda.id, {
  estado:'cerrado',
@@ -135,7 +247,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  const content = generarTicketPago(
  activeComanda,
  comandaItems,
- [...pagos, pObj],
+ saldoPendiente > 0.001 ? [...pagos, ...abonosPrevios, pObj] : [...pagos, ...abonosPrevios],
  selectedMesa.nombre,
  ivaPorcentaje,
  undefined,
@@ -162,12 +274,13 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
 
  const handleShowPrecuentaPreview = () => {
  if (!activeComanda) return;
+ const todosPagos = [...pagos, ...abonosPrevios];
  const content = generarPrecuenta(
  activeComanda,
  comandaItems,
  selectedMesa.nombre,
  ivaPorcentaje,
- pagos,
+ todosPagos,
  habitacionNombre
  );
  setPreviewContent(content);
@@ -178,7 +291,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  items: comandaItems,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
- pagos,
+ pagos: todosPagos,
  habitacionNombre,
  }).catch(err => console.warn('print server offline', err));
  });

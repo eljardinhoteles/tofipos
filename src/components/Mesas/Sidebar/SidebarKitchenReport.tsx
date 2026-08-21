@@ -14,17 +14,15 @@ import {
  DrawerDescription,
  DrawerHandle,
 } from'@/components/ui/drawer';
-import { ClipboardText, Printer, FileText, X, Check } from'@phosphor-icons/react';
+import { ClipboardText, FileText, X, Check, CalendarBlank } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
-import { generarReporteCocinaConsolidado } from'../../../services/printTemplateEngine';
-import { queueRawKitchenPrint } from'../../../lib/printServerClient';
-import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { A4ReportPreviewModal } from'../../Common/A4ReportPreviewModal';
 import type { Comanda, HabitacionCuenta } from'../../../db/database';
 import { cn } from'@/lib/utils';
 import { useIsMobile } from'../../../hooks/useIsMobile';
+import { useRxReservas } from'../../../hooks/useRxReservas';
 
 interface SidebarKitchenReportProps {
  opened: boolean;
@@ -42,18 +40,45 @@ export function SidebarKitchenReport({
  allCuentas,
 }: SidebarKitchenReportProps) {
  const isMobile = useIsMobile();
+ const { reservas } = useRxReservas();
  const [selectedReportMesas, setSelectedReportMesas] = useState<Set<string>>(new Set());
+ const [selectedReservas, setSelectedReservas] = useState<Set<string>>(new Set());
  const [reportData, setReportData] = useState<Array<{ mesaNombre: string; habitacionNombre?: string; items: any[] }>>([]);
- const [previewOpened, setPreviewOpened] = useState(false);
  const [a4PreviewOpened, setA4PreviewOpened] = useState(false);
- const [previewTitle, setPreviewTitle] = useState('');
- const [previewContent, setPreviewContent] = useState('');
- const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [loading, setLoading] = useState(false);
 
+ const mesaExtrasPorMesa = (mesaId: string) => {
+ const comanda = allComandas.find(c => c.mesa_id === mesaId && isOperativeComanda(c));
+ let habitacionNombre: string | undefined;
+ let clienteNombre: string | undefined = comanda?.cliente || undefined;
+ if (comanda?.habitacion_cuenta_id) {
+ const cuenta = allCuentas.find(c => c.id === comanda.habitacion_cuenta_id);
+ if (cuenta) {
+ const roomMesa = allMesas.find(m => m.id === cuenta.mesa_id);
+ habitacionNombre = roomMesa?.nombre;
+ clienteNombre = cuenta.huesped || clienteNombre;
+ }
+ }
+ return { habitacionNombre, clienteNombre };
+ };
+
  const activeMesas = (allMesas ?? [])
- .filter(m => m.piso.toLowerCase() !=='habitaciones'&& allComandas.some(c => c.mesa_id === m.id && isOperativeComanda(c)))
+ .filter(m =>
+ m.piso.toLowerCase() !=='habitaciones'&&
+ m.piso !=='Reservas'&&
+ !/^(reserva_|delivery_|local_)/.test(m.id) &&
+ allComandas.some(c => c.mesa_id === m.id && isOperativeComanda(c)))
  .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity:'base'}));
+
+ const toISO = (d: Date) => {
+ const local = new Date(d);
+ local.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+ return local.toISOString().split('T')[0];
+ };
+ const hoyStr = toISO(new Date());
+ const reservasHoy = (reservas ?? [])
+ .filter((r: any) => r.fecha === hoyStr && r.estado !=='cancelada')
+ .sort((a: any, b: any) => a.hora.localeCompare(b.hora));
 
  const toggleMesa = (id: string, checked: boolean) => {
  const newSet = new Set(selectedReportMesas);
@@ -62,18 +87,25 @@ export function SidebarKitchenReport({
  setSelectedReportMesas(newSet);
  };
 
+ const toggleReserva = (id: string, checked: boolean) => {
+ const newSet = new Set(selectedReservas);
+ if (checked) newSet.add(id);
+ else newSet.delete(id);
+ setSelectedReservas(newSet);
+ };
+
  const handleSelectAll = () => setSelectedReportMesas(new Set(activeMesas.map(m => m.id)));
  const handleDeselectAll = () => setSelectedReportMesas(new Set());
 
- const handleGenerarReporte = async (tipo:'80mm'|'a4') => {
- if (selectedReportMesas.size === 0) {
- showToast.error('Ninguna mesa seleccionada');
+ const handleGenerarReporte = async () => {
+ if (selectedReportMesas.size === 0 && selectedReservas.size === 0) {
+ showToast.error('Ninguna mesa o reserva seleccionada');
  return;
  }
  setLoading(true);
  try {
  const rxDb = await initVerticalRxDb();
- const mesasData: Array<{ mesaNombre: string; habitacionNombre?: string; items: any[] }> = [];
+ const mesasData: Array<{ mesaNombre: string; habitacionNombre?: string; clienteNombre?: string; items: any[] }> = [];
 
  const sorted = Array.from(selectedReportMesas).sort((aId, bId) => {
  const a = allMesas.find(m => m.id === aId);
@@ -90,37 +122,32 @@ export function SidebarKitchenReport({
  const docs = await rxDb.comanda_items.find({
  selector: { comanda_id: comanda.id, _deleted: { $ne: true } }
  }).exec();
- const items = docs.map((d: any) => d.toJSON());
+ const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado);
  if (items.length === 0) continue;
 
- let habitacionNombre ='';
- if (comanda.habitacion_cuenta_id) {
- const cuenta = allCuentas.find(c => c.id === comanda.habitacion_cuenta_id);
- if (cuenta) {
- const roomMesa = allMesas.find(m => m.id === cuenta.mesa_id);
- if (roomMesa) habitacionNombre = roomMesa.nombre;
- }
- }
- mesasData.push({ mesaNombre: mesa.nombre, habitacionNombre: habitacionNombre || undefined, items });
+ const { habitacionNombre, clienteNombre } = mesaExtrasPorMesa(mesaId);
+ mesasData.push({ mesaNombre: mesa.nombre, habitacionNombre, clienteNombre, items });
  }
 
- if (mesasData.length === 0) {
- showToast.error('Las mesas seleccionadas no tienen productos');
+ const reservasSeleccionadasDocs = reservasHoy.filter((r: any) => selectedReservas.has(r.id));
+
+ for (const reserva of reservasSeleccionadasDocs) {
+ if (!reserva.comanda_id) continue;
+ const docs = await rxDb.comanda_items.find({
+ selector: { comanda_id: reserva.comanda_id, _deleted: { $ne: true } }
+ }).exec();
+ const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado);
+ if (items.length === 0) continue;
+ mesasData.push({ mesaNombre: `Reserva — ${reserva.nombre} (${reserva.hora})`, items });
+ }
+
+ if (mesasData.length === 0 && selectedReservas.size === 0) {
+ showToast.error('Las mesas y reservas seleccionadas no tienen productos');
  return;
  }
 
  setReportData(mesasData);
- if (tipo ==='80mm') {
- const rawText = generarReporteCocinaConsolidado(mesasData);
- setPreviewTitle('Reporte Consolidado de Cocina');
- setPreviewContent(rawText);
- setPreviewOnPrint(() => () => {
- queueRawKitchenPrint(rawText,'Reporte Consolidado de Cocina').catch(err => console.warn('print server offline', err));
- });
- setPreviewOpened(true);
- } else {
  setA4PreviewOpened(true);
- }
  } catch (e) {
  console.error(e);
  showToast.error('Error generando reporte');
@@ -167,6 +194,7 @@ export function SidebarKitchenReport({
  ) : (
  activeMesas.map(mesa => {
  const isChecked = selectedReportMesas.has(mesa.id);
+ const { habitacionNombre, clienteNombre } = mesaExtrasPorMesa(mesa.id);
  return (
  <div
  key={mesa.id}
@@ -175,10 +203,54 @@ export function SidebarKitchenReport({
  isChecked ?"bg-primary/10 border-primary":"bg-muted border-border")}
  >
  <div className="flex items-center gap-3">
- <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold", isChecked ?"bg-primary":"bg-border")}>
+ <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0", isChecked ?"bg-primary":"bg-border")}>
  {isChecked && <Check size={14} weight="bold"/>}
  </div>
+ <div className="flex flex-col">
  <span className="font-extrabold text-xs text-foreground">{mesa.nombre}</span>
+ {(habitacionNombre || clienteNombre) && (
+ <span className="text-[10px] font-bold text-muted-foreground">
+ {[
+ habitacionNombre && `Hab. ${habitacionNombre.match(/\d+/)?.[0] ?? habitacionNombre}`,
+ clienteNombre,
+ ].filter(Boolean).join(' · ')}
+ </span>
+ )}
+ </div>
+ </div>
+ </div>
+ );
+ })
+ )}
+ </div>
+
+ <div className="flex items-center justify-between pt-2">
+ <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-extrabold text-xs flex items-center gap-1.5">
+ <CalendarBlank size={14} weight="bold"/> Reservas de hoy
+ </span>
+ </div>
+
+ <div className="flex flex-col gap-2">
+ {reservasHoy.length === 0 ? (
+ <span className="text-xs text-muted-foreground font-semibold text-center py-6">No hay reservas para hoy.</span>
+ ) : (
+ reservasHoy.map((reserva: any) => {
+ const isChecked = selectedReservas.has(reserva.id);
+ return (
+ <div
+ key={reserva.id}
+ onClick={() => toggleReserva(reserva.id, !isChecked)}
+ className={cn("p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
+ isChecked ?"bg-primary/10 border-primary":"bg-muted border-border")}
+ >
+ <div className="flex items-center gap-3">
+ <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0", isChecked ?"bg-primary":"bg-border")}>
+ {isChecked && <Check size={14} weight="bold"/>}
+ </div>
+ <div className="flex flex-col">
+ <span className="font-extrabold text-xs text-foreground">{reserva.nombre}</span>
+ <span className="text-[10px] font-bold text-muted-foreground">{reserva.hora} · {reserva.personas} personas</span>
+ </div>
  </div>
  </div>
  );
@@ -189,17 +261,11 @@ export function SidebarKitchenReport({
  );
 
  const footer = (
- <div className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
+ <div className="p-4 border-t border-border bg-card shrink-0">
  <button
- type="button"disabled={loading || selectedReportMesas.size === 0}
- onClick={() => handleGenerarReporte('80mm')}
- className="py-2.5 rounded-xl bg-primary/10 text-primary font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
- <Printer size={16} /> Ticket 80mm
- </button>
- <button
- type="button"disabled={loading || selectedReportMesas.size === 0}
- onClick={() => handleGenerarReporte('a4')}
- className="py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
+ type="button"disabled={loading || (selectedReportMesas.size === 0 && selectedReservas.size === 0)}
+ onClick={() => handleGenerarReporte()}
+ className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
  <FileText size={16} /> Hoja A4
  </button>
  </div>
@@ -232,14 +298,6 @@ export function SidebarKitchenReport({
  </SheetContent>
  </Sheet>
  )}
-
- <TicketPreviewModal
- opened={previewOpened}
- onClose={() => setPreviewOpened(false)}
- title={previewTitle}
- content={previewContent}
- onPrint={previewOnPrint ?? undefined}
- />
 
  <A4ReportPreviewModal
  opened={a4PreviewOpened}

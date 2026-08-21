@@ -1,5 +1,5 @@
 // @ts-nocheck
-import type { Comanda, ComandaItem, Pago } from '../db/database';
+import type { Comanda, ComandaItem, Pago, Reserva } from '../db/database';
 import { getOrgCache } from '../lib/orgCache';
 
 /**
@@ -539,10 +539,14 @@ export function generarTicketReserva(
   items: PrintableItem[],
   zonaNombre: string,
   ivaPercent: number = 15,
-  pagos: Pago[] = []
+  pagos: Pago[] = [],
+  montoAbonado?: number,
 ): string {
   let t = '';
 
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
+  t += `${orgName.toUpperCase()}\n`;
+  t += `---------------\n`;
   t += `RESERVA CONFIRMADA\n\n`;
 
   t += `Cliente: ${reserva.nombre || 'Sin nombre'}\n`;
@@ -554,8 +558,8 @@ export function generarTicketReserva(
   if (reserva.telefono) {
     t += `Telefono: ${reserva.telefono}\n`;
   }
-  if (reserva.notas) {
-    t += `Notas: ${reserva.notas}\n`;
+  if (reserva.nota) {
+    t += `Notas: ${reserva.nota}\n`;
   }
   t += `---------------\n`;
 
@@ -589,13 +593,11 @@ export function generarTicketReserva(
     t += `IVA (${ivaPercent}%): - $${iva.toFixed(2)}\n`;
     t += `Total Estimado: - $${total.toFixed(2)}\n`;
 
-    if (pagos && pagos.length > 0) {
-      const totalPagado = pagos.reduce((acc, p) => acc + p.monto, 0);
-      if (totalPagado > 0) {
-        t += `Abono Previo: - $${totalPagado.toFixed(2)}\n`;
-        const saldoPendiente = Math.max(0, total - totalPagado);
-        t += `Saldo a Pagar: - $${saldoPendiente.toFixed(2)}\n`;
-      }
+    const totalPagado = montoAbonado ?? (pagos ? pagos.reduce((acc, p) => acc + p.monto, 0) : 0);
+    if (totalPagado > 0) {
+      t += `Abono Previo: - $${totalPagado.toFixed(2)}\n`;
+      const saldoPendiente = Math.max(0, total - totalPagado);
+      t += `Saldo a Pagar: - $${saldoPendiente.toFixed(2)}\n`;
     }
     t += `---------------\n`;
   }

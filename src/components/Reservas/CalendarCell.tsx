@@ -13,17 +13,20 @@ interface CalendarCellProps {
  onCardClick: (id: string) => void;
  onAssign: (r: Reserva) => void;
  onCancel: (id: string) => void;
+ isMonthEnd?: boolean;
  codigoMap?: Record<string, string>;
 }
 
 export function CalendarCell({
  isToday,
+ isWeekend,
  dayReservas,
  highlightedId,
  onCellClick,
  onCardClick,
  onAssign,
  onCancel,
+ isMonthEnd = false,
  codigoMap = {}
 }: CalendarCellProps) {
  const [hovered, setHovered] = useState(false);
@@ -37,7 +40,8 @@ export function CalendarCell({
  onCellClick();
  }}
  className={cn("p-2 min-h-[100px] border-b border-r border-border transition-colors flex flex-col gap-1 cursor-pointer select-none",
- isToday ?"bg-primary/5":"bg-background",
+ isToday ?"bg-primary/5": isWeekend ?"bg-muted/40":"bg-background",
+ isMonthEnd &&"border-r-2 border-r-foreground/20",
  hovered &&"bg-muted/80")}
  >
  {dayReservas.map(r => (

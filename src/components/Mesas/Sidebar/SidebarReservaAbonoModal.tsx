@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CreditCard } from '@phosphor-icons/react';
+import { CreditCard, Paperclip } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ interface SidebarReservaAbonoModalProps {
     bancoDestino?: string;
     numeroComprobante?: string;
     redTarjeta?: string;
+    comprobanteFile?: File | null;
   }) => Promise<void>;
 }
 
@@ -48,6 +49,7 @@ export function SidebarReservaAbonoModal({ opened, onClose, saldoPendiente, onCo
   const [bancoDestino, setBancoDestino] = useState('');
   const [numeroComprobante, setNumeroComprobante] = useState('');
   const [redTarjeta, setRedTarjeta] = useState('');
+  const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
   const reset = () => {
@@ -56,6 +58,7 @@ export function SidebarReservaAbonoModal({ opened, onClose, saldoPendiente, onCo
     setBancoDestino('');
     setNumeroComprobante('');
     setRedTarjeta('');
+    setComprobanteFile(null);
   };
 
   const handleClose = () => {
@@ -75,6 +78,7 @@ export function SidebarReservaAbonoModal({ opened, onClose, saldoPendiente, onCo
         bancoDestino: metodo === 'transferencia' ? (bancoDestino || undefined) : undefined,
         numeroComprobante: metodo === 'transferencia' ? (numeroComprobante.trim() || undefined) : undefined,
         redTarjeta: metodo === 'tarjeta' ? (redTarjeta || undefined) : undefined,
+        comprobanteFile,
       });
       reset();
       onClose();
@@ -159,6 +163,18 @@ export function SidebarReservaAbonoModal({ opened, onClose, saldoPendiente, onCo
               </Select>
             </div>
           )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Comprobante de pago (opcional)</Label>
+            <label className="flex items-center gap-2 p-2.5 rounded-xl bg-muted border border-dashed border-border text-xs font-bold text-muted-foreground cursor-pointer hover:bg-muted/70 transition-colors">
+              <Paperclip size={14} className="shrink-0" />
+              <span className="truncate">{comprobanteFile ? comprobanteFile.name : 'Adjuntar foto o PDF'}</span>
+              <input
+                type="file" accept="image/*,application/pdf" className="hidden"
+                onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">

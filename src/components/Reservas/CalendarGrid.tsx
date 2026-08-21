@@ -51,19 +51,26 @@ export function CalendarGrid({
     <div className="flex-1 w-full overflow-hidden bg-muted relative">
       <div className="w-full h-full overflow-auto">
         <div style={{ display: 'grid', gridTemplateColumns: gridColumns, minWidth: `${gridMinWidth}px` }}>
-          {/* Header */}
-          <div className="h-12 bg-background border-b border-r border-border" />
+          {/* Header — mes en curso, sobre la columna de zonas */}
+          <div className="h-12 px-3 bg-primary border-b border-r border-border flex items-center">
+            <span className="font-extrabold text-xs text-primary-foreground uppercase truncate">
+              {visibleDates[0]?.toLocaleDateString('es-ES', { month: 'long' })}
+            </span>
+          </div>
           {visibleDates.map(date => {
             const ds = toISO(date);
             const dayReservasAll = (reservas || []).filter(r => r.fecha === ds);
             const dayCount = dayReservasAll.length;
             const peopleCount = dayReservasAll.reduce((sum, r) => sum + (r.personas || 0), 0);
             const today = isToday(date);
+            // Último día del mes: marca el cambio de mes con un borde derecho
+            // más grueso, tanto en el header de fechas como en la columna.
+            const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() === date.getDate();
 
             return (
               <div
                 key={date.toISOString()}
-                className={`h-12 px-3 bg-background border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'bg-primary/10 text-primary' : 'text-foreground'}`}
+                className={`h-12 px-3 bg-background border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'bg-primary/10 text-primary' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
               >
                 <div className="flex items-baseline gap-1">
                   <span className="uppercase text-[10px] text-muted-foreground">
@@ -109,6 +116,7 @@ export function CalendarGrid({
                   .filter(r => r.fecha === ds && (zona.id === 'sin_zona' ? !r.zona_id : r.zona_id === zona.id))
                   .filter(r => !q || r.nombre.toLowerCase().includes(q))
                   .sort((a, b) => a.hora.localeCompare(b.hora));
+                const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate() === date.getDate();
 
                 return (
                   <CalendarCell
@@ -121,6 +129,7 @@ export function CalendarGrid({
                     onCardClick={onCardClick}
                     onAssign={onAssign}
                     onCancel={onCancel}
+                    isMonthEnd={monthEnd}
                     codigoMap={codigoMap}
                   />
                 );

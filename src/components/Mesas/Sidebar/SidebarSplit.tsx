@@ -81,6 +81,35 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  };
  }, [activeComanda?.id]);
 
+ // Abonos previos registrados fuera del split (p.ej. desde la reserva
+ // antes de asignar mesa) — se restan del total a dividir igual que los
+ // pagos legacy, para no pedirle de más a quienes falta cobrar.
+ const [ventasPrevias, setVentasPrevias] = useState<any[]>([]);
+ useEffect(() => {
+ if (!activeComanda?.id) {
+ setVentasPrevias([]);
+ return;
+ }
+ let alive = true;
+ let unsub: { unsubscribe: () => void } | null = null;
+ const run = async () => {
+ const rxDb = await initVerticalRxDb();
+ if (!alive) return;
+ const query = rxDb.ventas.find({ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } } });
+ const docs = await query.exec();
+ if (!alive) return;
+ setVentasPrevias(docs.map((d: any) => d.toJSON()));
+ unsub = query.$.subscribe((docs: any[]) => {
+ setVentasPrevias(docs.map((d: any) => d.toJSON()));
+ });
+ };
+ run().catch(console.error);
+ return () => {
+ alive = false;
+ unsub?.unsubscribe();
+ };
+ }, [activeComanda?.id]);
+
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
  const { menuItems } = useRxMenuCatalog();
 
@@ -89,12 +118,33 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  }, [comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
  const totalOriginal = totalesOriginales.total;
- const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ const totalPagadoVentas = useMemo(() => {
+ return ventasPrevias.reduce((accVenta: number, v: any) => {
+ const movs = v.movimientos ?? [];
+ const sumaVenta = movs.reduce((acc: number, m: any) => {
+ if (m.anulado) return acc;
+ if (m.tipo ==='pago') return acc + (m.monto ?? 0);
+ if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ return acc;
+ }, 0);
+ return accVenta + sumaVenta;
+ }, 0);
+ }, [ventasPrevias]);
+ const totalPagado = useMemo(
+ () => pagos.reduce((acc, p) => acc + p.monto, 0) + totalPagadoVentas,
+ [pagos, totalPagadoVentas]
+ );
  const saldoPendiente = Math.max(0, totalOriginal - totalPagado);
 
+ // Dividir "por productos" asume que nada se cobró todavía por otra vía —
+ // si ya hay un abono (p.ej. de una reserva antes de asignar mesa) o un
+ // pago previo que no fue por productos, ya no se puede saber qué ítems
+ // cubre ese monto, así que la opción se bloquea.
  const hasNonProductPayments = useMemo(() => {
- return pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
- }, [pagos]);
+ const pagoLegacyNoProductos = pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
+ const hayPagoDeVenta = totalPagadoVentas > 0.001;
+ return pagoLegacyNoProductos || hayPagoDeVenta;
+ }, [pagos, totalPagadoVentas]);
 
  const montoPorPersona = saldoInicialSplit / personas;
 
@@ -183,11 +233,29 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  setMontoCustom('');
  setCobrarModalState(null);
 
+ // Recalcula sumando ambas fuentes (pagos legacy + movimientos de venta):
+ // una parte pudo haberse cobrado por acá y otra ya venir abonada desde la
+ // reserva antes de asignar mesa — solo mirar `pagos` subestimaba lo ya
+ // cubierto y dejaba la cuenta "abierta" aunque estuviera saldada.
  const rxDb = await initVerticalRxDb();
  const pagosActualizados = await rxDb.pagos.find({
  selector: { comanda_id: activeComanda.id, _deleted: false }
  }).exec();
- const nuevoTotalPagado = pagosActualizados.reduce((acc, p) => acc + p.monto, 0);
+ const ventasActualizadas = await rxDb.ventas.find({
+ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
+ }).exec();
+ const totalPagosLegacy = pagosActualizados.reduce((acc, p) => acc + p.monto, 0);
+ const totalVentas = ventasActualizadas.reduce((accVenta, doc: any) => {
+ const movs = doc.toJSON().movimientos ?? [];
+ const sumaVenta = movs.reduce((acc: number, m: any) => {
+ if (m.anulado) return acc;
+ if (m.tipo ==='pago') return acc + (m.monto ?? 0);
+ if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ return acc;
+ }, 0);
+ return accVenta + sumaVenta;
+ }, 0);
+ const nuevoTotalPagado = totalPagosLegacy + totalVentas;
 
  if (Math.abs(totalOriginal - nuevoTotalPagado) < 0.05 || nuevoTotalPagado >= totalOriginal) {
  await updateRxComanda(activeComanda.id, {
@@ -235,6 +303,17 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  )}
 
  {!splitMethod ? (
+ saldoPendiente <= 0.001 ? (
+ <div className="flex flex-col items-center gap-2 py-10 text-center">
+ <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+ <Check size={24} weight="bold"/>
+ </div>
+ <span className="font-extrabold text-sm text-foreground">Cuenta ya pagada</span>
+ <span className="text-xs text-muted-foreground max-w-[220px]">
+ Esta cuenta ya fue cubierta en su totalidad, no hay saldo para dividir.
+ </span>
+ </div>
+ ) : (
  <div className="flex flex-col gap-4">
  <div className="p-6 rounded-2xl bg-primary/10 border border-primary/20 flex flex-col items-center gap-1 text-center">
  <span className="text-[10px] font-black uppercase tracking-wider text-primary">Total a Dividir</span>
@@ -282,6 +361,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  </div>
  </button>
  </div>
+ )
  ) : (
  <>
  {splitMethod ==='iguales'&& (

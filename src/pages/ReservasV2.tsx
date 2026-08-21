@@ -9,6 +9,7 @@ import { CalendarGrid } from'../components/Reservas/CalendarGrid';
 import { ProductSelector } from'../components/Mesas/ProductSelector';
 import { updateRxComanda, updateRxMesa, updateRxReserva, initVerticalRxDb } from'../db/rxdb';
 import { useRxReservas } from'../hooks/useRxReservas';
+import { toISO } from'../components/Reservas/reservaUtils';
 
 export default function ReservasV2() {
  const {
@@ -37,7 +38,15 @@ export default function ReservasV2() {
  const { reservas } = useRxReservas();
  const [zonas, setZonas] = useState<any[]>([]);
  const [mesas, setMesas] = useState<any[]>([]);
- const mesasLibres = mesas.filter(m => m.estado ==='libre');
+ // Excluye mesas sintéticas (id 'reserva_*'/'delivery_*'/'local_*', piso
+ // 'Reservas'): son placeholders que el sync crea en Supabase para
+ // satisfacer la FK de comandas sin mesa física — nunca deben poder
+ // asignarse como mesa real de una reserva.
+ const mesasLibres = mesas.filter(m =>
+ m.estado ==='libre'&&
+ m.piso !=='Reservas'&&
+ !/^(reserva_|delivery_|local_)/.test(m.id)
+ );
 
  useEffect(() => {
  let alive = true;
@@ -105,6 +114,14 @@ export default function ReservasV2() {
  };
 
  const handleOpenAssign = (r: Reserva) => {
+ // Segunda barrera además del botón deshabilitado en MiniReservaCard: este
+ // modal también se puede disparar vía openAssignModal (UIContext), que no
+ // pasa por el botón — así que la regla "solo el día del servicio" se
+ // valida acá también.
+ if (r.fecha !== toISO(new Date())) {
+ showToast.error('No se puede asignar mesa todavía','Esta reserva es para otro día. Podrás asignar mesa el día del servicio.');
+ return;
+ }
  setReservaToAssign(r);
  setMesaSeleccionada(null);
  setAssignModalOpen(true);

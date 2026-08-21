@@ -4,7 +4,7 @@ import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type 
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import dayjs from'dayjs';
-import { initVerticalRxDb } from'../db/rxdb';
+import { initVerticalRxDb, updateRxComanda } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
 import { useIvaActivo } from'../hooks/useIvaActivo';
 import { Input } from'@/components/ui/input';
@@ -59,7 +59,7 @@ export default function OrdenesV2() {
  const { comandas } = useRxComandas() as { comandas: Comanda[] };
  const [comandaItems, setComandaItems] = useState<ComandaItem[]>([]);
  const [habitacionCuentas, setHabitacionCuentas] = useState<HabitacionCuenta[]>([]);
- const [, setReservas] = useState<Reserva[]>([]);
+ const [reservas, setReservas] = useState<Reserva[]>([]);
 
  useEffect(() => {
  let active = true;
@@ -120,12 +120,45 @@ export default function OrdenesV2() {
  // Índice de mesas por id: evita un`.find()`(scan lineal de todas las mesas
  // de la organización) por cada comanda filtrada y por cada fila renderizada.
  const mesaById = useMemo(() => new Map(safeMesas.map(m => [m.id, m])), [safeMesas]);
+ // Índice reserva por comanda_id: una reserva ya asignada a mesa real
+ // guarda esa asignación también en `reserva.mesa_id` (ver
+ // handleAssignSubmit en ReservasV2) — se usa como respaldo si por algún
+ // motivo `comanda.mesa_id` se quedó en el id sintético `reserva_<id>`,
+ // para no perder la orden del histórico solo por ese desajuste.
+ const reservaByComandaId = useMemo(
+ () => new Map(reservas.filter(r => r.comanda_id).map(r => [r.comanda_id as string, r])),
+ [reservas]
+ );
+
+ // Auto-reparación: si `handleAssignSubmit` (ReservasV2) actualizó
+ // `reserva.mesa_id` pero por alguna condición de carrera la comanda se
+ // quedó con el `mesa_id` sintético `reserva_<id>`, se corrige acá en
+ // background al detectarla — así el histórico deja de perder la orden en
+ // vez de solo tolerar el desajuste en cada lectura.
+ useEffect(() => {
+ for (const comanda of safeComandas) {
+ if (!comanda.mesa_id?.startsWith('reserva_')) continue;
+ const reservaVinculada = reservaByComandaId.get(comanda.id);
+ if (!reservaVinculada?.mesa_id) continue;
+ const mesaReal = mesaById.get(reservaVinculada.mesa_id);
+ updateRxComanda(comanda.id, {
+ mesa_id: reservaVinculada.mesa_id,
+ mesa_nombre: mesaReal?.nombre || comanda.mesa_nombre,
+ }).catch(err => console.warn('No se pudo reparar mesa_id de comanda de reserva:', err));
+ }
+ }, [safeComandas, reservaByComandaId, mesaById]);
 
  const filteredComandas = useMemo(() => {
  const [start, end] = dateRange;
 
  return safeComandas.filter(comanda => {
- if (comanda.mesa_id?.startsWith('reserva_')) return false;
+ if (comanda.mesa_id?.startsWith('reserva_')) {
+ // Todavía "sin asignar" salvo que la reserva vinculada ya tenga
+ // mesa real — en ese caso se muestra igual (con la mesa de la
+ // reserva) en vez de quedar invisible para siempre en Órdenes.
+ const reservaVinculada = reservaByComandaId.get(comanda.id);
+ if (!reservaVinculada?.mesa_id) return false;
+ }
 
  if (status ==='historico') {
  // Todas las órdenes no anuladas — incluye las cargadas a habitación
@@ -331,6 +364,7 @@ export default function OrdenesV2() {
   ? { nombre: habitacionMesa?.nombre || comanda.mesa_nombre || 'Habitación' }
   : mesaById.get(comanda.mesa_id);
   const clienteLabel = comanda.cliente || habitacionCuenta?.huesped;
+  const esDeReserva = reservaByComandaId.has(comanda.id);
   const rowData = comandaRowData.get(comanda.id);
   const total = rowData?.total || 0;
   const itemCount = rowData?.items.reduce((acc, i) => acc + (i.cantidad || 1), 0) || 0;
@@ -348,6 +382,11 @@ export default function OrdenesV2() {
   {habitacionCuenta && (
   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold shrink-0">
   <Door size={11} weight="bold" /> Habitación
+  </span>
+  )}
+  {esDeReserva && (
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-bold shrink-0">
+  <Calendar size={11} weight="bold" /> Reserva
   </span>
   )}
   </div>

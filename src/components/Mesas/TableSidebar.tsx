@@ -364,7 +364,7 @@ export function TableSidebar({
         if (reservaView === 'nueva') {
           return (
             <SidebarReservaNew
-              onBack={() => setReservaView('none')}
+              onBack={() => setReservaView(selectedReservaId ? 'detalle' : 'none')}
               onSuccess={(id) => {
                 setSelectedReservaId(id);
                 setReservaView('detalle');

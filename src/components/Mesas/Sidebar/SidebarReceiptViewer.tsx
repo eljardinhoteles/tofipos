@@ -38,6 +38,7 @@ export function SidebarReceiptViewer({
  const [previewContent, setPreviewContent] = useState('');
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [pagos, setPagos] = useState<any[]>([]);
+ const [pagosDeVentas, setPagosDeVentas] = useState<any[]>([]);
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
  const { openConfirm } = useUI();
@@ -91,10 +92,11 @@ export function SidebarReceiptViewer({
  useEffect(() => {
  let alive = true;
  let sub: { unsubscribe: () => void } | null = null;
+ let ventasSub: { unsubscribe: () => void } | null = null;
 
  (async () => {
  if (!activeComanda?.id) {
- if (alive) setPagos([]);
+ if (alive) { setPagos([]); setPagosDeVentas([]); }
  return;
  }
  const rxDb = await initVerticalRxDb();
@@ -106,11 +108,37 @@ export function SidebarReceiptViewer({
  if (!alive) return;
  setPagos(docs.map((doc: any) => doc.toJSON()));
  });
+
+ // Pagos que viven como movimientos de RxVenta (Centro de Ventas /
+ // abonos de reserva) — sin esto el recibo final de una comanda cerrada
+ // por ese camino se ve sin pagos.
+ const ventasQuery = rxDb.ventas.find({
+ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
+ });
+ ventasSub = ventasQuery.$.subscribe((docs: any[]) => {
+ if (!alive) return;
+ const orgId = localStorage.getItem('pos_active_org_id') ||'';
+ const pagosDeMovimientos = docs.flatMap((doc: any) => {
+ const v = doc.toJSON();
+ return (v.movimientos ?? [])
+ .filter((m: any) => !m.anulado && m.tipo ==='pago')
+ .map((m: any) => ({
+ id: m.id,
+ comanda_id: activeComanda.id,
+ monto: m.monto ?? 0,
+ metodo_pago: m.metodo_pago ?? null,
+ fecha: m.fecha,
+ organization_id: orgId,
+ }));
+ });
+ setPagosDeVentas(pagosDeMovimientos);
+ });
  })().catch(() => {});
 
  return () => {
  alive = false;
  sub?.unsubscribe();
+ ventasSub?.unsubscribe();
  };
  }, [activeComanda?.id]);
 
@@ -124,7 +152,8 @@ export function SidebarReceiptViewer({
  const subtotal = totales.subtotalNeto;
  const ivaCalculado = totales.ivaTotal;
 
- const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ const todosPagos = useMemo(() => [...pagos, ...pagosDeVentas], [pagos, pagosDeVentas]);
+ const totalPagado = useMemo(() => todosPagos.reduce((acc, p) => acc + p.monto, 0), [todosPagos]);
 
  const isFacturado = activeComanda?.estado ==='facturado';
  const isAnulada = activeComanda?.estado ==='anulada';
@@ -257,11 +286,11 @@ export function SidebarReceiptViewer({
  variant="secondary"className="w-full font-bold text-primary bg-primary/10"
  onClick={() => {
  const content = esComandaEnHabitacionActiva
- ? generarPrecuenta(activeComanda, comandaItems, selectedMesa.nombre, ivaPorcentaje, [], habitacionMesa?.nombre)
+ ? generarPrecuenta(activeComanda, comandaItems, selectedMesa.nombre, ivaPorcentaje, todosPagos, habitacionMesa?.nombre)
  : generarTicketPago(
  activeComanda,
  comandaItems,
- pagos,
+ todosPagos,
  selectedMesa.nombre,
  ivaPorcentaje,
  undefined,
@@ -315,7 +344,7 @@ export function SidebarReceiptViewer({
  <SidebarPagosModal
  opened={showPagosModal}
  onClose={() => setShowPagosModal(false)}
- pagos={pagos}
+ pagos={todosPagos}
  totalPagado={totalPagado}
  />
 

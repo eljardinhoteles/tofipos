@@ -12,7 +12,7 @@ import { SidebarCloseCuentaModal } from'./SidebarCloseCuentaModal';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
-import { createRxVenta, updateRxComanda, updateRxComandaItem, updateRxMesa, anularComandaItem } from'../../../db/rxdb';
+import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, anularComandaItem } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { useUI } from'../../../context/UIContext';
 import { useAuth } from'../../../context/AuthContext';
@@ -91,6 +91,10 @@ export function SidebarDetails({
 
  const [liveComanda, setLiveComanda] = useState<any | null>(activeComandaProp || null);
  const [pagos, setPagos] = useState<any[]>([]);
+ // Ventas vinculadas a esta comanda (Centro de Ventas) — trae abonos
+ // registrados antes de que la comanda existiera como mesa, p.ej. al
+ // asignar mesa a una reserva con pagos previos.
+ const [ventasComanda, setVentasComanda] = useState<any[]>([]);
  const [, setLinkedHabitacionCuenta] = useState<any | null>(null);
  const [linkedMesa, setLinkedMesa] = useState<any | null>(null);
 
@@ -110,6 +114,9 @@ export function SidebarDetails({
  const p = await rxDb.pagos.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).exec();
  if (!alive) return;
  setPagos(p.map((d: any) => d.toJSON()));
+ const v = await rxDb.ventas.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).exec();
+ if (!alive) return;
+ setVentasComanda(v.map((d: any) => d.toJSON()));
  const hc = activeComandaProp.habitacion_cuenta_id
  ? await rxDb.habitacion_cuentas.findOne(activeComandaProp.habitacion_cuenta_id).exec()
  : null;
@@ -134,6 +141,7 @@ export function SidebarDetails({
  if (activeComandaProp?.id) {
  subs.push(rxDb.comandas.findOne(activeComandaProp.id).$.subscribe(() => refresh()));
  subs.push(rxDb.pagos.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).$.subscribe(() => refresh()));
+ subs.push(rxDb.ventas.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).$.subscribe(() => refresh()));
  }
  })().catch(() => {});
  return () => {
@@ -265,10 +273,13 @@ export function SidebarDetails({
  }));
 
  // Clientes únicos para autocompletar en el flujo de cambio de cliente
- const uniqueClientNames = useMemo(
- () => Array.from(new Set(clientes.map(c => c.nombre).filter(Boolean))),
- [clientes]
- );
+ const uniqueClientNames = useMemo(() => {
+ const names = new Set<string>();
+ for (const c of clientes) {
+ if (c.nombre) names.add(c.nombre);
+ }
+ return Array.from(names);
+ }, [clientes]);
  const filteredChangeClientes = uniqueClientNames
  .filter(nombre => nombre.toLowerCase().includes(changeClienteName.toLowerCase()) && nombre !== changeClienteName)
  .slice(0, 5);
@@ -295,8 +306,50 @@ export function SidebarDetails({
  () => comandaItems.reduce((acc, item) => acc + (item.cantidad || 0), 0),
  [comandaItems]
  );
- const totalPagado = useMemo(() => pagos.reduce((acc, p) => acc + p.monto, 0), [pagos]);
+ const totalPagadoVentas = useMemo(() => {
+ return ventasComanda.reduce((accVenta: number, v: any) => {
+ const movs = v.movimientos ?? [];
+ const sumaVenta = movs.reduce((acc: number, m: any) => {
+ if (m.anulado) return acc;
+ if (m.tipo ==='pago') return acc + (m.monto ?? 0);
+ if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ return acc;
+ }, 0);
+ return accVenta + sumaVenta;
+ }, 0);
+ }, [ventasComanda]);
+ const totalPagado = useMemo(
+ () => pagos.reduce((acc, p) => acc + p.monto, 0) + totalPagadoVentas,
+ [pagos, totalPagadoVentas]
+ );
  const saldoPendiente = Math.max(0, total - totalPagado);
+ // Venta vigente (no anulada) sobre esta comanda, si existe — se reutiliza
+ // al cerrar la cuenta en vez de crear una paralela que duplicaría el
+ // cobro e ignoraría abonos ya registrados (p.ej. desde una reserva).
+ const ventaVigente = useMemo(() => {
+ return ventasComanda
+ .filter((v: any) => !(v.movimientos ?? []).some((m: any) => m.tipo ==='anular'))
+ .sort((a: any, b: any) => (b.created_at ||'').localeCompare(a.created_at ||''))[0] || null;
+ }, [ventasComanda]);
+ // Movimientos 'pago' de todas las ventas de la comanda, normalizados al
+ // shape que espera SidebarPagosModal — así el historial de "Ver Pagos"
+ // incluye abonos hechos desde una reserva antes de asignar mesa.
+ const pagosDeVentas = useMemo(() => {
+ return ventasComanda.flatMap((v: any) => {
+ const res: any[] = [];
+ for (const m of (v.movimientos ?? [])) {
+ if (!m.anulado && m.tipo === 'pago') {
+ res.push({
+ id: m.id,
+ tipo_division: v.origen === 'reserva_restaurante' ? 'Abono de reserva' : undefined,
+ fecha: m.fecha,
+ monto: m.monto ?? 0,
+ });
+ }
+ }
+ return res;
+ });
+ }, [ventasComanda]);
 
  const cantidadesSnapshot = useMemo(() => {
  try {
@@ -312,17 +365,17 @@ export function SidebarDetails({
  )
  : [], [activeComanda?.confirmada_at, comandaItems]);
 
- const itemsConCantidadExtra = useMemo(() => activeComanda?.confirmada_at
- ? comandaItems
- .filter(item => {
+ const itemsConCantidadExtra = useMemo(() => {
+ if (!activeComanda?.confirmada_at) return [];
+ const res: any[] = [];
+ for (const item of comandaItems) {
  const cantConfirmada = cantidadesSnapshot[item.id];
- return cantConfirmada !== undefined && item.cantidad > cantConfirmada;
- })
- .map(item => ({
- ...item,
- cantidad: item.cantidad - cantidadesSnapshot[item.id],
- }))
- : [], [activeComanda?.confirmada_at, comandaItems, cantidadesSnapshot]);
+ if (cantConfirmada !== undefined && item.cantidad > cantConfirmada) {
+ res.push({ ...item, cantidad: item.cantidad - cantConfirmada });
+ }
+ }
+ return res;
+ }, [activeComanda?.confirmada_at, comandaItems, cantidadesSnapshot]);
 
  const itemsNuevos = useMemo(() => [...itemsRealmenteNuevos, ...itemsConCantidadExtra], [itemsRealmenteNuevos, itemsConCantidadExtra]);
  const hayItemsNuevos = itemsNuevos.length > 0;
@@ -341,6 +394,8 @@ export function SidebarDetails({
  activeComanda,
  comandaItems,
  selectedMesa.nombre,
+ ivaPorcentaje,
+ [...pagos, ...pagosDeVentas],
  linkedMesa?.nombre
  );
  setPreviewContent(content);
@@ -351,6 +406,7 @@ export function SidebarDetails({
  items: comandaItems,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
+ pagos: [...pagos, ...pagosDeVentas],
  habitacionNombre: linkedMesa?.nombre,
  }).catch(err => console.warn('print server offline', err));
  });
@@ -731,7 +787,8 @@ export function SidebarDetails({
 
  <Button
  variant="secondary"className="w-full font-bold text-violet-600 bg-violet-50"onClick={() => onAction(selectedMesa,'dividido')}
- disabled={total === 0}
+ disabled={total === 0 || saldoPendiente <= 0.001}
+ title={saldoPendiente <= 0.001 ?'La cuenta ya está pagada en su totalidad': undefined}
  >
  <Scissors size={18} weight="bold"className="mr-1.5"/> Dividir Cuenta
  </Button>
@@ -852,7 +909,7 @@ export function SidebarDetails({
  <SidebarPagosModal
  opened={showPagosModal}
  onClose={() => setShowPagosModal(false)}
- pagos={pagos}
+ pagos={[...pagos, ...pagosDeVentas]}
  totalPagado={totalPagado}
  />
 
@@ -888,6 +945,36 @@ export function SidebarDetails({
  _modified: new Date().toISOString(),
  });
  // Sin método: se define después al anclar en Centro de Ventas.
+ // Aislado en su propio try/catch: si registrar el saldo en la venta
+ // falla (p.ej. la venta no se sincronizó todavía), NO debe bloquear
+ // el cierre de la comanda ni la liberación de la mesa más abajo —
+ // eso es lo operativamente crítico, el ajuste se puede corregir
+ // después a mano en Centro de Ventas.
+ try {
+ if (ventaVigente) {
+ // Ya existe una venta sobre esta comanda (p.ej. abonos de
+ // reserva previos a asignar mesa) — se completa esa misma
+ // venta en vez de crear una paralela. Igual que el flujo sin
+ // reserva (rama `else`), el saldo pendiente queda como
+ // 'ajuste' — NO se auto-cobra con un 'pago' aquí, el cobro
+ // real se ancla después en Centro de Ventas.
+ // Los 'ajuste' se SUMAN para formar montoTotal (ver
+ // useVentasConMovimientos): se agrega solo el delta entre el
+ // total real y lo ya ajustado, nunca el saldo íntegro, o el
+ // total quedaría duplicado.
+ const yaAjustado = (ventaVigente.movimientos ?? [])
+ .filter((m: any) => !m.anulado && m.tipo ==='ajuste')
+ .reduce((acc: number, m: any) => acc + (m.monto ?? 0), 0);
+ const deltaAjuste = total - yaAjustado;
+ if (Math.abs(deltaAjuste) > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaVigente.id,
+ tipo:'ajuste',
+ monto: deltaAjuste,
+ motivo:'Ajuste al cerrar cuenta',
+ });
+ }
+ } else {
  await createRxVenta({
  id: crypto.randomUUID(),
  origen:'mesa',
@@ -898,6 +985,11 @@ export function SidebarDetails({
  comanda_id: activeComanda.id,
  organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
  }, saldoPendiente);
+ }
+ } catch (ventaError) {
+ console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
+ showToast.error('Aviso','La cuenta se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
+ }
  }
 
  showToast.success('Ticket de Cierre',`Imprimiendo precuenta de ${selectedMesa.nombre}...`);
@@ -1013,9 +1105,9 @@ export function SidebarDetails({
  className="w-full"/>
  {changeClienteAutocomplete && filteredChangeClientes.length > 0 && (
  <div className="absolute top-full mt-1 w-full bg-card border border-border rounded-lg shadow-lg overflow-hidden z-10 flex flex-col">
- {filteredChangeClientes.map((nombre, idx) => (
+ {filteredChangeClientes.map((nombre) => (
  <button
- key={idx}
+ key={nombre}
  type="button"onClick={() => {
  setChangeClienteName(nombre);
  setChangeClienteAutocomplete(false);

@@ -1,5 +1,6 @@
 import { Clock, Users, ArrowUpRight } from'@phosphor-icons/react';
 import { type Reserva } from'../../db/database';
+import { toISO } from'./reservaUtils';
 
 interface MiniReservaCardProps {
  reserva: Reserva;
@@ -18,6 +19,9 @@ export function MiniReservaCard({
  codigo =''}: MiniReservaCardProps) {
  const done = reserva.estado ==='completada';
  const canceled = reserva.estado ==='cancelada';
+ // Asignar mesa solo tiene sentido el día del servicio: una reserva futura
+ // aún no debe ocupar una mesa física.
+ const esHoy = reserva.fecha === toISO(new Date());
 
  return (
  <div
@@ -43,8 +47,14 @@ export function MiniReservaCard({
 
  {!canceled && !done && (
  <button
- type="button"onClick={(e) => { e.stopPropagation(); onAssign(); }}
- className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center cursor-pointer shrink-0 transition-colors"title="Asignar Mesa">
+ type="button"
+ disabled={!esHoy}
+ onClick={(e) => { e.stopPropagation(); if (esHoy) onAssign(); }}
+ className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+ esHoy
+ ?'bg-emerald-100 text-emerald-800 cursor-pointer'
+ :'bg-muted text-muted-foreground/50 cursor-not-allowed'}`}
+ title={esHoy ?'Asignar Mesa':'Solo se puede asignar mesa el día de la reserva'}>
  <ArrowUpRight size={14} weight="bold"/>
  </button>
  )}
