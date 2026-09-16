@@ -244,6 +244,16 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     setComprobanteFile(null);
   }, [accionActiva]);
 
+  // Un pago en efectivo no tiene comprobante que subir — se deshabilita en
+  // vez de solo ocultar para dejar claro que la opción existe pero no
+  // aplica a este método, y se limpia cualquier archivo ya seleccionado si
+  // el usuario cambia de método después de elegir uno.
+  const comprobanteDeshabilitado = accionActiva === 'pago' && metodoPago === 'efectivo';
+
+  useEffect(() => {
+    if (comprobanteDeshabilitado) setComprobanteFile(null);
+  }, [comprobanteDeshabilitado]);
+
   const registrar = async (input: Omit<RxVentaMovimiento, 'id' | 'fecha'> & { fecha?: string }) => {
     setSaving(true);
     try {
@@ -766,11 +776,23 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-muted-foreground">Monto</span>
-                  <Input
-                    type="number" placeholder="0.00" value={montoPago}
-                    onChange={(e) => setMontoPago(e.target.value)}
-                    className="h-9 text-xs font-bold"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number" placeholder="0.00" value={montoPago}
+                      onChange={(e) => setMontoPago(e.target.value)}
+                      className="h-9 text-xs font-bold"
+                    />
+                    {item.saldo > 0.01 && (
+                      <button
+                        type="button"
+                        onClick={() => setMontoPago(item.saldo.toFixed(2))}
+                        title={`Usar saldo pendiente ($${item.saldo.toFixed(2)})`}
+                        className="shrink-0 h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
+                      >
+                        <CurrencyDollar size={16} weight="bold" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-muted-foreground">Método de pago</span>
@@ -973,16 +995,23 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               </div>
             )}
 
-            {/* Comprobante opcional (si aplica) */}
+            {/* Comprobante opcional (si aplica) — deshabilitado para pagos en
+                efectivo, que no tienen comprobante que subir. */}
             {ACCIONES_CON_COMPROBANTE.includes(accionActiva) && (
-              <label className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground cursor-pointer hover:bg-muted transition-all h-9 text-xs font-semibold w-full",
-                comprobanteFile && "border-primary text-primary font-bold bg-primary/5"
-              )}>
+              <label
+                title={comprobanteDeshabilitado ? 'Un pago en efectivo no requiere comprobante' : undefined}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground transition-all h-9 text-xs font-semibold w-full",
+                  comprobanteDeshabilitado
+                    ? "opacity-50 cursor-not-allowed"
+                    : cn("cursor-pointer hover:bg-muted", comprobanteFile && "border-primary text-primary font-bold bg-primary/5")
+                )}
+              >
                 <Paperclip size={14} className="shrink-0" />
                 <span className="truncate">{comprobanteFile ? comprobanteFile.name : 'Adjuntar comprobante (opcional)'}</span>
                 <input
                   type="file" accept="image/*,application/pdf" className="hidden"
+                  disabled={comprobanteDeshabilitado}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) setComprobanteFile(file);
