@@ -1521,6 +1521,27 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
 
   const replicaBase = { live: true, waitForLeadership: false }
 
+  // cliente_id es uuid en Postgres pero solo string|null en el schema local:
+  // un valor sentinel o mal ingresado (ej. un teléfono/documento escrito ahí
+  // por error) rompe el upsert entero con "invalid input syntax for type
+  // uuid" (22P02), y ese error cae en la rama silenciosa de makePushHandler
+  // dejando el documento atascado sin sincronizar y sin rastro visible. Se
+  // descarta el campo en vez de bloquear el push si no tiene forma de uuid.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const stripInvalidUuid = (doc: Record<string, unknown>, field: string) => {
+    const value = doc[field]
+    if (typeof value === 'string' && !UUID_RE.test(value)) {
+      console.warn(`[Push] campo "${field}" con valor no-uuid descartado antes de subir:`, value)
+      delete doc[field]
+    }
+  }
+
+  const sanitizeComandaDoc = (doc: Record<string, unknown>) => {
+    const clean = { ...doc }
+    stripInvalidUuid(clean, 'cliente_id')
+    return clean
+  }
+
   const mesas = patchPush(replicateSupabase({
     ...replicaBase,
     tableName: 'mesas',
@@ -1539,7 +1560,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     replicationIdentifier: `comandas-supabase-${orgId}`,
     pull: { batchSize: 100, queryBuilder, modifier: stripUndefined },
     push: { batchSize: 100 }
-  }), makePushHandler('comandas'))
+  }), makePushHandler('comandas', sanitizeComandaDoc))
 
   const items = patchPush(replicateSupabase({
     ...replicaBase,
@@ -1595,6 +1616,7 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     const clean = { ...doc }
     delete clean.documento_nombre
     delete clean.documento_url
+    stripInvalidUuid(clean, 'cliente_id')
     return clean
   }
 

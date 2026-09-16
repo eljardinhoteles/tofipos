@@ -78,7 +78,7 @@ export function useTableActions() {
       const comandaId = crypto.randomUUID();
 
       const finalCliente = customerNameFromSidebar || 'Consumidor Final';
-      const finalClientId = customerNameFromSidebar ? (clientId || undefined) : '99999999999';
+      const finalClientId = customerNameFromSidebar ? (clientId || undefined) : undefined;
       try {
         const rxDb = await getVerticalRxDb();
         const allComandas = await rxDb.comandas.find({
