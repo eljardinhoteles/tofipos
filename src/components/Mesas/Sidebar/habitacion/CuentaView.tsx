@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Receipt, CreditCard } from '@phosphor-icons/react';
 import { type Mesa, type HabitacionCuenta } from '../../../../db/database';
-import { initVerticalRxDb } from '../../../../db/rxdb';
+import { initVerticalRxDb, updateRxHabitacionCuenta, updateRxMesa } from '../../../../db/rxdb';
 import { TicketPreviewModal } from '../../../Common/TicketPreviewModal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useUI } from '../../../../context/UIContext';
+import { showToast } from '@/lib/toast';
 
 export function CuentaView({
   cuenta,
@@ -19,10 +21,12 @@ export function CuentaView({
   onCheckout: (data: any) => void;
   onOpenComanda?: (comandaId: string) => void;
 }) {
+  const { openPrompt } = useUI();
   const roomType = selectedMesa.nombre.match(/\(([^)]+)\)/)?.[1] || selectedMesa.piso || 'Sin tipo';
   const roomNum = selectedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || selectedMesa.nombre.replace(/\D/g, '') || selectedMesa.nombre;
   const [comandas, setComandas] = useState<any[]>([]);
   const [previewTicketText, setPreviewTicketText] = useState<string | null>(null);
+  const [anulando, setAnulando] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -38,6 +42,41 @@ export function CuentaView({
   const totalConIva = useMemo(() => {
     return comandas.reduce((acc, c) => acc + (c.total || 0), 0);
   }, [comandas]);
+
+  // Solo se permite anular una cuenta sin consumos cargados — con comandas
+  // ya asociadas, el flujo correcto es el checkout normal (cobrar o marcar
+  // a crédito), no una anulación silenciosa que dejaría consumos huérfanos.
+  const puedeAnular = comandas.length === 0;
+
+  const handleAnular = () => {
+    if (!puedeAnular) {
+      showToast.error('No se puede anular: esta cuenta ya tiene comandas cargadas.');
+      return;
+    }
+    openPrompt({
+      title: 'Anular cuenta de habitación',
+      label: 'Motivo de anulación',
+      placeholder: 'Ej. Check-in duplicado, error al abrir la cuenta...',
+      required: true,
+      onConfirm: async (motivo) => {
+        setAnulando(true);
+        try {
+          await updateRxHabitacionCuenta(cuenta.id, {
+            estado: 'cerrada',
+            notas: [cuenta.notas, `Anulada: ${motivo}`].filter(Boolean).join(' · '),
+          });
+          await updateRxMesa(selectedMesa.id, { estado: 'libre' });
+          showToast.success('Cuenta anulada');
+          onClose();
+        } catch (e) {
+          console.error(e);
+          showToast.error('No se pudo anular la cuenta');
+        } finally {
+          setAnulando(false);
+        }
+      },
+    });
+  };
 
   return (
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
@@ -123,7 +162,9 @@ export function CuentaView({
           </Button>
           <Button
             variant="ghost" className="w-full font-bold text-destructive"
-            onClick={onClose}
+            onClick={handleAnular}
+            disabled={anulando || !puedeAnular}
+            title={puedeAnular ? undefined : 'No se puede anular: esta cuenta ya tiene comandas cargadas'}
           >
             Anular
           </Button>
