@@ -1868,8 +1868,8 @@ label {
 }
 
 @theme inline {
-  --font-sans: 'Inter Variable', sans-serif;
-  --font-heading: 'Geist Variable', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --color-nav: var(--ui-nav);
   --color-nav-foreground: var(--ui-nav-foreground);
   --color-sidebar-ring: var(--sidebar-ring);

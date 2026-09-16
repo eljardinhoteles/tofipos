@@ -23,6 +23,7 @@ import type { RxVentaMovimiento, VentaMovimientoTipo } from '../../db/rxdb';
 interface MovimientoHistorialCardProps {
   ventaId: string;
   movimiento: RxVentaMovimiento;
+  allMovimientos?: RxVentaMovimiento[];
   icon: typeof XCircle;
   label: string;
   colorClasses: string;
@@ -31,11 +32,12 @@ interface MovimientoHistorialCardProps {
 /**
  * Fila de historial de un movimiento — con anular puntual inline (se cargó
  * un dato mal): el registro nunca se borra, solo se marca `anulado` y
- * queda visible tachado con su motivo. Único movimiento que no admite
- * anularse a sí mismo es 'anular' (la anulación de la venta completa).
+ * más (monto, motivo, fecha quedan intactos como evidencia), solo se
+ * excluye de los cálculos derivados (ver useVentasConMovimientos).
+ * Único movimiento que no admite anularse a sí mismo es 'anular' (la anulación de la venta completa).
  */
-export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, label, colorClasses }: MovimientoHistorialCardProps) {
-  const { currentMesero } = useAuth();
+export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos, icon: Icon, label, colorClasses }: MovimientoHistorialCardProps) {
+  const { currentMesero, adminUser } = useAuth();
   const { usuarios } = useRxUsuarios();
   const [confirmando, setConfirmando] = useState(false);
   const [dialogDeleteOpen, setDialogDeleteOpen] = useState(false);
@@ -43,11 +45,28 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const autorDoc = usuarios.find((u: any) => u.id === m.usuario_id || u.user_id === m.usuario_id);
-  const autorNombre = autorDoc?.nombre || (m.usuario_id === currentMesero?.id ? currentMesero?.nombre : '');
+  const autorDoc = m.usuario_id ? usuarios.find((u: any) => u.id === m.usuario_id || u.user_id === m.usuario_id) : undefined;
+  
+  let adminName = '';
+  if (m.usuario_id === adminUser?.id) {
+    adminName = adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || 'Administrador';
+  }
+
+  const autorNombre = autorDoc?.nombre 
+    || (m.usuario_id === currentMesero?.id ? currentMesero?.nombre : '')
+    || adminName
+    || (m.usuario_id ? 'Usuario' : '');
 
   const puedeAnularse = m.tipo !== 'anular' && !m.anulado;
   const admiteComprobante = !m.anulado && ['pago', 'ajuste', 'reembolso', 'anclar'].includes(m.tipo);
+
+  let montoAsociado = 0;
+  if (m.pagos_asociados && m.pagos_asociados.length > 0 && allMovimientos) {
+    montoAsociado = m.pagos_asociados.reduce((sum, pagoId) => {
+      const pago = allMovimientos.find(x => x.id === pagoId);
+      return sum + (pago?.monto || 0);
+    }, 0);
+  }
 
   const [comprobanteDisplayUrl, setComprobanteDisplayUrl] = useState<string>('');
 
@@ -114,18 +133,91 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
   const fileUrl = m.comprobante_url ? (comprobanteDisplayUrl || resolverComprobanteUrl(m.comprobante_url)) : '';
   const isPdf = m.comprobante_url?.toLowerCase().endsWith('.pdf');
 
+  if (m.tipo === 'ajuste') {
+    return (
+      <div className={cn(
+        "group relative flex items-center justify-between py-1.5 px-2 transition-all rounded-md",
+        m.anulado ? "opacity-60 bg-muted/20" : "hover:bg-muted/50"
+      )}>
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <Icon size={14} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-blue-600"} />
+          <div className="flex flex-col min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={cn("text-xs font-semibold", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
+                Ajuste {m.monto! > 0 ? '+' : '-'}${Math.abs(m.monto || 0).toFixed(2)}
+              </span>
+              {m.motivo && (
+                <span className={cn("text-[11px] truncate", m.anulado ? "text-muted-foreground" : "text-muted-foreground")}>
+                  ({m.motivo})
+                </span>
+              )}
+              {autorNombre && (
+                <span className={cn("text-[10px] truncate ml-1 opacity-0 group-hover:opacity-70 transition-opacity", m.anulado ? "text-muted-foreground" : "text-muted-foreground")}>
+                  • por {autorNombre}
+                </span>
+              )}
+            </div>
+            {m.anulado && m.anulado_motivo && (
+              <span className="text-[10px] text-destructive font-medium italic truncate">
+                Anulado: {m.anulado_motivo}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-medium text-muted-foreground/70">
+            {dayjs(m.fecha).format('DD MMM, HH:mm')}
+          </span>
+
+          {m.anulado && (
+            <Badge variant="outline" className="text-[9px] font-bold border-gray-300 text-gray-600 bg-gray-100 px-1.5 py-0">
+              Anulado
+            </Badge>
+          )}
+
+          {puedeAnularse && !confirmando && (
+            <button
+              type="button" onClick={() => setConfirmando(true)}
+              title="Anular este ajuste"
+              className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+            >
+              <Prohibit size={13} weight="bold" />
+            </button>
+          )}
+        </div>
+
+        {confirmando && (
+          <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border shadow-lg rounded-lg p-2 flex items-center gap-2">
+            <Input
+              type="text" placeholder="Motivo de anulación" value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className="h-7 text-xs w-40 bg-background"
+            />
+            <Button type="button" variant="destructive" size="sm" onClick={handleAnular} disabled={saving} className="h-7 text-xs font-bold shrink-0">
+              Confirmar
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setConfirmando(false); setMotivo(''); }} className="h-7 text-xs shrink-0">
+              Cancelar
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (m.tipo === 'comentario') {
     return (
       <div className={cn(
-        "group relative rounded-xl border p-2.5 flex flex-col gap-2 transition-all shadow-2xs",
-        m.anulado ? "opacity-60 bg-muted/30 border-border" : "border-amber-200/80 bg-amber-50/50 hover:bg-amber-50 hover:border-amber-300"
+        "group relative rounded-xl p-2.5 flex flex-col gap-2 transition-all",
+        m.anulado ? "opacity-60" : "hover:bg-amber-50/40"
       )}>
         <div className="flex items-center justify-between gap-2.5">
           {/* Izquierda: Icono + Texto del comentario + Autor */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className={cn(
-              "w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 shadow-2xs",
-              m.anulado ? "bg-muted text-muted-foreground border-border" : "bg-amber-100 border-amber-200 text-amber-800"
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+              m.anulado ? "text-muted-foreground" : "text-amber-700"
             )}>
               <ChatText size={16} weight="bold" />
             </div>
@@ -134,7 +226,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
                 "{m.motivo || 'Sin texto'}"
               </p>
               {autorNombre && (
-                <span className={cn("text-[10px] font-extrabold truncate", m.anulado ? "text-muted-foreground/60" : "text-amber-800/80")}>
+                <span className={cn("text-[10px] font-extrabold truncate opacity-0 group-hover:opacity-100 transition-opacity", m.anulado ? "text-muted-foreground/60" : "text-amber-800/80")}>
                   por {autorNombre}
                 </span>
               )}
@@ -157,7 +249,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
               <button
                 type="button" onClick={() => setConfirmando(true)}
                 title="Anular este comentario"
-                className="p-1 text-amber-800/60 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer"
+                className="p-1 text-amber-800/60 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
               >
                 <Prohibit size={13} weight="bold" />
               </button>
@@ -247,8 +339,18 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
               <span className="text-xs font-black text-primary shrink-0">${m.monto.toFixed(2)}</span>
             )}
           </div>
-          <span className="text-[11px] text-muted-foreground truncate font-medium">
-            {m.motivo || m.numero_factura || (m.metodo_pago ? `Método: ${m.metodo_pago}` : 'Movimiento de venta')}
+          <span className="text-[11px] text-muted-foreground truncate font-medium flex items-center gap-1.5">
+            <span className="truncate">
+              {m.motivo || m.numero_factura || (m.metodo_pago ? `Método: ${m.metodo_pago}` : 'Movimiento de venta')}
+            </span>
+            {montoAsociado > 0 && (
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 border-l border-border pl-1.5 shrink-0">
+                Cubre ${montoAsociado.toFixed(2)}
+              </span>
+            )}
+            {autorNombre && (
+              <span className="text-[10px] opacity-0 group-hover:opacity-70 transition-opacity border-l border-border pl-1.5 shrink-0">por {autorNombre}</span>
+            )}
           </span>
         </div>
 
@@ -307,7 +409,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, icon: Icon, la
             <button
               type="button" onClick={() => setConfirmando(true)}
               title="Anular este movimiento"
-              className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer"
+              className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
             >
               <Prohibit size={14} weight="bold" />
             </button>

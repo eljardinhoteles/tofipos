@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise, Paperclip, Trash, Plus,
   CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
-  Table, ForkKnife, BedIcon, Door,
+  Table, ForkKnife, BedIcon, Door, CloudCheck, CloudWarning, ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { CaretDown, User as UserIcon } from '@phosphor-icons/react';
 import {
   Select,
   SelectContent,
@@ -28,7 +31,7 @@ import dayjs from 'dayjs';
 import { showToast } from '@/lib/toast';
 import { useAuth } from '../../context/AuthContext';
 import { useMetodosPagoConfig } from '../../hooks/useMetodosPagoConfig';
-import { agregarVentaMovimiento, updateRxVenta, adjuntarComprobanteMovimiento } from '../../db/rxdb';
+import { agregarVentaMovimiento, updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
 import { subirComprobante, eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
@@ -150,7 +153,9 @@ const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
  * nunca edita el historial existente.
  */
 export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
-  const { currentMesero } = useAuth();
+  const { currentMesero, adminUser } = useAuth();
+  const getUsuarioId = () => currentMesero?.id || adminUser?.id;
+  
   const { bancos, redesTarjeta } = useMetodosPagoConfig();
   const { venta, movimientos } = item;
 
@@ -171,8 +176,16 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const [uploadingDocumento, setUploadingDocumento] = useState(false);
   const [docToDelete, setDocToDelete] = useState<{ id: string; url: string; nombre: string; origen: string } | null>(null);
   const [confirmDeleteVenta, setConfirmDeleteVenta] = useState(false);
+  const [clienteAbierto, setClienteAbierto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accion, setAccion] = useState<AccionId>('pago');
+  const [checkingSync, setCheckingSync] = useState(false);
+  const [syncResult, setSyncResult] = useState<'ok' | 'reintentado' | 'error' | null>(null);
+
+  const [ajustarVentaPago, setAjustarVentaPago] = useState(false);
+  const [motivoAjustePago, setMotivoAjustePago] = useState('');
+  
+  const [pagosSeleccionados, setPagosSeleccionados] = useState<Set<string>>(new Set());
 
   const accionesDisponibles = useMemo<AccionId[]>(() => {
     // Si la venta está anulada, todo queda estrictamente en solo lectura:
@@ -199,8 +212,33 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   useEffect(() => {
     setAccion(accionesDisponibles[0] ?? 'pago');
     setComprobanteFile(null);
+    setSyncResult(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venta.id]);
+
+  const handleVerificarSync = async () => {
+    setCheckingSync(true);
+    setSyncResult(null);
+    try {
+      const resultado = await verificarSyncVenta(venta.id);
+      if (resultado.enSupabase) {
+        setSyncResult('ok');
+        showToast.success('La venta está sincronizada en Supabase');
+      } else if (resultado.reintentado) {
+        setSyncResult('reintentado');
+        showToast.success('La venta no estaba sincronizada. Se reenvió, esperando confirmación...');
+      } else {
+        setSyncResult('error');
+        showToast.error(resultado.error || 'No se pudo verificar la sincronización');
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncResult('error');
+      showToast.error('No se pudo verificar la sincronización');
+    } finally {
+      setCheckingSync(false);
+    }
+  };
 
   useEffect(() => {
     setComprobanteFile(null);
@@ -229,6 +267,16 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const handlePago = async () => {
     const monto = parseFloat(montoPago);
     if (!monto || monto <= 0) { showToast.error('Ingresa un monto válido'); return; }
+
+    let montoAjuste = 0;
+    if (ajustarVentaPago) {
+      montoAjuste = monto - Math.max(0, item.saldo);
+      if (montoAjuste > 0 && !motivoAjustePago.trim()) {
+        showToast.error('Ingresa el motivo del ajuste');
+        return;
+      }
+    }
+
     if (await registrar({
       tipo: 'pago',
       monto,
@@ -236,20 +284,35 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       transferencia_banco: metodoPago === 'transferencia' ? (bancoDestino || undefined) : undefined,
       transferencia_referencia: metodoPago === 'transferencia' ? (numeroComprobanteTransf.trim() || undefined) : undefined,
       tarjeta_red: metodoPago === 'tarjeta' ? (redTarjeta || undefined) : undefined,
-      usuario_id: currentMesero?.id,
+      usuario_id: getUsuarioId(),
     })) {
+      if (montoAjuste > 0) {
+        try {
+          await agregarVentaMovimiento({
+            venta_id: venta.id,
+            tipo: 'ajuste',
+            monto: montoAjuste,
+            motivo: motivoAjustePago.trim(),
+            usuario_id: getUsuarioId(),
+          });
+        } catch (e) {
+          console.error("Error al registrar ajuste", e);
+        }
+      }
       showToast.success('Pago registrado');
       setMontoPago('');
       setBancoDestino('');
       setNumeroComprobanteTransf('');
       setRedTarjeta('');
+      setAjustarVentaPago(false);
+      setMotivoAjustePago('');
     }
   };
 
   const handleAjuste = async () => {
     const monto = parseFloat(montoAjuste);
     if (!monto) { showToast.error('Ingresa un monto (positivo para aumentar, negativo para reducir)'); return; }
-    if (await registrar({ tipo: 'ajuste', monto, motivo: motivoAjuste.trim() || undefined, usuario_id: currentMesero?.id })) {
+    if (await registrar({ tipo: 'ajuste', monto, motivo: motivoAjuste.trim() || undefined, usuario_id: getUsuarioId() })) {
       showToast.success('Ajuste registrado');
       setMontoAjuste('');
       setMotivoAjuste('');
@@ -258,9 +321,15 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
 
   const handleFacturar = async () => {
     if (!numeroFactura.trim()) { showToast.error('Ingresa el número de factura'); return; }
-    if (await registrar({ tipo: 'anclar', numero_factura: numeroFactura.trim(), usuario_id: currentMesero?.id })) {
+    if (await registrar({ 
+      tipo: 'anclar', 
+      numero_factura: numeroFactura.trim(), 
+      pagos_asociados: pagosSeleccionados.size > 0 ? Array.from(pagosSeleccionados) : undefined,
+      usuario_id: getUsuarioId() 
+    })) {
       showToast.success('Venta facturada');
       setNumeroFactura('');
+      setPagosSeleccionados(new Set());
     }
   };
 
@@ -270,7 +339,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       showToast.error('Ingresa un monto de reembolso válido');
       return;
     }
-    if (await registrar({ tipo: 'reembolso', monto, motivo: motivoReembolso.trim() || undefined, usuario_id: currentMesero?.id })) {
+    if (await registrar({ tipo: 'reembolso', monto, motivo: motivoReembolso.trim() || undefined, usuario_id: getUsuarioId() })) {
       showToast.success('Reembolso registrado');
       setMontoReembolso('');
       setMotivoReembolso('');
@@ -278,7 +347,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   };
 
   const handleMarcarCredito = async () => {
-    if (await registrar({ tipo: 'marcar_credito', motivo: motivoCredito.trim() || undefined, usuario_id: currentMesero?.id })) {
+    if (await registrar({ tipo: 'marcar_credito', motivo: motivoCredito.trim() || undefined, usuario_id: getUsuarioId() })) {
       showToast.success('Venta marcada como crédito');
       setMotivoCredito('');
     }
@@ -286,7 +355,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
 
   const handleComentario = async () => {
     if (!textoComentario.trim()) { showToast.error('Escribe un comentario'); return; }
-    if (await registrar({ tipo: 'comentario', motivo: textoComentario.trim(), usuario_id: currentMesero?.id })) {
+    if (await registrar({ tipo: 'comentario', motivo: textoComentario.trim(), usuario_id: getUsuarioId() })) {
       showToast.success('Comentario agregado');
       setTextoComentario('');
     }
@@ -294,7 +363,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
 
   const handleAnular = async () => {
     if (!motivoAnulacion.trim()) { showToast.error('Ingresa el motivo de anulación'); return; }
-    if (await registrar({ tipo: 'anular', motivo: motivoAnulacion.trim(), usuario_id: currentMesero?.id })) {
+    if (await registrar({ tipo: 'anular', motivo: motivoAnulacion.trim(), usuario_id: getUsuarioId() })) {
       showToast.success('Venta anulada');
       setMotivoAnulacion('');
     }
@@ -328,7 +397,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         tipo: 'comentario',
         motivo: file.name,
         comprobante_url: url,
-        usuario_id: currentMesero?.id,
+        usuario_id: getUsuarioId(),
       });
       showToast.success('Documento adjuntado');
     } catch (e) {
@@ -371,52 +440,88 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
         {/* Card de resumen del Header de Venta */}
-        <div className="rounded-2xl border border-border bg-card shadow-xs p-5 flex flex-col gap-4">
-          {/* Bloque 1: Referencia + Badges (arriba) y Fecha de creación (debajo) */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base font-extrabold text-foreground truncate">{venta.referencia || '—'}</span>
-              </div>
+        <Card className="gap-0 py-0 overflow-visible">
+          {/* Bloque 1: Identidad — referencia sola arriba; fecha + badges comparten fila abajo */}
+          <div className="flex flex-col gap-1.5 px-5 py-4">
+            <CardTitle className="text-sm font-extrabold line-clamp-2">{venta.referencia || '—'}</CardTitle>
 
-              {/* Badges de estado (Origen + Tipo + Facturado + Anulado) */}
-              <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-muted-foreground shrink-0">
+                Creada el {dayjs(venta.created_at).format('DD MMM YYYY, HH:mm')}
+              </span>
+
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <button
+                  type="button"
+                  onClick={handleVerificarSync}
+                  disabled={checkingSync}
+                  title="Verificar si esta venta está sincronizada en Supabase"
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50",
+                    syncResult === 'ok' && "border-emerald-200 text-emerald-700 bg-emerald-50",
+                    syncResult === 'reintentado' && "border-amber-200 text-amber-700 bg-amber-50",
+                    syncResult === 'error' && "border-red-200 text-red-700 bg-red-50",
+                    !syncResult && "border-border text-muted-foreground hover:bg-muted/40"
+                  )}
+                >
+                  {checkingSync ? (
+                    <ArrowsClockwise size={12} weight="bold" className="animate-spin" />
+                  ) : syncResult === 'ok' ? (
+                    <CloudCheck size={12} weight="bold" />
+                  ) : syncResult === 'error' ? (
+                    <CloudWarning size={12} weight="bold" />
+                  ) : (
+                    <ArrowsClockwise size={12} weight="bold" />
+                  )}
+                  {checkingSync
+                    ? 'Verificando...'
+                    : syncResult === 'ok'
+                      ? 'Sincronizada'
+                      : syncResult === 'reintentado'
+                        ? 'Reenviada'
+                        : syncResult === 'error'
+                          ? 'Error de sync'
+                          : 'Verificar sync'}
+                </button>
                 {(() => {
                   const OrigenIcon = ORIGEN_ICON[venta.origen];
                   return (
-                    <Badge variant="outline" className={cn("font-bold text-xs px-2 py-0.5 gap-1", ORIGEN_CLASSES[venta.origen])}>
+                    <Badge variant="outline" className={cn("font-bold", ORIGEN_CLASSES[venta.origen])}>
                       <OrigenIcon size={12} weight="bold" /> {ORIGEN_LABEL[venta.origen]}
                     </Badge>
                   );
                 })()}
-                <Badge variant="outline" className={cn("font-bold text-xs px-2 py-0.5",
-                  venta.tipo === 'credito' ? "border-rose-200 text-rose-700 bg-rose-50" : "border-border text-muted-foreground")}>
-                  {venta.tipo === 'credito' ? <CreditCard size={12} weight="fill" className="mr-1" /> : null} {venta.tipo === 'credito' ? 'Crédito' : 'Directa'}
-                </Badge>
-                {item.facturado && <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50 font-bold text-xs px-2 py-0.5"><Receipt size={12} weight="fill" className="mr-1" /> Facturado</Badge>}
+                {venta.tipo === 'credito' && (
+                  <Badge variant="outline" className="font-bold border-rose-200 text-rose-700 bg-rose-50">
+                    <CreditCard size={12} weight="fill" /> Crédito
+                  </Badge>
+                )}
+                {item.facturado && (
+                  <Badge variant="outline" className="font-bold border-emerald-200 text-emerald-700 bg-emerald-50">
+                    <Receipt size={12} weight="fill" /> Facturado
+                  </Badge>
+                )}
                 {item.anulado && (
-                  <div className="flex items-center gap-1.5 bg-destructive/10 rounded-full pr-1">
-                    <Badge variant="destructive" className="font-bold text-xs px-2 py-0.5 border-0"><Prohibit size={12} weight="fill" className="mr-1" /> Anulado</Badge>
-                    <button
+                  <div className="flex items-center gap-1 bg-destructive/10 rounded-full pr-0.5">
+                    <Badge variant="destructive" className="font-bold border-0"><Prohibit size={12} weight="fill" /> Anulado</Badge>
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-5 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
                       onClick={() => setConfirmDeleteVenta(true)}
-                      className="p-1 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors cursor-pointer mr-0.5"
                       title="Borrar definitivamente"
                     >
-                      <Trash size={14} weight="bold" />
-                    </button>
+                      <Trash size={13} weight="bold" />
+                    </Button>
                   </div>
                 )}
               </div>
             </div>
-
-            <span className="text-xs font-semibold text-muted-foreground">
-              Creada el {dayjs(venta.created_at).format('DD MMM YYYY, HH:mm')}
-            </span>
           </div>
 
-          {/* Bloque 2: Monto de venta -------------- Saldo */}
-          <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-muted/40 border border-border/60">
+          {/* Bloque 2: Montos — monto de venta y saldo, dato financiero clave, con más peso visual */}
+          <div className="flex items-center justify-between gap-4 px-5 py-4 bg-muted/40">
             <div className="flex flex-col gap-0.5">
               <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Monto de Venta</span>
               <span className="text-2xl font-black text-foreground tracking-tight">${item.montoTotal.toFixed(2)}</span>
@@ -425,27 +530,24 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Saldo</span>
               {item.saldo > 0.01 ? (
-                <span className="text-sm font-black text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                <span className="font-black text-sm text-amber-600">
                   ${item.saldo.toFixed(2)}
                 </span>
               ) : item.saldo < -0.01 ? (
-                <span className="text-sm font-black text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                <span className="font-black text-sm text-blue-600">
                   Excedente ${Math.abs(item.saldo).toFixed(2)}
                 </span>
               ) : (
-                <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                <span className="font-black text-sm text-emerald-600">
                   Saldado ($0.00)
                 </span>
               )}
             </div>
           </div>
 
-          {/* Bloque 3: Datos del Cliente */}
-          <VentaClienteCard venta={venta} />
-
-          {/* Bloque 3.5: Motivo de Anulación */}
+          {/* Motivo de Anulación: crítico cuando aplica, pegado al bloque financiero */}
           {item.anulado && item.motivoAnulacion && (
-            <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/50">
+            <div className="flex flex-col gap-1.5 px-5 py-3 bg-red-50 dark:bg-red-950/30 border-t border-red-100 dark:border-red-900/50">
               <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
                 <Prohibit size={14} weight="bold" />
                 <span className="text-[10px] font-extrabold uppercase tracking-wider">Motivo de Anulación</span>
@@ -456,29 +558,48 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             </div>
           )}
 
-          {/* Bloque 4: Archivos / Documentos en pequeñas cards rectangulares con placeholder */}
-          <div className="flex flex-col gap-2">
-            <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">
-              Archivos ({item.documentosAdjuntos.length})
-            </span>
+          {/* Bloque 3: Cliente, colapsable — fila delgada, sin look de input */}
+          <Collapsible open={clienteAbierto} onOpenChange={setClienteAbierto} className="border-t border-border">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center justify-between gap-2 w-full px-5 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserIcon size={14} className="text-muted-foreground shrink-0" />
+                  <span className="text-xs font-extrabold text-foreground truncate">
+                    {venta.cliente_nombre || 'Sin cliente'}
+                  </span>
+                </div>
+                <CaretDown size={14} className={cn("text-muted-foreground shrink-0 transition-transform", clienteAbierto && "rotate-180")} />
+              </button>
+            </CollapsibleTrigger>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <CollapsibleContent>
+              <div className="px-5 pb-4 select-text">
+                <VentaClienteCard venta={venta} />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Bloque 4: Archivos, minimalista — solo lista + link añadir, sin grid de tarjetas */}
+          <div className="flex flex-col gap-2 px-5 py-4 border-t border-border">
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {item.documentosAdjuntos.map((doc) => (
                 <div
                   key={doc.id}
-                  className="group relative flex items-center justify-between p-2 rounded-xl bg-muted/50 border border-border text-xs font-bold transition-all hover:bg-muted hover:border-primary/40 shadow-2xs"
+                  className="group relative flex items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted transition-colors"
                 >
                   <a
                     href={resolverComprobanteUrl(doc.url)}
                     target="_blank"
                     rel="noreferrer"
                     title={doc.nombre}
-                    className="flex items-center gap-2 min-w-0 flex-1 text-foreground hover:text-primary transition-colors"
+                    className="flex items-center gap-1.5 min-w-0 flex-1 text-muted-foreground hover:text-primary transition-colors"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <Paperclip size={14} weight="bold" />
-                    </div>
-                    <span className="truncate text-[11px] font-extrabold">{doc.nombre}</span>
+                    <Paperclip size={13} className="shrink-0" />
+                    <span className="truncate text-[11px] font-semibold">{doc.nombre}</span>
                   </a>
 
                   {!item.anulado && (
@@ -487,23 +608,22 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                       onClick={() => setDocToDelete(doc)}
                       disabled={uploadingDocumento}
                       title="Eliminar archivo"
-                      className="p-1 rounded-md text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer shrink-0 ml-1"
+                      className="shrink-0 p-0.5 rounded text-muted-foreground/50 hover:text-destructive hover:bg-background transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                     >
-                      <Trash size={13} weight="bold" />
+                      <Trash size={12} />
                     </button>
                   )}
                 </div>
               ))}
 
-              {/* Placeholder rectangular para añadir archivo */}
               {!item.anulado && (
                 <label className={cn(
-                  "flex items-center justify-center gap-2 p-2 rounded-xl border border-dashed border-border bg-muted/20 text-xs font-bold text-muted-foreground cursor-pointer hover:bg-muted/50 hover:border-primary/50 hover:text-primary transition-all shadow-2xs min-h-[38px]",
+                  "flex items-center justify-center gap-1.5 p-2 rounded-lg border border-dashed border-border text-muted-foreground cursor-pointer hover:bg-muted/40 hover:text-primary hover:border-primary/50 transition-colors",
                   uploadingDocumento && "opacity-50 pointer-events-none"
                 )}>
-                  <Plus size={14} weight="bold" />
-                  <span className="text-[11px] font-bold">
-                    {uploadingDocumento ? 'Subiendo...' : 'Añadir archivo'}
+                  <Plus size={13} />
+                  <span className="text-[11px] font-semibold">
+                    {uploadingDocumento ? 'Subiendo...' : 'Añadir'}
                   </span>
                   <input
                     type="file"
@@ -518,7 +638,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               )}
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Dialog de confirmación para eliminar documento */}
         <Dialog open={!!docToDelete} onOpenChange={(open) => { if (!open) setDocToDelete(null); }}>
@@ -590,6 +710,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               key={m.id}
               ventaId={venta.id}
               movimiento={m}
+              allMovimientos={movimientos}
               icon={MOVIMIENTO_ICON[m.tipo]}
               label={MOVIMIENTO_LABEL[m.tipo]}
               colorClasses={MOVIMIENTO_COLOR[m.tipo]}
@@ -706,6 +827,28 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                     </Select>
                   </div>
                 )}
+
+                <div className="col-span-2 flex flex-col gap-2 mt-2 pt-2 border-t border-border/50">
+                  <label className="flex items-center gap-2 cursor-pointer w-fit">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                      checked={ajustarVentaPago}
+                      onChange={(e) => setAjustarVentaPago(e.target.checked)}
+                    />
+                    <span className="text-xs font-bold text-foreground select-none">Ajustar venta para evitar excedente</span>
+                  </label>
+                  {ajustarVentaPago && (
+                    <div className="flex flex-col gap-1 mt-1">
+                      <span className="text-[11px] font-bold text-muted-foreground">Motivo del ajuste</span>
+                      <Input
+                        type="text" placeholder="Ej. Propina, recargo adicional..." value={motivoAjustePago}
+                        onChange={(e) => setMotivoAjustePago(e.target.value)}
+                        className="h-9 text-xs font-bold"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -731,13 +874,46 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             )}
 
             {accionActiva === 'anclar' && (
-              <div className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold text-muted-foreground">Número de factura</span>
-                <Input
-                  type="text" placeholder="Ej. F-001-00023" value={numeroFactura}
-                  onChange={(e) => setNumeroFactura(e.target.value)}
-                  className="h-9 text-xs font-bold"
-                />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-bold text-muted-foreground">Número de factura</span>
+                  <Input
+                    type="text" placeholder="Ej. F-001-00023" value={numeroFactura}
+                    onChange={(e) => setNumeroFactura(e.target.value)}
+                    className="h-9 text-xs font-bold"
+                  />
+                </div>
+                
+                {(() => {
+                  const pagosDisponibles = movimientos.filter(m => m.tipo === 'pago' && !m.anulado && m.monto);
+                  if (pagosDisponibles.length === 0) return null;
+                  
+                  return (
+                    <div className="flex flex-col gap-2 p-3 bg-muted/30 border border-border/50 rounded-xl mt-1">
+                      <span className="text-[11px] font-bold text-foreground">Pagos asociados a esta factura (opcional)</span>
+                      <div className="flex flex-col gap-2">
+                        {pagosDisponibles.map(pago => (
+                          <label key={pago.id} className="flex items-center gap-2 cursor-pointer w-fit group">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                              checked={pagosSeleccionados.has(pago.id)}
+                              onChange={(e) => {
+                                const next = new Set(pagosSeleccionados);
+                                if (e.target.checked) next.add(pago.id);
+                                else next.delete(pago.id);
+                                setPagosSeleccionados(next);
+                              }}
+                            />
+                            <span className="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors select-none">
+                              ${pago.monto?.toFixed(2)} - {pago.metodo_pago} {dayjs(pago.fecha).format('(DD/MM HH:mm)')}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

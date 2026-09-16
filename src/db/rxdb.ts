@@ -394,6 +394,7 @@ export interface RxVentaMovimiento {
   transferencia_referencia?: string
   motivo?: string
   numero_factura?: string
+  pagos_asociados?: string[]
   comprobante_url?: string
   fecha: string
   usuario_id?: string
@@ -2485,6 +2486,39 @@ export async function updateRxVenta(id: string, patch: Partial<Pick<RxVenta, 'do
   return result
 }
 
+// Diagnóstico manual para el botón "Verificar sincronización" del Centro de
+// Ventas: consulta Supabase directo (bypasea el estado interno de RxDB, que
+// puede creer erróneamente que el push fue exitoso) y, si la fila no existe
+// ahí, fuerza un reintento tocando `_modified` para que RxDB la vuelva a
+// encolar en el próximo ciclo de push. Loguea cada paso porque el bug que
+// motivó esto (una venta "atascada" en un solo dispositivo) no dejó ningún
+// rastro en consola — sin log explícito, es indetectable para el usuario.
+export async function verificarSyncVenta(ventaId: string): Promise<{ enSupabase: boolean; reintentado: boolean; error?: string }> {
+  const db = await initVerticalRxDb()
+  console.log(`[SyncCheck ventas] Verificando venta ${ventaId} contra Supabase...`)
+  try {
+    const { data, error } = await supabase.from('ventas').select('id').eq('id', ventaId).maybeSingle()
+    if (error) {
+      console.error(`[SyncCheck ventas] Error consultando Supabase:`, error.message, error.code)
+      return { enSupabase: false, reintentado: false, error: error.message }
+    }
+    if (data) {
+      console.log(`[SyncCheck ventas] Venta ${ventaId} SÍ existe en Supabase, está sincronizada.`)
+      return { enSupabase: true, reintentado: false }
+    }
+
+    console.warn(`[SyncCheck ventas] Venta ${ventaId} NO existe en Supabase. Forzando reintento de push...`)
+    const doc = await db.ventas.findOne(ventaId).exec(true)
+    await doc.update({ $set: { _modified: new Date().toISOString() } } as any)
+    console.log(`[SyncCheck ventas] Venta ${ventaId} re-encolada para push.`)
+    return { enSupabase: false, reintentado: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`[SyncCheck ventas] Excepción verificando venta ${ventaId}:`, msg)
+    return { enSupabase: false, reintentado: false, error: msg }
+  }
+}
+
 // Agrega un movimiento al historial de una venta existente — pago,
 // reembolso, ajuste (aumentar/disminuir el monto), o cambio de estado
 // (anclar/facturar/anular). Nunca edita movimientos previos, solo agrega al
@@ -2508,6 +2542,7 @@ export async function agregarVentaMovimiento(
     transferencia_referencia: input.transferencia_referencia,
     motivo: input.motivo,
     numero_factura: input.numero_factura,
+    pagos_asociados: input.pagos_asociados,
     comprobante_url: input.comprobante_url,
     fecha: input.fecha || new Date().toISOString(),
     usuario_id: input.usuario_id,

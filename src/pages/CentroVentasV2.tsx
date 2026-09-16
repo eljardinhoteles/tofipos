@@ -10,6 +10,7 @@ import { useVentasConMovimientos, type VentaConMovimientos } from '../hooks/useV
 import type { VentaOrigen, VentaTipo } from '../db/rxdb';
 import { VentaDetalleAcciones } from '../components/CentroVentas/VentaDetalleAcciones';
 import { RegistrarVentaPanel } from '../components/CentroVentas/RegistrarVentaPanel';
+import { DashboardControlDia } from '../components/CentroVentas/DashboardControlDia';
 
 const ORIGEN_LABEL: Record<VentaOrigen, string> = {
   mesa: 'Mesa',
@@ -105,6 +106,7 @@ export default function CentroVentasV2() {
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedVentaId, setSelectedVentaId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [registrando, setRegistrando] = useState(false);
 
   const [displayLimit, setDisplayLimit] = useState(30);
@@ -180,11 +182,16 @@ export default function CentroVentasV2() {
     [items, selectedVentaId]
   );
 
+  const selectedDateGroup = useMemo(
+    () => groupedByDay.find(g => g.label === selectedDate) ?? null,
+    [groupedByDay, selectedDate]
+  );
+
   return (
     <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Panel 1: buscador + filtros + lista de ventas */}
-        <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 bg-card", (selected || registrando) ? "hidden md:flex md:w-2/5" : "flex-1")}>
+        <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 bg-card", (selected || registrando || selectedDate) ? "hidden md:flex md:w-2/5" : "flex-1")}>
           <div className="p-3 border-b border-border shrink-0 flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -235,7 +242,7 @@ export default function CentroVentasV2() {
 
               <button
                 type="button" title="Registrar venta"
-                onClick={() => { setSelectedVentaId(null); setRegistrando(true); }}
+                onClick={() => { setSelectedVentaId(null); setSelectedDate(null); setRegistrando(true); }}
                 className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs active:scale-95 transition-all cursor-pointer shrink-0">
                 <Plus size={16} weight="bold" />
               </button>
@@ -320,7 +327,7 @@ export default function CentroVentasV2() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto hide-scrollbar">
             {filteredItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center px-4">
                 <span className="text-xs font-bold text-muted-foreground">No hay ventas</span>
@@ -329,9 +336,13 @@ export default function CentroVentasV2() {
             ) : (
               groupedByDay.map(group => (
                 <div key={group.label} className="flex flex-col">
-                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider px-4 py-2 bg-muted/60 sticky top-0">
+                  <button
+                    type="button"
+                    onClick={() => { setRegistrando(false); setSelectedVentaId(null); setSelectedDate(group.label); }}
+                    className="text-[10px] font-extrabold text-muted-foreground hover:text-foreground uppercase tracking-wider px-4 py-2 bg-muted/60 sticky top-0 text-left transition-colors cursor-pointer w-full"
+                  >
                     {group.label}
-                  </span>
+                  </button>
                   {group.items.map(item => {
                     const active = item.venta.id === selectedVentaId;
                     const OrigenIcon = ORIGEN_ICON[item.venta.origen];
@@ -340,7 +351,7 @@ export default function CentroVentasV2() {
                       <button
                         key={item.venta.id}
                         type="button"
-                        onClick={() => { setRegistrando(false); setSelectedVentaId(item.venta.id); }}
+                        onClick={() => { setRegistrando(false); setSelectedDate(null); setSelectedVentaId(item.venta.id); }}
                         className={cn(
                           "w-full flex items-stretch gap-0 text-left border-b border-border/60 transition-colors cursor-pointer",
                           active ? "bg-primary/10" : "hover:bg-muted"
@@ -442,6 +453,25 @@ export default function CentroVentasV2() {
               </button>
             </div>
             <VentaDetalleAcciones item={selected} />
+          </main>
+        ) : selectedDateGroup ? (
+          <main className="w-full md:w-3/5 shrink-0 flex flex-col min-h-0 relative">
+            <div className="md:hidden flex items-center p-3 border-b border-border bg-card shrink-0">
+              <button 
+                onClick={() => setSelectedDate(null)}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={18} />
+                <span className="text-sm font-semibold">Volver a la lista</span>
+              </button>
+            </div>
+            <DashboardControlDia 
+              date={selectedDateGroup.label} 
+              items={selectedDateGroup.items}
+              onSelectVenta={(id) => {
+                setSelectedDate(null);
+                setSelectedVentaId(id);
+              }}
+            />
           </main>
         ) : (
           <main className="hidden md:flex flex-1 min-w-0 flex-col items-center justify-center gap-3 text-center px-6">
