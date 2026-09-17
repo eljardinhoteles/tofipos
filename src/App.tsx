@@ -6,13 +6,41 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { setSuspendHooks } from './db/database';
 import { supabase } from './lib/supabase';
 import { initVerticalRxDb, forceSyncAll, waitForInitialSync } from './db/rxdb';
-import { ArrowsClockwise } from '@phosphor-icons/react';
+import {
+  ArrowsClockwise,
+  SignOut,
+  SquaresFour,
+  Receipt,
+  CalendarCheck,
+  CurrencyDollar,
+  Users,
+  Bag,
+  ChartBar,
+} from '@phosphor-icons/react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { showToast } from '@/lib/toast';
 import { setOrgCache } from './lib/orgCache';
+
+const brandModules = [
+  { label: 'Mesas', icon: SquaresFour },
+  { label: 'Órdenes', icon: Receipt },
+  { label: 'Reservas', icon: CalendarCheck },
+  { label: 'Centro de Ventas', icon: CurrencyDollar },
+  { label: 'Clientes', icon: Users },
+  { label: 'Productos', icon: Bag },
+  { label: 'Métricas', icon: ChartBar },
+];
 
 export default function App() {
   const {
@@ -190,102 +218,172 @@ export default function App() {
       </div>
     );
   } else if (!activeOrganizationId) {
+    const brandPanel = (
+      <div className="relative hidden md:flex md:w-1/2 lg:w-[45%] flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-15"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 20% 20%, currentColor 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        />
+        <div className="relative flex items-center gap-2.5">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-primary-foreground/15">
+            <img src="/Icon-app.webp" alt="TofiPOS" className="w-6 h-6 object-contain" />
+          </div>
+          <span className="font-heading text-base font-semibold tracking-tight">TofiPOS</span>
+        </div>
+        <div className="relative flex flex-col gap-5 max-w-sm">
+          <h1 className="font-heading text-3xl font-semibold leading-tight">
+            Gestión Operativa de Restaurante &amp; Hoteles
+          </h1>
+          <div className="flex flex-wrap gap-2.5">
+            {brandModules.map(({ label, icon: ModIcon }) => (
+              <div
+                key={label}
+                title={label}
+                className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/10"
+              >
+                <ModIcon size={18} weight="regular" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="relative text-xs text-primary-foreground/60">
+          © {new Date().getFullYear()} TofiPOS
+        </p>
+      </div>
+    );
+
     if (!adminUser) {
       content = (
-        <div className="h-screen w-screen flex items-center justify-center p-6 bg-background">
-          <div className="bg-card p-8 rounded-2xl border border-border shadow-xl w-full max-w-sm flex flex-col gap-5">
-            <div className="flex flex-col gap-1 text-center">
-              <h2 className="font-extrabold text-lg text-foreground">Configuración POS</h2>
-              <p className="text-xs text-muted-foreground">
-                Inicia sesión con tu cuenta de administrador para vincular este dispositivo.
-              </p>
+        <div className="flex h-screen w-screen bg-background">
+          {brandPanel}
+          <div className="flex w-full md:w-1/2 lg:w-[55%] items-center justify-center p-6">
+            <div className="w-full max-w-sm flex flex-col gap-6">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="font-heading text-xl font-medium text-foreground">Configuración POS</h2>
+                <p className="text-sm text-muted-foreground">
+                  Inicia sesión con tu cuenta de administrador para vincular este dispositivo.
+                </p>
+              </div>
+              <form onSubmit={handleAdminLogin} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="admin-email">Correo</Label>
+                  <Input
+                    id="admin-email"
+                    type="email"
+                    required
+                    placeholder="admin@tuempresa.com"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="admin-password">Contraseña</Label>
+                  <Input
+                    id="admin-password"
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <Button type="submit" disabled={isAdminSubmitting} className="mt-2 w-full">
+                  {isAdminSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
+                </Button>
+              </form>
             </div>
-            <form onSubmit={handleAdminLogin} className="flex flex-col gap-3">
-              <Input
-                type="email"
-                required
-                placeholder="Correo admin"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                className="h-9 text-xs"
-              />
-              <Input
-                type="password"
-                required
-                placeholder="Contraseña"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="h-9 text-xs"
-              />
-              <Button type="submit" disabled={isAdminSubmitting} className="mt-2">
-                Iniciar Sesión Admin
-              </Button>
-            </form>
           </div>
         </div>
       );
     } else {
       content = (
-        <div className="h-screen w-screen flex items-center justify-center p-6 bg-background">
-          <div className="bg-card p-8 rounded-2xl border border-border shadow-xl w-full max-w-sm flex flex-col gap-5">
-            <div className="flex flex-col gap-1 text-center">
-              <h2 className="font-extrabold text-lg text-foreground">
-                {isCreatingOrg || orgs.length === 0 ? 'Crear Organización' : 'Seleccionar Hotel'}
-              </h2>
-            </div>
-            {loadingOrgs ? (
-              <div className="py-8 text-center text-xs font-semibold text-muted-foreground">Cargando...</div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {isCreatingOrg || orgs.length === 0 ? (
-                  <>
-                    <Input
-                      type="text"
-                      required
-                      placeholder="Nombre del Hotel"
-                      value={newOrgNombre}
-                      onChange={(e) => setNewOrgNombre(e.target.value)}
-                      className="h-9 text-xs"
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleCrearOrg}
-                      disabled={isAdminSubmitting}
-                      className="py-2.5"
-                    >
-                      Crear y Vincular
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <select
-                      value={selectedOrgId || ''}
-                      onChange={(e) => setSelectedOrgId(e.target.value)}
-                      className="h-10 px-3 text-xs bg-muted border border-border rounded-lg font-semibold"
-                    >
-                      {orgs.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleVincularOrg}
-                      disabled={isAdminSubmitting}
-                      className="py-2.5 rounded-lg bg-primary text-primary-foreground font-bold text-xs"
-                    >
-                      Vincular Dispositivo
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={logoutAdmin}
-                  className="py-2 text-xs font-bold text-destructive"
-                >
-                  Cerrar Sesión Admin
-                </button>
+        <div className="flex h-screen w-screen bg-background">
+          {brandPanel}
+          <div className="flex w-full md:w-1/2 lg:w-[55%] items-center justify-center p-6">
+            <div className="w-full max-w-sm flex flex-col gap-6">
+              <div className="flex flex-col gap-1.5">
+                <h2 className="font-heading text-xl font-medium text-foreground">
+                  {isCreatingOrg || orgs.length === 0 ? 'Crear organización' : 'Seleccionar establecimiento'}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {isCreatingOrg || orgs.length === 0
+                    ? 'Registra el establecimiento para vincular este dispositivo.'
+                    : 'Elige el establecimiento al que quieres vincular este dispositivo.'}
+                </p>
               </div>
-            )}
+              {loadingOrgs ? (
+                <div className="py-8 text-center text-sm font-medium text-muted-foreground">
+                  Cargando...
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {isCreatingOrg || orgs.length === 0 ? (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="org-nombre">Nombre del establecimiento</Label>
+                        <Input
+                          id="org-nombre"
+                          type="text"
+                          required
+                          placeholder="Establecimiento Ejemplo"
+                          value={newOrgNombre}
+                          onChange={(e) => setNewOrgNombre(e.target.value)}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleCrearOrg}
+                        disabled={isAdminSubmitting}
+                        className="w-full"
+                      >
+                        Crear y vincular
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Establecimiento</Label>
+                        <Select value={selectedOrgId || undefined} onValueChange={setSelectedOrgId}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Selecciona un establecimiento" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {orgs.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleVincularOrg}
+                        disabled={isAdminSubmitting}
+                        className="w-full"
+                      >
+                        Vincular dispositivo
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={logoutAdmin}
+                    className="w-full text-destructive hover:text-destructive"
+                  >
+                    <SignOut size={16} />
+                    Cerrar sesión admin
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       );

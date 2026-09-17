@@ -200,8 +200,9 @@ export function generarComandaCocina(
     t += `${'='.repeat(48)}\n\n`;
   }
 
-  const itemsCocina = items.filter(i => !i.es_bebida);
-  const itemsBebida = items.filter(i => i.es_bebida);
+  const itemsActivos = items.filter(i => !i.anulado);
+  const itemsCocina = itemsActivos.filter(i => !i.es_bebida);
+  const itemsBebida = itemsActivos.filter(i => i.es_bebida);
 
   function imprimirGrupo(groupItems: PrintableItem[]): string {
     let s = '';
@@ -367,10 +368,10 @@ export function generarPrecuenta(
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
   }
   if (comanda.cliente && comanda.cliente !== 'Consumidor Final') {
-    t += `Huesped: ${comanda.cliente}\n`;
+    t += `Cliente: ${comanda.cliente}\n`;
   }
   if (comanda.mesero) {
-    t += `Mesero: ${comanda.mesero}\n`;
+    t += `Usuario: ${comanda.mesero}\n`;
   }
   t += `${'-'.repeat(W)}\n`;
 
@@ -643,7 +644,7 @@ export function generarTicketPago(
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
   }
-  t += `Mesero: ${comanda.mesero || 'Genérico'}\n`;
+  t += `Usuario: ${comanda.mesero || 'Genérico'}\n`;
   t += `Cliente: ${comanda.cliente || 'Consumidor Final'}\n`;
 
   const activeComandaClient = comanda.cliente_id;
@@ -750,7 +751,7 @@ export function generarPrecuentaDividida(
     t += `Cliente que paga: ${nombrePagador.toUpperCase()}\n`;
   }
   if (comanda.mesero) {
-    t += `Mesero: ${comanda.mesero}\n`;
+    t += `Usuario: ${comanda.mesero}\n`;
   }
   t += `${'-'.repeat(W)}\n`;
 

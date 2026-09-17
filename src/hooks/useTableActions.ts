@@ -3,9 +3,11 @@ import { showToast } from '@/lib/toast';
 import { useUI } from '../context/UIContext';
 import { createRxComanda, updateRxComanda, updateRxMesa, getVerticalRxDb } from '../db/rxdb';
 import { isOperativeComanda } from '../db/comandaState';
+import { useAuth } from '../context/AuthContext';
 
 export function useTableActions() {
   const { openConfirm, openPrompt } = useUI();
+  const { currentMesero, adminUser } = useAuth();
 
   const getOrgId = () => localStorage.getItem('pos_active_org_id') || '';
 
@@ -94,7 +96,7 @@ export function useTableActions() {
           folio: nextFolio,
           mesa_id: mesa.id,
           mesa_nombre: mesa.nombre,
-          mesero: 'Mesero Genérico',
+          mesero: currentMesero?.nombre || (adminUser ? (adminUser.email?.split('@')[0] || 'Administrador') : 'Sistema'),
           cliente: finalCliente,
           cliente_id: finalClientId,
           habitacion_cuenta_id: habitacionCuentaId,

@@ -155,6 +155,7 @@ const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
 export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const { currentMesero, adminUser } = useAuth();
   const getUsuarioId = () => currentMesero?.id || adminUser?.id;
+  const esAdmin = !!adminUser || currentMesero?.rol === 'admin';
   
   const { bancos, redesTarjeta } = useMetodosPagoConfig();
   const { venta, movimientos } = item;
@@ -514,16 +515,18 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                 {item.anulado && (
                   <div className="flex items-center gap-1 bg-destructive/10 rounded-full pr-0.5">
                     <Badge variant="destructive" className="font-bold border-0"><Prohibit size={12} weight="fill" /> Anulado</Badge>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-5 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => setConfirmDeleteVenta(true)}
-                      title="Borrar definitivamente"
-                    >
-                      <Trash size={13} weight="bold" />
-                    </Button>
+                    {esAdmin && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-5 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={() => setConfirmDeleteVenta(true)}
+                        title="Borrar definitivamente"
+                      >
+                        <Trash size={13} weight="bold" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

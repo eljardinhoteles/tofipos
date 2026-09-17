@@ -14,6 +14,7 @@ import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
 import { showToast } from'@/lib/toast';
 import { useUI } from'../../../context/UIContext';
+import { useAuth } from '../../../context/AuthContext';
 
 interface SidebarReceiptViewerProps {
  selectedMesa: Mesa;
@@ -42,6 +43,8 @@ export function SidebarReceiptViewer({
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
  const { openConfirm } = useUI();
+ const { currentMesero, adminUser } = useAuth();
+ const esAdmin = !!adminUser || currentMesero?.rol === 'admin';
 
  useEffect(() => {
  let alive = true;
@@ -329,7 +332,7 @@ export function SidebarReceiptViewer({
  Ver Pagos
  </Button>
  )}
- {isAnulada && (
+ {isAnulada && esAdmin && (
     <Button
       variant="destructive"
       className="w-full font-bold"

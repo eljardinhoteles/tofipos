@@ -480,7 +480,9 @@ export function SidebarDetails({
  withBebida(comandaItems),
  selectedMesa.nombre,
  false,
- linkedMesa?.nombre
+ linkedMesa?.nombre,
+ false,
+ withBebida(itemsAnuladosDesdeUltimaConfirmacion)
  );
  setPreviewContent(content);
  setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
@@ -491,6 +493,7 @@ export function SidebarDetails({
  mesaNombre: selectedMesa.nombre,
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
+ itemsAnulados: withBebida(itemsAnuladosDesdeUltimaConfirmacion),
  }).catch(err => console.warn('print server offline', err));
  });
  setPreviewOpened(true);
