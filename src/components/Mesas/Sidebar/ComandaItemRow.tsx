@@ -11,6 +11,8 @@ export interface ComandaItemData {
  pagado_cantidad?: number;
  anulado?: boolean;
  anulado_motivo?: string | null;
+ cortesia_cantidad?: number | null;
+ cortesia_motivo?: string | null;
 }
 
 interface ComandaItemRowProps {
@@ -28,6 +30,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  const pagado = item.pagado_cantidad || 0;
  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
  const isAnulado = !!item.anulado;
+ const isCortesia = (item.cortesia_cantidad || 0) > 0;
  const isReadOnly = !onClick;
  const isOdd = index % 2 === 1;
 
@@ -53,7 +56,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  </span>
  </div>
 
- {(item.modificadores?.length || pagado > 0 || item.cantidad > 1 || isAnulado) ? (
+ {(item.modificadores?.length || pagado > 0 || item.cantidad > 1 || isAnulado || isCortesia) ? (
  <div className="flex items-center justify-between gap-2 mt-0.5">
  <div className="flex items-center gap-1 flex-wrap">
  {item.modificadores && item.modificadores.length > 0 &&
@@ -66,6 +69,11 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  {isAnulado && (
  <span className="px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-destructive">
  ANULADO
+ </span>
+ )}
+ {isCortesia && (
+ <span className="px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-emerald-600">
+ CORTESÍA
  </span>
  )}
  {pagado > 0 && (
@@ -85,6 +93,9 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
 
  {isAnulado && item.anulado_motivo && (
  <span className="text-[10px] text-muted-foreground mt-0.5 truncate">Motivo: {item.anulado_motivo}</span>
+ )}
+ {isCortesia && item.cortesia_motivo && (
+ <span className="text-[10px] text-muted-foreground mt-0.5 truncate">Motivo: {item.cortesia_motivo}</span>
  )}
  </div>
  </div>

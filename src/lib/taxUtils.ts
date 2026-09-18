@@ -90,15 +90,21 @@ export function calcularTotalesComanda(
   // cobran: se excluyen de todos los totales derivados (subtotal, IVA,
   // saldo pendiente, montos de división, etc.) en todo el sistema.
   comandaItems.filter(item => !item.anulado).forEach(item => {
+    // Cortesía (parcial o total): esas unidades se sirvieron pero no se
+    // cobran — a diferencia de anulado, el item SÍ sigue yendo a cocina tal
+    // cual. Solo se resta la cantidad cortesía de la base de cobro.
+    const cantidadCobrable = Math.max(0, item.cantidad - (item.cortesia_cantidad || 0));
+    if (cantidadCobrable === 0) return;
+
     // 1. Obtener el MenuItem de referencia para conocer sus impuestos
     const menuItem = menuMap.get(item.item_id);
-    
+
     // 2. Obtener el IVA del producto
     const pctIva = obtenerIvaProducto(menuItem, tasaSistema);
-    
+
     // 3. Calcular montos para este item
     // Nota: Usamos item.precio que es el precio al que se registró en la comanda
-    const calculo = calcularPreciosItem(item.precio, item.cantidad, pctIva, preciosConIvaGlobal);
+    const calculo = calcularPreciosItem(item.precio, cantidadCobrable, pctIva, preciosConIvaGlobal);
     
     subtotalNeto += calculo.subtotalNeto;
     ivaTotal += calculo.ivaTotal;

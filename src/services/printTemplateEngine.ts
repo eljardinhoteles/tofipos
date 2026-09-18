@@ -386,9 +386,14 @@ export function generarPrecuenta(
   // que el cliente revise lo que va a pagar, no un registro interno.
   let subtotal = 0;
   items.filter(item => !item.anulado).forEach(item => {
-    const itemTotal = item.precio * item.cantidad;
+    const cortesiaQty = item.cortesia_cantidad || 0;
+    const cantidadCobrable = Math.max(0, item.cantidad - cortesiaQty);
+    const itemTotal = item.precio * cantidadCobrable;
     subtotal += itemTotal;
     t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
+    if (cortesiaQty > 0) {
+      t += `     * CORTESÍA (${cortesiaQty})${item.cortesia_motivo ? `: ${item.cortesia_motivo.toUpperCase()}` : ''}\n`;
+    }
     if (item.modificadores && item.modificadores.length > 0) {
       item.modificadores.forEach((mod: string) => {
         t += `     * ${mod.toUpperCase()}\n`;

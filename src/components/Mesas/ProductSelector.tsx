@@ -7,6 +7,7 @@ import { ProductModifiersModal } from'../Products/ProductModifiersModal';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
+import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
  const [modifyingItem, setModifyingItem] = useState<MenuItem | null>(null);
  const [rxComandaItems, setRxComandaItems] = useState<ComandaItem[]>([]);
+ const [recentProductIds, setRecentProductIds] = useState<string[]>(() => getRecentProductIds());
 
  const { menuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
 
@@ -104,6 +106,17 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  () => new Set(safeDbCategorias.filter(c => c.es_comida_incluida).map(c => c.nombre)),
  [safeDbCategorias]
  );
+
+ // "Usados recientemente" en ESTE dispositivo — clientes suelen repetir lo
+ // mismo, así que esto ahorra navegar categorías en pedidos largos. Solo
+ // productos que siguen existiendo y activos (uno inactivo, ej. plato del
+ // menú de huésped de ayer, no debe seguir apareciendo acá).
+ const recentItems = useMemo(() => {
+ const byId = new Map(safeMenuItems.map(i => [i.id, i]));
+ return recentProductIds
+ .map(id => byId.get(id))
+ .filter((i): i is MenuItem => !!i && i.activo !== false);
+ }, [recentProductIds, safeMenuItems]);
 
  const categories = useMemo(() => {
  // Igual que filteredItems: si ningún producto de una categoría está
@@ -215,6 +228,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  _modified: new Date().toISOString()
  });
  }
+
+ registerRecentProduct(item.id);
+ setRecentProductIds(getRecentProductIds());
  }, [activeComanda, rxComandaItems]);
 
  const handleAddProduct = useCallback(async (item: MenuItem) => {
@@ -282,31 +298,53 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
   {/* CONTENIDO PRINCIPAL */}
   <div className="flex-1 relative flex flex-col min-h-0">
-    <main className="flex-1 overflow-y-auto p-4 pb-12 relative">
+    <main className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+112px)] relative">
       {(!selectedCategory && !searchQueryDebounced) ? (
         /* HOME DE CATEGORÍAS */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('Favoritos')}
-            className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
-          >
-            <Star size={24} weight="fill" className="mb-1" />
-            <span className="font-extrabold text-[13px] text-center">Favoritos</span>
-          </button>
-          {categories.map((cat) => (
+        <div className="flex flex-col gap-5">
+          {recentItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
+                Usados recientemente
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {recentItems.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleAddProduct(item)}
+                    className="flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-xs text-foreground whitespace-nowrap">{item.nombre}</span>
+                    <span className="text-[10px] font-extrabold text-primary whitespace-nowrap">${item.precio.toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             <button
-              key={cat}
               type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={cn("h-20 flex flex-col items-center justify-center p-2 rounded-2xl border transition-colors shadow-sm cursor-pointer",
-                planCategoryNames.has(cat)
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-                  : "bg-card border-border text-foreground hover:bg-muted")}
+              onClick={() => setSelectedCategory('Favoritos')}
+              className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
             >
-              <span className="font-extrabold text-[13px] text-center line-clamp-2 px-1">{cat}</span>
+              <Star size={24} weight="fill" className="mb-1" />
+              <span className="font-extrabold text-[13px] text-center">Favoritos</span>
             </button>
-          ))}
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={cn("h-20 flex flex-col items-center justify-center p-2 rounded-2xl border transition-colors shadow-sm cursor-pointer",
+                  planCategoryNames.has(cat)
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                    : "bg-card border-border text-foreground hover:bg-muted")}
+              >
+                <span className="font-extrabold text-[13px] text-center line-clamp-2 px-1">{cat}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         /* GRID DE PRODUCTOS */

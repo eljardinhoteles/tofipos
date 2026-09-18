@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from'react';
-import { X, Plus, Printer, Trash, Minus, Check, Bed, Basket, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User } from'@phosphor-icons/react';
+import { X, Plus, Printer, Trash, Minus, Check, Bed, Basket, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User, GiftIcon } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { ComandaItemRow } from'./ComandaItemRow';
@@ -70,6 +70,12 @@ export function SidebarDetails({
  // patrón "confirmando + motivo" que MovimientoHistorialCard.tsx.
  const [anulandoItem, setAnulandoItem] = useState(false);
  const [anularMotivo, setAnularMotivo] = useState('');
+ // Mismo patrón "confirmando + motivo", para marcar cortesía (item servido
+ // pero no cobrado) — solo disponible al pedir cuenta, ver comentario en
+ // el botón. A diferencia de anular, precio pasa a 0 pero el item sigue
+ // yendo a cocina normal (no lleva flag anulado).
+ const [marcandoCortesia, setMarcandoCortesia] = useState(false);
+ const [cortesiaMotivo, setCortesiaMotivo] = useState('');
  const { currentMesero } = useAuth();
  const [showPagosModal, setShowPagosModal] = useState(false);
 
@@ -242,6 +248,25 @@ export function SidebarDetails({
  setEditingItem(null);
  };
 
+ // Cortesía: el item completo (todas sus unidades) se sirvió pero no se
+ // cobra — precio a $0, sin tocar `anulado` (cocina lo sigue viendo
+ // normal). Solo disponible al pedir cuenta — ver comentario en el botón.
+ const handleMarcarCortesia = async () => {
+ if (!editingItem) return;
+ if (!cortesiaMotivo.trim()) {
+ showToast.error('Error','Debe indicar un motivo para marcar cortesía.');
+ return;
+ }
+ await updateRxComandaItem(editingItem.id, {
+ precio: 0,
+ cortesia_cantidad: editingItem.cantidad,
+ cortesia_motivo: cortesiaMotivo.trim(),
+ });
+ setMarcandoCortesia(false);
+ setCortesiaMotivo('');
+ setEditingItem(null);
+ };
+
  const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
  const [ivaModalOpen, setIvaModalOpen] = useState(false);
  const { menuItems } = useRxMenuCatalog();
@@ -400,6 +425,14 @@ export function SidebarDetails({
 
  const itemsNuevos = useMemo(() => [...itemsRealmenteNuevos, ...itemsConCantidadExtra], [itemsRealmenteNuevos, itemsConCantidadExtra]);
  const hayItemsNuevos = itemsNuevos.length > 0;
+
+ // Si ya se marcó algún ítem como cortesía, no se puede reabrir la cuenta
+ // para volver a agregar productos — evita que se agregue algo después de
+ // haber regalado un ítem y usar ese descuento para colar otro cobro.
+ const hayCortesia = useMemo(
+ () => comandaItems.some((item: any) => (item.cortesia_cantidad || 0) > 0),
+ [comandaItems]
+ );
 
  // Ítems anulados después del último "Confirmar"/"Adicional" — se adjuntan
  // como sección final del próximo ticket de Adicional que se imprima (no
@@ -823,6 +856,8 @@ export function SidebarDetails({
  </Button>
  <Button
  variant="secondary"className="w-full font-bold text-muted-foreground bg-muted"onClick={() => onAction(selectedMesa,'reabrir')}
+ disabled={hayCortesia}
+ title={hayCortesia ?'No se puede reabrir: esta cuenta ya tiene un ítem de cortesía aplicado': undefined}
  >
  <ArrowCounterClockwise size={18} weight="bold"className="mr-1.5"/> Reabrir
  </Button>
@@ -885,6 +920,39 @@ export function SidebarDetails({
  <Button type="button"variant="ghost"size="sm"onClick={() => { setAnulandoItem(false); setAnularMotivo(''); }} className="h-8 text-xs shrink-0">
  Cancelar
  </Button>
+ </div>
+ )}
+ {/* Cortesía: solo al pedir cuenta — un item que se regala (cumpleañero,
+ guía de agencia, etc.) se decide al cerrar, no durante el servicio. El
+ item sigue yendo a cocina normal, solo cambia el cobro a $0. */}
+ {activeComanda?.estado ==='cuenta'&& !(editingItem.cortesia_cantidad > 0) && (
+ !marcandoCortesia ? (
+ <Button
+ type="button"variant="secondary"className="w-full font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100"onClick={() => setMarcandoCortesia(true)}
+ >
+ <GiftIcon size={14} className="mr-1"/> Marcar como cortesía
+ </Button>
+ ) : (
+ <div className="flex items-center gap-2">
+ <Input
+ type="text"placeholder="Motivo de cortesía"value={cortesiaMotivo}
+ onChange={(e) => setCortesiaMotivo(e.target.value)}
+ className="h-8 text-xs flex-1"/>
+ <Button type="button"size="sm"onClick={handleMarcarCortesia} className="h-8 text-xs font-bold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white">
+ Confirmar
+ </Button>
+ <Button type="button"variant="ghost"size="sm"onClick={() => { setMarcandoCortesia(false); setCortesiaMotivo(''); }} className="h-8 text-xs shrink-0">
+ Cancelar
+ </Button>
+ </div>
+ )
+ )}
+ {editingItem.cortesia_cantidad > 0 && (
+ <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col gap-0.5">
+ <span className="text-[11px] font-bold text-emerald-700">Cortesía aplicada</span>
+ {editingItem.cortesia_motivo && (
+ <span className="text-[10px] text-emerald-700/80">Motivo: {editingItem.cortesia_motivo}</span>
+ )}
  </div>
  )}
  </div>

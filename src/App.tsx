@@ -126,7 +126,8 @@ export default function App() {
     e.preventDefault();
     setIsAdminSubmitting(true);
     try {
-      await loginAdmin(adminEmail, adminPassword);
+      const { error } = await loginAdmin(adminEmail, adminPassword);
+      if (error) throw error;
     } catch (error) {
       console.error('Login admin falló:', error);
       showToast.error('Error', 'Credenciales inválidas.');

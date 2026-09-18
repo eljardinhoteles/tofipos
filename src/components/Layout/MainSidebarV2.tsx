@@ -29,9 +29,20 @@ const navItemsV2 = [
  { label:'Ajustes', to:'/v2/ajustes', icon: Gear },
 ];
 
+// Módulos ocultos del sidebar para roles operativos (mesero/cajero) —
+// solo visuales, no impide navegar ahí directamente por URL.
+const RESTRICTED_LABELS_BY_ROLE: Record<string, string[]> = {
+ mesero: ['Reservas','Métricas'],
+ cajero: ['Reservas','Métricas'],
+};
+
 export function MainSidebarV2() {
  const { currentMesero, logoutAdmin } = useAuth();
  const location = useLocation();
+ const restrictedLabels = currentMesero?.rol ? RESTRICTED_LABELS_BY_ROLE[currentMesero.rol] : undefined;
+ const visibleNavItems = restrictedLabels
+ ? navItemsV2.filter(item => !restrictedLabels.includes(item.label))
+ : navItemsV2;
  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
  online: navigator.onLine,
  supabaseOk: null,
@@ -69,7 +80,7 @@ export function MainSidebarV2() {
 
  {/* Navigation */}
  <nav className="flex-1 flex flex-col gap-2 items-center w-full">
- {navItemsV2.map((item) => {
+ {visibleNavItems.map((item) => {
  const Icon = item.icon;
  const isActive = location.pathname === item.to || (item.to !=='/v2/mesas'&& location.pathname.startsWith(item.to));
  return (
