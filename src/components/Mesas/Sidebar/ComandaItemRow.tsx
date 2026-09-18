@@ -37,7 +37,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  const content = (
  <div className="flex items-center gap-3 w-full px-4 py-3">
  {/* Badge de cantidad */}
- <div className={cn("w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0",
+ <div className={cn("w-8 h-8 rounded-md font-bold text-sm flex items-center justify-center border shrink-0",
  isAnulado ?"bg-destructive/10 border-destructive/30 text-destructive": isFullyPaid ?"bg-emerald-100 border-emerald-300 text-emerald-800":"bg-muted border-border text-foreground")}>
  {item.cantidad}
  </div>
@@ -45,46 +45,46 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  {/* Contenido */}
  <div className="flex flex-col flex-1 min-w-0">
  <div className="flex items-center justify-between gap-2">
- <span className={cn("font-bold text-sm truncate flex items-center gap-1.5",
+ <span className={cn("font-bold text-base truncate flex items-center gap-1.5",
  isAnulado ?"line-through text-muted-foreground":"text-foreground")}>
- {isLocked && !isAnulado && <Lock size={11} weight="bold"className="text-muted-foreground shrink-0"/>}
+ {isLocked && !isAnulado && <Lock size={12} weight="bold"className="text-muted-foreground shrink-0"/>}
  {item.nombre}
  </span>
- <span className={cn("font-black text-sm shrink-0",
+ <span className={cn("font-black text-base shrink-0",
  (isAnulado || isFullyPaid) ?"line-through text-muted-foreground":"text-foreground")}>
  ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
  </span>
  </div>
 
  {(item.modificadores?.length || pagado > 0 || item.cantidad > 1 || isAnulado || isCortesia) ? (
- <div className="flex items-center justify-between gap-2 mt-0.5">
+ <div className="flex items-center justify-between gap-2 mt-1">
  <div className="flex items-center gap-1 flex-wrap">
  {item.modificadores && item.modificadores.length > 0 &&
  item.modificadores.map((mod, i) => (
- <span key={`${mod}-${i}`} className="px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground font-medium text-[10px]">
+ <span key={`${mod}-${i}`} className="px-1.5 py-0.5 rounded bg-muted border border-border text-foreground font-semibold text-xs">
  {mod}
  </span>
  ))
  }
  {isAnulado && (
- <span className="px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-destructive">
+ <span className="px-1.5 py-0.5 rounded font-bold text-xs text-white bg-destructive">
  ANULADO
  </span>
  )}
  {isCortesia && (
- <span className="px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-emerald-600">
+ <span className="px-1.5 py-0.5 rounded font-bold text-xs text-white bg-emerald-600">
  CORTESÍA
  </span>
  )}
  {pagado > 0 && (
- <span className={cn("px-1.5 py-0.5 rounded font-bold text-[10px] text-white",
+ <span className={cn("px-1.5 py-0.5 rounded font-bold text-xs text-white",
  isFullyPaid ?"bg-emerald-600":"bg-amber-600")}>
  {isFullyPaid ?'Pagado':`${pagado} pagados`}
  </span>
  )}
  </div>
  {item.cantidad > 1 && (
- <span className="text-[10px] text-muted-foreground font-semibold shrink-0">
+ <span className="text-xs text-muted-foreground font-semibold shrink-0">
  ${item.precio.toLocaleString('en-US', { minimumFractionDigits: 2 })} c/u
  </span>
  )}
@@ -92,10 +92,10 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  ) : null}
 
  {isAnulado && item.anulado_motivo && (
- <span className="text-[10px] text-muted-foreground mt-0.5 truncate">Motivo: {item.anulado_motivo}</span>
+ <span className="text-xs text-muted-foreground mt-0.5 truncate">Motivo: {item.anulado_motivo}</span>
  )}
  {isCortesia && item.cortesia_motivo && (
- <span className="text-[10px] text-muted-foreground mt-0.5 truncate">Motivo: {item.cortesia_motivo}</span>
+ <span className="text-xs text-muted-foreground mt-0.5 truncate">Motivo: {item.cortesia_motivo}</span>
  )}
  </div>
  </div>

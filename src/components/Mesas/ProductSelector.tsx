@@ -29,17 +29,24 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
   const [navbarSlot, setNavbarSlot] = useState<HTMLElement | null>(null);
+  const [navbarSearchSlot, setNavbarSearchSlot] = useState<HTMLElement | null>(null);
 
+  // La navbar movil puede montar o remontar en cualquier momento sin
+  // relacion con el ciclo de vida de este selector (cambios de ruta,
+  // animaciones de entrada, etc.) - un timeout fijo de una sola vez dejaba
+  // los botones Volver/Categorias/Buscar perdidos para siempre si el slot
+  // no existia todavia en ese instante. Un MutationObserver reacciona en
+  // cuanto el nodo aparece o desaparece, sin importar cuando ocurra.
   useEffect(() => {
-    // Buscar el slot una vez montado el componente
-    const el = document.getElementById('mobile-navbar-cart-action-slot');
-    if (el) setNavbarSlot(el);
-    else {
-      // Como el navbar a veces se renderiza después o está fuera de contexto, intentamos buscarlo de nuevo con un timeout corto
-      setTimeout(() => {
-        setNavbarSlot(document.getElementById('mobile-navbar-cart-action-slot'));
-      }, 100);
-    }
+    const syncSlots = () => {
+      setNavbarSlot(document.getElementById('mobile-navbar-cart-action-slot'));
+      setNavbarSearchSlot(document.getElementById('mobile-navbar-cart-search-slot'));
+    };
+    syncSlots();
+
+    const observer = new MutationObserver(syncSlots);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, []);
 
  useEffect(() => {
@@ -258,11 +265,11 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
   {/* HEADER PRINCIPAL */}
-  <header className="h-14 px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
+  <header className="h-16 px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
     {!hideBackButton && (
       <button
         type="button" onClick={onBack}
-        className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
+        className="w-10 h-10 rounded-lg bg-muted text-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
         <ArrowLeft size={18} weight="bold"/>
       </button>
     )}
@@ -275,7 +282,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           setSearchQueryDebounced('');
         }}
         title="Volver a categorías"
-        className="w-9 h-9 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
+        className="w-10 h-10 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
         <ForkKnife size={18} weight="fill"/>
       </button>
     )}
@@ -285,7 +292,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         id="product-search-input"
         type="text" placeholder="Buscar productos..." value={searchQueryInput}
         onChange={(e) => setSearchQueryInput(e.target.value)}
-        className="w-full h-9 pl-9 pr-8 text-xs"/>
+        className="w-full h-10 pl-9 pr-8 text-sm"/>
       {searchQueryInput && (
         <button
           type="button" onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}
@@ -313,10 +320,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     key={item.id}
                     type="button"
                     onClick={() => handleAddProduct(item)}
-                    className="flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
+                    className="flex items-center px-4 py-2.5 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-xs text-foreground whitespace-nowrap">{item.nombre}</span>
-                    <span className="text-[10px] font-extrabold text-primary whitespace-nowrap">${item.precio.toFixed(2)}</span>
+                    <span className="font-bold text-sm text-foreground whitespace-nowrap">{item.nombre}</span>
                   </button>
                 ))}
               </div>
@@ -326,22 +332,22 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
+              className="h-24 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
             >
-              <Star size={24} weight="fill" className="mb-1" />
-              <span className="font-extrabold text-[13px] text-center">Favoritos</span>
+              <Star size={28} weight="fill" className="mb-1" />
+              <span className="font-extrabold text-sm text-center">Favoritos</span>
             </button>
             {categories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={cn("h-20 flex flex-col items-center justify-center p-2 rounded-2xl border transition-colors shadow-sm cursor-pointer",
+                className={cn("h-24 flex flex-col items-center justify-center p-2 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
                   planCategoryNames.has(cat)
                     ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                     : "bg-card border-border text-foreground hover:bg-muted")}
               >
-                <span className="font-extrabold text-[13px] text-center line-clamp-2 px-1">{cat}</span>
+                <span className="font-extrabold text-sm text-center line-clamp-2 px-1">{cat}</span>
               </button>
             ))}
           </div>
@@ -412,7 +418,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
     )}
 
     {/* BOTÓN DERECHO EN EL NAVBAR (Vía Portal) */}
-    {document.getElementById('mobile-navbar-cart-search-slot') && createPortal(
+    {navbarSearchSlot && createPortal(
       <button
         type="button"
         onClick={() => {
@@ -423,7 +429,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
       >
         <MagnifyingGlass size={22} weight="bold" />
       </button>,
-      document.getElementById('mobile-navbar-cart-search-slot')!
+      navbarSearchSlot
     )}
   </div>
 
@@ -519,17 +525,17 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
   return (
     <div
       onClick={() => onAdd(item)}
-      className={cn("p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between select-none active:scale-98 min-h-[90px]",
+      className={cn("p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between select-none active:scale-98 min-h-[104px]",
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md" : "bg-card text-foreground border-border")}
     >
-      <span className={cn("font-bold text-sm line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+      <span className={cn("font-bold text-base line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
         {item.nombre}
       </span>
 
       <div className="flex items-center justify-between mt-3">
         {isSelected ? (
-          <span className="px-2.5 py-1 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-sm">
+          <span className="px-2.5 py-1 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-base">
             {currentQty}
           </span>
         ) : (
@@ -539,12 +545,12 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
               const rxDb = await initVerticalRxDb();
               await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
             }}
-            className="text-muted-foreground/50 transition-colors cursor-pointer">
-            <Star size={16} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
+            className="text-muted-foreground/50 transition-colors cursor-pointer p-1 -m-1">
+            <Star size={18} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
           </button>
         )}
 
-        <span className={cn("font-black text-base", isSelected ? "text-primary-foreground" : "text-primary")}>
+        <span className={cn("font-black text-lg", isSelected ? "text-primary-foreground" : "text-primary")}>
           ${finalPrice.toFixed(2)}
         </span>
       </div>

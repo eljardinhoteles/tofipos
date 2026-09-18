@@ -4,7 +4,7 @@
 // productos, para repetir rápido lo que el mesero pide más seguido desde
 // este equipo (ej. clientes que piden "lo mismo de siempre").
 const STORAGE_KEY = 'pos_recent_product_ids'
-const MAX_RECENT = 6
+const MAX_RECENT = 4
 
 export function getRecentProductIds(): string[] {
   try {

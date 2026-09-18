@@ -149,6 +149,9 @@ interface PrintableItem extends Partial<ComandaItem> {
   qtyToPay?: number;
   es_bebida?: boolean;
   anulado_motivo?: string | null;
+  // Ítems de una categoría marcada (ej. Entradas) van siempre primero en el
+  // ticket de cocina — resuelto por el caller cruzando con categorías.
+  imprimir_primero?: boolean;
 }
 
 /**
@@ -201,7 +204,12 @@ export function generarComandaCocina(
   }
 
   const itemsActivos = items.filter(i => !i.anulado);
-  const itemsCocina = itemsActivos.filter(i => !i.es_bebida);
+  // Entradas (o cualquier categoría marcada "imprimir primero") van antes
+  // que el resto, sin importar el orden en que se agregaron al pedido —
+  // sort() estable: dentro de cada grupo se conserva el orden original.
+  const itemsCocina = itemsActivos
+    .filter(i => !i.es_bebida)
+    .sort((a, b) => (b.imprimir_primero ? 1 : 0) - (a.imprimir_primero ? 1 : 0));
   const itemsBebida = itemsActivos.filter(i => i.es_bebida);
 
   function imprimirGrupo(groupItems: PrintableItem[]): string {

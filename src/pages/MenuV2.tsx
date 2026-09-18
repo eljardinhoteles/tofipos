@@ -1,6 +1,6 @@
 import { useMemo, useState } from'react';
 import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
-import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour, CaretUp, CaretDown } from'@phosphor-icons/react';
+import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour, CaretUp, CaretDown, NumberCircleOneIcon } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxdb';
@@ -279,6 +279,16 @@ export default function MenuV2() {
  cat.es_comida_incluida ?"bg-emerald-500 text-white":"text-muted-foreground")}
  >
  <Check size={13} weight="bold"/>
+ </button>
+ <button
+ type="button"title={cat.imprimir_primero ?'Quitar prioridad de impresión':'Imprimir primero en la comanda de cocina'}
+ onClick={async () => {
+ await updateRxCategoria(cat.id, { imprimir_primero: !cat.imprimir_primero });
+ }}
+ className={cn("w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors",
+ cat.imprimir_primero ?"bg-primary text-primary-foreground":"text-muted-foreground")}
+ >
+ <NumberCircleOneIcon size={14} weight="bold"/>
  </button>
  <button
  type="button"onClick={() => setEditingCategory(cat)}

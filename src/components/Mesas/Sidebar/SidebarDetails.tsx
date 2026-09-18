@@ -269,7 +269,7 @@ export function SidebarDetails({
 
  const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
  const [ivaModalOpen, setIvaModalOpen] = useState(false);
- const { menuItems } = useRxMenuCatalog();
+ const { menuItems, categorias } = useRxMenuCatalog();
 
  const [editingModifiers, setEditingModifiers] = useState(false);
  const editingMenuItem = useMemo(
@@ -292,10 +292,17 @@ export function SidebarDetails({
  };
 
  const withBebida = (items: any[]) =>
- items.map(item => ({
+ items.map(item => {
+ const menuItem = menuItems.find(m => m.id === item.item_id);
+ const categoria = menuItem ? categorias.find(c => c.id === menuItem.categoria_id) : undefined;
+ return {
  ...item,
- es_bebida: menuItems.find(m => m.id === item.item_id)?.es_bebida || false,
- }));
+ es_bebida: menuItem?.es_bebida || false,
+ // Entradas (o cualquier categoría marcada) siempre primero en el
+ // ticket de cocina, sin importar el orden en que se pidieron.
+ imprimir_primero: categoria?.imprimir_primero || false,
+ };
+ });
 
  // Clientes únicos para autocompletar en el flujo de cambio de cliente
  const uniqueClientNames = useMemo(() => {
@@ -736,9 +743,9 @@ export function SidebarDetails({
 
  {!editingItem && activeComanda?.estado !=='cuenta'&& (
  <Button
- className="w-full h-8 rounded-none border-0 font-bold text-xs bg-primary text-primary-foreground shrink-0"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ className="w-full h-10 rounded-none border-0 font-bold text-xs bg-primary text-primary-foreground shrink-0"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
- <Basket size={14} weight="bold"className="mr-1.5"/>
+ <Basket size={16} weight="bold"className="mr-1.5"/>
  Añadir Productos {totalItems > 0 &&`· Total Items: ${totalItems}`}
  </Button>
  )}
@@ -794,7 +801,7 @@ export function SidebarDetails({
  <div className="grid grid-cols-2 gap-2">
  <Button
  variant={!activeComanda?.confirmada ?"default":"secondary"}
- className={cn("w-full font-bold", !activeComanda?.confirmada ?"":"bg-muted text-foreground")}
+ className={cn("w-full h-10 font-bold", !activeComanda?.confirmada ?"":"bg-muted text-foreground")}
  onClick={handleConfirmOrder}
  disabled={comandaItems.length === 0}
  >
@@ -808,7 +815,7 @@ export function SidebarDetails({
  ?`Adicional (${itemsNuevos.length})`:'Reimprimir'}
  </Button>
  <Button
- variant="secondary"className="w-full font-bold text-primary bg-primary/10"onClick={() => onAction(selectedMesa,'cuenta')}
+ variant="secondary"className="w-full h-10 font-bold text-primary bg-primary/10"onClick={() => onAction(selectedMesa,'cuenta')}
  disabled={total === 0 || !activeComanda?.confirmada}
  >
  <Check size={18} weight="bold"className="mr-1.5"/>
@@ -816,7 +823,7 @@ export function SidebarDetails({
  </Button>
 
  <Button
- variant="secondary"className="w-full font-bold text-blue-600 bg-blue-50"onClick={() => {
+ variant="secondary"className="w-full h-10 font-bold text-blue-600 bg-blue-50"onClick={() => {
  if (activeRoomAccounts.length === 0) {
  showToast.error('Aviso','No hay habitaciones activas para cargar.');
  return;
@@ -828,7 +835,7 @@ export function SidebarDetails({
  <Bed size={18} weight="bold"className="mr-1.5"/> Cargar Hab.
  </Button>
  <Button
- variant="ghost"className="w-full font-bold text-destructive"onClick={() => onAction(selectedMesa,'cancelar')}
+ variant="ghost"className="w-full h-10 font-bold text-destructive"onClick={() => onAction(selectedMesa,'cancelar')}
  >
  Anular
  </Button>
@@ -836,26 +843,26 @@ export function SidebarDetails({
  ) : (
  <div className="grid grid-cols-2 gap-2">
  <Button
- variant="secondary"className="w-full font-bold text-amber-600 bg-amber-50"onClick={handlePrintPrecuenta}
+ variant="secondary"className="w-full h-10 font-bold text-amber-600 bg-amber-50"onClick={handlePrintPrecuenta}
  >
  <Printer size={18} weight="bold"className="mr-1.5"/> Pre-cuenta
  </Button>
  <Button
- className="w-full font-bold bg-primary text-primary-foreground"onClick={() => setCloseCuentaModalOpen(true)}
+ className="w-full h-10 font-bold bg-primary text-primary-foreground"onClick={() => setCloseCuentaModalOpen(true)}
  disabled={total === 0}
  >
  <Check size={18} weight="bold"className="mr-1.5"/> Cobrar Cuenta
  </Button>
 
  <Button
- variant="secondary"className="w-full font-bold text-violet-600 bg-violet-50"onClick={() => onAction(selectedMesa,'dividido')}
+ variant="secondary"className="w-full h-10 font-bold text-violet-600 bg-violet-50"onClick={() => onAction(selectedMesa,'dividido')}
  disabled={total === 0 || saldoPendiente <= 0.001}
  title={saldoPendiente <= 0.001 ?'La cuenta ya está pagada en su totalidad': undefined}
  >
  <Scissors size={18} weight="bold"className="mr-1.5"/> Dividir Cuenta
  </Button>
  <Button
- variant="secondary"className="w-full font-bold text-muted-foreground bg-muted"onClick={() => onAction(selectedMesa,'reabrir')}
+ variant="secondary"className="w-full h-10 font-bold text-muted-foreground bg-muted"onClick={() => onAction(selectedMesa,'reabrir')}
  disabled={hayCortesia}
  title={hayCortesia ?'No se puede reabrir: esta cuenta ya tiene un ítem de cortesía aplicado': undefined}
  >

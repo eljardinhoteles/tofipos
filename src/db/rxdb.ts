@@ -160,6 +160,10 @@ export interface RxCategoria {
   nombre: string
   orden?: number
   es_comida_incluida?: boolean
+  // Los ítems de esta categoría (ej. Entradas) se imprimen primero en la
+  // comanda de cocina, sin importar el orden en que se agregaron al pedido
+  // — cocina siempre quiere ver entradas antes que fuertes de un vistazo.
+  imprimir_primero?: boolean
   organization_id: string
   _deleted: boolean
   _modified: string
@@ -644,7 +648,7 @@ const reservaSchema = {
 } as const
 
 const categoriaSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -652,6 +656,7 @@ const categoriaSchema = {
     nombre: { type: 'string' },
     orden: { type: 'number' },
     es_comida_incluida: { type: 'boolean' },
+    imprimir_primero: { type: 'boolean' },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
@@ -1151,7 +1156,14 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         }),
       },
     },
-    categorias: { schema: categoriaSchema },
+    categorias: {
+ schema: categoriaSchema,
+ migrationStrategies: {
+ // v0 → v1: agrega imprimir_primero — categorías (ej. Entradas) cuyos
+ // ítems van siempre al inicio de la comanda de cocina.
+ 1: (oldDoc: any) => ({ ...oldDoc, imprimir_primero: false }),
+ },
+ },
     mesas: { schema: mesaSchema },
     comandas: {
       schema: comandaSchema,
