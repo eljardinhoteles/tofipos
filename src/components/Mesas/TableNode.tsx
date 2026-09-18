@@ -44,13 +44,13 @@ export const TableNode = memo(function TableNode({
  className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
  // Seleccionada/sidebar abierto: azul sólido, siempre (salvo cuenta).
- ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white":"bg-teal-600 border-teal-600 text-white": isFree
+ ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white":"bg-sky-600 border-sky-600 text-white": isFree
  // Libre: blanca neutra, borde blanco (sin acento) — igual que una
  // mesa libre, la diferenciación vive en ocupada/seleccionada.
  ?"bg-card border-white text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":
  // Ocupada sin seleccionar: azul sutil (fondo/borde tenues), no
  // sólido — el sólido queda reservado para cuando está seleccionada.
- "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-300")}
+ "bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-950/30 dark:border-sky-800 dark:text-sky-300")}
  >
  <div className="flex items-center justify-between">
  <span className="text-[10px] font-black uppercase tracking-wider">

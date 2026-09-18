@@ -63,9 +63,9 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-teal-600 md:text-white">
+ <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-sky-600 md:text-white">
  <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-teal-600 text-white md:bg-white/15">
+ <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-sky-600 text-white md:bg-white/15">
  <Bed size={20} weight="bold"/>
  </div>
  <div className="flex flex-col">
@@ -132,7 +132,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
 
  <Button
  type="submit"disabled={isLoading || !huesped.trim()}
- className="mt-4 w-full py-3.5 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white">
+ className="mt-4 w-full py-3.5 flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white">
  <Bed size={18} weight="bold"/> Abrir Cuenta
  </Button>
  </form>

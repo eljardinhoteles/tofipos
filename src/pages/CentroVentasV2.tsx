@@ -36,8 +36,8 @@ const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
 const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
   mesa: 'bg-blue-50 text-blue-700 border-blue-200',
   reserva_restaurante: 'bg-amber-50 text-amber-700 border-amber-200',
-  reserva_hotel: 'bg-purple-50 text-purple-700 border-purple-200',
-  habitacion: 'bg-teal-50 text-teal-700 border-teal-200',
+  reserva_hotel: 'bg-sky-50 text-sky-700 border-sky-200',
+  habitacion: 'bg-sky-50 text-sky-700 border-sky-200',
 };
 
 const ORIGEN_FILTERS: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'reserva_hotel', 'habitacion'];
@@ -347,6 +347,10 @@ export default function CentroVentasV2() {
                     const active = item.venta.id === selectedVentaId;
                     const OrigenIcon = ORIGEN_ICON[item.venta.origen];
                     const estado = estadoPrincipalDe(item);
+                    // Una venta anulada se ve toda en tonos grises — ningún
+                    // acento de color (origen, crédito, iconos) compite por
+                    // atención con las ventas activas al escanear la lista.
+                    const isAnulada = estado === 'anulado';
                     return (
                       <button
                         key={item.venta.id}
@@ -354,6 +358,7 @@ export default function CentroVentasV2() {
                         onClick={() => { setRegistrando(false); setSelectedDate(null); setSelectedVentaId(item.venta.id); }}
                         className={cn(
                           "w-full flex items-stretch gap-0 text-left border-b border-border/60 transition-colors cursor-pointer",
+                          isAnulada && "opacity-70",
                           active ? "bg-primary/10" : "hover:bg-muted"
                         )}
                       >
@@ -364,24 +369,32 @@ export default function CentroVentasV2() {
                           {/* Fila 1: Badges (Origen / Crédito) -------------- Valor ($ Monto) */}
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                              <Badge variant="outline" className={cn("shrink-0 font-bold text-[10px] gap-1 px-1.5 py-0", ORIGEN_CLASSES[item.venta.origen])}>
+                              <Badge variant="outline" className={cn("shrink-0 font-bold text-[10px] gap-1 px-1.5 py-0",
+                                isAnulada ? "border-border text-muted-foreground bg-muted" : ORIGEN_CLASSES[item.venta.origen])}>
                                 <OrigenIcon size={10} weight="bold" /> {ORIGEN_LABEL[item.venta.origen]}
                               </Badge>
                               {item.venta.tipo === 'credito' && (
-                                <Badge variant="outline" className="shrink-0 font-bold text-[10px] border-rose-200 text-rose-700 bg-rose-50 gap-1 px-1.5 py-0">
+                                <Badge variant="outline" className={cn("shrink-0 font-bold text-[10px] gap-1 px-1.5 py-0",
+                                  isAnulada ? "border-border text-muted-foreground bg-muted" : "border-rose-200 text-rose-700 bg-rose-50")}>
                                   <CreditCard size={10} weight="bold" /> Crédito
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs font-black text-foreground shrink-0">${item.montoTotal.toFixed(2)}</span>
+                            <span className={cn("text-xs font-black shrink-0", isAnulada ? "text-muted-foreground" : "text-foreground")}>
+                              ${item.montoTotal.toFixed(2)}
+                            </span>
                           </div>
 
                           {/* Fila 2: Nombre del cliente ---------------- Estado (Pagado/Pendiente/Anulado + Saldo) */}
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-black text-foreground truncate">{item.venta.cliente_nombre || 'Sin cliente'}</span>
+                            <span className={cn("text-xs font-black truncate", isAnulada ? "text-muted-foreground" : "text-foreground")}>
+                              {item.venta.cliente_nombre || 'Sin cliente'}
+                            </span>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {item.saldo > 0.01 && (
-                                <span className="text-[10px] font-extrabold text-amber-600">saldo ${item.saldo.toFixed(2)}</span>
+                                <span className={cn("text-[10px] font-extrabold", isAnulada ? "text-muted-foreground" : "text-amber-600")}>
+                                  saldo ${item.saldo.toFixed(2)}
+                                </span>
                               )}
                               <Badge variant="outline" className={cn("font-bold text-[10px] px-1.5 py-0", ESTADO_PRINCIPAL_BADGE[estado])}>
                                 {ESTADO_PRINCIPAL_LABEL[estado]}
@@ -393,9 +406,9 @@ export default function CentroVentasV2() {
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-muted-foreground truncate font-medium">{item.venta.referencia || 'Sin referencia'}</span>
                             <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                              {item.textoComentarios && <div title={`Comentario: ${item.textoComentarios}`}><ChatText size={12} className="text-blue-600" /></div>}
-                              {item.comprobanteUrl && <div title="Tiene comprobante"><Paperclip size={12} className="text-primary" /></div>}
-                              {item.facturado && <div title="Facturado"><Receipt size={12} weight="fill" className="text-emerald-600" /></div>}
+                              {item.textoComentarios && <div title={`Comentario: ${item.textoComentarios}`}><ChatText size={12} className={isAnulada ? undefined : "text-blue-600"} /></div>}
+                              {item.comprobanteUrl && <div title="Tiene comprobante"><Paperclip size={12} className={isAnulada ? undefined : "text-primary"} /></div>}
+                              {item.facturado && <div title="Facturado"><Receipt size={12} weight="fill" className={isAnulada ? undefined : "text-emerald-600"} /></div>}
                             </div>
                           </div>
                         </div>

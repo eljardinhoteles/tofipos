@@ -180,10 +180,10 @@ export function SidebarReceiptViewer({
  número de la mesa/habitación, título + subtítulo, fondo temático en
  desktop según el estado de la comanda. */}
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
- esComandaEnHabitacionActiva ?"md:bg-teal-600 md:text-white": isAnulada ?"md:bg-red-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
+ esComandaEnHabitacionActiva ?"md:bg-sky-600 md:text-white": isAnulada ?"md:bg-red-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
  <div className="flex items-center gap-3">
  <div className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0",
- esComandaEnHabitacionActiva ?"bg-teal-600 text-white md:bg-white/15": isAnulada ?"bg-red-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
+ esComandaEnHabitacionActiva ?"bg-sky-600 text-white md:bg-white/15": isAnulada ?"bg-red-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
  {badgeNum}
  </div>
  <div className="flex flex-col min-w-0">

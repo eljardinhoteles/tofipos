@@ -360,7 +360,7 @@ export default function MesasV2() {
  }
  }}
  className={cn("h-8 px-3 rounded-md flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer shrink-0",
- selectedPiso.toLowerCase() ==='habitaciones'?"bg-teal-600 text-white shadow-xs":"bg-transparent text-muted-foreground")}
+ selectedPiso.toLowerCase() ==='habitaciones'?"bg-sky-600 text-white shadow-xs":"bg-transparent text-muted-foreground")}
  >
  <Bed size={18} />
  Hotel
@@ -368,7 +368,7 @@ export default function MesasV2() {
  <span
  title={`${habitacionesActivasCount} habitación${habitacionesActivasCount === 1 ?'':'es'} con cuenta activa`}
  className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none",
- selectedPiso.toLowerCase() ==='habitaciones'?"bg-white text-teal-600":"bg-teal-600 text-white")}
+ selectedPiso.toLowerCase() ==='habitaciones'?"bg-white text-sky-600":"bg-sky-600 text-white")}
  >
  {habitacionesActivasCount}
  </span>

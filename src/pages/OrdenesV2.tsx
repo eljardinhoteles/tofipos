@@ -414,7 +414,7 @@ export default function OrdenesV2() {
   {mesa?.nombre || 'Mesa Eliminada'}
   </span>
   {habitacionCuenta && (
-  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-bold shrink-0">
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold shrink-0">
   <Door size={11} weight="bold" /> Habitación
   </span>
   )}
