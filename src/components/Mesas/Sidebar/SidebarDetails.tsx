@@ -309,10 +309,18 @@ export function SidebarDetails({
  const totalPagadoVentas = useMemo(() => {
  return ventasComanda.reduce((accVenta: number, v: any) => {
  const movs = v.movimientos ?? [];
+ // Las ventas "Dividido - ..." (SidebarSplit, cualquiera de los 3
+ // métodos: iguales/monto/productos) registran el cobro ya recibido en
+ // el momento como movimiento 'ajuste' (no 'pago': el método de pago
+ // real se ancla después en Centro de Ventas) — sin esto, el saldo
+ // restante no bajaba y mostraba el total completo de nuevo aunque ya
+ // se hubiera cobrado esa parte.
+ const esSplit = typeof v.referencia ==='string' && v.referencia.includes('Dividido - ');
  const sumaVenta = movs.reduce((acc: number, m: any) => {
  if (m.anulado) return acc;
  if (m.tipo ==='pago') return acc + (m.monto ?? 0);
  if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ if (m.tipo ==='ajuste'&& esSplit) return acc + (m.monto ?? 0);
  return acc;
  }, 0);
  return accVenta + sumaVenta;
@@ -326,22 +334,35 @@ export function SidebarDetails({
  // Venta vigente (no anulada) sobre esta comanda, si existe — se reutiliza
  // al cerrar la cuenta en vez de crear una paralela que duplicaría el
  // cobro e ignoraría abonos ya registrados (p.ej. desde una reserva).
+ // Las ventas "Dividido - ..." (SidebarSplit) quedan excluidas a propósito:
+ // cada cobro por división es un registro de venta independiente en Centro
+ // de Ventas (p.ej. "pagó Juan $30"), así que el saldo restante al cerrar
+ // debe crear SU PROPIA venta nueva, no mezclarse como ajuste dentro de la
+ // del split — de lo contrario una cuenta de $100 con $30 divididos y $70
+ // cerrados terminaba viéndose como una sola venta de $100.
  const ventaVigente = useMemo(() => {
  return ventasComanda
  .filter((v: any) => !(v.movimientos ?? []).some((m: any) => m.tipo ==='anular'))
+ .filter((v: any) => !(typeof v.referencia ==='string' && v.referencia.includes('Dividido - ')))
  .sort((a: any, b: any) => (b.created_at ||'').localeCompare(a.created_at ||''))[0] || null;
  }, [ventasComanda]);
  // Movimientos 'pago' de todas las ventas de la comanda, normalizados al
  // shape que espera SidebarPagosModal — así el historial de "Ver Pagos"
- // incluye abonos hechos desde una reserva antes de asignar mesa.
+ // incluye abonos hechos desde una reserva antes de asignar mesa. También
+ // se incluyen los 'ajuste' de ventas "Dividido - ..." (SidebarSplit): ese
+ // monto ya se cobró en el momento del split, aunque quede registrado como
+ // 'ajuste' porque el método de pago real se ancla después en Centro de
+ // Ventas — ver mismo criterio en `totalPagadoVentas`.
  const pagosDeVentas = useMemo(() => {
  return ventasComanda.flatMap((v: any) => {
+ const esSplit = typeof v.referencia === 'string' && v.referencia.includes('Dividido - ');
  const res: any[] = [];
  for (const m of (v.movimientos ?? [])) {
- if (!m.anulado && m.tipo === 'pago') {
+ if (m.anulado) continue;
+ if (m.tipo === 'pago' || (m.tipo === 'ajuste' && esSplit)) {
  res.push({
  id: m.id,
- tipo_division: v.origen === 'reserva_restaurante' ? 'Abono de reserva' : undefined,
+ tipo_division: esSplit ? v.referencia : (v.origen === 'reserva_restaurante' ? 'Abono de reserva' : undefined),
  fecha: m.fecha,
  monto: m.monto ?? 0,
  });
@@ -719,10 +740,15 @@ export function SidebarDetails({
  cuánto ya se cobró sin abrir el modal de pagos aparte. */}
  {totalPagado > 0 && (
  <>
- <div className="flex items-center justify-between pt-2 mt-1 border-t border-border text-emerald-600">
- <span className="font-bold">Ya cobrado</span>
+ <button
+ type="button"
+ onClick={() => setShowPagosModal(true)}
+ title="Ver detalle de los cobros"
+ className="flex items-center justify-between pt-2 mt-1 border-t border-border text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors"
+ >
+ <span className="font-bold underline decoration-dotted underline-offset-2">Ya cobrado</span>
  <span className="font-black">${totalPagado.toFixed(2)}</span>
- </div>
+ </button>
  <div className="flex items-center justify-between">
  <span className="text-base font-black text-foreground">Restante</span>
  <span className="text-xl font-black text-orange-600">${saldoPendiente.toFixed(2)}</span>
@@ -956,24 +982,25 @@ export function SidebarDetails({
  try {
  if (ventaVigente) {
  // Ya existe una venta sobre esta comanda (p.ej. abonos de
- // reserva previos a asignar mesa) — se completa esa misma
- // venta en vez de crear una paralela. Igual que el flujo sin
- // reserva (rama `else`), el saldo pendiente queda como
- // 'ajuste' — NO se auto-cobra con un 'pago' aquí, el cobro
- // real se ancla después en Centro de Ventas.
- // Los 'ajuste' se SUMAN para formar montoTotal (ver
- // useVentasConMovimientos): se agrega solo el delta entre el
- // total real y lo ya ajustado, nunca el saldo íntegro, o el
- // total quedaría duplicado.
- const yaAjustado = (ventaVigente.movimientos ?? [])
- .filter((m: any) => !m.anulado && m.tipo ==='ajuste')
- .reduce((acc: number, m: any) => acc + (m.monto ?? 0), 0);
- const deltaAjuste = total - yaAjustado;
- if (Math.abs(deltaAjuste) > 0.001) {
+ // reserva previos a asignar mesa, o un cobro por división
+ // desde SidebarSplit) — se completa esa misma venta en vez de
+ // crear una paralela. Igual que el flujo sin reserva (rama
+ // `else`), el saldo pendiente queda como 'ajuste' — NO se
+ // auto-cobra con un 'pago' aquí, el cobro real se ancla
+ // después en Centro de Ventas.
+ // Se agrega directamente `saldoPendiente` (lo que falta por
+ // cobrar, ya descontando pagos y ajustes de split previos —
+ // ver `totalPagado`/`totalPagadoVentas` más arriba) en vez de
+ // recalcular "total - ajustes previos": ese recálculo asumía
+ // que todo lo ya cobrado de esta venta estaba en movimientos
+ // 'ajuste', pero un split registra el cobro también como
+ // 'ajuste' (ver SidebarSplit) y quedaba contado dos veces,
+ // dando un delta ~0 y perdiendo el saldo real al cerrar.
+ if (saldoPendiente > 0.001) {
  await agregarVentaMovimiento({
  venta_id: ventaVigente.id,
  tipo:'ajuste',
- monto: deltaAjuste,
+ monto: saldoPendiente,
  motivo:'Ajuste al cerrar cuenta',
  });
  }

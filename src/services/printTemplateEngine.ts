@@ -418,7 +418,7 @@ export function generarPrecuenta(
     const totalPagado = pagos.reduce((acc, pg) => acc + pg.monto, 0);
     if (totalPagado > 0) {
       t += `${'-'.repeat(W)}\n`;
-      t += justifyBetween('Abonado:', `$${totalPagado.toFixed(2)}`, W) + '\n';
+      t += justifyBetween('Ya cobrado:', `$${totalPagado.toFixed(2)}`, W) + '\n';
       const saldo = Math.max(0, total - totalPagado);
       t += p(POS.BOLD_ON) + justifyBetween('Saldo pendiente:', `$${saldo.toFixed(2)}`, W) + p(POS.BOLD_OFF) + '\n';
     }

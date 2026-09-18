@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from'react';
-import { MagnifyingGlass, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Door } from'@phosphor-icons/react';
+import { MagnifyingGlass, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Door, Prohibit } from'@phosphor-icons/react';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
+import { useAuth } from'../context/AuthContext';
 import { showToast } from'@/lib/toast';
 import dayjs from'dayjs';
 import { initVerticalRxDb, updateRxComanda } from'../db/rxdb';
@@ -15,6 +16,15 @@ import { useRxMesas } from'../hooks/useRxMesas';
 import { useRxComandas } from'../hooks/useRxComandas';
 import { calcularTotalesComanda } from'../lib/taxUtils';
 import { cn } from'@/lib/utils';
+import { Button } from'@/components/ui/button';
+import {
+ Dialog,
+ DialogContent,
+ DialogHeader,
+ DialogTitle,
+ DialogDescription,
+ DialogFooter,
+} from'@/components/ui/dialog';
 
 const FILTER_TABS = [
   { value: 'historico', label: 'Histórico' },
@@ -50,6 +60,29 @@ export default function OrdenesV2() {
 
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
  const { menuItems } = useRxMenuCatalog();
+ const { currentMesero, adminUser } = useAuth();
+ const esAdmin = !!adminUser || currentMesero?.rol ==='admin';
+ const [comandaToAnular, setComandaToAnular] = useState<Comanda | null>(null);
+ const [anulandoHistorica, setAnulandoHistorica] = useState(false);
+
+ // Temporal mientras el sistema está en pruebas: permite a un admin anular
+ // una comanda ya cerrada/facturada directamente desde el histórico (por
+ // errores de prueba, datos de testing, etc.) sin borrar nada — igual que
+ // cualquier otra anulación, queda registrada y visible en "Anuladas".
+ const handleAnularHistorica = async () => {
+ if (!comandaToAnular) return;
+ setAnulandoHistorica(true);
+ try {
+ await updateRxComanda(comandaToAnular.id, { estado:'anulada'});
+ showToast.success('Comanda anulada','La cuenta histórica fue marcada como anulada.');
+ setComandaToAnular(null);
+ } catch (error) {
+ console.error('Error al anular comanda histórica:', error);
+ showToast.error('Error','No se pudo anular la comanda.');
+ } finally {
+ setAnulandoHistorica(false);
+ }
+ };
 
  const dbEpoch = useDbEpoch();
  // Mesas y comandas vienen de los hooks compartidos: una única suscripción
@@ -349,6 +382,7 @@ export default function OrdenesV2() {
   <th className="px-6 py-3.5">Total</th>
   <th className="px-6 py-3.5 hidden sm:table-cell">Fecha</th>
   <th className="px-6 py-3.5">Estado</th>
+  {esAdmin && <th className="px-6 py-3.5">Acciones</th>}
   </tr>
   </thead>
   <tbody className="divide-y divide-border">
@@ -435,6 +469,19 @@ export default function OrdenesV2() {
   </span>
   )}
   </td>
+  {esAdmin && (
+  <td className="px-6 py-3.5">
+  {(comanda.estado ==='cerrado'|| comanda.estado ==='facturado') && (
+  <button
+  type="button"
+  onClick={(e) => { e.stopPropagation(); setComandaToAnular(comanda); }}
+  title="Anular esta cuenta histórica (temporal, modo pruebas)"
+  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[11px] font-bold cursor-pointer hover:bg-destructive/20 transition-colors">
+  <Prohibit size={13} weight="bold" /> Anular
+  </button>
+  )}
+  </td>
+  )}
   </tr>
   );
   })}
@@ -488,6 +535,24 @@ export default function OrdenesV2() {
   </div>
   </div>
   )}
+
+  {/* Anular cuenta histórica (temporal, modo pruebas) — solo admin */}
+  <Dialog open={!!comandaToAnular} onOpenChange={(open) => { if (!open) setComandaToAnular(null); }}>
+  <DialogContent className="sm:max-w-sm">
+  <DialogHeader>
+  <DialogTitle>Anular cuenta histórica</DialogTitle>
+  <DialogDescription>
+  ¿Anular la comanda {comandaToAnular ?`#${comandaToAnular.folio}` :''} de {comandaToAnular?.mesa_nombre ||'esta mesa'}? Quedará marcada como anulada y visible en la pestaña "Anuladas". Esta acción es temporal para el modo de pruebas.
+  </DialogDescription>
+  </DialogHeader>
+  <DialogFooter>
+  <Button type="button"variant="outline"onClick={() => setComandaToAnular(null)}>Cancelar</Button>
+  <Button type="button"variant="destructive"disabled={anulandoHistorica}onClick={handleAnularHistorica}>
+  {anulandoHistorica ?'Anulando...':'Anular cuenta'}
+  </Button>
+  </DialogFooter>
+  </DialogContent>
+  </Dialog>
  </div>
  );
 }

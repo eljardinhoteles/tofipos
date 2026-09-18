@@ -43,9 +43,14 @@ export const TableNode = memo(function TableNode({
  onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
  className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
- ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white": isFree
- ?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": isFree
- ?"bg-card border-border text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":"bg-primary/10 border-primary/50 text-primary")}
+ // Seleccionada/sidebar abierto: azul sólido, siempre (salvo cuenta).
+ ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white":"bg-teal-600 border-teal-600 text-white": isFree
+ // Libre: blanca neutra, borde blanco (sin acento) — igual que una
+ // mesa libre, la diferenciación vive en ocupada/seleccionada.
+ ?"bg-card border-white text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":
+ // Ocupada sin seleccionar: azul sutil (fondo/borde tenues), no
+ // sólido — el sólido queda reservado para cuando está seleccionada.
+ "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-300")}
  >
  <div className="flex items-center justify-between">
  <span className="text-[10px] font-black uppercase tracking-wider">
@@ -66,7 +71,7 @@ export const TableNode = memo(function TableNode({
  {roomType}
  </span>
  {cliente && (
- <div className={cn("flex items-center gap-1 mt-1 font-extrabold text-[10px] max-w-full", isSelected ?"text-white":"text-primary")}>
+ <div className="flex items-center gap-1 mt-1 font-extrabold text-[10px] max-w-full text-inherit">
  <User size={10} className="shrink-0"/>
  <span className="truncate">{cliente}</span>
  </div>

@@ -384,15 +384,15 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     setSaving(true);
     try {
       const rxDb = await import('../../db/rxdb').then(m => m.initVerticalRxDb());
-      const doc = await rxDb.comandas.findOne(venta.id).exec();
+      const doc = await rxDb.ventas.findOne(venta.id).exec();
       if (doc) {
         await doc.update({ $set: { _deleted: true, _modified: new Date().toISOString() } } as any);
-        showToast.success('Comanda borrada permanentemente');
+        showToast.success('Venta borrada permanentemente');
         setConfirmDeleteVenta(false);
       }
     } catch (e) {
       console.error(e);
-      showToast.error('Error al borrar la comanda');
+      showToast.error('Error al borrar la venta');
     } finally {
       setSaving(false);
     }
@@ -699,9 +699,9 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         <Dialog open={confirmDeleteVenta} onOpenChange={setConfirmDeleteVenta}>
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>Borrar Comanda</DialogTitle>
+              <DialogTitle>Borrar Venta</DialogTitle>
               <DialogDescription>
-                ¿Estás seguro de que deseas borrar permanentemente esta comanda y ocultarla de la lista? Esta acción no se puede deshacer.
+                ¿Estás seguro de que deseas borrar permanentemente esta venta y ocultarla de la lista? Esta acción no se puede deshacer.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

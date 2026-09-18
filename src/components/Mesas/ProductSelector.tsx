@@ -98,8 +98,18 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return map;
  }, [safeComandaItems]);
 
+ // Nombre de categoría -> es comida incluida en el plan del hotel (ej.
+ // menú de huésped), para distinguir visualmente ese grupo en el grid.
+ const planCategoryNames = useMemo(
+ () => new Set(safeDbCategorias.filter(c => c.es_comida_incluida).map(c => c.nombre)),
+ [safeDbCategorias]
+ );
+
  const categories = useMemo(() => {
- const cats = new Set(safeMenuItems.map(i => i.categoria_nombre || 'Sin Categoría'));
+ // Igual que filteredItems: si ningún producto de una categoría está
+ // activo hoy (ej. menú de huésped sin platos habilitados), el chip no
+ // debe aparecer vacío en la lista.
+ const cats = new Set(safeMenuItems.filter(i => i.activo !== false).map(i => i.categoria_nombre || 'Sin Categoría'));
  const orderMap = new Map(safeDbCategorias.map((c, idx) => [c.nombre, idx]));
  
  return Array.from(cats).sort((a, b) => {
@@ -111,7 +121,12 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  }, [safeMenuItems, safeDbCategorias]);
 
  const filteredItems = useMemo(() => {
+ // Un producto inactivo (ej. plato del menú de huésped que hoy no está
+ // disponible) nunca debe poder pedirse — activo es el flag que ya existía
+ // en el catálogo, pero hasta ahora no bloqueaba nada acá.
  const items = safeMenuItems.filter(item => {
+ if (item.activo === false) return false;
+
  const matchesSearch = !searchQueryDebounced ||
  item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
 
@@ -284,7 +299,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
               key={cat}
               type="button"
               onClick={() => setSelectedCategory(cat)}
-              className="h-20 flex flex-col items-center justify-center p-2 rounded-2xl bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-sm cursor-pointer"
+              className={cn("h-20 flex flex-col items-center justify-center p-2 rounded-2xl border transition-colors shadow-sm cursor-pointer",
+                planCategoryNames.has(cat)
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                  : "bg-card border-border text-foreground hover:bg-muted")}
             >
               <span className="font-extrabold text-[13px] text-center line-clamp-2 px-1">{cat}</span>
             </button>

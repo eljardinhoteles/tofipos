@@ -73,6 +73,14 @@ export default function MesasV2() {
  [dbPisos]
  );
 
+ // Indicador del botón "Hotel": cuántas habitaciones tienen una cuenta
+ // abierta ahora mismo, para que el cajero note desde el selector de zonas
+ // que hay consumos activos sin necesidad de entrar a esa vista primero.
+ const habitacionesActivasCount = useMemo(
+ () => allCuentas.filter(c => c.estado ==='activa').length,
+ [allCuentas]
+ );
+
  // Lista ordenada de pisos para navegación por gestos (Hotel/Habitaciones siempre al inicio)
  const allSelectablePisos = useMemo(() => {
  const list = dbPisos.map(p => p.nombre);
@@ -352,10 +360,19 @@ export default function MesasV2() {
  }
  }}
  className={cn("h-8 px-3 rounded-md flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer shrink-0",
- selectedPiso.toLowerCase() ==='habitaciones'?"bg-primary text-primary-foreground shadow-xs":"bg-transparent text-muted-foreground")}
+ selectedPiso.toLowerCase() ==='habitaciones'?"bg-teal-600 text-white shadow-xs":"bg-transparent text-muted-foreground")}
  >
  <Bed size={18} />
  Hotel
+ {habitacionesActivasCount > 0 && (
+ <span
+ title={`${habitacionesActivasCount} habitación${habitacionesActivasCount === 1 ?'':'es'} con cuenta activa`}
+ className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none",
+ selectedPiso.toLowerCase() ==='habitaciones'?"bg-white text-teal-600":"bg-teal-600 text-white")}
+ >
+ {habitacionesActivasCount}
+ </span>
+ )}
  </button>
 
  <div className="w-[1px] h-6 bg-border shrink-0"/>

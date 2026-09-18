@@ -121,10 +121,17 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  const totalPagadoVentas = useMemo(() => {
  return ventasPrevias.reduce((accVenta: number, v: any) => {
  const movs = v.movimientos ?? [];
+ // Las ventas "Dividido - ..." creadas por este mismo split (cualquiera
+ // de los 3 métodos) registran el cobro ya recibido como 'ajuste' (el
+ // método de pago real se ancla después en Centro de Ventas, no 'pago'
+ // aquí) — sin esto, un segundo split sobre la misma comanda no veía lo
+ // ya cobrado.
+ const esSplit = typeof v.referencia ==='string' && v.referencia.includes('Dividido - ');
  const sumaVenta = movs.reduce((acc: number, m: any) => {
  if (m.anulado) return acc;
  if (m.tipo ==='pago') return acc + (m.monto ?? 0);
  if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ if (m.tipo ==='ajuste'&& esSplit) return acc + (m.monto ?? 0);
  return acc;
  }, 0);
  return accVenta + sumaVenta;
@@ -136,15 +143,23 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  );
  const saldoPendiente = Math.max(0, totalOriginal - totalPagado);
 
- // Dividir "por productos" asume que nada se cobró todavía por otra vía —
- // si ya hay un abono (p.ej. de una reserva antes de asignar mesa) o un
- // pago previo que no fue por productos, ya no se puede saber qué ítems
- // cubre ese monto, así que la opción se bloquea.
+ // Dividir "por productos" asume que se sabe qué ítems cubre lo ya
+ // cobrado — un pago previo POR PRODUCTOS sí lo sabe (son estos mismos
+ // ítems, vía `pagado_cantidad`), así que no bloquea, permite seguir
+ // dividiendo el resto. Lo que sí bloquea es un abono que no fue por
+ // productos (p.ej. de una reserva antes de asignar mesa, o un pago
+ // "por partes iguales"/"por monto"): ahí no hay forma de saber qué
+ // ítems cubre ese monto.
  const hasNonProductPayments = useMemo(() => {
  const pagoLegacyNoProductos = pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
- const hayPagoDeVenta = totalPagadoVentas > 0.001;
- return pagoLegacyNoProductos || hayPagoDeVenta;
- }, [pagos, totalPagadoVentas]);
+ const hayVentaNoProductos = ventasPrevias.some((v: any) => {
+ const esSplitPorProductos = typeof v.referencia ==='string' && v.referencia.includes('(Productos)');
+ if (esSplitPorProductos) return false;
+ const movs = v.movimientos ?? [];
+ return movs.some((m: any) => !m.anulado && (m.tipo ==='pago'|| m.tipo ==='ajuste') && (m.monto ?? 0) > 0.001);
+ });
+ return pagoLegacyNoProductos || hayVentaNoProductos;
+ }, [pagos, ventasPrevias]);
 
  const montoPorPersona = saldoInicialSplit / personas;
 
@@ -294,7 +309,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
  {splitMethod && (
  <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold text-foreground/80">Nombre de quien paga (Opcional)</Label>
+ <Label className="text-xs font-bold text-foreground/80">Nombre de quien paga</Label>
  <Input
  type="text"placeholder="Ej: Juan Pérez"value={payerName}
  onChange={(e) => setPayerName(e.target.value)}
@@ -411,11 +426,21 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
 
  {splitMethod ==='monto'&& (
  <div className="flex flex-col gap-3">
+ <div className="flex items-center justify-between">
  <Label className="text-xs font-bold text-foreground/80">Monto a Pagar</Label>
+ <span className="text-[10px] font-bold text-muted-foreground">
+ Pendiente: ${saldoPendiente.toFixed(2)}
+ </span>
+ </div>
  <Input
- type="number"step="0.01"placeholder="0.00"value={montoCustom}
+ type="number"step="0.01"min={0}max={saldoPendiente}placeholder="0.00"value={montoCustom}
  onChange={(e) => setMontoCustom(parseFloat(e.target.value) ||'')}
- className="h-12 px-4 text-lg font-black"/>
+ className={cn("h-12 px-4 text-lg font-black", Number(montoCustom) > saldoPendiente &&"border-destructive text-destructive")}/>
+ {Number(montoCustom) > saldoPendiente && (
+ <span className="text-[10px] font-bold text-destructive">
+ El monto no puede superar el pendiente (${saldoPendiente.toFixed(2)}).
+ </span>
+ )}
  </div>
  )}
 
@@ -495,7 +520,9 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <Printer size={16} /> Pre-cuenta
  </button>
  <button
- type="button"disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
+ type="button"
+ disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente || !payerName.trim()}
+ title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
  onClick={() => setCobrarModalState({ monto: Number(montoCustom), label:'Pago Parcial'})}
  className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
  Cobrar Monto
@@ -521,7 +548,9 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <Printer size={16} /> Pre-cuenta
  </button>
  <button
- type="button"disabled={selectedPersonaIdx === null}
+ type="button"
+ disabled={selectedPersonaIdx === null || !payerName.trim()}
+ title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
  onClick={() => {
  if (selectedPersonaIdx !== null) {
  const idx = selectedPersonaIdx;
@@ -560,8 +589,11 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <Printer size={16} /> Pre-cuenta
  </button>
  <button
- type="button"onClick={() => setCobrarModalState({ monto: totalesSeleccionados.total, label:'Pago de Productos', itemsPagados: selectedItems })}
- className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer shadow-xs">
+ type="button"
+ disabled={!payerName.trim()}
+ title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
+ onClick={() => setCobrarModalState({ monto: totalesSeleccionados.total, label:'Pago de Productos', itemsPagados: selectedItems })}
+ className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
  Cobrar (${totalesSeleccionados.total.toFixed(2)})
  </button>
  </footer>
@@ -583,8 +615,10 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  Cancelar
  </button>
  <button
- type="button"onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.itemsPagados, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
- className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs cursor-pointer shadow-xs">
+ type="button"
+ disabled={!payerName.trim()}
+ onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.itemsPagados, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
+ className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
  Cobrar e Imprimir
  </button>
  </div>

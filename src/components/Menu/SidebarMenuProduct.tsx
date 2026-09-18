@@ -1,15 +1,17 @@
 import { useEffect, useState } from'react';
-import { X, Plus, Trash } from'@phosphor-icons/react';
+import { X, Plus, Trash, Sparkle } from'@phosphor-icons/react';
 import { type ModifierGroup } from'../../db/database';
 import { useUI } from'../../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, createRxCategoria, createRxMenuItem, updateRxMenuItem } from'../../db/rxdb';
 import { useRxMenuCatalog } from'../../hooks/useRxMenuCatalog';
+import { MODIFIER_TEMPLATES } from'@/lib/modifierTemplates';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Switch } from'@/components/ui/switch';
 import { Button } from'@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export function SidebarMenuProduct() {
  const { selectedMenuProductId, setMenuView, setSelectedMenuProductId, openConfirm } = useUI();
@@ -76,6 +78,22 @@ export function SidebarMenuProduct() {
  setModificadores(prev => [
  ...prev,
  { id: crypto.randomUUID(), nombre:'', obligatorio: false, multi: false, opciones: [] },
+ ]);
+ };
+
+ // Aplica una plantilla predefinida (Papa: Frita/Dorada, etc.) como grupo
+ // completo con un clic — el producto que no la necesita simplemente no la
+ // agrega, no afecta a nadie más. Si el grupo ya existe (mismo nombre,
+ // sin distinguir mayúsculas) se ignora en vez de duplicarlo.
+ const applyModifierTemplate = (template: (typeof MODIFIER_TEMPLATES)[number]) => {
+ const yaExiste = modificadores.some(g => g.nombre.trim().toLowerCase() === template.nombre.toLowerCase());
+ if (yaExiste) {
+ showToast.error(`"${template.nombre}"ya fue añadido a este producto`);
+ return;
+ }
+ setModificadores(prev => [
+ ...prev,
+ { id: crypto.randomUUID(), nombre: template.nombre, obligatorio: template.obligatorio, multi: template.multi, opciones: [...template.opciones] },
  ]);
  };
 
@@ -283,11 +301,36 @@ export function SidebarMenuProduct() {
  <div className="flex flex-col gap-2">
  <div className="flex items-center justify-between">
  <Label className="text-xs font-bold">Opciones adicionales</Label>
+ <div className="flex items-center gap-1">
+ {MODIFIER_TEMPLATES.length > 0 && (
+ <Popover>
+ <PopoverTrigger asChild>
+ <Button
+ type="button"variant="ghost"size="sm"
+ className="h-7 px-2 text-xs font-bold text-primary gap-1">
+ <Sparkle size={14} weight="bold"/> Sugerencias
+ </Button>
+ </PopoverTrigger>
+ <PopoverContent align="end"className="w-56 p-1.5 flex flex-col gap-0.5">
+ {MODIFIER_TEMPLATES.map(template => (
+ <button
+ key={template.nombre}
+ type="button"
+ onClick={() => applyModifierTemplate(template)}
+ className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-muted transition-colors cursor-pointer flex flex-col gap-0.5">
+ <span className="text-xs font-bold text-foreground">{template.nombre}</span>
+ <span className="text-[10px] text-muted-foreground">{template.opciones.join(' · ')}</span>
+ </button>
+ ))}
+ </PopoverContent>
+ </Popover>
+ )}
  <Button
  type="button"variant="ghost"size="sm"onClick={addModifierGroup}
  className="h-7 px-2 text-xs font-bold text-primary gap-1">
  <Plus size={14} weight="bold"/> Añadir grupo
  </Button>
+ </div>
  </div>
 
  {modificadores.length === 0 ? (

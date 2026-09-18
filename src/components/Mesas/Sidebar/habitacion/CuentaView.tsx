@@ -82,22 +82,22 @@ export function CuentaView({
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
       {/* Header — mismo lenguaje que SidebarDetails: badge circular con el
           número de la unidad, título + subtítulo, fondo temático en desktop. */}
-      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-primary md:text-primary-foreground">
+      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-teal-600 md:text-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-primary text-primary-foreground md:bg-primary-foreground/15">
+          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-teal-600 text-white md:bg-white/15">
             {roomNum}
           </div>
           <div className="flex flex-col">
-            <h3 className="font-extrabold text-base leading-tight md:text-primary-foreground">
+            <h3 className="font-extrabold text-base leading-tight md:text-white">
               {cuenta.huesped}
             </h3>
-            <span className="text-[10px] font-bold text-muted-foreground md:text-primary-foreground/70">
+            <span className="text-[10px] font-bold text-muted-foreground md:text-white/70">
               {roomType} · {selectedMesa.nombre}
             </span>
           </div>
         </div>
 
-        <Button variant="ghost" size="icon-lg" onClick={onClose} className="rounded-xl text-muted-foreground md:text-primary-foreground">
+        <Button variant="ghost" size="icon-lg" onClick={onClose} className="rounded-xl text-muted-foreground md:text-white">
           <X size={18} weight="bold" />
         </Button>
       </header>

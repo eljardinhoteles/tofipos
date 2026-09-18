@@ -3,8 +3,7 @@ import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
 import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour, CaretUp, CaretDown } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
-import { useIvaActivo } from'../hooks/useIvaActivo';
-import { createRxCategoria, updateRxCategoria } from'../db/rxdb';
+import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxdb';
 import { cn } from'@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { CsvUploader } from '@/components/Menu/CsvUploader';
@@ -64,28 +63,17 @@ export default function MenuV2() {
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
  {/* ── HEADER PRINCIPAL ─────────────────────────────── */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
- <div className="flex items-center gap-3 shrink-0">
+ <header className="h-14 px-6 bg-card border-b border-border flex items-center shadow-xs shrink-0 gap-3">
  <button
  type="button"title="Nuevo Producto"onClick={() => {
  setSelectedMenuProductId(null);
  setMenuView('producto');
  }}
- className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
+ className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-[background-color,transform] shadow-xs cursor-pointer shrink-0">
  <Plus size={18} weight="bold"/>
  </button>
 
  <div className="w-[1px] h-6 bg-border shrink-0"/>
-
-        <button
-          type="button" onClick={() => setIsManageCategoriesOpen(true)}
-          className="h-9 px-3 rounded-lg bg-muted text-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer">
-          <SquaresFour size={18} />
-          Categorías
-        </button>
-
-        <CsvUploader />
- </div>
 
  {/* Buscador */}
  <div className="relative w-64 shrink-0">
@@ -96,10 +84,21 @@ export default function MenuV2() {
  className="pl-9 h-9 text-xs"/>
  </div>
 
- <div className="w-[1px] h-6 bg-border shrink-0"/>
+        <button
+          type="button" onClick={() => setIsManageCategoriesOpen(true)}
+          className="h-9 px-3 rounded-lg bg-muted text-foreground font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer shrink-0">
+          <SquaresFour size={18} />
+          Categorías
+        </button>
 
- {/* Chips de Categorías */}
- <div className="flex-1 overflow-x-auto hide-scrollbar flex items-center gap-2">
+        <div className="flex-1"/>
+
+        <CsvUploader />
+ </header>
+
+ {/* Chips de Categorías — fila propia debajo del header */}
+ <div className="h-13 px-6 bg-card border-b border-border flex items-center shrink-0 overflow-x-auto hide-scrollbar">
+ <div className="flex items-center gap-2 min-w-max">
  <button
  type="button"onClick={() => setSelectedCategory('all')}
  className={cn("px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer",
@@ -119,7 +118,7 @@ export default function MenuV2() {
  </button>
  ))}
  </div>
- </header>
+ </div>
 
  {/* Grid de Productos */}
  <main className="flex-1 overflow-y-auto p-6">
@@ -139,6 +138,14 @@ export default function MenuV2() {
  product={product}
  isSelected={selectedMenuProductId === product.id}
  onEdit={() => handleEditClick(product)}
+ onToggleActivo={async (activo: boolean) => {
+ try {
+ await updateRxMenuItem(product.id, { activo });
+ } catch (error) {
+ console.error('Error al actualizar disponibilidad:', error);
+ showToast.error('No se pudo actualizar la disponibilidad');
+ }
+ }}
  />
  ))}
  </div>
@@ -305,27 +312,18 @@ export default function MenuV2() {
  );
 }
 
-function MenuProductCardV2({ product, onEdit, isSelected }: any) {
- const { porcentaje: ivaSistema } = useIvaActivo();
-
- let ivaLabel ='';
- if (product.iva_modalidad ==='exento') {
- ivaLabel ='Exento';
- } else if (product.iva_modalidad ==='especifico') {
- ivaLabel =`IVA ${product.iva_porcentaje}%`;
- } else {
- ivaLabel =`IVA ${ivaSistema}%`;
- }
-
+function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo }: any) {
+ const isInactivo = product.activo === false;
  return (
  <div
  onClick={onEdit}
  className={cn("bg-card rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between active:scale-98",
+ isInactivo &&"opacity-50",
  isSelected ?"border-primary ring-2 ring-primary/20 shadow-md":"border-border")}
  >
  <div className="flex flex-col gap-1">
  <div className="flex items-center justify-between gap-2">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground truncate">
+ <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">
  {product.category}
  </span>
  </div>
@@ -345,9 +343,18 @@ function MenuProductCardV2({ product, onEdit, isSelected }: any) {
  <span>{product.modificadores.length}</span>
  </div>
  )}
- <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
- {ivaLabel}
- </span>
+ {onToggleActivo && (
+ <button
+ type="button"
+ title={isInactivo ?'Activar producto':'Desactivar producto'}
+ onClick={e => { e.stopPropagation(); onToggleActivo(isInactivo); }}
+ className={cn("size-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0",
+ isInactivo
+ ?"bg-card border-border text-transparent hover:border-muted-foreground":"bg-primary border-primary text-primary-foreground")}
+ >
+ <Check size={12} weight="bold"/>
+ </button>
+ )}
  </div>
  </div>
  </div>
