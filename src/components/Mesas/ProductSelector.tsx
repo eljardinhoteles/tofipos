@@ -31,12 +31,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   const [navbarSlot, setNavbarSlot] = useState<HTMLElement | null>(null);
   const [navbarSearchSlot, setNavbarSearchSlot] = useState<HTMLElement | null>(null);
 
-  // La navbar movil puede montar o remontar en cualquier momento sin
-  // relacion con el ciclo de vida de este selector (cambios de ruta,
-  // animaciones de entrada, etc.) - un timeout fijo de una sola vez dejaba
+  // La navbar movil puede montar en cualquier momento sin relacion con el
+  // ciclo de vida de este selector - un timeout fijo de una sola vez dejaba
   // los botones Volver/Categorias/Buscar perdidos para siempre si el slot
-  // no existia todavia en ese instante. Un MutationObserver reacciona en
-  // cuanto el nodo aparece o desaparece, sin importar cuando ocurra.
+  // no existia todavia en ese instante. En vez de observar todo el body
+  // (dispara con cualquier mutacion de DOM en toda la app - costoso, esta
+  // es la pantalla mas usada), se observa el body SOLO hasta encontrar el
+  // contenedor raiz estable de la navbar, y desde ahi se limita a observar
+  // adentro de ese nodo, que cambia con mucha menos frecuencia.
   useEffect(() => {
     const syncSlots = () => {
       setNavbarSlot(document.getElementById('mobile-navbar-cart-action-slot'));
@@ -44,9 +46,29 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
     };
     syncSlots();
 
-    const observer = new MutationObserver(syncSlots);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    let innerObserver: MutationObserver | null = null;
+    const outerObserver = new MutationObserver(() => {
+      const root = document.getElementById('mobile-navbar-root');
+      if (root && !innerObserver) {
+        outerObserver.disconnect();
+        syncSlots();
+        innerObserver = new MutationObserver(syncSlots);
+        innerObserver.observe(root, { childList: true, subtree: true });
+      }
+    });
+
+    const existingRoot = document.getElementById('mobile-navbar-root');
+    if (existingRoot) {
+      innerObserver = new MutationObserver(syncSlots);
+      innerObserver.observe(existingRoot, { childList: true, subtree: true });
+    } else {
+      outerObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      outerObserver.disconnect();
+      innerObserver?.disconnect();
+    };
   }, []);
 
  useEffect(() => {

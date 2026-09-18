@@ -83,7 +83,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
 
  return (
  <>
- <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
+ <div id="mobile-navbar-root"className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
  <nav className="flex items-center w-full max-w-md pointer-events-auto">
  {cart && cart.itemCount > 0 ? (
  /* Estado carrito: Layout de 3 piezas idéntico al normal */
