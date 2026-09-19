@@ -1,5 +1,5 @@
 import { useEffect, useState } from'react';
-import { Printer, Key, ArrowsClockwise, ForkKnife, Receipt, Trash } from'@phosphor-icons/react';
+import { Printer, ArrowsClockwise, ForkKnife, Receipt, Trash, FloppyDiskIcon } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { Input } from'@/components/ui/input';
 import { Button } from'@/components/ui/button';
@@ -59,7 +59,11 @@ export default function AjustesImpresion() {
  }
  };
 
- const loadCatalog = async () => {
+ // `silent`: no muestra ningún toast propio (ni éxito ni error) y relanza
+ // el error para que el caller decida qué mostrar — usado quien encadena
+ // esta carga con otro paso (ej. guardar conexión) y solo quiere un único
+ // toast final, no uno por cada función intermedia.
+ const loadCatalog = async (opts?: { notify?: boolean; silent?: boolean }) => {
  setLoadingCatalog(true);
  try {
  const [system, configured] = await Promise.all([
@@ -68,7 +72,11 @@ export default function AjustesImpresion() {
  ]);
  setSystemPrinters(system);
  setConfiguredPrinters(configured);
+ if (opts?.notify) {
+ showToast.success('Catálogo actualizado');
+ }
  } catch (err) {
+ if (opts?.silent) throw err;
  const message = err instanceof Error ? err.message :'No se pudo cargar el catálogo de impresoras';
  showToast.error('Error', message);
  } finally {
@@ -81,21 +89,25 @@ export default function AjustesImpresion() {
  loadCatalog();
  }, []);
 
- const handleSaveServerUrl = async () => {
+ // Un solo botón guarda ambos ajustes (URL + token) — casi siempre se
+ // configuran juntos al vincular un dispositivo nuevo al print server.
+ // En cadena: si recargar el catálogo o el estado falla (ej. la URL nueva
+ // todavía no responde), se muestra SOLO ese error, nunca junto al toast
+ // de éxito — evita el mensaje contradictorio de "guardado" + "falló".
+ const handleSaveConnection = async () => {
  savePrintServerUrl(serverUrlInput);
+ savePrintToken(tokenInput);
  const storedUrl = localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181';
  setServerUrl(storedUrl);
  setServerUrlInput(storedUrl);
- showToast.success('URL guardada','Este dispositivo ahora apunta a ese print server.');
- await loadCatalog();
+ try {
+ await loadCatalog({ silent: true });
  await refreshStatus();
- };
-
- const handleSaveToken = async () => {
- savePrintToken(tokenInput);
- showToast.success('Token guardado','Este dispositivo ya puede autenticarse con el print server.');
- await loadCatalog();
- await refreshStatus();
+ showToast.success('Ajustes guardados','Este dispositivo ahora apunta a ese print server.');
+ } catch (err) {
+ const message = err instanceof Error ? err.message :'No se pudo conectar con el print server';
+ showToast.error('Error', message);
+ }
  };
 
  const configuredNames = new Set(configuredPrinters.map(p => p.name));
@@ -167,26 +179,19 @@ export default function AjustesImpresion() {
 
  return (
  <div className="flex flex-col gap-6 py-6">
- <div className="flex items-center justify-between">
- <div className="flex items-center gap-3">
+ <div className="flex items-center gap-3 min-w-0">
  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
  <Printer size={22} weight="fill"/>
  </div>
- <div className="flex flex-col">
+ <div className="flex flex-col min-w-0">
  <h3 className="font-extrabold text-base text-foreground">Gestión de Impresoras</h3>
- <p className="text-xs text-muted-foreground">Conecta las impresoras que ya tienes instaladas en esta PC y asígnales un rol.</p>
+ <p className="text-xs text-muted-foreground truncate">Conecta las impresoras que ya tienes instaladas en esta PC y asígnales un rol.</p>
  </div>
- </div>
-
- <Button variant="outline"size="sm"disabled={loadingCatalog} onClick={loadCatalog}>
- <ArrowsClockwise size={16} className={loadingCatalog ?'animate-spin':''} /> Actualizar
- </Button>
  </div>
 
  <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
- <h4 className="font-extrabold text-sm text-foreground">Estado del print server</h4>
-
- <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
+ <div className="flex items-center justify-between gap-3">
+ <div className="grid grid-cols-2 gap-4 text-xs font-semibold flex-1">
  <div className="flex flex-col">
  <span className="text-muted-foreground">Servidor</span>
  <span className={cn(serverOk ?"text-emerald-600":"text-destructive","font-extrabold")}>
@@ -199,33 +204,35 @@ export default function AjustesImpresion() {
  </div>
  </div>
 
- <div className="flex flex-col gap-1.5">
- <span className="text-xs text-muted-foreground font-bold">URL del print server</span>
- <div className="flex items-center gap-3">
- <Input
- type="text"placeholder="http://192.168.0.137:18181"value={serverUrlInput}
- onChange={(e) => setServerUrlInput(e.target.value)}
- className="flex-1 text-xs font-mono"/>
- <Button size="sm"onClick={handleSaveServerUrl}>
- Guardar URL
+ <Button variant="secondary"size="icon"className="shrink-0"disabled={loadingCatalog} title="Actualizar"onClick={async () => { await loadCatalog(); await refreshStatus(); showToast.success('Estado actualizado'); }}>
+ <ArrowsClockwise size={18} className={loadingCatalog ?'animate-spin':''} />
  </Button>
  </div>
+
+ <div className="flex flex-col gap-1.5">
+ <span className="text-xs text-muted-foreground font-bold">URL del print server</span>
+ <Input
+ type="url"inputMode="url"autoCapitalize="off"autoCorrect="off"spellCheck={false}
+ placeholder="http://192.168.0.137:18181"value={serverUrlInput}
+ onChange={(e) => setServerUrlInput(e.target.value)}
+ className="h-11 text-sm font-mono"/>
  <span className="text-[11px] text-muted-foreground">
  En este dispositivo usa 127.0.0.1. En celulares/tablets de la misma red, usa la IP local de la PC con el print server (ej: 192.168.0.137).
  </span>
  </div>
- </div>
 
- <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
- <h4 className="font-extrabold text-sm text-foreground">Token de impresión</h4>
- <div className="flex items-center gap-3">
+ <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+ <span className="text-xs text-muted-foreground font-bold">Token de impresión</span>
+ <div className="flex items-center gap-2">
  <Input
- type="text"placeholder="Ej: AB3K-9XQZ"value={tokenInput}
+ type="text"inputMode="text"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
+ placeholder="Ej: AB3K-9XQZ"value={tokenInput}
  onChange={(e) => setTokenInput(e.target.value)}
- className="flex-1 text-xs font-mono"/>
- <Button size="sm"onClick={handleSaveToken}>
- <Key size={16} /> Guardar Token
+ className="flex-1 h-11 text-sm font-mono"/>
+ <Button className="h-11 shrink-0"onClick={handleSaveConnection}>
+ <FloppyDiskIcon size={18} weight="bold"/> Guardar
  </Button>
+ </div>
  </div>
  </div>
 

@@ -6,7 +6,6 @@ import { useRxAjustesIva } from'../hooks/useRxAjustesIva';
 import AjustesOrganizacion from './Ajustes/AjustesOrganizacion';
 import AjustesImpresion from './Ajustes/AjustesImpresion';
 import AjustesAuditoria from './Ajustes/AjustesAuditoria';
-import AjustesMantenimiento from './Ajustes/AjustesMantenimiento';
 import AjustesMetodosPago from './Ajustes/AjustesMetodosPago';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -14,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
-const SECTION_KEYS = ['organizacion', 'metodos-pago', 'impresion', 'auditoria', 'iva', 'mantenimiento'] as const;
+const SECTION_KEYS = ['organizacion', 'metodos-pago', 'impresion', 'auditoria', 'iva'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
 
 const SECTIONS = [
@@ -23,7 +22,6 @@ const SECTIONS = [
   { value: 'impresion', label: 'Impresión' },
   { value: 'auditoria', label: 'Auditoría' },
   { value: 'iva', label: 'IVA' },
-  { value: 'mantenimiento', label: 'Mantenimiento' },
 ] as const;
 
 export default function AjustesV2() {
@@ -130,7 +128,6 @@ export default function AjustesV2() {
  {activeSection === 'metodos-pago' && <AjustesMetodosPago />}
  {activeSection ==='impresion'&& <AjustesImpresion />}
  {activeSection ==='auditoria'&& <AjustesAuditoria />}
- {activeSection ==='mantenimiento'&& <AjustesMantenimiento />}
  {activeSection ==='iva'&& (
  <div className="bg-card rounded-2xl border border-border p-6 shadow-xs flex flex-col gap-6">
  <div className="flex items-center justify-between gap-4">

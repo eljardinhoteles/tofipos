@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from'react';
+import { useState, useEffect, useMemo, useRef } from'react';
 import { X, Plus, Printer, Trash, Minus, Check, Bed, Basket, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User, GiftIcon } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
@@ -19,6 +19,7 @@ import { useAuth } from'../../../context/AuthContext';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { queueKitchenPrint, queueReceiptPrint } from'../../../lib/printServerClient';
 import { generarPrecuenta } from'../../../services/printTemplateEngine';
+import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
 import {
@@ -58,6 +59,27 @@ export function SidebarDetails({
  onAddProduct,
  onAction,
 }: SidebarDetailsProps) {
+ const isMobile = useIsMobile();
+ // Chevron sobre "Añadir Productos" en móvil: avisa que la lista de
+ // productos sigue scrolleable hacia abajo, ya que ahí no queda tan obvio
+ // como en desktop (más alto de pantalla visible de una vez).
+ const productListRef = useRef<HTMLDivElement>(null);
+ const [hasMoreBelow, setHasMoreBelow] = useState(false);
+ useEffect(() => {
+ const el = productListRef.current;
+ if (!el) return;
+ const checkScroll = () => {
+ setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+ };
+ checkScroll();
+ el.addEventListener('scroll', checkScroll);
+ const resizeObserver = new ResizeObserver(checkScroll);
+ resizeObserver.observe(el);
+ return () => {
+ el.removeEventListener('scroll', checkScroll);
+ resizeObserver.disconnect();
+ };
+ }, [comandaItems]);
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
@@ -718,7 +740,7 @@ export function SidebarDetails({
  </Collapsible>
 
  {/* Lista de productos */}
- <main className="flex-1 overflow-y-auto">
+ <main ref={productListRef}className="flex-1 overflow-y-auto">
  {comandaItems.length === 0 ? (
  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
  <Basket size={48} className="text-muted-foreground/40"/>
@@ -741,21 +763,34 @@ export function SidebarDetails({
  )}
  </main>
 
- {!editingItem && activeComanda?.estado !=='cuenta'&& (
+ {/* Footer y Acciones */}
+ <footer className={cn("relative p-4 bg-card flex flex-col gap-3 shrink-0",
+ (editingItem || activeComanda?.estado ==='cuenta') &&"border-t border-border")}>
+ {isMobile && hasMoreBelow && !editingItem && activeComanda?.estado !=='cuenta'&& (
+ <CaretDown
+ aria-hidden="true"
+ size={18}
+ weight="bold"
+ className="absolute -top-3 left-1/2 -translate-x-1/2 text-muted-foreground/70 animate-bounce pointer-events-none"
+ />
+ )}
+ {!editingItem ? (
+ <>
+ {activeComanda?.estado !=='cuenta'&& (
  <Button
- className="w-full h-10 rounded-none border-0 font-bold text-xs bg-primary text-primary-foreground shrink-0"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ className="w-full h-10 font-bold text-xs bg-orange-500 hover:bg-orange-600 text-white shrink-0"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
  <Basket size={16} weight="bold"className="mr-1.5"/>
  Añadir Productos {totalItems > 0 &&`· Total Items: ${totalItems}`}
  </Button>
  )}
-
- {/* Footer y Acciones */}
- <footer className={cn("p-4 bg-card flex flex-col gap-3 shrink-0",
- (editingItem || activeComanda?.estado ==='cuenta') &&"border-t border-border")}>
- {!editingItem ? (
- <>
  <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-muted/60 text-sm font-semibold text-muted-foreground">
+ {/* En móvil, mientras se está tomando el pedido (todavía no se pidió la
+ cuenta), solo se muestra el Total — subtotal/IVA/cobros son detalle
+ que no hace falta ver a cada rato y le quitan espacio a la lista de
+ productos, que es lo que se usa activamente en ese momento. */}
+ {(!isMobile || activeComanda?.estado ==='cuenta') && (
+ <>
  <div className="flex items-center justify-between">
  <span>Subtotal</span>
  <span className="font-bold text-foreground">${subtotal.toFixed(2)}</span>
@@ -771,14 +806,18 @@ export function SidebarDetails({
  </span>
  <span className="font-bold text-foreground">${ivaCalculado.toFixed(2)}</span>
  </button>
- <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+ </>
+ )}
+ <div className={cn("flex items-center justify-between",
+ (!isMobile || activeComanda?.estado ==='cuenta') &&"pt-2 mt-1 border-t border-border")}>
  <span className="text-base font-black text-foreground">Total</span>
  <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
  </div>
  {/* Cuenta dividida (SidebarSplit) registra pagos parciales por
  persona/ítem antes del cierre — sin esto no había forma de ver
- cuánto ya se cobró sin abrir el modal de pagos aparte. */}
- {totalPagado > 0 && (
+ cuánto ya se cobró sin abrir el modal de pagos aparte. Igual que
+ subtotal/IVA, solo aplica cuando ya se pidió la cuenta en móvil. */}
+ {totalPagado > 0 && (!isMobile || activeComanda?.estado ==='cuenta') && (
  <>
  <button
  type="button"

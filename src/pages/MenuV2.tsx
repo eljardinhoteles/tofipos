@@ -7,6 +7,15 @@ import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxd
 import { cn } from'@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { CsvUploader } from '@/components/Menu/CsvUploader';
+import {
+ Sheet,
+ SheetContent,
+ SheetHeader,
+ SheetTitle,
+ SheetDescription,
+} from '@/components/ui/sheet';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CATEGORY_ICONS, getCategoryIcon } from '@/lib/categoryIcons';
 
 export default function MenuV2() {
  const [searchQuery, setSearchQuery] = useState('');
@@ -152,26 +161,18 @@ export default function MenuV2() {
  )}
  </main>
 
- {/* Modal: Gestionar Categorías */}
- {isManageCategoriesOpen && (
- <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
- <div className="bg-card rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col">
- <div className="p-4 border-b border-border flex items-center justify-between">
- <div className="flex items-center gap-3">
- <SquaresFour size={24} className="text-primary"/>
- <div>
- <h3 className="font-extrabold text-sm text-foreground">Categorías</h3>
- <p className="text-xs text-muted-foreground">Agrupa tu menú igual que en tu carta física</p>
+ {/* Drawer: Gestionar Categorías */}
+ <Sheet open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
+ <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
+ <SheetHeader className="p-4 border-b border-border flex-row items-center gap-3 space-y-0">
+ <SquaresFour size={24} className="text-primary shrink-0"/>
+ <div className="flex flex-col gap-0.5">
+ <SheetTitle>Categorías</SheetTitle>
+ <SheetDescription>Agrupa tu menú igual que en tu carta física</SheetDescription>
  </div>
- </div>
- <button
- type="button"onClick={() => setIsManageCategoriesOpen(false)}
- className="w-7 h-7 rounded-lg text-muted-foreground flex items-center justify-center cursor-pointer">
- <X size={16} />
- </button>
- </div>
+ </SheetHeader>
 
- <div className="p-4 flex flex-col gap-4">
+ <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
  {/* Formulario Nueva Categoría */}
  <form
  onSubmit={async (e) => {
@@ -197,16 +198,66 @@ export default function MenuV2() {
  </form>
 
  {/* Lista */}
- <div className="max-h-64 overflow-y-auto flex flex-col gap-1">
+ <div className="flex flex-col gap-2">
  {safeDbCategorias.length === 0 ? (
  <div className="py-8 text-center text-xs text-muted-foreground">Sin categorías aún</div>
  ) : (
- safeDbCategorias.map((cat, idx) => (
+ safeDbCategorias.map((cat, idx) => {
+ const CategoryIcon = getCategoryIcon(cat.icono);
+ return (
  <div
  key={cat.id}
- className={cn("flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors",
- editingCategory?.id === cat.id ?"bg-muted border border-border":"")}
+ className={cn("flex flex-col gap-2.5 p-3 rounded-xl border transition-colors",
+ editingCategory?.id === cat.id ?"bg-muted border-border":"border-border/60")}
  >
+ <div className="flex items-center gap-2">
+ <div className="flex flex-col gap-0.5 shrink-0">
+ <button
+ type="button"
+ onClick={() => handleMoveCategory(idx,'up')}
+ disabled={idx === 0}
+ className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+ <CaretUp size={12} weight="bold"/>
+ </button>
+ <button
+ type="button"
+ onClick={() => handleMoveCategory(idx,'down')}
+ disabled={idx === safeDbCategorias.length - 1}
+ className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+ <CaretDown size={12} weight="bold"/>
+ </button>
+ </div>
+
+ {/* Selector de ícono */}
+ <Popover>
+ <PopoverTrigger asChild>
+ <button
+ type="button"
+ title="Elegir ícono"
+ className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground cursor-pointer">
+ {CategoryIcon ? <CategoryIcon size={16} weight="bold"/> : <SquaresFour size={16} />}
+ </button>
+ </PopoverTrigger>
+ <PopoverContent className="w-72 p-2"align="start">
+ <div className="grid grid-cols-8 gap-1">
+ {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
+ <button
+ key={key}
+ type="button"
+ title={key}
+ onClick={async () => {
+ await updateRxCategoria(cat.id, { icono: cat.icono === key ? null : key });
+ }}
+ className={cn("w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors",
+ cat.icono === key ?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-muted")}
+ >
+ <Icon size={16} weight="bold"/>
+ </button>
+ ))}
+ </div>
+ </PopoverContent>
+ </Popover>
+
  {editingCategory?.id === cat.id ? (
  <Input
  type="text"value={editingCategory?.nombre ||''}
@@ -221,34 +272,19 @@ export default function MenuV2() {
  }
  if (e.key ==='Escape') setEditingCategory(null);
  }}
- className="flex-1 font-bold h-7 text-xs bg-transparent border-b border-primary"autoFocus
+ className="flex-1 font-bold h-8 text-xs"autoFocus
  />
  ) : (
- <div className="flex items-center gap-2">
-    <div className="flex flex-col gap-0.5 mr-1">
-      <button 
-        type="button" 
-        onClick={() => handleMoveCategory(idx, 'up')}
-        disabled={idx === 0}
-        className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
-        <CaretUp size={12} weight="bold" />
-      </button>
-      <button 
-        type="button" 
-        onClick={() => handleMoveCategory(idx, 'down')}
-        disabled={idx === safeDbCategorias.length - 1}
-        className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
-        <CaretDown size={12} weight="bold" />
-      </button>
-    </div>
-    <span className="font-semibold text-foreground">{cat.nombre}</span>
-    {cat.es_comida_incluida && (
-      <span className="px-1.5 py-0.5 rounded-xs bg-emerald-100 text-emerald-700 text-[10px] font-bold">Plan</span>
-    )}
+ <div className="flex items-center gap-1.5 flex-1 min-w-0">
+ <span className="font-semibold text-foreground truncate">{cat.nombre}</span>
+ {cat.es_comida_incluida && (
+ <span className="px-1.5 py-0.5 rounded-xs bg-emerald-100 text-emerald-700 text-[10px] font-bold shrink-0">Plan</span>
+ )}
  </div>
  )}
+ </div>
 
- <div className="flex items-center gap-1 shrink-0">
+ <div className="flex items-center justify-end gap-1">
  {editingCategory?.id === cat.id ? (
  <>
  <button
@@ -259,12 +295,12 @@ export default function MenuV2() {
  }
  setEditingCategory(null);
  }}
- className="w-6 h-6 rounded-md text-foreground flex items-center justify-center cursor-pointer">
+ className="w-7 h-7 rounded-md text-foreground flex items-center justify-center cursor-pointer">
  <Check size={14} weight="bold"/>
  </button>
  <button
  type="button"onClick={() => setEditingCategory(null)}
- className="w-6 h-6 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
+ className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
  <X size={14} />
  </button>
  </>
@@ -275,7 +311,7 @@ export default function MenuV2() {
  onClick={async () => {
  await updateRxCategoria(cat.id, { es_comida_incluida: !cat.es_comida_incluida });
  }}
- className={cn("w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors",
+ className={cn("w-7 h-7 rounded-md flex items-center justify-center cursor-pointer transition-colors",
  cat.es_comida_incluida ?"bg-emerald-500 text-white":"text-muted-foreground")}
  >
  <Check size={13} weight="bold"/>
@@ -285,14 +321,14 @@ export default function MenuV2() {
  onClick={async () => {
  await updateRxCategoria(cat.id, { imprimir_primero: !cat.imprimir_primero });
  }}
- className={cn("w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors",
+ className={cn("w-7 h-7 rounded-md flex items-center justify-center cursor-pointer transition-colors",
  cat.imprimir_primero ?"bg-primary text-primary-foreground":"text-muted-foreground")}
  >
  <NumberCircleOneIcon size={14} weight="bold"/>
  </button>
  <button
  type="button"onClick={() => setEditingCategory(cat)}
- className="w-6 h-6 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
+ className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
  <PencilLine size={13} />
  </button>
  <button
@@ -304,20 +340,20 @@ export default function MenuV2() {
  }
  );
  }}
- className="w-6 h-6 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
+ className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
  <Trash size={13} />
  </button>
  </>
  )}
  </div>
  </div>
- ))
+ );
+ })
  )}
  </div>
  </div>
- </div>
- </div>
- )}
+ </SheetContent>
+ </Sheet>
  </div>
  );
 }

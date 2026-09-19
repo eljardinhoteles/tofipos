@@ -8,6 +8,7 @@ import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
 import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -133,6 +134,13 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  // menú de huésped), para distinguir visualmente ese grupo en el grid.
  const planCategoryNames = useMemo(
  () => new Set(safeDbCategorias.filter(c => c.es_comida_incluida).map(c => c.nombre)),
+ [safeDbCategorias]
+ );
+
+ // Nombre de categoría -> ícono elegido por el admin (ver categoryIcons.ts),
+ // para reemplazar el texto plano por algo reconocible de un vistazo.
+ const categoryIconByName = useMemo(
+ () => new Map(safeDbCategorias.filter(c => c.icono).map(c => [c.nombre, c.icono as string])),
  [safeDbCategorias]
  );
 
@@ -354,24 +362,34 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-24 flex flex-col items-center justify-center p-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
+              className="h-20 flex items-center justify-center px-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
             >
-              <Star size={28} weight="fill" className="mb-1" />
-              <span className="font-extrabold text-sm text-center">Favoritos</span>
+              <span className="flex flex-col items-center gap-1 max-w-full">
+                <Star size={22} weight="fill" className="shrink-0" />
+                <span className="font-semibold text-base text-center line-clamp-2">Favoritos</span>
+              </span>
             </button>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={cn("h-24 flex flex-col items-center justify-center p-2 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
-                  planCategoryNames.has(cat)
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-                    : "bg-card border-border text-foreground hover:bg-muted")}
-              >
-                <span className="font-extrabold text-sm text-center line-clamp-2 px-1">{cat}</span>
-              </button>
-            ))}
+            {categories.map((cat) => {
+              const CategoryIcon = getCategoryIcon(categoryIconByName.get(cat));
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={cn("h-20 flex items-center justify-center px-2 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
+                    planCategoryNames.has(cat)
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                      : "bg-card border-border text-foreground hover:bg-muted")}
+                >
+                  <span className="flex flex-col items-center gap-1 max-w-full">
+                    <span className="shrink-0 w-[22px] h-[22px] flex items-center justify-center">
+                      {CategoryIcon && <CategoryIcon size={22} weight="bold" />}
+                    </span>
+                    <span className="font-semibold text-base text-center leading-tight line-clamp-2">{cat}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -572,7 +590,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
           </button>
         )}
 
-        <span className={cn("font-black text-lg", isSelected ? "text-primary-foreground" : "text-primary")}>
+        <span className={cn("font-black text-base", isSelected ? "text-primary-foreground" : "text-primary")}>
           ${finalPrice.toFixed(2)}
         </span>
       </div>

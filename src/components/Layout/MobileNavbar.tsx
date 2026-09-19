@@ -83,14 +83,14 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
 
  return (
  <>
- <div id="mobile-navbar-root"className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
+ <div id="mobile-navbar-root"className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
  <nav className="flex items-center w-full max-w-md pointer-events-auto">
  {cart && cart.itemCount > 0 ? (
  /* Estado carrito: Layout de 3 piezas idéntico al normal */
  <div className="flex items-center justify-between w-full gap-3 h-14">
  
  {/* IZQUIERDA: Slot para Categorías/Volver */}
- <div id="mobile-navbar-cart-action-slot" onClick={e => e.stopPropagation()} className="shrink-0 flex items-center justify-center w-14 h-14"></div>
+ <div id="mobile-navbar-cart-action-slot"onClick={e => e.stopPropagation()} className="shrink-0 flex items-center justify-center w-14 h-14"></div>
  
  {/* CENTRO: Info de comanda */}
  <button

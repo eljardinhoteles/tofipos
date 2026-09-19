@@ -164,6 +164,10 @@ export interface RxCategoria {
   // comanda de cocina, sin importar el orden en que se agregaron al pedido
   // — cocina siempre quiere ver entradas antes que fuertes de un vistazo.
   imprimir_primero?: boolean
+  // Nombre del icono elegido (ver CATEGORY_ICONS en categoryIcons.ts) para
+  // mostrar en las cards de categoria del selector de productos en vez de
+  // solo texto. Null/undefined = sin icono asignado, se ve como antes.
+  icono?: string | null
   organization_id: string
   _deleted: boolean
   _modified: string
@@ -648,7 +652,7 @@ const reservaSchema = {
 } as const
 
 const categoriaSchema = {
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -657,6 +661,7 @@ const categoriaSchema = {
     orden: { type: 'number' },
     es_comida_incluida: { type: 'boolean' },
     imprimir_primero: { type: 'boolean' },
+    icono: { type: ['string', 'null'] },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
@@ -1162,6 +1167,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
  // v0 → v1: agrega imprimir_primero — categorías (ej. Entradas) cuyos
  // ítems van siempre al inicio de la comanda de cocina.
  1: (oldDoc: any) => ({ ...oldDoc, imprimir_primero: false }),
+ // v1 → v2: agrega icono — el admin lo elige manualmente por categoría
+ // para mostrarlo en las cards del selector de productos.
+ 2: (oldDoc: any) => ({ ...oldDoc, icono: null }),
  },
  },
     mesas: { schema: mesaSchema },
