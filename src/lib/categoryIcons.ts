@@ -44,6 +44,18 @@ import {
   Tray,
   Gift,
   Cow,
+  Apple,
+  Bone,
+  Coin,
+  CurrencyDollar,
+  Flower,
+  MapPin,
+  Plant,
+  ShoppingCart,
+  Storefront,
+  Ticket,
+  FireExtinguisher,
+  IceCream,
   type Icon,
 } from '@phosphor-icons/react'
 
@@ -97,6 +109,17 @@ export const CATEGORY_ICONS: Record<string, Icon> = {
   tray: Tray,
   gift: Gift,
   cow: Cow,
+  apple: Apple,
+  bone: Bone,
+  coin: Coin,
+  currency_dollar: CurrencyDollar,
+  flower: Flower,
+  map_pin: MapPin,
+  plant: Plant,
+  shopping_cart: ShoppingCart,
+  storefront: Storefront,
+  ticket: Ticket,
+  fire_extinguisher: FireExtinguisher,
 }
 
 export type CategoryIconKey = keyof typeof CATEGORY_ICONS
