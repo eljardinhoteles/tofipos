@@ -55,7 +55,6 @@ import {
   Storefront,
   Ticket,
   FireExtinguisher,
-  IceCream,
   type Icon,
 } from '@phosphor-icons/react'
 
