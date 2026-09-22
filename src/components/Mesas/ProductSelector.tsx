@@ -303,19 +303,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         <ArrowLeft size={18} weight="bold"/>
       </button>
     )}
-    {(selectedCategory || searchQueryDebounced) && (
-      <button
-        type="button"
-        onClick={() => {
-          setSelectedCategory(null);
-          setSearchQueryInput('');
-          setSearchQueryDebounced('');
-        }}
-        title="Volver a categorías"
-        className="w-10 h-10 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
-        <ForkKnife size={18} weight="fill"/>
-      </button>
-    )}
     <div className="relative flex-1">
       <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
       <Input
@@ -331,11 +318,24 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         </button>
       )}
     </div>
+    {(selectedCategory || searchQueryDebounced) && (
+      <button
+        type="button"
+        onClick={() => {
+          setSelectedCategory(null);
+          setSearchQueryInput('');
+          setSearchQueryDebounced('');
+        }}
+        title="Volver a categorías"
+        className="w-10 h-10 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
+        <ForkKnife size={18} weight="fill"/>
+      </button>
+    )}
   </header>
 
   {/* CONTENIDO PRINCIPAL */}
   <div className="flex-1 relative flex flex-col min-h-0">
-    <main className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+112px)] relative">
+    <main className="@container flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+112px)] relative">
       {(!selectedCategory && !searchQueryDebounced) ? (
         /* HOME DE CATEGORÍAS */
         <div className="flex flex-col gap-5">
@@ -344,13 +344,13 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
               <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
                 Usados recientemente
               </span>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 py-1 @md:flex-wrap @md:overflow-visible @md:mx-0 @md:px-0 @md:py-0">
                 {recentItems.map(item => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => handleAddProduct(item)}
-                    className="flex items-center px-4 py-2.5 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
+                    className="flex items-center shrink-0 px-4 py-2.5 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
                   >
                     <span className="font-bold text-sm text-foreground whitespace-nowrap">{item.nombre}</span>
                   </button>
@@ -358,15 +358,15 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-2 @md:gap-3 @lg:grid-cols-3 @xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-20 flex items-center justify-center px-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
+              className="h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
             >
-              <span className="flex flex-col items-center gap-1 max-w-full">
-                <Star size={22} weight="fill" className="shrink-0" />
-                <span className="font-semibold text-base text-center line-clamp-2">Favoritos</span>
+              <span className="font-semibold text-base text-left line-clamp-2">Favoritos</span>
+              <span className="shrink-0 w-[22px] h-[22px] @md:w-7 @md:h-7 [&>svg]:w-full [&>svg]:h-full">
+                <Star weight="fill" />
               </span>
             </button>
             {categories.map((cat) => {
@@ -376,16 +376,15 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={cn("h-20 flex items-center justify-center px-2 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
+                  className={cn("h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
                     planCategoryNames.has(cat)
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                       : "bg-card border-border text-foreground hover:bg-muted")}
                 >
-                  <span className="flex flex-col items-center gap-1 max-w-full">
-                    <span className="shrink-0 w-[22px] h-[22px] flex items-center justify-center">
-                      {CategoryIcon && <CategoryIcon size={22} weight="bold" />}
-                    </span>
-                    <span className="font-semibold text-base text-center leading-tight line-clamp-2">{cat}</span>
+                  <span className="font-semibold text-base text-left leading-tight line-clamp-2">{cat}</span>
+                  <span className={cn("shrink-0 w-[22px] h-[22px] @md:w-7 @md:h-7 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full",
+                    !planCategoryNames.has(cat) && "text-neutral-600")}>
+                    {CategoryIcon && <CategoryIcon weight="bold" />}
                   </span>
                 </button>
               );
@@ -409,7 +408,11 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                 <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
                   {group.category}
                 </span>
-                <div className="pos-menu-grid">
+                {/* Lista (icono + texto + precio) en paneles angostos, grid de cards
+                    cuando el panel es ancho — según el ancho real del contenedor
+                    (@container), no del viewport, porque este selector puede vivir
+                    embebido en layouts más anchos que el propio panel. */}
+                <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,240px))] @md:gap-3">
                   {group.items.map(item => (
                     <ProductCardV2
                       key={item.id}
@@ -418,6 +421,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                       currentQty={itemQuantities[item.id] || 0}
                       ivaPorcentaje={ivaPorcentaje}
                       preciosConIva={preciosConIva}
+                      categoryIcon={getCategoryIcon(categoryIconByName.get(item.categoria_nombre || ''))}
+                      isPlanItem={planCategoryNames.has(item.categoria_nombre || 'Sin Categoría')}
                     />
                   ))}
                 </div>
@@ -553,11 +558,18 @@ interface ProductCardProps {
   currentQty: number;
   ivaPorcentaje: number;
   preciosConIva: boolean;
+  categoryIcon: ReturnType<typeof getCategoryIcon>;
+  isPlanItem: boolean;
 }
 
-const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva }: ProductCardProps) {
+// Un único componente cuyo propio layout cambia según el ancho del panel
+// (@container en <main>, no el viewport global): fila compacta con ícono
+// cuando el panel es angosto, card cuando hay espacio. Así nunca se
+// duplica el render entre "mobile" y "desktop" — solo existe una versión
+// del producto en el DOM en todo momento.
+const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva, categoryIcon: CategoryIcon, isPlanItem }: ProductCardProps) {
   const isSelected = currentQty > 0;
-  
+
   const finalPrice = !preciosConIva && item.iva_modalidad === 'sistema'
     ? item.precio * (1 + ivaPorcentaje / 100)
     : item.precio;
@@ -565,35 +577,45 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
   return (
     <div
       onClick={() => onAdd(item)}
-      className={cn("p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between select-none active:scale-98 min-h-[104px]",
+      className={cn(
+        "border transition-all cursor-pointer select-none active:scale-98",
+        "flex items-center gap-3 px-3 py-3 rounded-xl",
+        "@md:relative @md:flex-col @md:items-stretch @md:justify-between @md:gap-0 @md:p-4 @md:rounded-2xl @md:min-h-[104px]",
         isSelected
-          ? "bg-primary text-primary-foreground border-primary shadow-md" : "bg-card text-foreground border-border")}
+          ? "bg-primary text-primary-foreground border-primary shadow-md"
+          : isPlanItem
+            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+            : "bg-card text-foreground border-border")}
     >
-      <span className={cn("font-bold text-base line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+      <button
+        type="button"
+        onClick={async (e) => {
+          e.stopPropagation();
+          const rxDb = await initVerticalRxDb();
+          await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
+        }}
+        className={cn("shrink-0 w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer @md:w-10 @md:h-10 @md:rounded-xl",
+          isSelected ? "bg-primary-foreground/20" : isPlanItem ? "bg-emerald-100" : "bg-muted")}>
+        {isSelected ? (
+          <span className="font-black text-sm text-primary-foreground @md:text-base">{currentQty}</span>
+        ) : item.favorito ? (
+          <Star size={18} weight="fill" className="text-amber-400" />
+        ) : (
+          CategoryIcon && <CategoryIcon size={18} weight="bold" />
+        )}
+      </button>
+
+      <span className={cn("flex-1 font-bold text-base line-clamp-2 @md:w-full @md:mt-3", isSelected ? "text-primary-foreground" : "text-foreground")}>
         {item.nombre}
       </span>
 
-      <div className="flex items-center justify-between mt-3">
-        {isSelected ? (
-          <span className="px-2.5 py-1 rounded-md bg-primary-foreground/20 text-primary-foreground font-black text-base">
-            {currentQty}
-          </span>
-        ) : (
-          <button
-            type="button" onClick={async (e) => {
-              e.stopPropagation();
-              const rxDb = await initVerticalRxDb();
-              await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
-            }}
-            className="text-muted-foreground/50 transition-colors cursor-pointer p-1 -m-1">
-            <Star size={18} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito ? 'text-amber-400' : ''} />
-          </button>
-        )}
+      <span className={cn("shrink-0 font-black text-sm @md:hidden", isSelected ? "text-primary-foreground" : isPlanItem ? "text-emerald-700" : "text-primary")}>
+        ${finalPrice.toFixed(2)}
+      </span>
 
-        <span className={cn("font-black text-base", isSelected ? "text-primary-foreground" : "text-primary")}>
-          ${finalPrice.toFixed(2)}
-        </span>
-      </div>
+      <span className={cn("hidden @md:block @md:absolute @md:top-4 @md:right-4 font-black text-base", isSelected ? "text-primary-foreground" : isPlanItem ? "text-emerald-700" : "text-primary")}>
+        ${finalPrice.toFixed(2)}
+      </span>
     </div>
   );
 });

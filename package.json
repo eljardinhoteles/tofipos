@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -49,6 +50,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "lucide-react": "^1.28.0",
+    "patch-package": "^8.0.1",
     "postcss": "^8.5.6",
     "postcss-simple-vars": "^7.0.1",
     "sonner": "^2.0.7",
