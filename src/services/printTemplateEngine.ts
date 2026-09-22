@@ -466,6 +466,10 @@ export function generarPrecuentaConsolidadaHabitacion(
   ivaPercent: number = 15,
   habitacionNombre?: string,
   forPrinter = false,
+  // Cuando es true, omite los items incluidos en el plan del huésped
+  // (precio 0) y solo deja los consumos que sí se cobran — para la
+  // versión "Consumos" del checkout de habitación.
+  soloConsumo = false,
 ): string {
   const p = (cmd: string) => forPrinter ? cmd : '';
   const W = 48;
@@ -481,7 +485,7 @@ export function generarPrecuentaConsolidadaHabitacion(
   t += p(POS.ALIGN_LEFT);
   t += `${'-'.repeat(W)}\n`;
 
-  t += justifyBetween('PRECUENTA CONSOLIDADA', new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(soloConsumo ? 'CONSUMOS (SIN INCLUIDOS)' : 'PRECUENTA CONSOLIDADA', new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
@@ -491,6 +495,11 @@ export function generarPrecuentaConsolidadaHabitacion(
   // ── Una sección por comanda ─────────────────────────────────────
   let granSubtotal = 0;
   comandas.forEach(({ comanda, items }) => {
+    const itemsVisibles = items
+      .filter(item => !item.anulado)
+      .filter(item => !soloConsumo || item.precio > 0);
+    if (itemsVisibles.length === 0) return;
+
     const fechaComanda = comanda.created_at ? new Date(comanda.created_at).toLocaleDateString('es-ES') : '';
     t += p(POS.BOLD_ON);
     t += `Comanda #${comanda.folio}${fechaComanda ? ` (${fechaComanda})` : ''}\n`;
@@ -498,7 +507,7 @@ export function generarPrecuentaConsolidadaHabitacion(
     t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
     t += `${'-'.repeat(W)}\n`;
 
-    items.filter(item => !item.anulado).forEach(item => {
+    itemsVisibles.forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       granSubtotal += itemTotal;
       t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';

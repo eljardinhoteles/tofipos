@@ -108,7 +108,7 @@ export function TicketPreviewModal({
 
  return (
  <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
- <DialogContent className="max-w-md max-h-[90vh] flex flex-col gap-4 p-6">
+ <DialogContent showCloseButton={false} className="max-w-md max-h-[90vh] flex flex-col gap-4 p-6">
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2 text-base">
  <FileText size={18} className="text-primary"/> {title}

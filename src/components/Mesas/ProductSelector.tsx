@@ -362,10 +362,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 cursor-pointer"
+              className="h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 transform-gpu cursor-pointer"
             >
               <span className="font-semibold text-base text-left line-clamp-2">Favoritos</span>
-              <span className="shrink-0 w-[22px] h-[22px] @md:w-7 @md:h-7 [&>svg]:w-full [&>svg]:h-full">
+              <span className="shrink-0 w-9 h-9 @md:w-11 @md:h-11 rounded-full bg-amber-100 flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px] @md:[&>svg]:w-7 @md:[&>svg]:h-7">
                 <Star weight="fill" />
               </span>
             </button>
@@ -376,14 +376,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={cn("h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl border transition-all active:scale-95 shadow-sm cursor-pointer",
+                  className={cn("h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl border transition-all active:scale-95 transform-gpu shadow-sm cursor-pointer",
                     planCategoryNames.has(cat)
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                       : "bg-card border-border text-foreground hover:bg-muted")}
                 >
                   <span className="font-semibold text-base text-left leading-tight line-clamp-2">{cat}</span>
-                  <span className={cn("shrink-0 w-[22px] h-[22px] @md:w-7 @md:h-7 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full",
-                    !planCategoryNames.has(cat) && "text-neutral-600")}>
+                  <span className={cn("shrink-0 w-9 h-9 @md:w-11 @md:h-11 rounded-full flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px] @md:[&>svg]:w-7 @md:[&>svg]:h-7",
+                    planCategoryNames.has(cat) ? "bg-emerald-100" : "bg-muted text-neutral-600")}>
                     {CategoryIcon && <CategoryIcon weight="bold" />}
                   </span>
                 </button>
@@ -447,7 +447,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           }
         }}
         className={cn(
-          "flex items-center justify-center w-14 h-14 rounded-full shadow-lg cursor-pointer active:scale-95 transition-all",
+          "flex items-center justify-center w-14 h-14 rounded-full shadow-lg cursor-pointer active:scale-95 transform-gpu transition-all",
           (selectedCategory || searchQueryDebounced)
             ? "bg-orange-500 text-white shadow-orange-500/30"
             : "bg-nav text-nav-foreground shadow-black/20"
@@ -470,7 +470,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           const input = document.getElementById('product-search-input');
           if (input) input.focus();
         }}
-        className="flex items-center justify-center w-14 h-14 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-95 transition-transform"
+        className="flex items-center justify-center w-14 h-14 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-95 transform-gpu transition-transform"
       >
         <MagnifyingGlass size={22} weight="bold" />
       </button>,
@@ -578,7 +578,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
     <div
       onClick={() => onAdd(item)}
       className={cn(
-        "border transition-all cursor-pointer select-none active:scale-98",
+        "border transition-all cursor-pointer select-none active:scale-98 transform-gpu",
         "flex items-center gap-3 px-3 py-3 rounded-xl",
         "@md:relative @md:flex-col @md:items-stretch @md:justify-between @md:gap-0 @md:p-4 @md:rounded-2xl @md:min-h-[104px]",
         isSelected
@@ -594,7 +594,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
           const rxDb = await initVerticalRxDb();
           await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
         }}
-        className={cn("shrink-0 w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer @md:w-10 @md:h-10 @md:rounded-xl",
+        className={cn("shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer @md:w-10 @md:h-10",
           isSelected ? "bg-primary-foreground/20" : isPlanItem ? "bg-emerald-100" : "bg-muted")}>
         {isSelected ? (
           <span className="font-black text-sm text-primary-foreground @md:text-base">{currentQty}</span>

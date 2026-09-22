@@ -13,6 +13,16 @@ import { useIvaActivo } from'../../../../hooks/useIvaActivo';
 import { generarPrecuentaConsolidadaHabitacion } from'../../../../services/printTemplateEngine';
 import { queueReprintTicket } from'../../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../../Common/TicketPreviewModal';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from'@/components/ui/alert-dialog';
 
 // Cambios pendientes de cortesía por item, mantenidos en memoria hasta que se
 // confirma el cobro — así el cajero puede ajustar varios items sin disparar
@@ -43,6 +53,11 @@ export function HabitacionCheckoutView({
   const [itemsByComanda, setItemsByComanda] = useState<Record<string, any[]>>({});
   const [expandedComandaId, setExpandedComandaId] = useState<string | null>(null);
   const [cortesiaDrafts, setCortesiaDrafts] = useState<Record<string, CortesiaDraft>>({});
+
+  // Confirmación antes de "Cobrar": el cierre en base de datos es
+  // irreversible desde esta pantalla (libera la mesa/cierra la cuenta), así
+  // que se pide un paso extra para evitar toques accidentales.
+  const [confirmCobroOpened, setConfirmCobroOpened] = useState(false);
 
   // Preview consolidado que el huésped revisa antes de confirmar el cobro.
   // El cierre real en base de datos (handleFinalizar) solo corre cuando el
@@ -130,10 +145,12 @@ export function HabitacionCheckoutView({
     }));
   };
 
-  // Botón "Imprimir": solo arma y muestra el comprobante consolidado para
-  // que el huésped lo revise, sin afectar el estado de las comandas. Es
-  // independiente de "Cobrar" — se puede imprimir varias veces sin cobrar.
-  const handleImprimirConsolidado = () => {
+  // Botón "Completa" / "Consumos": solo arma y muestra el comprobante
+  // consolidado para que el huésped lo revise, sin afectar el estado de
+  // las comandas. Es independiente de "Cobrar" — se puede imprimir varias
+  // veces sin cobrar. "Consumos" omite los items del plan (precio 0),
+  // para no confundir al huésped con líneas en $0 en su cuenta a pagar.
+  const handleImprimirConsolidado = (soloConsumo: boolean) => {
     if (comandasSeleccionadas.length === 0) return;
 
     const comandasConItems = comandasSeleccionadas.map(c => ({
@@ -154,6 +171,8 @@ export function HabitacionCheckoutView({
       selectedMesa.nombre,
       ivaPorcentaje,
       selectedMesa.nombre,
+      false,
+      soloConsumo,
     );
     setPreviewContent(content);
     setPreviewOpened(true);
@@ -402,20 +421,59 @@ export function HabitacionCheckoutView({
         <div className="grid grid-cols-2 gap-2">
           <Button
             type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
-            onClick={handleImprimirConsolidado}
+            onClick={() => handleImprimirConsolidado(false)}
             className="w-full font-bold"
           >
-            <Printer size={18} weight="bold" className="mr-1.5" /> Imprimir
+            <Printer size={18} weight="bold" className="mr-1.5" /> Completa
           </Button>
           <Button
+            type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
+            onClick={() => handleImprimirConsolidado(true)}
+            className="w-full font-bold"
+          >
+            <Printer size={18} weight="bold" className="mr-1.5" /> Consumos
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
             type="button" disabled={isProcessing || comandasSeleccionadas.length === 0}
-            onClick={handleFinalizar}
+            onClick={() => setConfirmCobroOpened(true)}
             className="w-full font-bold"
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Cobrar
           </Button>
+          <Button
+            type="button" variant="ghost" disabled={isProcessing}
+            onClick={onBack}
+            className="w-full font-bold"
+          >
+            Cancelar
+          </Button>
         </div>
       </footer>
+
+      <AlertDialog open={confirmCobroOpened} onOpenChange={setConfirmCobroOpened}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar cobro</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cobrará ${total.toFixed(2)} y se cerrarán {comandasSeleccionadas.length === comandas.length ? 'todas las comandas' : `${comandasSeleccionadas.length} de ${comandas.length} comandas`} seleccionadas. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isProcessing}
+              onClick={() => {
+                setConfirmCobroOpened(false);
+                handleFinalizar();
+              }}
+            >
+              Confirmar cobro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <TicketPreviewModal
         opened={previewOpened}
