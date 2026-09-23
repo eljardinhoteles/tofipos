@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, CartesianGrid } from'recharts';
-import { Coin, Receipt, Warning, Tag, CalendarBlank } from'@phosphor-icons/react';
+import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise } from'@phosphor-icons/react';
 import dayjs from'dayjs';
-import { initVerticalRxDb } from'../db/rxdb';
+import { initVerticalRxDb, forceSyncAll, pingSyncStatus } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
 import { useRxClientes } from'../hooks/useRxClientes';
 import { Card, CardContent, CardHeader } from'@/components/ui/card';
@@ -79,9 +79,20 @@ export default function MetricasV2() {
  const [periodo, setPeriodo] = useState<'hoy'|'7d'|'30d'|'mes'|'custom'>('7d');
  const [calendarOpen, setCalendarOpen] = useState(false);
  const [customRange, setCustomRange] = useState<DatesRange>([null, null]);
+ const [syncing, setSyncing] = useState(false);
+
+ const handleForceSync = async () => {
+ setSyncing(true);
+ try {
+ await forceSyncAll();
+ await pingSyncStatus();
+ } finally {
+ setTimeout(() => setSyncing(false), 800);
+ }
+ };
 
  const [comandas, setComandas] = useState<any[]>([]);
- const [pagos, setPagos] = useState<any[]>([]);
+ const [ventas, setVentas] = useState<any[]>([]);
  const [comandaItems, setComandaItems] = useState<any[]>([]);
  const [menuItems, setMenuItems] = useState<any[]>([]);
  const [categorias, setCategorias] = useState<any[]>([]);
@@ -107,7 +118,7 @@ export default function MetricasV2() {
  };
 
  watch(rxDb.comandas, setComandas);
- watch(rxDb.pagos, setPagos);
+ watch(rxDb.ventas, setVentas);
  watch(rxDb.comanda_items, setComandaItems);
  watch(rxDb.menu_items, setMenuItems);
  watch(rxDb.categorias, setCategorias);
@@ -148,6 +159,24 @@ export default function MetricasV2() {
  return { inicio: prevInicio, fin: endOfDay(prevFin) };
  }, [datesLimit]);
 
+ // Los cobros reales viven en ventas[].movimientos (tipo 'pago'), no en la
+ // colección `pagos` — esa quedó obsoleta cuando Centro de Ventas v2
+ // reemplazó el modelo de "pago único inmutable" por ventas con historial
+ // de movimientos embebido (ver comentario en RxVentaMovimiento, db/rxdb.ts).
+ // Se aplana aquí a la misma forma {comanda_id, monto, fecha} que el resto
+ // de este archivo ya consume, para no reescribir cada cálculo de abajo.
+ const pagos = useMemo(() => {
+ const flat: Array<{ comanda_id: string; monto: number; fecha: string; created_at: string }> = [];
+ ventas.forEach((v) => {
+ if (!v.comanda_id) return;
+ (v.movimientos || []).forEach((m: any) => {
+ if (m.tipo !=='pago'|| m.anulado) return;
+ flat.push({ comanda_id: v.comanda_id, monto: Number(m.monto || 0), fecha: m.fecha, created_at: m.fecha });
+ });
+ });
+ return flat;
+ }, [ventas]);
+
  const activeComandas = useMemo(() => comandas.filter((c) => {
  const fc = new Date(c.created_at);
  return fc >= datesLimit.inicio && fc <= datesLimit.fin;
@@ -175,19 +204,23 @@ export default function MetricasV2() {
  return map;
  }, [pagos, datesLimit]);
 
- const previousPaidMap = useMemo(() => {
- const map = new Map<string, number>();
- pagos.forEach((p) => {
- const paymentDate = p.fecha ? new Date(p.fecha) : new Date(p.created_at || Date.now());
- if (paymentDate >= previousLimit.inicio && paymentDate <= previousLimit.fin) {
- map.set(p.comanda_id, (map.get(p.comanda_id) || 0) + Number(p.monto || 0));
- }
- });
- return map;
+ // Suman directo de `pagos` (todos los movimientos de pago, con o sin
+ // comanda_id) — no desde currentPaidMap/previousPaidMap, que agrupan por
+ // comanda_id y por eso excluyen los pagos de checkout de habitación
+ // consolidado (una venta ahí cierra varias comandas a la vez y no tiene
+ // un comanda_id único que la represente).
+ const ventasActuales = useMemo(() => {
+ return pagos.reduce((sum, p) => {
+ const paymentDate = new Date(p.fecha);
+ return paymentDate >= datesLimit.inicio && paymentDate <= datesLimit.fin ? sum + Number(p.monto || 0) : sum;
+ }, 0);
+ }, [pagos, datesLimit]);
+ const ventasAnteriores = useMemo(() => {
+ return pagos.reduce((sum, p) => {
+ const paymentDate = new Date(p.fecha);
+ return paymentDate >= previousLimit.inicio && paymentDate <= previousLimit.fin ? sum + Number(p.monto || 0) : sum;
+ }, 0);
  }, [pagos, previousLimit]);
-
- const ventasActuales = useMemo(() => Array.from(currentPaidMap.values()).reduce((a, b) => a + b, 0), [currentPaidMap]);
- const ventasAnteriores = useMemo(() => Array.from(previousPaidMap.values()).reduce((a, b) => a + b, 0), [previousPaidMap]);
 
  const ticketActual = activeCompletadas.length > 0 ? ventasActuales / activeCompletadas.length : 0;
  const ticketAnterior = previousCompletadas.length > 0 ? ventasAnteriores / previousCompletadas.length : 0;
@@ -357,15 +390,6 @@ export default function MetricasV2() {
  return ventasPorDiaSemana.reduce((best, current) => (current.promedio > best.promedio ? current : best), ventasPorDiaSemana[0] || { dia:'N/D', promedio: 0, total: 0 });
  }, [ventasPorDiaSemana]);
 
- const cobradasCount = useMemo(
- () => activeComandas.filter((c) => c.estado ==='cobradas').length,
- [activeComandas]
- );
- const conciliadasCount = useMemo(
- () => activeComandas.filter((c) => c.estado ==='conciliadas').length,
- [activeComandas]
- );
-
  const clientesFidelizacion = useMemo(() => {
  const frecuentes = clientes
  .map((c: any) => {
@@ -452,6 +476,12 @@ export default function MetricasV2() {
  </Popover>
  )}
  </div>
+
+ <button
+ type="button"title="Recargar datos"onClick={handleForceSync}disabled={syncing}
+ className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 cursor-pointer ml-auto disabled:opacity-60">
+ <ArrowsClockwise size={18} weight="bold"className={syncing ?'animate-spin':''}/>
+ </button>
  </header>
 
  {/* Content */}
@@ -667,17 +697,6 @@ export default function MetricasV2() {
  <div className="flex items-center justify-between">
  <span className="text-sm font-bold text-foreground">Ticket promedio</span>
  <span className="text-sm font-black text-foreground">{money(ticketActual)}</span>
- </div>
- <div className="p-3 rounded-xl border border-border bg-muted flex flex-col gap-1.5">
- <span className="text-sm font-black text-foreground">Órdenes cobradas vs conciliadas</span>
- <div className="flex items-center justify-between">
- <span className="text-sm text-muted-foreground">Cobradas</span>
- <span className="text-sm font-black text-foreground">{cobradasCount}</span>
- </div>
- <div className="flex items-center justify-between">
- <span className="text-sm text-muted-foreground">Conciliadas</span>
- <span className="text-sm font-black text-foreground">{conciliadasCount}</span>
- </div>
  </div>
  </CardContent>
  </Card>

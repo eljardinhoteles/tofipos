@@ -942,3 +942,65 @@ export function generarReporteCocinaConsolidado(
   t += '\n\n\n';
   return t;
 }
+
+/**
+ * SOLICITUD DE DATOS DE FACTURACIÓN
+ * Ticket rápido, sin comanda asociada: se entrega al cliente para que llene
+ * a mano sus datos de facturación antes de emitir la factura. Cada campo
+ * lleva varias líneas en blanco debajo (no una sola línea de guiones) para
+ * que haya espacio cómodo de escribir a mano.
+ */
+export function generarSolicitudDatosFacturacion(
+  forPrinter = false,
+): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
+  let t = '';
+
+  if (forPrinter) t += POS.INIT;
+
+  // ── Encabezado ──────────────────────────────────────────────────
+  // Centrado también "a mano" (alignCenter) además de los comandos
+  // ESC/POS: el preview en pantalla del ticket quita los comandos
+  // ESC/POS (stripEscPos en TicketPreviewModal), así que sin esto el
+  // nombre se vería pegado a la izquierda en el preview aunque en la
+  // impresora térmica ya saliera centrado.
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `${alignCenter(orgName.toUpperCase(), W)}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_LEFT);
+  t += `${'-'.repeat(W)}\n`;
+  t += `Fecha: ${new Date().toLocaleDateString('es-ES')}\n`;
+  t += `${'-'.repeat(W)}\n\n`;
+
+  t += `Por favor escriba sus datos de facturacion.\n`;
+  t += `Please write your billing information.\n\n`;
+
+  // ── Campos con espacio suficiente para escribir a mano ───────────
+  const campos = [
+    'RUC/Cedula/Pasaporte:',
+    'Nombre/Name:',
+    'Telefono/Phone:',
+    'Direccion/Address:',
+    'Email:',
+  ];
+  campos.forEach(campo => {
+    t += p(POS.BOLD_ON) + `${campo}\n` + p(POS.BOLD_OFF);
+    // Línea completa de guiones bajos para escribir encima, con una línea
+    // en blanco antes y después para dar aire entre campos.
+    t += `\n${'_'.repeat(W)}\n\n`;
+  });
+
+  // Mesa la anota el mesero al final, no el cliente.
+  t += p(POS.BOLD_ON) + `Mesa:\n` + p(POS.BOLD_OFF);
+  t += `\n${'_'.repeat(W)}\n\n`;
+
+  t += p(POS.ALIGN_CENTER);
+  t += `Gracias por llenar sus datos con claridad.\n`;
+  t += `Thank you for filling in your details clearly.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += `\n\n\n`;
+
+  return t;
+}

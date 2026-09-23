@@ -136,6 +136,19 @@ export async function queueReprintTicket(params: { rawText: string; mesaNombre: 
   });
 }
 
+/** Envía la solicitud de datos de facturación (ticket rápido, sin comanda) al rol 'receipt'. */
+export async function queueSolicitudFacturacionPrint(rawText: string) {
+  return requestJson('/jobs', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'receipt',
+      title: 'Solicitud de Datos de Facturación',
+      payload: {},
+      raw_text: rawText,
+    }),
+  });
+}
+
 /** Envía texto crudo ya formateado (p.ej. un reporte consolidado) al rol 'kitchen', sin comanda puntual asociada. */
 export async function queueRawKitchenPrint(rawText: string, title = 'Reporte de Cocina') {
   return requestJson('/jobs', {

@@ -10,11 +10,14 @@ import { useIsMobile } from'../hooks/useIsMobile';
 import { useRxMesas } from'../hooks/useRxMesas';
 import { useRxPisos } from'../hooks/useRxPisos';
 import { useRxComandas } from'../hooks/useRxComandas';
-import { Plus, Basket, Bed, ClipboardText } from'@phosphor-icons/react';
+import { Plus, Basket, Bed, ClipboardText, Receipt } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { useSearchParams } from'react-router-dom';
 import { SidebarKitchenReport } from'../components/Mesas/Sidebar/SidebarKitchenReport';
 import { cn } from'@/lib/utils';
+import { generarSolicitudDatosFacturacion } from'../services/printTemplateEngine';
+import { queueSolicitudFacturacionPrint } from'../lib/printServerClient';
+import { TicketPreviewModal } from'../components/Common/TicketPreviewModal';
 
 export default function MesasV2() {
  const [searchParams, setSearchParams] = useSearchParams();
@@ -66,6 +69,12 @@ export default function MesasV2() {
  const { comandas: allComandas } = useRxComandas() as { comandas: Comanda[] };
  const [allCuentas, setAllCuentas] = useState<HabitacionCuenta[]>([]);
  const [reportSidebarOpen, setReportSidebarOpen] = useState(false);
+ const [facturacionTicketText, setFacturacionTicketText] = useState<string | null>(null);
+
+ const handleImprimirSolicitudFacturacion = useCallback(() => {
+ const texto = generarSolicitudDatosFacturacion();
+ setFacturacionTicketText(texto);
+ }, []);
 
  // Lista de nombres de pisos disponibles
  const availablePisos = useMemo(
@@ -324,6 +333,15 @@ export default function MesasV2() {
  </button>
 
  <button
+ type="button"title="Solicitud de Datos de Facturación"onClick={(e) => {
+ e.stopPropagation();
+ handleImprimirSolicitudFacturacion();
+ }}
+ className="w-9 h-9 rounded-lg bg-primary/10 active:scale-95 text-primary flex items-center justify-center transition-all shrink-0 cursor-pointer">
+ <Receipt size={18} weight="bold"/>
+ </button>
+
+ <button
  type="button"title="Reporte Consolidado Cocina"onClick={(e) => {
  e.stopPropagation();
  setReportSidebarOpen(true);
@@ -549,6 +567,17 @@ export default function MesasV2() {
  allMesas={allMesas}
  allComandas={allComandas}
  allCuentas={allCuentas}
+ />
+
+ <TicketPreviewModal
+ opened={facturacionTicketText !== null}
+ onClose={() => setFacturacionTicketText(null)}
+ title="Solicitud de Datos de Facturación"
+ content={facturacionTicketText || ''}
+ onPrint={() => {
+ if (!facturacionTicketText) return;
+ queueSolicitudFacturacionPrint(facturacionTicketText).catch(err => console.warn('print server offline', err));
+ }}
  />
  </div>
  );
