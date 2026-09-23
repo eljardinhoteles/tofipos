@@ -16,8 +16,8 @@ import { useSearchParams } from'react-router-dom';
 import { SidebarKitchenReport } from'../components/Mesas/Sidebar/SidebarKitchenReport';
 import { cn } from'@/lib/utils';
 import { generarSolicitudDatosFacturacion } from'../services/printTemplateEngine';
-import { queueSolicitudFacturacionPrint } from'../lib/printServerClient';
-import { TicketPreviewModal } from'../components/Common/TicketPreviewModal';
+import { queueSolicitudFacturacionPrint, getPrintServerStatus } from'../lib/printServerClient';
+import { showToast } from'@/lib/toast';
 
 export default function MesasV2() {
  const [searchParams, setSearchParams] = useSearchParams();
@@ -69,11 +69,29 @@ export default function MesasV2() {
  const { comandas: allComandas } = useRxComandas() as { comandas: Comanda[] };
  const [allCuentas, setAllCuentas] = useState<HabitacionCuenta[]>([]);
  const [reportSidebarOpen, setReportSidebarOpen] = useState(false);
- const [facturacionTicketText, setFacturacionTicketText] = useState<string | null>(null);
+ const [printServerOk, setPrintServerOk] = useState(false);
 
+ // Vistazo rápido del servidor de impresión local: se revisa al montar y
+ // cada 15s (evita golpear el health-check en cada render/interacción).
+ useEffect(() => {
+ let alive = true;
+ const check = () => {
+ getPrintServerStatus()
+ .then((status) => { if (alive) setPrintServerOk(status.ok); })
+ .catch(() => { if (alive) setPrintServerOk(false); });
+ };
+ check();
+ const interval = setInterval(check, 15_000);
+ return () => { alive = false; clearInterval(interval); };
+ }, []);
+
+ // Ticket rápido sin importar: no hay nada que se pierda si se imprime
+ // por error (el cliente solo lo llena a mano), así que va directo a la
+ // cola de impresión sin modal de preview/confirmación.
  const handleImprimirSolicitudFacturacion = useCallback(() => {
- const texto = generarSolicitudDatosFacturacion();
- setFacturacionTicketText(texto);
+ const texto = generarSolicitudDatosFacturacion(true);
+ queueSolicitudFacturacionPrint(texto).catch(err => console.warn('print server offline', err));
+ showToast.success('Enviado a Impresora','Solicitud de datos de facturación enviada.');
  }, []);
 
  // Lista de nombres de pisos disponibles
@@ -319,9 +337,15 @@ export default function MesasV2() {
  <div className="shrink-0 flex flex-col">
  {/* Header V2 Tailwind/Shadcn style */}
  <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs">
+ <div className="flex items-center gap-2 min-w-0">
  <h1 className="font-extrabold text-base text-foreground truncate max-w-[240px]">
  {localStorage.getItem('pos_org_name_cached') ||'POS'}
  </h1>
+ <span
+ title={printServerOk ?'Servidor de impresión conectado':'Servidor de impresión sin conexión'}
+ className={cn("w-2 h-2 rounded-full shrink-0", printServerOk ?'bg-emerald-500':'bg-red-500')}
+ />
+ </div>
  <div className="flex items-center gap-3 shrink-0">
  <button
  type="button"title="Ver Productos"onClick={(e) => {
@@ -337,7 +361,7 @@ export default function MesasV2() {
  e.stopPropagation();
  handleImprimirSolicitudFacturacion();
  }}
- className="w-9 h-9 rounded-lg bg-primary/10 active:scale-95 text-primary flex items-center justify-center transition-all shrink-0 cursor-pointer">
+ className="w-9 h-9 rounded-lg bg-blue-500 active:scale-95 text-white flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
  <Receipt size={18} weight="bold"/>
  </button>
 
@@ -567,17 +591,6 @@ export default function MesasV2() {
  allMesas={allMesas}
  allComandas={allComandas}
  allCuentas={allCuentas}
- />
-
- <TicketPreviewModal
- opened={facturacionTicketText !== null}
- onClose={() => setFacturacionTicketText(null)}
- title="Solicitud de Datos de Facturación"
- content={facturacionTicketText || ''}
- onPrint={() => {
- if (!facturacionTicketText) return;
- queueSolicitudFacturacionPrint(facturacionTicketText).catch(err => console.warn('print server offline', err));
- }}
  />
  </div>
  );
