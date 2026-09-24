@@ -13,6 +13,12 @@ export interface VentaConMovimientos {
   // número de factura) — facturado es true si existe cualquiera de los dos
   // con numero_factura, para leer también historiales previos a la fusión.
   facturado: boolean
+  // true si ya se facturó y ningún pago es posterior a la última factura —
+  // es decir, no hay dinero nuevo pendiente de facturar. Sin monto por
+  // factura (no se registra cuánto cubre cada una), la fecha es la señal
+  // disponible: un pago después de la última factura implica saldo sin
+  // facturar, aunque `facturado` siga en true por haber facturado antes.
+  facturaAlDia: boolean
   anulado: boolean       // existe al menos un movimiento 'anular'
   numeroFactura: string | null // del último movimiento anclar/facturar con numero_factura
   comprobanteUrl: string | null // del movimiento más reciente que tenga uno
@@ -36,6 +42,8 @@ function calcular(venta: RxVenta): VentaConMovimientos {
   let totalReembolsado = 0
   let facturado = false
   let anulado = false
+  let ultimaFechaFactura: string | null = null
+  let ultimaFechaPago: string | null = null
   let numeroFactura: string | null = null
   let comprobanteUrl: string | null = null
   let metodoPago: string | null = null
@@ -61,12 +69,13 @@ function calcular(venta: RxVenta): VentaConMovimientos {
     // como si nunca hubiera pasado, salvo por el registro en sí.
     if (m.anulado) continue
     if (m.tipo === 'ajuste') montoTotal += m.monto ?? 0
-    else if (m.tipo === 'pago') { totalPagado += m.monto ?? 0; metodoPago = m.metodo_pago ?? metodoPago }
+    else if (m.tipo === 'pago') { totalPagado += m.monto ?? 0; metodoPago = m.metodo_pago ?? metodoPago; ultimaFechaPago = m.fecha }
     else if (m.tipo === 'reembolso') totalReembolsado += m.monto ?? 0
     else if (m.tipo === 'anclar' || m.tipo === 'facturar') {
       if (m.numero_factura) {
         facturado = true;
         numeroFactura = m.numero_factura;
+        ultimaFechaFactura = m.fecha;
       }
     }
     else if (m.tipo === 'anular') {
@@ -87,6 +96,14 @@ function calcular(venta: RxVenta): VentaConMovimientos {
     }
   }
 
+  // Sin monto por factura, la fecha es la señal disponible: si el pago más
+  // reciente es posterior a la última factura, ese pago aún no está cubierto
+  // por ninguna factura, aunque la venta ya se haya facturado antes.
+  const facturaAlDia = facturado && (
+    !ultimaFechaPago || !ultimaFechaFactura ||
+    new Date(ultimaFechaPago).getTime() <= new Date(ultimaFechaFactura).getTime()
+  )
+
   return {
     venta,
     movimientos: ordenados,
@@ -95,6 +112,7 @@ function calcular(venta: RxVenta): VentaConMovimientos {
     totalReembolsado,
     saldo: montoTotal - totalPagado + totalReembolsado,
     facturado,
+    facturaAlDia,
     anulado,
     numeroFactura,
     comprobanteUrl,

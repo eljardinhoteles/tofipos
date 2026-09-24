@@ -70,6 +70,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
     const montoNum = parseFloat(monto);
     if (!montoNum || montoNum <= 0) { showToast.error('Ingresa un monto válido'); return; }
     if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
+    if (!esCredito && metodo === 'tarjeta' && !redTarjeta) { showToast.error('Selecciona la red de cobro de la tarjeta'); return; }
 
     setSaving(true);
     try {
@@ -165,16 +166,16 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
       {/* Origen */}
       <div className="flex flex-col gap-2">
         <Label className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">Origen</Label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {ORIGEN_OPTS.map(o => (
             <button
               key={o.value}
               type="button" onClick={() => setOrigen(o.value)}
-              className={cn("p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer",
+              className={cn("p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer",
                 origen === o.value ? "bg-primary/10 border-primary text-primary" : "bg-card border-border text-muted-foreground")}
             >
               <o.icon size={20} weight="bold" />
-              <span className="text-[11px] font-extrabold text-center">{o.label}</span>
+              <span className="text-[10px] font-extrabold text-center leading-tight">{o.label}</span>
             </button>
           ))}
         </div>
@@ -271,10 +272,10 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
 
         {!esCredito && metodo === 'tarjeta' && (
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] font-bold text-muted-foreground">Red de cobro</Label>
+            <Label className="text-[11px] font-bold text-muted-foreground">Red de cobro *</Label>
             <Select value={redTarjeta || undefined} onValueChange={setRedTarjeta}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={redesTarjeta.length ? 'Selecciona' : 'Sin redes configuradas'} />
+              <SelectTrigger className={cn("w-full", !redTarjeta && "border-destructive/50")}>
+                <SelectValue placeholder={redesTarjeta.length ? 'Selecciona (obligatorio)' : 'Sin redes configuradas'} />
               </SelectTrigger>
               <SelectContent>
                 {redesTarjeta.map(r => (
@@ -314,7 +315,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
           Cancelar
         </Button>
         <Button
-          type="button" onClick={handleSubmit} disabled={saving}
+          type="button" onClick={handleSubmit}
+          disabled={saving || (!esCredito && metodo === 'tarjeta' && !redTarjeta)}
           className={esCredito ? "bg-rose-600 hover:bg-rose-700 text-white" : ""}
         >
           Registrar

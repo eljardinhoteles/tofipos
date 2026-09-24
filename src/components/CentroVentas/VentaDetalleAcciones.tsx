@@ -52,11 +52,13 @@ const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
   habitacion: Door,
 };
 
+// Mismos colores/relleno que ORIGEN_CLASSES en CentroVentasV2.tsx, para que
+// el badge de origen se vea idéntico en la lista y en el detalle.
 const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
-  mesa: 'bg-blue-50 text-blue-700 border-blue-200',
-  reserva_restaurante: 'bg-amber-50 text-amber-700 border-amber-200',
-  reserva_hotel: 'bg-sky-50 text-sky-700 border-sky-200',
-  habitacion: 'bg-sky-50 text-sky-700 border-sky-200',
+  mesa: 'bg-blue-600 text-white border-blue-600',
+  reserva_restaurante: 'bg-orange-600 text-white border-orange-600',
+  reserva_hotel: 'bg-sky-600 text-white border-sky-600',
+  habitacion: 'bg-violet-600 text-white border-violet-600',
 };
 
 interface VentaDetalleAccionesProps {
@@ -278,6 +280,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const handlePago = async () => {
     const monto = parseFloat(montoPago);
     if (!monto || monto <= 0) { showToast.error('Ingresa un monto válido'); return; }
+    if (metodoPago === 'tarjeta' && !redTarjeta) { showToast.error('Selecciona la red de cobro de la tarjeta'); return; }
 
     let montoAjuste = 0;
     if (ajustarVentaPago) {
@@ -457,9 +460,20 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <CardTitle className="text-sm font-extrabold line-clamp-2">{venta.referencia || '—'}</CardTitle>
 
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-muted-foreground shrink-0">
-                Creada el {dayjs(venta.created_at).format('DD MMM YYYY, HH:mm')}
-              </span>
+              {/* Izquierda: info de la venta (fecha + origen). Derecha: estados (crédito/facturado/anulado) + sync. */}
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                {(() => {
+                  const OrigenIcon = ORIGEN_ICON[venta.origen];
+                  return (
+                    <Badge variant="outline" className={cn("font-bold shrink-0", ORIGEN_CLASSES[venta.origen])}>
+                      <OrigenIcon size={12} weight="bold" /> {ORIGEN_LABEL[venta.origen]}
+                    </Badge>
+                  );
+                })()}
+                <span className="text-xs font-medium text-muted-foreground shrink-0">
+                  Creada el {dayjs(venta.created_at).format('DD MMM YYYY, HH:mm')}
+                </span>
+              </div>
 
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
                 <button
@@ -494,21 +508,15 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                           ? 'Error de sync'
                           : 'Verificar sync'}
                 </button>
-                {(() => {
-                  const OrigenIcon = ORIGEN_ICON[venta.origen];
-                  return (
-                    <Badge variant="outline" className={cn("font-bold", ORIGEN_CLASSES[venta.origen])}>
-                      <OrigenIcon size={12} weight="bold" /> {ORIGEN_LABEL[venta.origen]}
-                    </Badge>
-                  );
-                })()}
+                {/* Colores alineados a ACCION_COLOR: crédito=indigo, facturado=purple
+                    (mismos que sus acciones correspondientes más abajo en este panel). */}
                 {venta.tipo === 'credito' && (
-                  <Badge variant="outline" className="font-bold border-rose-200 text-rose-700 bg-rose-50">
+                  <Badge variant="outline" className="font-bold border-indigo-200 text-indigo-700 bg-indigo-50">
                     <CreditCard size={12} weight="fill" /> Crédito
                   </Badge>
                 )}
                 {item.facturado && (
-                  <Badge variant="outline" className="font-bold border-emerald-200 text-emerald-700 bg-emerald-50">
+                  <Badge variant="outline" className="font-bold border-purple-200 text-purple-700 bg-purple-50">
                     <Receipt size={12} weight="fill" /> Facturado
                   </Badge>
                 )}
@@ -764,7 +772,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <Button
               type="button"
               onClick={handleConfirmar}
-              disabled={saving}
+              disabled={saving || (accionActiva === 'pago' && metodoPago === 'tarjeta' && !redTarjeta)}
               className={cn("font-bold text-xs h-9 px-4 rounded-full cursor-pointer shrink-0 transition-all shadow-xs",
                 ACCION_COLOR[accionActiva]
               )}
@@ -839,10 +847,10 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
 
                 {metodoPago === 'tarjeta' && (
                   <div className="col-span-2 flex flex-col gap-1">
-                    <span className="text-[11px] font-bold text-muted-foreground">Red de cobro</span>
+                    <span className="text-[11px] font-bold text-muted-foreground">Red de cobro *</span>
                     <Select value={redTarjeta || undefined} onValueChange={setRedTarjeta}>
-                      <SelectTrigger className="w-full h-9 text-xs font-bold">
-                        <SelectValue placeholder={redesTarjeta.length ? 'Selecciona' : 'Sin redes'} />
+                      <SelectTrigger className={cn("w-full h-9 text-xs font-bold", !redTarjeta && "border-destructive/50")}>
+                        <SelectValue placeholder={redesTarjeta.length ? 'Selecciona (obligatorio)' : 'Sin redes'} />
                       </SelectTrigger>
                       <SelectContent>
                         {redesTarjeta.map(r => (

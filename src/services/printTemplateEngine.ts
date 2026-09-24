@@ -960,14 +960,15 @@ export function generarSolicitudDatosFacturacion(
   if (forPrinter) t += POS.INIT;
 
   // ── Encabezado ──────────────────────────────────────────────────
-  // Centrado también "a mano" (alignCenter) además de los comandos
-  // ESC/POS: el preview en pantalla del ticket quita los comandos
-  // ESC/POS (stripEscPos en TicketPreviewModal), así que sin esto el
-  // nombre se vería pegado a la izquierda en el preview aunque en la
-  // impresora térmica ya saliera centrado.
+  // El centrado "a mano" (alignCenter, con espacios) es solo para el
+  // preview en pantalla, que quita los comandos ESC/POS (stripEscPos en
+  // TicketPreviewModal) y por eso necesita el padding manual. Para la
+  // impresora real basta el comando ALIGN_CENTER — si además se rellena
+  // con espacios, la impresora centra un texto ya desplazado dentro del
+  // ancho de columna y el título sale descuadrado.
   const orgName = getOrgCache().nombre || 'EL JARDIN';
   t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
-  t += `${alignCenter(orgName.toUpperCase(), W)}\n`;
+  t += `${forPrinter ? orgName.toUpperCase() : alignCenter(orgName.toUpperCase(), W)}\n`;
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
   t += p(POS.ALIGN_LEFT);
   t += `${'-'.repeat(W)}\n`;

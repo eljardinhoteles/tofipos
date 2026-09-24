@@ -13,6 +13,7 @@ import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
 import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, anularComandaItem } from'../../../db/rxdb';
+import { isOperativeComanda } from'../../../db/comandaState';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { useUI } from'../../../context/UIContext';
 import { useAuth } from'../../../context/AuthContext';
@@ -112,6 +113,7 @@ export function SidebarDetails({
  const [changeClienteModal, setChangeClienteModal] = useState(false);
  const [changeClienteName, setChangeClienteName] = useState('');
  const [changeClienteAutocomplete, setChangeClienteAutocomplete] = useState(false);
+ const [changeMesaModal, setChangeMesaModal] = useState(false);
  const { clientes } = useRxClientes();
 
  const [editCantidad, setEditCantidad] = useState(1);
@@ -347,6 +349,64 @@ export function SidebarDetails({
  if (!activeComanda) return;
  await updateRxComanda(activeComanda.id, { cliente: changeClienteName.trim() || undefined });
  setChangeClienteModal(false);
+ };
+
+ // Mesas realmente libres: el campo mesa.estado persistido puede quedar
+ // desincronizado (p.ej. tras cobrar por otro flujo), así que igual que en
+ // MesasV2/getMesaEstadoEfectivo, una mesa se considera libre solo si
+ // además no tiene ninguna comanda operativa activa apuntándole.
+ const [mesasIdsOcupadas, setMesasIdsOcupadas] = useState<Set<string>>(new Set());
+
+ useEffect(() => {
+ if (!changeMesaModal) return;
+ let alive = true;
+ (async () => {
+ const rxDb = await initVerticalRxDb();
+ const orgId = localStorage.getItem('pos_active_org_id') ||'';
+ const activas = await rxDb.comandas.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).exec();
+ if (!alive) return;
+ const ids = new Set<string>();
+ for (const doc of activas) {
+ const c = doc.toJSON();
+ if (isOperativeComanda(c)) ids.add(c.mesa_id);
+ }
+ setMesasIdsOcupadas(ids);
+ })().catch(() => {});
+ return () => { alive = false; };
+ }, [changeMesaModal]);
+
+ // Mesas disponibles para reasignar la comanda activa: libres y distintas
+ // de la mesa actual. Se excluyen habitaciones (flujo propio de cuentas de
+ // habitación) y las mesas sintéticas de Reserva/Delivery (piso 'Reservas',
+ // ver isSyntheticMesaId en rxdb.ts), que no son mesas físicas reales.
+ const mesasDisponiblesParaCambio = useMemo(
+ () => allMesas
+ .filter((m) => m.id !== selectedMesa.id && m.estado !=='cuenta' && !mesasIdsOcupadas.has(m.id)
+ && m.piso?.toLowerCase() !== 'habitaciones' && m.piso?.toLowerCase() !== 'reservas')
+ .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true })),
+ [allMesas, selectedMesa.id, mesasIdsOcupadas]
+ );
+
+ const [mesaSeleccionadaParaCambio, setMesaSeleccionadaParaCambio] = useState<any | null>(null);
+
+ useEffect(() => {
+ if (changeMesaModal) setMesaSeleccionadaParaCambio(null);
+ }, [changeMesaModal]);
+
+ const handleConfirmChangeMesa = async () => {
+ const destino = mesaSeleccionadaParaCambio;
+ if (!activeComanda || !destino) return;
+ await updateRxComanda(activeComanda.id, { mesa_id: destino.id, mesa_nombre: destino.nombre });
+ await updateRxMesa(destino.id, { estado: 'ocupada' });
+ const otrasComandasEnOrigen = await (await initVerticalRxDb()).comandas
+ .find({ selector: { mesa_id: selectedMesa.id, id: { $ne: activeComanda.id }, _deleted: { $ne: true } } })
+ .exec();
+ const origenSigueOcupada = otrasComandasEnOrigen.some((d: any) => isOperativeComanda(d.toJSON()));
+ if (!origenSigueOcupada) {
+ await updateRxMesa(selectedMesa.id, { estado: 'libre' });
+ }
+ setChangeMesaModal(false);
+ showToast.success('Mesa cambiada', `La comanda se movió a ${destino.nombre}.`);
  };
 
  const totales = useMemo(
@@ -591,10 +651,14 @@ export function SidebarDetails({
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
  activeComanda?.estado ==='cuenta'?"md:bg-orange-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
  <div className="flex items-center gap-3">
- <div className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0",
+ <button
+ type="button"
+ title="Cambiar mesa"
+ onClick={() => setChangeMesaModal(true)}
+ className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
  activeComanda?.estado ==='cuenta'?"bg-orange-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
  {selectedMesa.nombre.replace(/^Mesa\s*/i,'')}
- </div>
+ </button>
  <div className="flex flex-col">
  <h3 className={cn("font-extrabold text-base leading-tight", activeComanda?.estado ==='cuenta'?"md:text-white":"md:text-primary-foreground")}>
  {activeComanda?.cliente ||'Público General'}
@@ -1269,6 +1333,45 @@ export function SidebarDetails({
  </Button>
  <Button onClick={handleConfirmChangeCliente}>
  Guardar
+ </Button>
+ </div>
+ </DialogContent>
+ </Dialog>
+
+ <Dialog open={changeMesaModal} onOpenChange={setChangeMesaModal}>
+ <DialogContent className="max-w-lg">
+ <DialogHeader>
+ <DialogTitle>Cambiar Mesa</DialogTitle>
+ <DialogDescription>
+ Selecciona la nueva mesa para la orden #{activeComanda?.folio}. Solo se muestran mesas libres.
+ </DialogDescription>
+ </DialogHeader>
+ {mesasDisponiblesParaCambio.length === 0 ? (
+ <p className="text-sm text-muted-foreground text-center py-6">
+ No hay mesas libres disponibles en este momento.
+ </p>
+ ) : (
+ <div className="grid grid-cols-4 gap-2 max-h-80 overflow-y-auto py-1">
+ {mesasDisponiblesParaCambio.map((mesa) => (
+ <button
+ key={mesa.id}
+ type="button"
+ onClick={() => setMesaSeleccionadaParaCambio(mesa)}
+ className={cn("aspect-square rounded-xl border flex flex-col items-center justify-center gap-0.5 font-black text-base transition-colors cursor-pointer",
+ mesaSeleccionadaParaCambio?.id === mesa.id
+ ?"bg-primary text-primary-foreground border-primary"
+ :"border-border bg-muted/40 hover:bg-muted")}>
+ {mesa.nombre.replace(/^Mesa\s*/i,'')}
+ </button>
+ ))}
+ </div>
+ )}
+ <div className="flex items-center justify-end gap-2 pt-2">
+ <Button variant="outline"onClick={() => setChangeMesaModal(false)}>
+ Cancelar
+ </Button>
+ <Button disabled={!mesaSeleccionadaParaCambio} onClick={handleConfirmChangeMesa}>
+ Confirmar
  </Button>
  </div>
  </DialogContent>
