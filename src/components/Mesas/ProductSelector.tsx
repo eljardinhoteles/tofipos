@@ -227,6 +227,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  const existing = rxComandaItems.find(ci => {
  if (ci.item_id !== item.id) return false;
+ // Un ítem anulado es un estado terminal — nunca se reutiliza para sumar
+ // cantidad, siempre debe crear una fila nueva independiente.
+ if (ci.anulado) return false;
  if (ci.pagado_cantidad && ci.pagado_cantidad > 0) return false;
  const ciMods = [...(ci.modificadores || [])].sort();
  const itemMods = [...selectedModifiers].sort();
