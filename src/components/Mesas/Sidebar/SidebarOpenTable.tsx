@@ -6,6 +6,7 @@ import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
 import { Button } from'@/components/ui/button';
 import { Label } from'@/components/ui/label';
+import { Switch } from'@/components/ui/switch';
 import { ClienteSelector } from'@/components/Common/ClienteSelector';
 
 interface SidebarOpenTableProps {
@@ -16,6 +17,8 @@ interface SidebarOpenTableProps {
  setGuestCount: (val: number) => void;
  openLinkMode:'manual'|'habitacion';
  setOpenLinkMode: (mode:'manual'|'habitacion') => void;
+ mesaMultiple: boolean;
+ setMesaMultiple: (val: boolean) => void;
  selectedHabitacionId: string | null;
  setSelectedHabitacionId: (id: string | null) => void;
  onClose: () => void;
@@ -30,6 +33,8 @@ export function SidebarOpenTable({
  setGuestCount,
  openLinkMode,
  setOpenLinkMode,
+ mesaMultiple,
+ setMesaMultiple,
  selectedHabitacionId,
  setSelectedHabitacionId,
  onClose,
@@ -128,6 +133,17 @@ export function SidebarOpenTable({
  </Button>
  </div>
  </div>
+
+ {/* Mesa Múltiple: varias subcomandas (persona/cabaña) en la misma mesa */}
+ {openLinkMode ==='manual'&& (
+ <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-muted/50">
+ <div className="flex flex-col">
+ <Label htmlFor="mesa-multiple">Mesa múltiple</Label>
+ <span className="text-xs text-muted-foreground">Separar la comanda por personas o cabañas</span>
+ </div>
+ <Switch id="mesa-multiple"checked={mesaMultiple} onCheckedChange={setMesaMultiple} />
+ </div>
+ )}
 
  {/* Cliente o Habitación: una sola acción a la vez */}
  <div className="flex flex-col gap-2">

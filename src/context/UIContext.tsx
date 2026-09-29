@@ -33,6 +33,9 @@ interface UIContextType {
   checkoutView: boolean;
   setCheckoutView: (val: boolean) => void;
   viewingComandaId: string | null;
+  // Mesa Múltiple: subcomanda seleccionada en el sidebar (null = la primera).
+  activeSubcomandaId: string | null;
+  setActiveSubcomandaId: (id: string | null) => void;
   setViewingComandaId: (id: string | null) => void;
   reservaView: 'none' | 'nueva' | 'detalle';
   setReservaView: (view: 'none' | 'nueva' | 'detalle') => void;
@@ -64,6 +67,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [mesaView, setMesaView] = useState<'mapa' | 'productos'>('mapa');
   const [checkoutView, setCheckoutView] = useState(false);
   const [viewingComandaId, setViewingComandaId] = useState<string | null>(null);
+  const [activeSubcomandaId, setActiveSubcomandaId] = useState<string | null>(null);
   const [reservaView, setReservaView] = useState<'none' | 'nueva' | 'detalle'>('none');
   const [selectedReservaId, setSelectedReservaId] = useState<string | null>(null);
   const [reservaProductosComandaId, setReservaProductosComandaId] = useState<string | null>(null);
@@ -138,6 +142,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       setCheckoutView,
       viewingComandaId,
       setViewingComandaId,
+      activeSubcomandaId,
+      setActiveSubcomandaId,
       reservaView,
       setReservaView,
       selectedReservaId,
@@ -156,7 +162,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       setSelectedMesaEsHabitacion,
   }), [
       isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, confirmModal,
-      promptModal, checkoutView, viewingComandaId, reservaView, selectedReservaId,
+      promptModal, checkoutView, viewingComandaId, activeSubcomandaId, reservaView, selectedReservaId,
       reservaProductosComandaId, nuevaReservaPreset, menuView, selectedMenuProductId,
       selectedMesaEsHabitacion
   ]);

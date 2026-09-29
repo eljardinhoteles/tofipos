@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from'react';
 import { type Comanda, type Piso, type HabitacionCuenta } from'../db/database';
-import { isOperativeComanda } from'../db/comandaState';
+import { isOperativeComanda, pickComandaActiva } from'../db/comandaState';
 import { TableNode } from'../components/Mesas/TableNode';
 import { MesasControls } from'../components/Mesas/MesasControls';
 import { ProductSelector } from'../components/Mesas/ProductSelector';
@@ -234,14 +234,21 @@ export default function MesasV2() {
  clienteNombre: string | undefined;
  isHabitacion: boolean;
  habitacionAsociada: string;
+ subcomandasCount: number;
  };
  signature: string;
  }>());
 
  const [mesaDerivedData, nextCache] = useMemo(() => {
  const comandaByMesaId = new Map<string, Comanda>();
+ const subcomandasByMesaId = new Map<string, number>();
  for (const c of allComandas) {
- if (isOperativeComanda(c) && !comandaByMesaId.has(c.mesa_id)) comandaByMesaId.set(c.mesa_id, c);
+ if (!isOperativeComanda(c)) continue;
+ if (c.subcomanda_nombre) subcomandasByMesaId.set(c.mesa_id, (subcomandasByMesaId.get(c.mesa_id) ?? 0) + 1);
+ // Mesa Múltiple: la mesa solo se ve en"cuenta"si todas sus subcomandas
+ // la pidieron; si alguna sigue abierta, esa es la representativa.
+ const prev = comandaByMesaId.get(c.mesa_id);
+ if (!prev || (prev.estado ==='cuenta'&& c.estado !=='cuenta')) comandaByMesaId.set(c.mesa_id, c);
  }
  const cuentaByMesaId = new Map<string, HabitacionCuenta>();
  const cuentaById = new Map<string, HabitacionCuenta>();
@@ -257,6 +264,7 @@ export default function MesasV2() {
  clienteNombre: string | undefined;
  isHabitacion: boolean;
  habitacionAsociada: string;
+ subcomandasCount: number;
  }>();
 
  const cache = derivedCacheRef.current;
@@ -269,6 +277,7 @@ export default function MesasV2() {
  const isHabitacionPiso = mesa.piso?.toLowerCase() ==='habitaciones';
  const mesaComanda = comandaByMesaId.get(mesa.id);
  const mesaCuenta = cuentaByMesaId.get(mesa.id);
+ const subcomandasCount = subcomandasByMesaId.get(mesa.id) ?? 0;
  const clienteNombre = mesaCuenta ? mesaCuenta.huesped : mesaComanda?.cliente;
  const estadoVisual:'libre'|'ocupada'|'cuenta'= isHabitacionPiso
  ? (mesaCuenta ?'ocupada':'libre')
@@ -287,7 +296,7 @@ export default function MesasV2() {
  const signature = JSON.stringify([
  mesa.nombre, mesa.estado, mesa.capacidad, estadoVisual,
  clienteNombre, isHabitacionPiso, habitacionAsociada,
- mesaComanda?.id, mesaComanda?.estado, mesaComanda?.habitacion_cuenta_id,
+ mesaComanda?.id, mesaComanda?.estado, mesaComanda?.habitacion_cuenta_id, subcomandasCount,
  ]);
 
  const cached = cache.get(mesa.id);
@@ -299,6 +308,7 @@ export default function MesasV2() {
  clienteNombre,
  isHabitacion: isHabitacionPiso,
  habitacionAsociada,
+ subcomandasCount,
  };
 
  nextCache.set(mesa.id, { entry, signature });
@@ -537,7 +547,7 @@ export default function MesasV2() {
  {mesas.map((mesa) => {
  const derived = mesaDerivedData.get(mesa.id);
  if (!derived) return null;
- const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada } = derived;
+ const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
 
  return (
  <div key={mesa.id} className="overflow-visible">
@@ -548,6 +558,7 @@ export default function MesasV2() {
  isHabitacion={isHabitacion}
  activeComanda={mesaComanda}
  roomBadge={habitacionAsociada}
+ subcomandasCount={subcomandasCount}
  onSelect={handleSelectMesa}
  />
  </div>
@@ -562,7 +573,7 @@ export default function MesasV2() {
  {mesasToShow.map((mesa) => {
  const derived = mesaDerivedData.get(mesa.id);
  if (!derived) return null;
- const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada } = derived;
+ const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
 
  return (
  <div key={mesa.id} className="overflow-visible">
@@ -573,6 +584,7 @@ export default function MesasV2() {
  isHabitacion={isHabitacion}
  activeComanda={mesaComanda}
  roomBadge={habitacionAsociada}
+ subcomandasCount={subcomandasCount}
  onSelect={handleSelectMesa}
  />
  </div>
@@ -598,6 +610,7 @@ export default function MesasV2() {
 
 function ProductSelectorWrapper({ mesaId, onBack }: { mesaId: string | null; onBack: () => void }) {
  const [activeComanda, setActiveComanda] = useState<Comanda | null>(null);
+ const { activeSubcomandaId } = useUI();
 
  useEffect(() => {
  let active = true;
@@ -620,10 +633,11 @@ function ProductSelectorWrapper({ mesaId, onBack }: { mesaId: string | null; onB
 
  sub = query.$.subscribe((docs: any[]) => {
  if (!active) return;
- const operative = docs
+ const operativas = docs
  .map((doc: any) => doc.toJSON())
- .filter((c: Comanda) => isOperativeComanda(c))[0] ?? null;
- setActiveComanda(operative);
+ .filter((c: Comanda) => isOperativeComanda(c))
+ .sort((a: Comanda, b: Comanda) => a.folio - b.folio);
+ setActiveComanda(pickComandaActiva(operativas, activeSubcomandaId) ?? null);
  });
  if (!active) sub?.unsubscribe();
  })().catch(err => console.warn('Error cargando comanda activa para selector:', err));
@@ -632,7 +646,7 @@ function ProductSelectorWrapper({ mesaId, onBack }: { mesaId: string | null; onB
  active = false;
  sub?.unsubscribe();
  };
- }, [mesaId]);
+ }, [mesaId, activeSubcomandaId]);
 
  return <ProductSelector activeComanda={activeComanda} onBack={onBack} />;
 }

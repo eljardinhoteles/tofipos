@@ -15,7 +15,9 @@ import { SidebarReservaNew } from './Sidebar/SidebarReservaNew';
 import { SidebarReservaDetail } from './Sidebar/SidebarReservaDetail';
 import { SidebarMenuProduct } from '../Menu/SidebarMenuProduct';
 import { SidebarHabitacionCuenta } from './Sidebar/SidebarHabitacionCuenta';
-import { getMesaEstadoEfectivo, isOperativeComanda } from '../../db/comandaState';
+import { SubcomandasPanel } from './Sidebar/SubcomandasPanel';
+import { useTableActions } from '../../hooks/useTableActions';
+import { getMesaEstadoEfectivo, isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
 import { useRxClientes } from '../../hooks/useRxClientes';
 import { useRxMesas } from '../../hooks/useRxMesas';
@@ -45,10 +47,17 @@ export function TableSidebar({
 }: TableSidebarProps) {
   const [customerName, setCustomerName] = useState('');
   const [guestCount, setGuestCount] = useState(1);
-  const { checkoutView, setCheckoutView, viewingComandaId, setViewingComandaId, reservaView, setReservaView, selectedReservaId, setSelectedReservaId, menuView } = useUI();
+  const { checkoutView, setCheckoutView, viewingComandaId, setViewingComandaId, activeSubcomandaId, setActiveSubcomandaId, reservaView, setReservaView, selectedReservaId, setSelectedReservaId, menuView } = useUI();
   const [checkoutType, setCheckoutType] = useState<'directo' | 'dividido'>('directo');
   const [checkoutMode, setCheckoutMode] = useState<'cobro' | 'enviar_habitacion'>('cobro');
   const [openLinkMode, setOpenLinkMode] = useState<'manual' | 'habitacion'>('manual');
+  const [mesaMultiple, setMesaMultiple] = useState(false);
+  const [vistaTodas, setVistaTodas] = useState(false);
+  // Mientras se escribe el nombre de una subcomanda nueva se oculta el detalle
+  // de la comanda: en móvil el teclado encoge el sheet y el footer quedaba
+  // encajado entre el input y el teclado.
+  const [agregandoSub, setAgregandoSub] = useState(false);
+  const { crearSubcomanda } = useTableActions();
 
   const [newPisoName, setNewPisoName] = useState('');
   const [editingPisoId, setEditingPisoId] = useState<string | null>(null);
@@ -86,7 +95,8 @@ export function TableSidebar({
   const { clientes: allClientes } = useRxClientes();
 
   const [historicalComanda, setHistoricalComanda] = useState<any | null>(null);
-  const [activeComandaLive, setActiveComandaLive] = useState<any | null>(null);
+  // Comandas operativas de la mesa: 1 en mesa normal, N (subcomandas) en Mesa Múltiple.
+  const [mesaOperativas, setMesaOperativas] = useState<any[]>([]);
   const [liveComandaItems, setLiveComandaItems] = useState<any[]>([]);
   const [activeCuentaHabitacion, setActiveCuentaHabitacion] = useState<any | null>(null);
 
@@ -118,16 +128,17 @@ export function TableSidebar({
           sort: [{ updated_at: 'desc' }, { id: 'desc' }]
         });
 
+        const toOperativas = (docs: any[]) => docs
+          .map(d => (d.toJSON ? d.toJSON() : d))
+          .filter(c => isOperativeComanda(c))
+          .sort((a, b) => a.folio - b.folio);
+
         const currentDocs = await query.exec();
-        if (alive) {
-          const currentDoc = currentDocs.find(d => isOperativeComanda(d.toJSON ? d.toJSON() : d)) || null;
-          setActiveComandaLive(currentDoc ? currentDoc.toJSON() : null);
-        }
+        if (alive) setMesaOperativas(toOperativas(currentDocs));
 
         comandasSub = query.$.subscribe((docs: any[]) => {
           if (!alive) return;
-          const doc = docs.find(d => isOperativeComanda(d.toJSON ? d.toJSON() : d)) || null;
-          setActiveComandaLive(doc ? doc.toJSON() : null);
+          setMesaOperativas(toOperativas(docs));
         });
 
         const cuentaQuery = rxDb.habitacion_cuentas.find({
@@ -151,7 +162,48 @@ export function TableSidebar({
     };
   }, [selectedMesa?.id, selectedMesa?.estado, viewingComandaId]);
 
+  const esMultiple = esMesaMultiple(mesaOperativas);
+  // Ítems de todas las subcomandas: cocina recibe un solo ticket por mesa.
+  const [mesaItems, setMesaItems] = useState<any[]>([]);
+  const operativasKey = mesaOperativas.map(c => c.id).join(',');
+  useEffect(() => {
+    if (!esMultiple || !operativasKey) { setMesaItems([]); return; }
+    let alive = true;
+    let sub: { unsubscribe: () => void } | null = null;
+    (async () => {
+      const rxDb = await initVerticalRxDb();
+      if (!alive) return;
+      const query = rxDb.comanda_items.find({
+        selector: { comanda_id: { $in: operativasKey.split(',') }, _deleted: { $ne: true } }
+      });
+      sub = query.$.subscribe((docs: any[]) => { if (alive) setMesaItems(docs.map((d: any) => d.toJSON())); });
+    })().catch(() => {});
+    return () => { alive = false; sub?.unsubscribe(); };
+  }, [esMultiple, operativasKey]);
+  const grupoCocina = useMemo(
+    () => (esMultiple ? { comandas: mesaOperativas, items: mesaItems } : undefined),
+    [esMultiple, mesaOperativas, mesaItems]
+  );
+  const activeComandaLive = useMemo(
+    () => pickComandaActiva(mesaOperativas, activeSubcomandaId) ?? null,
+    [mesaOperativas, activeSubcomandaId]
+  );
+  // Mantiene la selección válida: si la subcomanda activa se cerró o cargó a
+  // habitación, pasa a la siguiente abierta.
+  useEffect(() => {
+    if (!esMultiple) return;
+    if (!mesaOperativas.some(c => c.id === activeSubcomandaId)) {
+      setActiveSubcomandaId(mesaOperativas[0]?.id ?? null);
+    }
+  }, [esMultiple, mesaOperativas, activeSubcomandaId, setActiveSubcomandaId]);
+
   const activeComanda = viewingComandaId ? historicalComanda : activeComandaLive;
+
+  // Mesa Múltiple: tras cobrar/cargar una subcomanda, el sidebar se queda en
+  // la mesa si aún hay otras con productos por resolver.
+  const quedanOtrasConProductos = esMultiple && mesaOperativas.some(c =>
+    c.id !== activeComanda?.id && mesaItems.some(i => i.comanda_id === c.id && !i.anulado && (i.cantidad || 0) > 0)
+  );
   const selectedMesaForView: Mesa | null = selectedMesa || (
     viewingComandaId && historicalComanda
       ? {
@@ -196,7 +248,15 @@ export function TableSidebar({
     };
   }, [activeComanda?.id]);
 
-  const comandaItems = liveComandaItems;
+  // Mesa Múltiple: los ítems de la subcomanda activa salen de la suscripción
+  // de toda la mesa (ya cargada), así al cambiar de subcomanda no se ven, por
+  // un instante, los ítems de la anterior mientras llega su propia consulta.
+  const comandaItems = useMemo(
+    () => (esMultiple && activeComanda && mesaItems.length > 0
+      ? mesaItems.filter(i => i.comanda_id === activeComanda.id)
+      : liveComandaItems),
+    [esMultiple, activeComanda, mesaItems, liveComandaItems]
+  );
 
   const [editingMesaId, setEditingMesaId] = useState<string | null>(null);
   const [tableFormValues, setTableFormValues] = useState({ numero: 1, nombre: '', capacidad: 0 });
@@ -209,6 +269,9 @@ export function TableSidebar({
       setCheckoutView(false);
       setSelectedHabitacionId(null);
       setOpenLinkMode('manual');
+      setMesaMultiple(false);
+      setVistaTodas(false);
+      setActiveSubcomandaId(null);
     }
   }, [selectedMesa]);
 
@@ -472,7 +535,7 @@ export function TableSidebar({
                 onBack={() => setCheckoutView(false)}
                 onSuccess={() => {
                   setCheckoutView(false);
-                  onClose();
+                  if (!quedanOtrasConProductos) onClose();
                 }}
               />
             );
@@ -488,7 +551,7 @@ export function TableSidebar({
               onBack={() => setCheckoutView(false)}
               onSuccess={() => {
                 setCheckoutView(false);
-                onClose();
+                if (!quedanOtrasConProductos) onClose();
               }}
             />
           );
@@ -523,15 +586,38 @@ export function TableSidebar({
             );
           }
 
-          return (
-            <SidebarDetails 
+          const details = (
+            <SidebarDetails
+              // Mesa Múltiple: una instancia por subcomanda, para que al
+              // cambiar no arrastre el estado (comanda en vivo, pagos, ítem
+              // en edición) de la anterior.
+              key={esMultiple ? activeComanda.id : undefined}
               selectedMesa={selectedMesaEffective}
               activeComanda={activeComanda}
               comandaItems={comandaItems}
               onClose={onClose}
+              onResuelta={() => { if (!quedanOtrasConProductos) onClose(); }}
               onAddProduct={() => onAction(selectedMesaEffective, 'add_product')}
               onAction={handleActionOverride}
+              grupo={viewingComandaId ? undefined : grupoCocina}
+              vistaTodas={esMultiple && vistaTodas}
+              onSelectSubcomanda={(id) => { setActiveSubcomandaId(id); setVistaTodas(false); }}
             />
+          );
+          if (!esMultiple || viewingComandaId) return details;
+          return (
+            <div className="h-full w-full flex flex-col overflow-hidden">
+              <SubcomandasPanel
+                subcomandas={mesaOperativas.filter(c => !!c.subcomanda_nombre)}
+                activeId={activeComanda.id}
+                vistaTodas={vistaTodas}
+                onSelect={(id) => { setActiveSubcomandaId(id); setVistaTodas(false); }}
+                onSelectTodas={() => setVistaTodas(true)}
+                onAdd={async (nombre) => { await crearSubcomanda(selectedMesaEffective, nombre); setVistaTodas(false); }}
+                onAddingChange={setAgregandoSub}
+              />
+              <div className={agregandoSub ? 'hidden' : 'flex-1 min-h-0'}>{details}</div>
+            </div>
           );
         }
 
@@ -544,6 +630,8 @@ export function TableSidebar({
             setGuestCount={setGuestCount}
             openLinkMode={openLinkMode}
             setOpenLinkMode={setOpenLinkMode}
+            mesaMultiple={mesaMultiple}
+            setMesaMultiple={setMesaMultiple}
             selectedHabitacionId={selectedHabitacionId}
             setSelectedHabitacionId={setSelectedHabitacionId}
             onClose={onClose}
@@ -556,6 +644,7 @@ export function TableSidebar({
                 guestCount,
                 clientId: resolvedId,
                 habitacionCuentaId,
+                mesaMultiple: mesaMultiple && !habitacionCuentaId,
               }));
               onAction(selectedMesaEffective, `abrir:${payload}`);
             }}

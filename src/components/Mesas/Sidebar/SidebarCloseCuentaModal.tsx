@@ -1,4 +1,4 @@
-import { Printer } from'@phosphor-icons/react';
+import { Printer, CircleNotch } from'@phosphor-icons/react';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -17,6 +17,8 @@ interface SidebarCloseCuentaModalProps {
  closePayerName: string;
  setClosePayerName: (val: string) => void;
  onConfirm: () => void;
+ // Cierre en curso: bloquea el botón y el cierre del modal (evita dobles clics).
+ procesando?: boolean;
 }
 
 export function SidebarCloseCuentaModal({
@@ -25,10 +27,11 @@ export function SidebarCloseCuentaModal({
  saldoPendiente,
  closePayerName,
  setClosePayerName,
- onConfirm
+ onConfirm,
+ procesando = false
 }: SidebarCloseCuentaModalProps) {
  return (
- <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+ <Dialog open={opened} onOpenChange={(open) => !open && !procesando && onClose()}>
  <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
  <DialogHeader className="border-b border-border pb-3 text-left">
  <DialogTitle className="font-extrabold text-lg text-foreground">
@@ -59,13 +62,13 @@ export function SidebarCloseCuentaModal({
 
  <div className="flex flex-col gap-2 pt-2 border-t border-border">
  <Button
- type="button"onClick={onConfirm}
+ type="button"onClick={onConfirm}disabled={procesando}
  className="gap-1.5 bg-emerald-600 text-white font-bold h-11 text-sm shadow-md">
- <Printer size={18} /> Cerrar e Imprimir
+ {procesando ? (<><CircleNotch size={18} className="animate-spin"/> Cerrando…</>) : (<><Printer size={18} /> Cerrar e Imprimir</>)}
  </Button>
 
  <Button
- type="button"variant="ghost"onClick={onClose}
+ type="button"variant="ghost"disabled={procesando}onClick={onClose}
  className="w-full text-muted-foreground">
  Cancelar
  </Button>

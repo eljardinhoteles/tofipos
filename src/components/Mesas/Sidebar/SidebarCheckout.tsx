@@ -8,7 +8,7 @@ import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
-import { initVerticalRxDb, createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
+import { initVerticalRxDb, createRxVenta, agregarVentaMovimiento, updateRxComanda, liberarMesaSiSinOperativas } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { Button } from'@/components/ui/button';
 
@@ -240,7 +240,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  estado:'cerrado',
  mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
  });
- await updateRxMesa(selectedMesa.id, { estado:'libre'});
+ await liberarMesaSiSinOperativas(selectedMesa.id);
 
  showToast.success('Venta Finalizada',`La mesa ${selectedMesa.nombre} ha sido cobrada exitosamente.`);
 

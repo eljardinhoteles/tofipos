@@ -16,7 +16,7 @@ import {
  createRxVenta,
  updateRxComanda,
  updateRxComandaItem,
- updateRxMesa
+ liberarMesaSiSinOperativas
 } from'../../../db/rxdb';
 import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
@@ -278,7 +278,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
  updated_at: new Date().toISOString()
  });
- await updateRxMesa(selectedMesa.id, { estado:'libre'});
+ await liberarMesaSiSinOperativas(selectedMesa.id);
  showToast.success('Cuenta Pagada','El saldo pendiente ha sido cubierto en su totalidad.');
  onSuccess();
  }

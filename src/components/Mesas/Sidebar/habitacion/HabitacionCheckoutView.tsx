@@ -13,6 +13,7 @@ import { useIvaActivo } from'../../../../hooks/useIvaActivo';
 import { generarPrecuentaConsolidadaHabitacion } from'../../../../services/printTemplateEngine';
 import { queueReprintTicket } from'../../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../../Common/TicketPreviewModal';
+import { SubcuentaChips } from'./SubcuentaChips';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -35,6 +36,7 @@ interface CortesiaDraft {
 export function HabitacionCheckoutView({
   cuenta,
   selectedMesa,
+  checkoutData,
   onBack,
   onSuccess,
 }: {
@@ -45,7 +47,15 @@ export function HabitacionCheckoutView({
   onSuccess: () => void;
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [payerName, setPayerName] = useState(cuenta.huesped ||'');
+  const subcuentas = cuenta.subcuentas ?? [];
+  // Subcuenta que se cobra: 'todas', null (principal) o id. Viene de CuentaView
+  // según el filtro que estaba activo; se puede cambiar aquí.
+  const [subSel, setSubSel] = useState<string | null>(
+    checkoutData?.subcuentaId === undefined ? 'todas' : checkoutData.subcuentaId
+  );
+  const nombrePagador = (sel: string | null) =>
+    subcuentas.find(x => x.id === sel)?.nombre || cuenta.huesped ||'';
+  const [payerName, setPayerName] = useState(nombrePagador(subSel));
   const { porcentaje: ivaPorcentaje } = useIvaActivo();
 
   const [comandas, setComandas] = useState<any[]>([]);
@@ -77,7 +87,9 @@ export function HabitacionCheckoutView({
       setComandas(list);
       // Por defecto se seleccionan todas las precuentas, como antes; el
       // usuario puede desmarcar las que no quiere pagar en este cobro.
-      setSelectedIds(new Set(list.map((c: any) => c.id)));
+      setSelectedIds(new Set(list
+        .filter((c: any) => subSel === 'todas' || (c.habitacion_subcuenta_id ?? null) === subSel)
+        .map((c: any) => c.id)));
 
       const itemsDocs = await rxDb.comanda_items.find({
         selector: { comanda_id: { $in: list.map((c: any) => c.id) }, _deleted: { $ne: true } }
@@ -108,6 +120,17 @@ export function HabitacionCheckoutView({
     [comandas, selectedIds]
   );
 
+  // Si lo que se cobra pertenece a una sola subcuenta, su nombre sale en la
+  // precuenta consolidada y en la referencia de la venta. Vacío si la cuenta
+  // no tiene subcuentas o si se cobran varias a la vez.
+  const etiquetaSubcuenta = useMemo(() => {
+    if (subcuentas.length === 0) return '';
+    const subs = new Set(comandasSeleccionadas.map(c => c.habitacion_subcuenta_id ?? null));
+    if (subs.size !== 1) return '';
+    const id = [...subs][0];
+    return subcuentas.find(x => x.id === id)?.nombre || cuenta.principal_nombre ||'Principal';
+  }, [comandasSeleccionadas, subcuentas, cuenta.principal_nombre]);
+
   // Total neto a cobrar por comanda: se resta, por cada item, el monto
   // correspondiente a la cantidad marcada en cortesía.
   const totalNetoPorComanda = useMemo(() => {
@@ -128,6 +151,14 @@ export function HabitacionCheckoutView({
     () => comandasSeleccionadas.reduce((acc, c) => acc + (totalNetoPorComanda.get(c.id) ?? c.total ?? 0), 0),
     [comandasSeleccionadas, totalNetoPorComanda]
   );
+
+  const cambiarSubcuenta = (sel: string | null) => {
+    setSubSel(sel);
+    setSelectedIds(new Set(comandas
+      .filter(c => sel === 'todas' || (c.habitacion_subcuenta_id ?? null) === sel)
+      .map(c => c.id)));
+    setPayerName(nombrePagador(sel));
+  };
 
   const toggleSeleccion = (id: string) => {
     setSelectedIds(prev => {
@@ -173,6 +204,7 @@ export function HabitacionCheckoutView({
       selectedMesa.nombre,
       false,
       soloConsumo,
+      etiquetaSubcuenta || undefined,
     );
     setPreviewContent(content);
     setPreviewOpened(true);
@@ -241,7 +273,7 @@ export function HabitacionCheckoutView({
           tipo:'directa',
           cliente_id: cuenta.cliente_id || undefined,
           cliente_nombre: payerName.trim() || cuenta.huesped || undefined,
-          referencia: `${selectedMesa.nombre} · Comandas ${folios}`,
+          referencia: `${selectedMesa.nombre}${etiquetaSubcuenta ? ` · ${etiquetaSubcuenta}` : ''} · Comandas ${folios}`,
           organization_id: localStorage.getItem('pos_active_org_id') ||'',
         }, total);
       }
@@ -276,6 +308,13 @@ export function HabitacionCheckoutView({
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        {subcuentas.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">Subcuenta a cobrar</span>
+            <SubcuentaChips subcuentas={subcuentas} value={subSel} onChange={cambiarSubcuenta} mostrarTodas nombrePrincipal={cuenta.principal_nombre || 'Principal'} />
+          </div>
+        )}
+
         <div className="flex flex-col gap-1">
           <Label>Nombre de quien paga</Label>
           <Input

@@ -104,13 +104,13 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  return (
  <div className={cn("w-full transition-opacity", (isFullyPaid || isAnulado) &&"opacity-60")}>
  {isReadOnly ? (
- <div className={cn("w-full text-left transition-colors", isOdd &&"bg-muted/70")}>
+ <div className={cn("w-full text-left", isOdd &&"bg-muted/70")}>
  {content}
  </div>
  ) : (
  <button
  type="button"onClick={onClick}
- className={cn("w-full text-left cursor-pointer transition-colors focus:outline-none focus-visible:bg-primary/10 border-l-4",
+ className={cn("w-full text-left cursor-pointer focus:outline-none focus-visible:bg-primary/10 border-l-4",
  isSelected
  ?"bg-primary/10 border-l-primary"
  :cn("border-l-transparent", isOdd &&"bg-muted/70"))}

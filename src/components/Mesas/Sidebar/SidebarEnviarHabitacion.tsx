@@ -4,7 +4,8 @@ import type { Comanda } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
-import { initVerticalRxDb, updateRxComanda, updateRxMesa } from'../../../db/rxdb';
+import { SubcuentaChips } from'./habitacion/SubcuentaChips';
+import { initVerticalRxDb, updateRxComanda, liberarMesaSiSinOperativas } from'../../../db/rxdb';
 
 interface SidebarEnviarHabitacionProps {
  activeComanda: Comanda;
@@ -14,6 +15,7 @@ interface SidebarEnviarHabitacionProps {
 
 export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: SidebarEnviarHabitacionProps) {
  const [selectedCuentaId, setSelectedCuentaId] = useState<string | null>(null);
+ const [selectedSubcuentaId, setSelectedSubcuentaId] = useState<string | null>(null);
  const [isProcessing, setIsProcessing] = useState(false);
  const [menuItems] = useState<any[]>([]);
  const [cuentasActivas, setCuentasActivas] = useState<any[]>([]);
@@ -48,12 +50,13 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  try {
  await updateRxComanda(activeComanda.id, {
  habitacion_cuenta_id: selectedCuentaId,
+ habitacion_subcuenta_id: selectedSubcuentaId,
  total: totales.total,
  confirmada: true,
  sincronizado: true,
  });
 
- await updateRxMesa(activeComanda.mesa_id, { estado:'libre'});
+ await liberarMesaSiSinOperativas(activeComanda.mesa_id);
  showToast.success('Cargo enviado a habitación');
  onSuccess();
  } catch {
@@ -83,7 +86,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  return (
  <div
  key={cuenta.id}
- onClick={() => setSelectedCuentaId(cuenta.id)}
+ onClick={() => { setSelectedCuentaId(cuenta.id); setSelectedSubcuentaId(null); }}
  className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer ${
  isSelected ?'bg-primary/10 border-primary':'bg-muted border-border'}`}
  >
@@ -97,6 +100,18 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  </div>
  );
  })}
+
+ {(() => {
+ const cuentaSel = cuentasActivas.find((c) => c.id === selectedCuentaId);
+ const subs = cuentaSel?.subcuentas ?? [];
+ if (subs.length === 0) return null;
+ return (
+ <div className="flex flex-col gap-2 pt-3 border-t border-border">
+ <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cargar a la subcuenta</span>
+ <SubcuentaChips subcuentas={subs} value={selectedSubcuentaId} onChange={setSelectedSubcuentaId} nombrePrincipal={cuentaSel?.principal_nombre || 'Principal'} />
+ </div>
+ );
+ })()}
  </main>
 
  <footer className="p-4 border-t border-border">

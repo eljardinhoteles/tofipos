@@ -33,6 +33,9 @@ export interface MobileCartInfo {
  mesaNombre: string;
  itemCount: number;
  total: number;
+ // Mesa Múltiple: mantiene el estado carrito (con los slots de Volver/
+ // Categorías/Buscar) aunque la subcomanda activa aún no tenga ítems.
+ mantenerVacio?: boolean;
 }
 
 const navItemsMobile = [
@@ -85,7 +88,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <>
  <div id="mobile-navbar-root"className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-2 pointer-events-none">
  <nav className="flex items-center w-full max-w-md pointer-events-auto">
- {cart && cart.itemCount > 0 ? (
+ {cart && (cart.itemCount > 0 || cart.mantenerVacio) ? (
  /* Estado carrito: Layout de 3 piezas idéntico al normal */
  <div className="flex items-center justify-between w-full gap-3 h-14">
  

@@ -17,3 +17,16 @@ export function getMesaEstadoEfectivo(
     estado: comanda.estado === 'cuenta' ? 'cuenta' : 'ocupada'
   }
 }
+
+type ComandaMesaRef = ComandaEstadoBase & { id: string; subcomanda_nombre?: string | null }
+
+// Mesa Múltiple: una mesa puede tener varias comandas operativas (una por
+// subcomanda). Devuelve la seleccionada en el sidebar, o la primera si no
+// hay selección válida.
+export function pickComandaActiva<T extends ComandaMesaRef>(operativas: T[], activeId?: string | null): T | undefined {
+  return (activeId ? operativas.find(c => c.id === activeId) : undefined) ?? operativas[0]
+}
+
+export function esMesaMultiple(operativas: Array<{ subcomanda_nombre?: string | null }>) {
+  return operativas.some(c => !!c.subcomanda_nombre)
+}

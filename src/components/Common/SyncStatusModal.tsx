@@ -9,6 +9,7 @@ import {
 } from '@phosphor-icons/react';
 import type { SyncStatus } from '../../db/rxdb';
 import { cn } from '@/lib/utils';
+import { appVersionLabel, appBuildDateLabel } from '@/lib/appVersion';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -158,6 +159,14 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
             </div>
           </div>
         )}
+
+        {/* Versión del sistema: comparar entre dispositivos para saber que todos
+            tienen la última actualización. */}
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-muted/60 text-xs">
+          <span className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">Versión del sistema</span>
+          <span className="font-black text-foreground tabular-nums">{appVersionLabel()}</span>
+        </div>
+        <span className="-mt-2 text-[10px] text-muted-foreground text-right">Compilado: {appBuildDateLabel()}</span>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">

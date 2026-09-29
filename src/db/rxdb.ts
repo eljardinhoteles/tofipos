@@ -5,6 +5,7 @@ import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
 import { replicateSupabase } from 'rxdb/plugins/replication-supabase'
 import { supabase } from '../lib/supabase'
+import { isOperativeComanda } from './comandaState'
 
 function withSuppressedDexieWarning<T>(run: () => Promise<T>): Promise<T> {
   const originalWarn = console.warn;
@@ -74,6 +75,12 @@ export interface RxComanda {
   // significa que sigue el IVA global activo en vivo (comportamiento histórico).
   iva_porcentaje?: number | null
   iva_precios_con_iva?: boolean | null
+  // Mesa Múltiple: una subcomanda es una comanda normal de la mesa con un
+  // nombre libre informativo (persona/cabaña). Todas las subcomandas de una
+  // mesa comparten mesa_id; no hay comanda "madre".
+  subcomanda_nombre?: string | null
+  // Subcuenta de la habitación a la que se cargó (null = cuenta principal).
+  habitacion_subcuenta_id?: string | null
 }
 
 export interface RxComandaItem {
@@ -127,6 +134,12 @@ export interface RxHabitacionCuenta {
   check_out?: string
   estado: 'activa' | 'cerrada'
   notas?: string
+  // Subcuentas de la habitación (p. ej. 2 familias en una villa que llevan
+  // consumos por separado). La cuenta "Principal" es implícita: comandas con
+  // habitacion_subcuenta_id null/undefined.
+  subcuentas?: Array<{ id: string; nombre: string }>
+  // Nombre de la subcuenta principal (null/undefined = "Principal").
+  principal_nombre?: string | null
   created_at: string
   updated_at: string
   organization_id: string
@@ -516,7 +529,7 @@ const mesaSchema = {
 } as const
 
 const comandaSchema = {
-  version: 4,
+  version: 6,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -547,7 +560,9 @@ const comandaSchema = {
     // Snapshot de IVA tomado al crear la comanda, editable luego a mano desde
     // el detalle de la comanda. `null` = sigue el IVA global activo en vivo.
     iva_porcentaje: { type: ['number', 'null'] },
-    iva_precios_con_iva: { type: ['boolean', 'null'] }
+    iva_precios_con_iva: { type: ['boolean', 'null'] },
+    subcomanda_nombre: { type: ['string', 'null'] },
+    habitacion_subcuenta_id: { type: ['string', 'null'] }
   },
   required: ['id', 'folio', 'mesa_id', 'mesero', 'estado', 'confirmada', 'total', 'created_at', 'updated_at', 'organization_id', '_deleted', '_modified'],
   indexes: ['folio', 'mesa_id', 'estado', 'organization_id', 'updated_at', '_modified']
@@ -601,7 +616,7 @@ const pisoSchema = {
 } as const
 
 const habitacionCuentaSchema = {
-  version: 0,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -613,6 +628,15 @@ const habitacionCuentaSchema = {
     check_out: { type: 'string' },
     estado: { type: 'string', enum: ['activa', 'cerrada'] },
     notas: { type: 'string' },
+    subcuentas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { id: { type: 'string' }, nombre: { type: 'string' } },
+        required: ['id', 'nombre']
+      }
+    },
+    principal_nombre: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -1184,7 +1208,11 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         3: (oldDoc: any) => ({ ...oldDoc, sincronizado: oldDoc.habitacion_cuenta_id ? false : null }),
         // v3 → v4: agrega override de IVA por comanda (snapshot al crear / edición manual).
         // Comandas existentes quedan en null = siguen el IVA global activo, sin cambio de comportamiento.
-        4: (oldDoc: any) => ({ ...oldDoc, iva_porcentaje: null, iva_precios_con_iva: null })
+        4: (oldDoc: any) => ({ ...oldDoc, iva_porcentaje: null, iva_precios_con_iva: null }),
+        // v4 → v5: Mesa Múltiple — nombre de subcomanda (null = comanda normal).
+        5: (oldDoc: any) => ({ ...oldDoc, subcomanda_nombre: null }),
+        // v5 → v6: subcuenta de habitación (null = cuenta principal).
+        6: (oldDoc: any) => ({ ...oldDoc, habitacion_subcuenta_id: null })
       }
     },
     comanda_items: {
@@ -1204,7 +1232,15 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
       }
     },
     pisos: { schema: pisoSchema },
-    habitacion_cuentas: { schema: habitacionCuentaSchema },
+    habitacion_cuentas: {
+      schema: habitacionCuentaSchema,
+      migrationStrategies: {
+        // v0 → v1: subcuentas de habitación (vacío = solo cuenta principal).
+        1: (oldDoc: any) => ({ ...oldDoc, subcuentas: [] }),
+        // v1 → v2: nombre editable de la subcuenta principal.
+        2: (oldDoc: any) => ({ ...oldDoc, principal_nombre: null })
+      }
+    },
     reservas: { schema: reservaSchema },
     pagos: {
       schema: pagoSchema,
@@ -1950,8 +1986,38 @@ export async function pingSyncStatus() {
   refreshCollectionStatus()
 }
 
+// El push descarta en silencio los documentos que Supabase rechaza por un
+// error de datos (p. ej. una columna que aún no existía) y RxDB los da por
+// enviados: nunca se reintentan solos. Esto los vuelve a marcar como
+// modificados para que se suban de nuevo — cuentas de habitación (todas las
+// activas + recientes) y comandas de los últimos días. El upsert es idempotente.
+export async function repushRecentLocalDocs(days = 7) {
+  const db = await initVerticalRxDb()
+  const since = new Date(Date.now() - days * 86400000).toISOString()
+  const now = new Date().toISOString()
+
+  const [cuentas, comandas] = await Promise.all([
+    db.habitacion_cuentas.find({ selector: { _deleted: { $ne: true } } }).exec(),
+    db.comandas.find({ selector: { _deleted: { $ne: true }, updated_at: { $gte: since } } }).exec(),
+  ])
+
+  for (const doc of cuentas as any[]) {
+    if (doc.estado === 'activa' || (doc.updated_at ?? '') >= since) {
+      await doc.incrementalPatch({ _modified: now })
+    }
+  }
+  for (const doc of comandas as any[]) {
+    await doc.incrementalPatch({ _modified: now })
+  }
+}
+
 export async function forceSyncAll() {
   if (!verticalReplicationState) return
+  try {
+    await repushRecentLocalDocs()
+  } catch (e) {
+    console.warn('[forceSyncAll] no se pudieron reenviar los documentos recientes:', e)
+  }
   Object.values(verticalReplicationState).forEach((state: any) => state?.reSync?.())
 }
 
@@ -2049,6 +2115,29 @@ export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modi
     source: 'rxdb'
   })
   return created
+}
+
+// Libera la mesa solo si ya no quedan comandas operativas en ella: en Mesa
+// Múltiple, cerrar/cargar una subcomanda no debe liberar la mesa mientras
+// haya otras abiertas.
+export async function liberarMesaSiSinOperativas(mesaId: string) {
+  const db = await initVerticalRxDb()
+  const docs = await db.comandas.find({ selector: { mesa_id: mesaId, _deleted: { $ne: true } } }).exec()
+  const operativas = docs.map((d: any) => d.toJSON()).filter((c: any) => isOperativeComanda(c))
+  if (operativas.length > 0) {
+    // Mesa Múltiple: las subcomandas vacías no se pueden cobrar ni cargar, así
+    // que si todo lo que queda abierto son subcomandas sin ítems se descartan
+    // (anuladas) para que la mesa no quede ocupada sin nada por resolver.
+    if (!operativas.every((c: any) => !!c.subcomanda_nombre)) return
+    const items = await db.comanda_items.find({
+      selector: { comanda_id: { $in: operativas.map((c: any) => c.id) }, _deleted: { $ne: true } }
+    }).exec()
+    if (items.some((i: any) => !i.anulado && (i.cantidad || 0) > 0)) return
+    for (const c of operativas) {
+      await updateRxComanda(c.id, { estado: 'anulada', motivo_anulacion: 'Subcomanda vacía' })
+    }
+  }
+  await updateRxMesa(mesaId, { estado: 'libre' })
 }
 
 export async function updateRxComanda(id: string, patch: Partial<RxComanda>) {

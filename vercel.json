@@ -1,3 +1,0 @@
-{
-  "rewrites": [{ "source": "/((?!assets|icon|apple-touch-icon|manifest|sw|workbox).*)", "destination": "/index.html" }]
-}

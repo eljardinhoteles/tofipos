@@ -1,6 +1,6 @@
 import { memo } from'react';
 import type { Mesa, Comanda } from'../../db/database';
-import { User, Receipt, ForkKnife, Bed } from'@phosphor-icons/react';
+import { User, Receipt, ForkKnife, Bed, Stack } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 
 interface TableNodeProps {
@@ -12,6 +12,8 @@ interface TableNodeProps {
  isHabitacion?: boolean;
  activeComanda?: Pick<Comanda,'estado'|'habitacion_cuenta_id'> & { sincronizado?: boolean } | null;
  roomBadge?: string;
+ // Mesa Múltiple: cantidad de subcomandas abiertas (0/undefined = mesa normal).
+ subcomandasCount?: number;
 }
 
 export const TableNode = memo(function TableNode({
@@ -22,10 +24,12 @@ export const TableNode = memo(function TableNode({
  cliente,
  isHabitacion,
  activeComanda,
- roomBadge
+ roomBadge,
+ subcomandasCount = 0
 }: TableNodeProps) {
  const isFree = mesa.estado ==='libre'&& !activeComanda;
 
+ const isMultiple = subcomandasCount > 0;
  const hasOpenComanda = Boolean(activeComanda);
  const effectiveState = hasOpenComanda
  ? (activeComanda?.estado ==='cuenta'?'cuenta':'ocupada')
@@ -128,6 +132,8 @@ export const TableNode = memo(function TableNode({
  <div className="flex items-center gap-1">
  {effectiveState ==='cuenta'? (
  <Receipt size={14} className={isSelected ?"text-white":"text-orange-600"} />
+ ) : isMultiple ? (
+ <Stack size={14} weight="fill" className={isSelected ?"text-white":"text-primary"} />
  ) : (
  <ForkKnife size={14} className={isSelected ?"text-white":"text-primary"} />
  )}
@@ -149,7 +155,15 @@ export const TableNode = memo(function TableNode({
  </span>
  )}
 
- {cliente && (
+ {isMultiple && (
+ <span className={cn("flex items-center gap-1 px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wide",
+ isSelected ?"bg-white/20 text-white":"bg-primary/15 text-primary")}>
+ <Stack size={10} weight="fill" />
+ {subcomandasCount} CUENTAS
+ </span>
+ )}
+
+ {cliente && !isMultiple && (
  <span className="text-[10px] font-extrabold truncate max-w-full mt-1">
  {cliente}
  </span>

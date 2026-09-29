@@ -4,9 +4,28 @@ import tailwindcss from '@tailwindcss/vite'
 // import basicSsl from '@vitejs/plugin-basic-ssl'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
+
+// Versión del sistema: el número (package.json "version") se sube a mano en
+// cada actualización; el "build" (commit + fecha) se calcula solo, así aunque
+// se olvide subir el número se nota que un dispositivo tiene otra compilación.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+const gitCommit = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  } catch {
+    return 'sin-git'
+  }
+})()
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_COMMIT__: JSON.stringify(gitCommit),
+    __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -12,12 +12,14 @@ import { SidebarCloseCuentaModal } from'./SidebarCloseCuentaModal';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
-import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, anularComandaItem } from'../../../db/rxdb';
+import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, liberarMesaSiSinOperativas, anularComandaItem } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { useUI } from'../../../context/UIContext';
 import { useAuth } from'../../../context/AuthContext';
 import { initVerticalRxDb } from'../../../db/rxdb';
+import { deltaGrupo, mergeItemsCocina } from'../../../lib/kitchenDelta';
+import { SubcuentaChips } from'./habitacion/SubcuentaChips';
 import { queueKitchenPrint, queueReceiptPrint } from'../../../lib/printServerClient';
 import { generarPrecuenta } from'../../../services/printTemplateEngine';
 import { useIsMobile } from'../../../hooks/useIsMobile';
@@ -32,7 +34,7 @@ import {
 } from'@/components/ui/dialog';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from'@/components/ui/collapsible';
 import { Input } from'@/components/ui/input';
-import { ArrowCounterClockwise } from'@phosphor-icons/react';
+import { ArrowCounterClockwise, CircleNotch } from'@phosphor-icons/react';
 
 const TIPO_CLIENTE_LABEL: Record<string, string> = {
  persona_natural:'Persona natural',
@@ -46,8 +48,18 @@ interface SidebarDetailsProps {
  activeComanda: any;
  comandaItems: any[];
  onClose: () => void;
+ // Se llama al terminar de cobrar/cargar a habitación la comanda; por defecto
+ // cierra el sidebar. En Mesa Múltiple se queda abierto si quedan otras
+ // subcomandas con productos.
+ onResuelta?: () => void;
  onAddProduct: () => void;
  onAction: (mesa: Mesa, action: string) => void;
+ // Mesa Múltiple: todas las subcomandas operativas de la mesa y sus ítems,
+ // para enviar a cocina un solo ticket de toda la mesa.
+ grupo?: { comandas: any[]; items: any[] };
+ // Mesa Múltiple: muestra todos los ítems de la mesa agrupados por subcomanda.
+ vistaTodas?: boolean;
+ onSelectSubcomanda?: (id: string) => void;
 }
 
 const EMPTY_ARRAY: any[] = [];
@@ -57,10 +69,15 @@ export function SidebarDetails({
  activeComanda: activeComandaProp,
  comandaItems = EMPTY_ARRAY,
  onClose,
+ onResuelta: onResueltaProp,
  onAddProduct,
  onAction,
+ grupo,
+ vistaTodas = false,
+ onSelectSubcomanda,
 }: SidebarDetailsProps) {
  const isMobile = useIsMobile();
+ const onResuelta = onResueltaProp ?? onClose;
  // Chevron sobre "Añadir Productos" en móvil: avisa que la lista de
  // productos sigue scrolleable hacia abajo, ya que ahí no queda tan obvio
  // como en desktop (más alto de pantalla visible de una vez).
@@ -103,10 +120,17 @@ export function SidebarDetails({
  const [showPagosModal, setShowPagosModal] = useState(false);
 
  const [closeCuentaModalOpen, setCloseCuentaModalOpen] = useState(false);
+ // Evita dobles clics mientras cierran cuenta / cargan a habitación: el
+ // proceso tarda unos segundos (escrituras + liberar mesa) antes de cerrar el
+ // modal. El ref bloquea el segundo clic antes de que React re-renderice.
+ const [procesandoCierre, setProcesandoCierre] = useState(false);
+ const [procesandoHab, setProcesandoHab] = useState(false);
+ const enCursoRef = useRef(false);
  const [closePayerName, setClosePayerName] = useState('');
 
  const [showRoomChargeModal, setShowRoomChargeModal] = useState(false);
  const [selectedRoomChargeId, setSelectedRoomChargeId] = useState<string | null>(null);
+ const [selectedSubcuentaId, setSelectedSubcuentaId] = useState<string | null>(null);
  const [activeRoomAccounts, setActiveRoomAccounts] = useState<any[]>([]);
  const [allMesas, setAllMesas] = useState<any[]>([]);
  const [clienteInfoOpen, setClienteInfoOpen] = useState(false);
@@ -347,7 +371,12 @@ export function SidebarDetails({
 
  const handleConfirmChangeCliente = async () => {
  if (!activeComanda) return;
- await updateRxComanda(activeComanda.id, { cliente: changeClienteName.trim() || undefined });
+ const nuevoCliente = changeClienteName.trim();
+ await updateRxComanda(activeComanda.id, {
+ cliente: nuevoCliente || undefined,
+ // Mesa Múltiple: la card de la subcomanda muestra este nombre.
+ ...(activeComanda.subcomanda_nombre && nuevoCliente ? { subcomanda_nombre: nuevoCliente } : {}),
+ });
  setChangeClienteModal(false);
  };
 
@@ -416,6 +445,20 @@ export function SidebarDetails({
  const subtotal = totales.subtotalNeto;
  const ivaCalculado = totales.ivaTotal;
  const total = totales.total;
+ // Vista "Todas": subtotal por subcomanda y total general (cada comanda puede
+ // tener su propio override de IVA).
+ const gruposTodas = useMemo(() => {
+ if (!grupo) return [];
+ return grupo.comandas.map(c => {
+ const items = grupo.items.filter(i => i.comanda_id === c.id);
+ const t = calcularTotalesComanda(
+ items.filter(i => !i.anulado), menuItems,
+ c.iva_porcentaje ?? ivaPorcentaje, c.iva_precios_con_iva ?? preciosConIva
+ );
+ return { comanda: c, items, total: t.total };
+ });
+ }, [grupo, menuItems, ivaPorcentaje, preciosConIva]);
+ const totalTodas = gruposTodas.reduce((acc, g) => acc + g.total, 0);
  const totalItems = useMemo(
  () => comandaItems.reduce((acc, item) => acc + (item.cantidad || 0), 0),
  [comandaItems]
@@ -532,6 +575,60 @@ export function SidebarDetails({
  )
  : [], [activeComanda?.confirmada_at, comandaItems]);
 
+ const kitchenGrupo = useMemo(
+ () => (grupo ? deltaGrupo(grupo.comandas, grupo.items) : null),
+ [grupo]
+ );
+ const nuevosCocina = kitchenGrupo ? kitchenGrupo.nuevos : itemsNuevos;
+ const hayNuevosCocina = kitchenGrupo ? kitchenGrupo.nuevos.length > 0 : hayItemsNuevos;
+ const hayConfirmadaCocina = kitchenGrupo ? kitchenGrupo.algunaConfirmada : !!activeComanda?.confirmada;
+ const sinItemsCocina = kitchenGrupo ? kitchenGrupo.vivos.length === 0 : comandaItems.length === 0;
+ // Sin ningún ítem en toda la mesa (en mesa múltiple, en ninguna subcomanda):
+ // "Anular" pasa a ser "Cerrar mesa", sin motivo.
+ const mesaSinItems = kitchenGrupo
+ ? kitchenGrupo.vivos.length === 0
+ : !comandaItems.some((i: any) => !i.anulado);
+
+ // Mesa Múltiple: un solo ticket a cocina con lo pendiente de TODAS las
+ // subcomandas (ítems iguales juntos, sin nombres de subcomanda).
+ const handleConfirmOrderGrupo = async () => {
+ if (!kitchenGrupo) return;
+ const ahora = new Date().toISOString();
+ const esAdicional = kitchenGrupo.algunaConfirmada && kitchenGrupo.nuevos.length > 0;
+ const reimprimir = kitchenGrupo.algunaConfirmada && kitchenGrupo.nuevos.length === 0;
+ const itemsTicket = mergeItemsCocina(reimprimir ? kitchenGrupo.vivos : kitchenGrupo.nuevos);
+ const anulados = esAdicional ? mergeItemsCocina(kitchenGrupo.anulados) : [];
+
+ if (!reimprimir) {
+ for (const pc of kitchenGrupo.porComanda) {
+ if (pc.items.length === 0 || pc.nuevos.length === 0) continue;
+ await updateRxComanda(pc.comanda.id, {
+ confirmada: true,
+ confirmada_at: ahora,
+ cantidades_snapshot: JSON.stringify(Object.fromEntries(pc.items.map(i => [i.id, i.cantidad]))),
+ });
+ }
+ }
+
+ const content = generarComandaCocina(
+ activeComanda, withBebida(itemsTicket), selectedMesa.nombre, esAdicional, linkedMesa?.nombre, false, withBebida(anulados)
+ );
+ setPreviewContent(content);
+ setPreviewTitle(`${esAdicional ?'Adicional Cocina':'Orden de Cocina'} - ${selectedMesa.nombre}`);
+ setPreviewOnPrint(() => () => {
+ queueKitchenPrint({
+ comanda: activeComanda,
+ items: withBebida(itemsTicket),
+ mesaNombre: selectedMesa.nombre,
+ esAdicional,
+ habitacionNombre: linkedMesa?.nombre,
+ itemsAnulados: withBebida(anulados),
+ }).catch(err => console.warn('print server offline', err));
+ });
+ setPreviewOpened(true);
+ if (!reimprimir) showToast.success(esAdicional ?'Adicional enviado':'Orden Confirmada','Un solo ticket de cocina para toda la mesa.');
+ };
+
  const handlePrintPrecuenta = () => {
  const content = generarPrecuenta(
  activeComanda,
@@ -557,6 +654,7 @@ export function SidebarDetails({
  };
 
  const handleConfirmOrder = async () => {
+ if (kitchenGrupo) return handleConfirmOrderGrupo();
  if (!activeComanda?.confirmada) {
  const ahora = new Date().toISOString();
  const snapshot = Object.fromEntries(
@@ -661,11 +759,11 @@ export function SidebarDetails({
  </button>
  <div className="flex flex-col">
  <h3 className={cn("font-extrabold text-base leading-tight", activeComanda?.estado ==='cuenta'?"md:text-white":"md:text-primary-foreground")}>
- {activeComanda?.cliente ||'Público General'}
+ {vistaTodas ?'Toda la mesa': (activeComanda?.cliente ||'Público General')}
  </h3>
  <div className="flex items-center gap-1.5">
  <span className={cn("text-[10px] font-bold text-muted-foreground", activeComanda?.estado ==='cuenta'?"md:text-white/70":"md:text-primary-foreground/70")}>
- ORDEN #{activeComanda?.folio} · {selectedMesa.nombre}
+ {vistaTodas ? `${gruposTodas.length} subcomandas` : `ORDEN #${activeComanda?.folio}`} · {selectedMesa.nombre}
  </span>
  {linkedMesa && (
  <span className={cn("flex items-center gap-1 w-fit px-1.5 py-0.5 rounded-md text-[10px] font-extrabold",
@@ -688,6 +786,7 @@ export function SidebarDetails({
  </header>
 
  {/* Datos del cliente, colapsable — siempre visible para poder cambiar el cliente */}
+ {!vistaTodas && (
  <Collapsible open={clienteInfoOpen} onOpenChange={setClienteInfoOpen} className="shrink-0 border-b border-border">
  <div className="w-full flex items-center justify-between px-4 py-2.5 transition-colors">
  <CollapsibleTrigger className="flex-1 flex items-center gap-2 cursor-pointer">
@@ -802,10 +901,37 @@ export function SidebarDetails({
  </div>
  </CollapsibleContent>
  </Collapsible>
+ )}
 
  {/* Lista de productos */}
  <main ref={productListRef}className="flex-1 overflow-y-auto">
- {comandaItems.length === 0 ? (
+ {vistaTodas ? (
+ <div className="flex flex-col">
+ {gruposTodas.map(g => (
+ <div key={g.comanda.id}>
+ <button
+ type="button"
+ onClick={() => onSelectSubcomanda?.(g.comanda.id)}
+ className="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-2 bg-muted border-y border-border cursor-pointer"
+ >
+ <span className="font-extrabold text-xs uppercase tracking-wide text-foreground truncate">{g.comanda.subcomanda_nombre || g.comanda.cliente}</span>
+ <span className="font-black text-xs text-foreground shrink-0">${g.total.toFixed(2)}</span>
+ </button>
+ {g.items.length === 0 ? (
+ <div className="px-4 py-3 text-[11px] text-muted-foreground">Sin productos</div>
+ ) : g.items.map((item, index) => (
+ <ComandaItemRow
+ key={item.id}
+ item={item}
+ index={index}
+ isLocked={!!g.comanda.confirmada_at && !!item.created_at && item.created_at <= g.comanda.confirmada_at && !item.anulado}
+ onClick={() => onSelectSubcomanda?.(g.comanda.id)}
+ />
+ ))}
+ </div>
+ ))}
+ </div>
+ ) : comandaItems.length === 0 ? (
  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
  <Basket size={48} className="text-muted-foreground/40"/>
  <span className="font-bold text-xs text-foreground">Comanda vacía</span>
@@ -828,6 +954,24 @@ export function SidebarDetails({
  </main>
 
  {/* Footer y Acciones */}
+ {vistaTodas ? (
+ <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
+ <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/60">
+ <span className="text-base font-black text-foreground">Total mesa</span>
+ <span className="text-xl font-black text-primary">${totalTodas.toFixed(2)}</span>
+ </div>
+ <Button
+ variant={!hayConfirmadaCocina ?"default":"secondary"}
+ className={cn("w-full h-10 font-bold", !hayConfirmadaCocina ?"":"bg-muted text-foreground")}
+ onClick={handleConfirmOrder}
+ disabled={sinItemsCocina}
+ >
+ {!hayConfirmadaCocina ? <Check size={18} weight="bold"className="mr-1.5"/> : <Printer size={18} weight="bold"className="mr-1.5"/>}
+ {!hayConfirmadaCocina ?'Confirmar': hayNuevosCocina ?`Adicional (${nuevosCocina.length})`:'Reimprimir'}
+ </Button>
+ <span className="text-[11px] text-center text-muted-foreground">Elige una subcomanda para añadir, cobrar o cargar a habitación.</span>
+ </footer>
+ ) : (
  <footer className={cn("relative p-4 bg-card flex flex-col gap-3 shrink-0",
  (editingItem || activeComanda?.estado ==='cuenta') &&"border-t border-border")}>
  {isMobile && hasMoreBelow && !editingItem && activeComanda?.estado !=='cuenta'&& (
@@ -903,19 +1047,19 @@ export function SidebarDetails({
  {activeComanda?.estado !=='cuenta'? (
  <div className="grid grid-cols-2 gap-2">
  <Button
- variant={!activeComanda?.confirmada ?"default":"secondary"}
- className={cn("w-full h-10 font-bold", !activeComanda?.confirmada ?"":"bg-muted text-foreground")}
+ variant={!hayConfirmadaCocina ?"default":"secondary"}
+ className={cn("w-full h-10 font-bold", !hayConfirmadaCocina ?"":"bg-muted text-foreground")}
  onClick={handleConfirmOrder}
- disabled={comandaItems.length === 0}
+ disabled={sinItemsCocina}
  >
- {!activeComanda?.confirmada ? (
+ {!hayConfirmadaCocina ? (
  <Check size={18} weight="bold"className="mr-1.5"/>
  ) : (
  <Printer size={18} weight="bold"className="mr-1.5"/>
  )}
- {!activeComanda?.confirmada
- ?'Confirmar': hayItemsNuevos
- ?`Adicional (${itemsNuevos.length})`:'Reimprimir'}
+ {!hayConfirmadaCocina
+ ?'Confirmar': hayNuevosCocina
+ ?`Adicional (${nuevosCocina.length})`:'Reimprimir'}
  </Button>
  <Button
  variant="secondary"className="w-full h-10 font-bold text-primary bg-primary/10"onClick={() => onAction(selectedMesa,'cuenta')}
@@ -937,11 +1081,21 @@ export function SidebarDetails({
  >
  <Bed size={18} weight="bold"className="mr-1.5"/> Cargar Hab.
  </Button>
+ {mesaSinItems ? (
+ // Mesa abierta sin ningún pedido (el cliente se fue): se cierra
+ // directo, sin diálogo de motivo.
+ <Button
+ variant="destructive"className="w-full h-10 font-bold"onClick={() => onAction(selectedMesa,'cerrar_vacia')}
+ >
+ Cerrar mesa
+ </Button>
+ ) : (
  <Button
  variant="ghost"className="w-full h-10 font-bold text-destructive"onClick={() => onAction(selectedMesa,'cancelar')}
  >
  Anular
  </Button>
+ )}
  </div>
  ) : (
  <div className="grid grid-cols-2 gap-2">
@@ -1112,6 +1266,7 @@ export function SidebarDetails({
  </div>
  )}
  </footer>
+ )}
 
  <SidebarPagosModal
  opened={showPagosModal}
@@ -1140,8 +1295,11 @@ export function SidebarDetails({
  saldoPendiente={saldoPendiente}
  closePayerName={closePayerName}
  setClosePayerName={setClosePayerName}
+ procesando={procesandoCierre}
  onConfirm={async () => {
- if (!activeComanda) return;
+ if (!activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoCierre(true);
  try {
  if (saldoPendiente > 0.01) {
  await updateRxComanda(activeComanda.id, {
@@ -1207,16 +1365,20 @@ export function SidebarDetails({
  mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
  });
 
+ await liberarMesaSiSinOperativas(activeComanda.mesa_id);
  setCloseCuentaModalOpen(false);
- onClose();
+ onResuelta();
  } catch (error) {
  console.error(error);
  showToast.error('Error','Hubo un error al cerrar la cuenta.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoCierre(false);
  }
  }}
  />
 
- <Dialog open={showRoomChargeModal} onOpenChange={setShowRoomChargeModal}>
+ <Dialog open={showRoomChargeModal} onOpenChange={(open) => { if (!procesandoHab) setShowRoomChargeModal(open); }}>
  <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
  <DialogHeader className="border-b border-border pb-3 text-left">
  <DialogTitle className="font-extrabold text-base text-foreground">
@@ -1238,7 +1400,7 @@ export function SidebarDetails({
  return (
  <button
  key={cuenta.id}
- type="button"onClick={() => setSelectedRoomChargeId(cuenta.id)}
+ type="button"onClick={() => { setSelectedRoomChargeId(cuenta.id); setSelectedSubcuentaId(null); }}
  className={cn("flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none",
  isSelected
  ?"border-primary bg-primary/10 shadow-sm":"border-border bg-card")}
@@ -1264,27 +1426,50 @@ export function SidebarDetails({
  })}
  </div>
 
+ {(() => {
+ const cuentaSel = activeRoomAccounts.find((c) => c.id === selectedRoomChargeId);
+ const subs = cuentaSel?.subcuentas ?? [];
+ if (subs.length === 0) return null;
+ return (
+ <div className="flex flex-col gap-2 pt-3 border-t border-border">
+ <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cargar a la subcuenta</span>
+ <SubcuentaChips subcuentas={subs} value={selectedSubcuentaId} onChange={setSelectedSubcuentaId} nombrePrincipal={cuentaSel?.principal_nombre || 'Principal'} />
+ </div>
+ );
+ })()}
+
  <div className="flex flex-col gap-2 pt-3 border-t border-border">
  <Button
  type="button"onClick={async () => {
- if (!selectedRoomChargeId || !activeComanda) return;
+ if (!selectedRoomChargeId || !activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoHab(true);
+ try {
  await updateRxComanda(activeComanda.id, {
  habitacion_cuenta_id: selectedRoomChargeId,
+ habitacion_subcuenta_id: selectedSubcuentaId,
  total,
  confirmada: true,
  sincronizado: true,
  });
- await updateRxMesa(activeComanda.mesa_id, { estado:'libre'});
+ await liberarMesaSiSinOperativas(activeComanda.mesa_id);
  setShowRoomChargeModal(false);
  showToast.success('Transferencia exitosa','La comanda fue asignada a la habitación.');
- onClose();
+ onResuelta();
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error','No se pudo transferir la comanda a la habitación.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoHab(false);
+ }
  }}
- disabled={!selectedRoomChargeId}
- className="w-full bg-primary text-primary-foreground font-bold h-11 text-sm shadow-md">
- Transferir a Habitación
+ disabled={!selectedRoomChargeId || procesandoHab}
+ className="w-full bg-primary text-primary-foreground font-bold h-11 text-sm shadow-md gap-1.5">
+ {procesandoHab ? (<><CircleNotch size={18} className="animate-spin"/> Transfiriendo…</>) :'Transferir a Habitación'}
  </Button>
  <Button
- type="button"variant="ghost"onClick={() => setShowRoomChargeModal(false)}
+ type="button"variant="ghost"disabled={procesandoHab}onClick={() => setShowRoomChargeModal(false)}
  className="w-full text-muted-foreground">
  Cancelar
  </Button>

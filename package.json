@@ -1,7 +1,7 @@
 {
   "name": "pos-food-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
@@ -9,10 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "print-server:run": "node print-server/server.js",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "print-server:run": "node print-server/server.js"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -37,7 +34,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^24.10.1",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.5",

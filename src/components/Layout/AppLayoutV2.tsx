@@ -19,6 +19,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useIvaActivo } from '../../hooks/useIvaActivo';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { calcularTotalesComanda } from '../../lib/taxUtils';
+import { isOperativeComanda, pickComandaActiva } from '../../db/comandaState';
 import { initVerticalRxDb, subscribeSyncStatus, pingSyncStatus, forceSyncAll, type SyncStatus } from '../../db/rxdb';
 import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { GlobalModals } from '../Common/GlobalModals';
@@ -39,6 +40,7 @@ export function AppLayoutV2() {
     configView, setConfigView,
     selectedConfigPiso, setSelectedConfigPiso,
     mesaView, setMesaView,
+    activeSubcomandaId,
     setCheckoutView, setViewingComandaId, menuView, setMenuView,
     setSelectedMenuProductId,
     reservaView, setReservaView, setSelectedReservaId,
@@ -134,8 +136,13 @@ export function AppLayoutV2() {
           })
           .$.subscribe((docs: any[]) => {
             if (!alive) return;
-            const comanda = docs[0] ? docs[0].toJSON() : null;
-            setCartComanda(comanda);
+            // Mesa Múltiple: el carrito sigue a la subcomanda activa (la misma
+            // que usa el selector de productos), no a la última actualizada.
+            const operativas = docs
+              .map((d: any) => d.toJSON())
+              .filter((c: any) => isOperativeComanda(c))
+              .sort((a: any, b: any) => a.folio - b.folio);
+            setCartComanda(pickComandaActiva(operativas, activeSubcomandaId) ?? null);
           })
       );
     })().catch(() => {});
@@ -143,7 +150,7 @@ export function AppLayoutV2() {
       alive = false;
       subs.forEach((s) => s.unsubscribe());
     };
-  }, [isMobile, mesaView, selectedMesaId]);
+  }, [isMobile, mesaView, selectedMesaId, activeSubcomandaId]);
 
   useEffect(() => {
     let alive = true;
@@ -168,13 +175,16 @@ export function AppLayoutV2() {
   }, [cartComanda?.id]);
 
   const cartInfo = useMemo(() => {
-    if (!cartComanda || cartItems.length === 0 || !selectedMesa) return null;
+    if (!cartComanda || !selectedMesa) return null;
+    const esSub = !!cartComanda.subcomanda_nombre;
+    if (cartItems.length === 0 && !esSub) return null;
     const totales = calcularTotalesComanda(cartItems, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva);
     const itemCount = cartItems.reduce((acc, it) => acc + (it.cantidad || 0), 0);
     return {
-      mesaNombre: selectedMesa.nombre,
+      mesaNombre: esSub ? `${selectedMesa.nombre} · ${cartComanda.subcomanda_nombre}` : selectedMesa.nombre,
       itemCount,
       total: totales.total,
+      mantenerVacio: esSub,
     };
   }, [cartComanda, cartItems, selectedMesa, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva]);
 

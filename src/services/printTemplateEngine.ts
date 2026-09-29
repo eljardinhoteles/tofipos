@@ -470,6 +470,9 @@ export function generarPrecuentaConsolidadaHabitacion(
   // (precio 0) y solo deja los consumos que sí se cobran — para la
   // versión "Consumos" del checkout de habitación.
   soloConsumo = false,
+  // Subcuenta de la habitación que se está cobrando (p. ej. una de las 2
+  // familias de una villa). Solo se pasa si el cobro es de una sola subcuenta.
+  subcuentaNombre?: string,
 ): string {
   const p = (cmd: string) => forPrinter ? cmd : '';
   const W = 48;
@@ -489,6 +492,9 @@ export function generarPrecuentaConsolidadaHabitacion(
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
+  }
+  if (subcuentaNombre) {
+    t += p(POS.BOLD_ON) + `Subcuenta: ${subcuentaNombre}` + p(POS.BOLD_OFF) + '\n';
   }
   t += `${'-'.repeat(W)}\n`;
 
