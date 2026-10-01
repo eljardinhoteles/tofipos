@@ -19,6 +19,7 @@ import { useMetodosPagoConfig } from '../../hooks/useMetodosPagoConfig';
 import { useAuth } from '../../context/AuthContext';
 import { createRxVenta, agregarVentaMovimiento } from '../../db/rxdb';
 import { subirComprobante } from '@/lib/comprobantes';
+import { ClienteBuscador } from '../Common/ClienteBuscador';
 import { ClienteFormModal } from '../Clientes/ClienteFormModal';
 import type { VentaOrigen, VentaTipo } from '../../db/rxdb';
 
@@ -197,16 +198,11 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
               <UserPlus size={12} weight="bold" /> Nuevo cliente
             </button>
           </div>
-          <Select value={clienteId || undefined} onValueChange={setClienteId}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={esCredito ? 'Cliente / agencia (requerido)' : 'Cliente registrado (opcional)'} />
-            </SelectTrigger>
-            <SelectContent>
-              {clientes.map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ClienteBuscador
+            value={clienteId}
+            onChange={setClienteId}
+            placeholder={esCredito ? 'Cliente / agencia (requerido)' : 'Buscar cliente registrado (opcional)'}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

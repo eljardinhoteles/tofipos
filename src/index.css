@@ -728,7 +728,10 @@ label {
 
 @media (max-width: 48em) {
   .pos-tables-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    /* minmax(0, 1fr): con 1fr a secas la columna no baja del ancho mínimo de su
+       contenido, y un nombre largo ensanchaba la columna (y la card cuadrada
+       crecía también en alto). */
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 20px !important;
   }
   .pos-menu-grid {
@@ -1702,12 +1705,12 @@ label {
   height: 92%;
   outline: none;
   z-index: 201;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   will-change: transform;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
-  perspective: 1000px;
+  /* Aísla el layout/pintado del sheet: el contenido interno no fuerza
+     recálculos fuera de él mientras se anima. */
+  contain: layout paint;
   /* Evita que el drag del sheet dispare scroll/bounce del body detrás en iOS */
   overscroll-behavior: contain;
 }

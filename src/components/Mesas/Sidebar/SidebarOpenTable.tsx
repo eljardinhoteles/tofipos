@@ -134,12 +134,12 @@ export function SidebarOpenTable({
  </div>
  </div>
 
- {/* Mesa Múltiple: varias subcomandas (persona/cabaña) en la misma mesa */}
+ {/* Mesa Múltiple: varias subcomandas (persona/habitación) en la misma mesa */}
  {openLinkMode ==='manual'&& (
  <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-muted/50">
  <div className="flex flex-col">
  <Label htmlFor="mesa-multiple">Mesa múltiple</Label>
- <span className="text-xs text-muted-foreground">Separar la comanda por personas o cabañas</span>
+ <span className="text-xs text-muted-foreground">Separar la comanda por personas o habitaciones</span>
  </div>
  <Switch id="mesa-multiple"checked={mesaMultiple} onCheckedChange={setMesaMultiple} />
  </div>

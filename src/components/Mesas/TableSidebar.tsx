@@ -609,6 +609,7 @@ export function TableSidebar({
             <div className="h-full w-full flex flex-col overflow-hidden">
               <SubcomandasPanel
                 subcomandas={mesaOperativas.filter(c => !!c.subcomanda_nombre)}
+                items={mesaItems}
                 activeId={activeComanda.id}
                 vistaTodas={vistaTodas}
                 onSelect={(id) => { setActiveSubcomandaId(id); setVistaTodas(false); }}

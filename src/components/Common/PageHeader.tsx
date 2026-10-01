@@ -17,7 +17,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 z-10 w-full",
+        "h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 z-10 w-full",
         className
       )}
       style={style}

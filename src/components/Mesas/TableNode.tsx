@@ -45,7 +45,7 @@ export const TableNode = memo(function TableNode({
  return (
  <div
  onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
- className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
+ className={cn("w-full min-w-0 min-h-0 aspect-square overflow-hidden rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
  // Seleccionada/sidebar abierto: azul sólido, siempre (salvo cuenta).
  ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white":"bg-sky-600 border-sky-600 text-white": isFree
@@ -67,7 +67,7 @@ export const TableNode = memo(function TableNode({
  />
  </div>
 
- <div className="flex flex-col items-center justify-center gap-0.5 text-center my-auto">
+ <div className="flex flex-col items-center justify-center gap-0.5 text-center my-auto w-full min-w-0">
  <span className="font-black text-xl leading-none truncate max-w-full">
  {roomNumber}
  </span>
@@ -75,7 +75,7 @@ export const TableNode = memo(function TableNode({
  {roomType}
  </span>
  {cliente && (
- <div className="flex items-center gap-1 mt-1 font-extrabold text-[10px] max-w-full text-inherit">
+ <div className="flex items-center justify-center gap-1 mt-1 font-extrabold text-[10px] max-w-full min-w-0 text-inherit">
  <User size={10} className="shrink-0"/>
  <span className="truncate">{cliente}</span>
  </div>
@@ -114,7 +114,7 @@ export const TableNode = memo(function TableNode({
  return (
  <div
  onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
- className={cn("w-full aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
+ className={cn("w-full min-w-0 min-h-0 aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
  ? effectiveState ==='cuenta'?"bg-orange-600 border-orange-600 text-white": effectiveState ==='ocupada'?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": effectiveState ==='libre'?"bg-card border-border text-muted-foreground": effectiveState ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":"bg-primary/10 border-primary/50 text-primary")}
  >
@@ -142,7 +142,7 @@ export const TableNode = memo(function TableNode({
  )}
  </div>
 
- <div className="flex flex-col items-center justify-center gap-1 text-center my-auto relative z-10">
+ <div className="flex flex-col items-center justify-center gap-1 text-center my-auto relative z-10 w-full min-w-0">
  <span className={cn("font-black text-lg leading-tight truncate max-w-full",
  effectiveState ==='libre'&& !isSelected ?"text-foreground":"text-inherit")}>
  {mesa.nombre}

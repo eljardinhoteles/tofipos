@@ -8,6 +8,8 @@ import { initVerticalRxDb } from '../../../db/rxdb';
 
 interface SubcomandasPanelProps {
   subcomandas: any[];
+  /** Ítems de todas las subcomandas de la mesa (los provee TableSidebar). */
+  items: any[];
   activeId: string | null;
   vistaTodas: boolean;
   onSelect: (id: string) => void;
@@ -20,8 +22,7 @@ interface SubcomandasPanelProps {
 // desliza). "Todas" muestra la mesa completa en una lista; tocar una
 // subcomanda la activa — el sidebar de abajo (SidebarDetails) pasa a operar
 // sobre esa comanda, con su footer de siempre.
-export function SubcomandasPanel({ subcomandas, activeId, vistaTodas, onSelect, onSelectTodas, onAdd, onAddingChange }: SubcomandasPanelProps) {
-  const [items, setItems] = useState<any[]>([]);
+export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onSelect, onSelectTodas, onAdd, onAddingChange }: SubcomandasPanelProps) {
   const [adding, setAdding] = useState(false);
   useEffect(() => {
     onAddingChange?.(adding);
@@ -44,24 +45,6 @@ export function SubcomandasPanel({ subcomandas, activeId, vistaTodas, onSelect, 
     const row = rowRef.current;
     if (row) row.scrollBy({ left: dir * Math.max(160, row.clientWidth * 0.6), behavior: 'smooth' });
   };
-
-  const idsKey = subcomandas.map(c => c.id).join(',');
-  useEffect(() => {
-    if (!idsKey) { setItems([]); return; }
-    let alive = true;
-    let sub: { unsubscribe: () => void } | null = null;
-    (async () => {
-      const rxDb = await initVerticalRxDb();
-      if (!alive) return;
-      const query = rxDb.comanda_items.find({
-        selector: { comanda_id: { $in: idsKey.split(',') }, _deleted: { $ne: true } }
-      });
-      sub = query.$.subscribe((docs: any[]) => {
-        if (alive) setItems(docs.map((d: any) => d.toJSON()));
-      });
-    })().catch(() => {});
-    return () => { alive = false; sub?.unsubscribe(); };
-  }, [idsKey]);
 
   useEffect(() => {
     // Scroll manual solo dentro de la fila: scrollIntoView también desplaza
@@ -151,7 +134,7 @@ export function SubcomandasPanel({ subcomandas, activeId, vistaTodas, onSelect, 
         <div className="flex items-center gap-2">
           <Input
             autoFocus
-            placeholder="Persona o cabaña (ej: Cabaña 3)"
+            placeholder="Persona o habitación (ej: Hab. 3)"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -190,13 +173,13 @@ export function SubcomandasPanel({ subcomandas, activeId, vistaTodas, onSelect, 
   }
 
   return (
-    <div className="relative shrink-0 border-b border-border bg-muted">
+    <div className="relative shrink-0 border-b border-border bg-muted md:h-[72px]">
       {borde.izq && (
         <button
           type="button"
           aria-label="Ver subcomandas anteriores"
           onClick={() => scrollFila(-1)}
-          className="hidden md:flex absolute left-1 top-[2.125rem] -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
+          className="hidden md:flex absolute left-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
         >
           <CaretLeft size={16} weight="bold" />
         </button>
@@ -206,12 +189,12 @@ export function SubcomandasPanel({ subcomandas, activeId, vistaTodas, onSelect, 
           type="button"
           aria-label="Ver más subcomandas"
           onClick={() => scrollFila(1)}
-          className="hidden md:flex absolute right-1 top-[2.125rem] -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
+          className="hidden md:flex absolute right-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
         >
           <CaretRight size={16} weight="bold" />
         </button>
       )}
-      <div ref={setRowRef} className="relative flex gap-2 overflow-x-auto overscroll-x-contain px-3 pt-5 pb-2.5 md:pt-2.5 [scrollbar-width:none] md:[scrollbar-width:thin] [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block md:[&::-webkit-scrollbar]:h-1.5 md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-border">
+      <div ref={setRowRef} className="relative flex gap-2 overflow-x-auto overscroll-x-contain px-3 pt-5 pb-2.5 md:h-full md:items-center md:py-0 [scrollbar-width:none] md:[scrollbar-width:thin] [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block md:[&::-webkit-scrollbar]:h-1.5 md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-border">
         <button
           type="button"
           ref={vistaTodas ? activeRef : undefined}

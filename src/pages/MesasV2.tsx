@@ -346,7 +346,7 @@ export default function MesasV2() {
  {mesaView ==='mapa'&& (
  <div className="shrink-0 flex flex-col">
  {/* Header V2 Tailwind/Shadcn style */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center justify-between shadow-xs">
+ <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center justify-between shadow-xs">
  <div className="flex items-center gap-2 min-w-0">
  <h1 className="font-extrabold text-base text-foreground truncate max-w-[240px]">
  {localStorage.getItem('pos_org_name_cached') ||'POS'}
@@ -550,7 +550,7 @@ export default function MesasV2() {
  const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
 
  return (
- <div key={mesa.id} className="overflow-visible">
+ <div key={mesa.id} className="min-w-0 overflow-visible">
  <TableNode
  mesa={mesaConEstado as any}
  isSelected={selectedMesaId === mesa.id}
@@ -576,7 +576,7 @@ export default function MesasV2() {
  const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
 
  return (
- <div key={mesa.id} className="overflow-visible">
+ <div key={mesa.id} className="min-w-0 overflow-visible">
  <TableNode
  mesa={mesaConEstado as any}
  isSelected={selectedMesaId === mesa.id}

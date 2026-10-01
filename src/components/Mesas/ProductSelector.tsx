@@ -298,7 +298,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
   {/* HEADER PRINCIPAL */}
-  <header className="h-16 px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
+  <header className="h-16 md:h-[72px] px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
     {!hideBackButton && (
       <button
         type="button" onClick={onBack}

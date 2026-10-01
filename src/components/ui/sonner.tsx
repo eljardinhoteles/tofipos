@@ -26,10 +26,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
             ? "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-md group-[.toaster]:rounded-full group-[.toaster]:px-4 group-[.toaster]:py-2.5 group-[.toaster]:text-[13px]"
             : "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:rounded-xl group-[.toaster]:p-4",
           title: isMobile ? "group-[.toast]:text-[13px] group-[.toast]:font-bold" : "",
-          // En móvil los éxitos/info salen solo con título (la descripción
-          // alargaba el toast); errores y avisos conservan su detalle.
+          // En móvil la descripción se conserva (es la info relevante, p. ej.
+          // qué mesa) pero recortada a una línea para no alargar el toast.
           description: isMobile
-            ? "group-[.toast]:text-muted-foreground group-data-[type=success]:hidden group-data-[type=info]:hidden"
+            ? "group-[.toast]:text-muted-foreground group-[.toast]:text-xs group-[.toast]:line-clamp-1"
             : "group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",

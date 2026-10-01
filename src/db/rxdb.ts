@@ -1817,6 +1817,17 @@ async function initVerticalRxDbInner() {
         state?.error$?.subscribe((err: any) => {
           const msg = err?.message || err?.parameters?.errors?.message || ''
           const isNetworkError = msg.includes('fetch') || msg.includes('offline') || msg.includes('network') || !navigator.onLine
+          // Carrera benigna: el pull y el stream realtime escriben a la vez el
+          // mismo doc en la meta de replicación (409 en replication-down-write-meta).
+          // Los datos ya quedaron guardados y RxDB reintenta solo: no es un error
+          // de sync, y marcarlo ponía la colección (y el botón de sync) en rojo.
+          const writeErr = err?.parameters?.writeError
+          const isMetaConflict = err?.code === 'RC_PULL'
+            && writeErr?.status === 409
+            && writeErr?.context === 'replication-down-write-meta'
+          if (isMetaConflict) {
+            return
+          }
           if (!isNetworkError) {
             console.error(`[RxDB Sync ERROR] ${name}:`, err)
             lastCollectionError[name] = msg || 'error'

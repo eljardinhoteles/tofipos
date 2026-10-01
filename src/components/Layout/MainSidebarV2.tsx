@@ -22,7 +22,7 @@ const navItemsV2 = [
  { label:'Mesas', to:'/v2/mesas', icon: SquaresFour },
  { label:'Órdenes', to:'/v2/ordenes', icon: Receipt },
  { label:'Reservas', to:'/v2/reservas', icon: CalendarCheck },
- { label:'Centro de Ventas', to:'/v2/centro-ventas', icon: CurrencyDollar },
+ { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyDollar },
  { label:'Clientes', to:'/v2/clientes', icon: Users },
  { label:'Productos', to:'/v2/menu', icon: Bag },
  { label:'Métricas', to:'/v2/metricas', icon: ChartBar },
@@ -71,11 +71,12 @@ export function MainSidebarV2() {
  }, []);
 
  return (
- <aside className="w-20 h-full bg-nav text-nav-foreground flex flex-col justify-between items-center py-4 border-r border-nav-foreground/10 shrink-0">
+ <aside className="w-[83px] h-full bg-nav text-nav-foreground flex flex-col justify-between items-center pb-4 border-r border-nav-foreground/10 shrink-0">
  {/* Brand Icon */}
- <div className="w-10 h-10 rounded-xl bg-nav-foreground/10 flex items-center justify-center mb-6">
+ {/* Misma altura que el header de las páginas (72px) para que la línea inferior coincida. */}
+ <div className="w-full h-[72px] shrink-0 flex items-center justify-center border-b border-nav-foreground/10 mb-4">
  <img
- src="/Icon-app.webp"alt="POS Food"aria-hidden="true"className="w-7 h-7 object-contain"/>
+ src="/Icon-app.webp"alt="POS Food"aria-hidden="true"className="w-8 h-8 object-contain"/>
  </div>
 
  {/* Navigation */}
@@ -88,11 +89,26 @@ export function MainSidebarV2() {
  key={item.label}
  to={item.to}
  title={item.label}
- className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer",
- isActive
- ?"bg-primary text-primary-foreground shadow-md shadow-primary/20":"text-nav-foreground/50")}
+ className="w-full flex flex-col items-center cursor-pointer"
  >
+ <span className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-[background-color,color,box-shadow,transform] duration-300 ease-out active:scale-95",
+ isActive
+ ?"bg-primary text-primary-foreground shadow-md shadow-primary/20":"text-nav-foreground/50")}>
  <Icon size={24} weight={isActive ?'fill':'regular'} />
+ </span>
+ {/* Solo el activo muestra su nombre: ayuda a ubicarse sin saturar la barra.
+ Siempre montado y animado (alto + opacidad): al cambiar de módulo, la
+ etiqueta anterior se pliega mientras la nueva se despliega, sin saltos. */}
+ <span
+ aria-hidden={!isActive}
+ className={cn("grid w-full transition-[grid-template-rows,opacity] duration-300 ease-out",
+ isActive ?"grid-rows-[1fr] opacity-100":"grid-rows-[0fr] opacity-0")}>
+ <span className="overflow-hidden">
+ <span className="block px-1 pt-1 text-center text-[10px] font-bold leading-tight text-nav-foreground">
+ {item.label}
+ </span>
+ </span>
+ </span>
  </NavLink>
  );
  })}

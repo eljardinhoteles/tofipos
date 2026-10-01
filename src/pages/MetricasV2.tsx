@@ -419,7 +419,7 @@ export default function MetricasV2() {
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
  {/* Header */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center shrink-0 shadow-xs gap-3">
+ <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center shrink-0 shadow-xs gap-3">
  <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
  {periodo ==='custom'&& customRange[0] && (
  <button

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
+import { readHookCache, commitHookCache } from './rxHookCache'
 
 /**
  * Suscripción compartida a todos los pisos de la organización.
  * Ver useRxComandas.ts para el motivo de centralizar esto.
  */
 export function useRxPisos() {
-  const [pisos, setPisos] = useState<any[]>([])
+  const [pisos, setPisos] = useState<any[]>(() => readHookCache<any[]>('pisos', []))
   const dbEpoch = useDbEpoch()
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export function useRxPisos() {
       })
       sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return
-        setPisos(docs.map((doc: any) => doc.toJSON()))
+        setPisos(commitHookCache('pisos', docs.map((doc: any) => doc.toJSON())))
       })
     })().catch(() => {})
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { MainSidebarV2 } from './MainSidebarV2';
@@ -16,6 +16,7 @@ import {
 import { useUI } from '../../context/UIContext';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useKeyboardCloseReset, useOtherDialogOpen } from '../../hooks/useKeyboardCloseReset';
 import { useIvaActivo } from '../../hooks/useIvaActivo';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { calcularTotalesComanda } from '../../lib/taxUtils';
@@ -49,6 +50,16 @@ export function AppLayoutV2() {
   } = useUI();
 
   const isMobile = useIsMobile();
+  // Restablece sheet y scroll cuando el teclado móvil se cierra y la vista queda "pegada".
+  useKeyboardCloseReset(isMobile);
+  // Con un diálogo abierto encima del sheet, el sheet no debe reaccionar al teclado.
+  const otroDialogAbierto = useOtherDialogOpen(isMobile);
+  // En Android el navegador ya redimensiona la pantalla al abrir el teclado
+  // (interactive-widget=resizes-content en index.html) y la restablece solo. Si
+  // vaul además reposiciona el sheet, mide un viewport que ya se achicó y le
+  // suma estilos en línea propios: doble ajuste, y el sheet se queda pegado al
+  // cerrar el teclado. En iOS sí hace falta su reposicionamiento.
+  const esAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
 
   const { handleTableAction } = useTableActions();
 
@@ -205,6 +216,22 @@ export function AppLayoutV2() {
     [selectedMesaId, mesaView, configView, menuView, reservaView, reservaProductosComandaId]
   );
 
+  // Mantiene el contenido montado mientras el sheet móvil termina de deslizarse
+  // al cerrar. Desmontar al instante hacía que el panel se vaciara/colapsara
+  // a mitad de la animación (brusco, sobre todo en gama baja).
+  // Al cerrar, el estado (mesa/configView) ya se limpió: se re-renderiza el
+  // último contenido abierto, congelado, para que no cambie mientras sale.
+  const [sheetContentMounted, setSheetContentMounted] = useState(false);
+  const lastSheetContent = useRef<ReactNode>(null);
+  useEffect(() => {
+    if (isMobileSheetOpen) {
+      setSheetContentMounted(true);
+      return;
+    }
+    const t = setTimeout(() => setSheetContentMounted(false), 450);
+    return () => clearTimeout(t);
+  }, [isMobileSheetOpen]);
+
   const closeMobileSheet = useCallback(() => {
     setSelectedMesaId(null);
     setConfigView('none');
@@ -214,6 +241,33 @@ export function AppLayoutV2() {
     setMenuView('none');
     setSelectedMenuProductId(null);
   }, [setSelectedMesaId, setConfigView, setViewingComandaId, setReservaView, setSelectedReservaId, setMenuView, setSelectedMenuProductId]);
+
+  const mobileSidebarContent = (
+                  <TableSidebar
+                    selectedMesa={selectedMesa}
+                    onClose={closeMobileSheet}
+                    onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
+                      if (res === 'productos') {
+                        setMesaView('productos');
+                      } else if (res === 'mapa') {
+                        setSelectedMesaId(null);
+                        setConfigView('none');
+                        setViewingComandaId(null);
+                        setMesaView('mapa');
+                      }
+                    }, setCheckoutView)}
+                    configView={configView}
+                    setConfigView={setConfigView}
+                    selectedConfigPiso={selectedConfigPiso}
+                    setSelectedConfigPiso={setSelectedConfigPiso}
+                    mesaEsDeHabitaciones={selectedMesaEsHabitacion}
+                  />
+  );
+  // La copia congelada se guarda en un efecto (no durante el render) para poder
+  // re-renderizar el último contenido mientras el sheet se desliza al cerrar.
+  useEffect(() => {
+    if (isMobileSheetOpen) lastSheetContent.current = mobileSidebarContent;
+  });
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground select-none">
@@ -311,6 +365,7 @@ export function AppLayoutV2() {
       {isMobile && (
         <Drawer
           open={isMobileSheetOpen}
+          repositionInputs={!otroDialogAbierto && !esAndroid}
           dismissible
           handleOnly
           onOpenChange={(open) => {
@@ -321,7 +376,7 @@ export function AppLayoutV2() {
         >
           <DrawerPortal>
             <DrawerOverlay />
-            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95vh] max-h-[95vh] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95vh] max-h-[95vh] bg-card rounded-t-3xl shadow-[0_-4px_12px_rgba(0,0,0,0.18)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
               <DrawerTitle className="sr-only">Panel de mesa</DrawerTitle>
               <DrawerDescription className="sr-only">
                 Acciones y detalles de la mesa seleccionada
@@ -331,27 +386,7 @@ export function AppLayoutV2() {
                   para que combine en vez de dejar una franja de fondo neutro. */}
               <DrawerHandle className="!bg-white/50" />
               <div className="flex-1 overflow-hidden">
-                {isMobileSheetOpen && (
-                  <TableSidebar
-                    selectedMesa={selectedMesa}
-                    onClose={closeMobileSheet}
-                    onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
-                      if (res === 'productos') {
-                        setMesaView('productos');
-                      } else if (res === 'mapa') {
-                        setSelectedMesaId(null);
-                        setConfigView('none');
-                        setViewingComandaId(null);
-                        setMesaView('mapa');
-                      }
-                    }, setCheckoutView)}
-                    configView={configView}
-                    setConfigView={setConfigView}
-                    selectedConfigPiso={selectedConfigPiso}
-                    setSelectedConfigPiso={setSelectedConfigPiso}
-                    mesaEsDeHabitaciones={selectedMesaEsHabitacion}
-                  />
-                )}
+                {isMobileSheetOpen ? mobileSidebarContent : sheetContentMounted ? lastSheetContent.current : null}
               </div>
             </DrawerContent>
           </DrawerPortal>

@@ -1,4 +1,4 @@
-import { useState } from'react';
+import { useEffect, useState } from'react';
 import { NavLink, useNavigate, useLocation } from'react-router-dom';
 import {
  Drawer,
@@ -8,6 +8,7 @@ import {
  DrawerTitle,
  DrawerDescription,
  DrawerHandle,
+ DrawerClose,
 } from'@/components/ui/drawer';
 import { Button } from'@/components/ui/button';
 import { Avatar, AvatarFallback } from'@/components/ui/avatar';
@@ -24,10 +25,12 @@ import {
  ArrowsClockwise,
  UserGear,
  SignOut,
+ X,
 } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 import { useAuth } from'../../context/AuthContext';
 import type { SyncStatus } from'../../db/rxdb';
+import { getPrintServerStatus } from'../../lib/printServerClient';
 
 export interface MobileCartInfo {
  mesaNombre: string;
@@ -42,7 +45,7 @@ const navItemsMobile = [
  { label:'Mesas', to:'/v2/mesas', icon: SquaresFour },
  { label:'Órdenes', to:'/v2/ordenes', icon: Receipt },
  { label:'Reservas', to:'/v2/reservas', icon: CalendarCheck },
- { label:'Centro de Ventas', to:'/v2/centro-ventas', icon: CurrencyDollar },
+ { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyDollar },
  { label:'Clientes', to:'/v2/clientes', icon: Users },
  { label:'Productos', to:'/v2/menu', icon: Bag },
  { label:'Métricas', to:'/v2/metricas', icon: ChartBar },
@@ -65,10 +68,23 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  cart?: MobileCartInfo | null;
  onOpenCart?: () => void;
 }) {
+ const syncPendiente = !syncStatus.online || syncStatus.hasError || syncStatus.activePushQueue > 0;
  const location = useLocation();
  const navigate = useNavigate();
  const { currentMesero, adminUser, logoutMesero, logoutAdmin } = useAuth();
  const [menuOpen, setMenuOpen] = useState(false);
+ const [printServerOk, setPrintServerOk] = useState(false);
+ const orgNombre = localStorage.getItem('pos_org_name_cached') ||'Organización';
+
+ // Estado del servidor de impresión: solo se consulta con el menú abierto.
+ useEffect(() => {
+ if (!menuOpen) return;
+ let alive = true;
+ getPrintServerStatus()
+ .then((status) => { if (alive) setPrintServerOk(status.ok); })
+ .catch(() => { if (alive) setPrintServerOk(false); });
+ return () => { alive = false; };
+ }, [menuOpen]);
 
  const userName = currentMesero?.nombre || adminUser?.email ||'Usuario';
  const userRole = currentMesero ?'Mesero':'Administrador';
@@ -128,14 +144,13 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <span className="text-sm font-bold">Mesas</span>
  </button>
 
+ {/* Verde = todo sincronizado. Rojo = algo pendiente (sin conexión, error
+ o cola de envío), para que el usuario se detenga a revisarlo. */}
  <button
  type="button"onClick={onOpenSync}
- title="Estado de Sincronización"className="relative flex items-center justify-center w-14 h-14 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-95 transition-transform shrink-0">
- <ArrowsClockwise size={22} className={syncing ?'animate-spin':''} />
- <span
- className={cn("absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-nav",
- !syncStatus.online ?"bg-amber-500": syncStatus.hasError ?"bg-destructive":"bg-emerald-500")}
- />
+ title="Estado de Sincronización"className={cn("relative flex items-center justify-center w-14 h-14 rounded-full text-white shadow-lg shadow-black/20 cursor-pointer active:scale-95 transition-colors shrink-0",
+ syncPendiente ?"bg-red-600 animate-pulse":"bg-emerald-600")}>
+ <ArrowsClockwise size={22} weight="bold" className={syncing ?'animate-spin':''} />
  </button>
  </div>
  )}
@@ -146,9 +161,24 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <DrawerPortal>
  <DrawerOverlay />
  <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95vh] max-h-[95vh] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
- <DrawerTitle className="sr-only">Secciones</DrawerTitle>
  <DrawerDescription className="sr-only">Navegación entre secciones de la app</DrawerDescription>
  <DrawerHandle />
+
+ {/* Header: título + botón de cierre */}
+ <div className="shrink-0 flex items-center justify-between gap-3 px-5 pt-7 pb-3 border-b border-border">
+ <DrawerTitle className="flex items-center gap-2 min-w-0 text-lg font-extrabold text-foreground">
+ <span className="truncate">{orgNombre}</span>
+ <span
+ title={printServerOk ?'Servidor de impresión conectado':'Servidor de impresión sin conexión'}
+ className={cn("w-2.5 h-2.5 rounded-full shrink-0", printServerOk ?'bg-emerald-500':'bg-red-500')}
+ />
+ </DrawerTitle>
+ <DrawerClose asChild>
+ <Button variant="ghost" size="icon" title="Cerrar" className="bg-muted rounded-full">
+ <X size={18} weight="bold" />
+ </Button>
+ </DrawerClose>
+ </div>
 
  {/* Secciones del menú — lista principal, ítems grandes y táctiles */}
  <nav className="flex-1 overflow-y-auto px-3 pt-4 pb-2 flex flex-col gap-1.5">

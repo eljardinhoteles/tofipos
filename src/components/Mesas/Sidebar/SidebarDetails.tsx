@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from'react';
-import { X, Plus, Printer, Trash, Minus, Check, Bed, Basket, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User, GiftIcon } from'@phosphor-icons/react';
+import { X, Plus, Eye, Printer, Trash, Minus, Check, Bed, Basket, CheckCircle, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User, GiftIcon } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { ComandaItemRow } from'./ComandaItemRow';
@@ -34,6 +34,7 @@ import {
 } from'@/components/ui/dialog';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from'@/components/ui/collapsible';
 import { Input } from'@/components/ui/input';
+import { SidebarCambiarCliente } from'./SidebarCambiarCliente';
 import { ArrowCounterClockwise, CircleNotch } from'@phosphor-icons/react';
 
 const TIPO_CLIENTE_LABEL: Record<string, string> = {
@@ -136,7 +137,6 @@ export function SidebarDetails({
  const [clienteInfoOpen, setClienteInfoOpen] = useState(false);
  const [changeClienteModal, setChangeClienteModal] = useState(false);
  const [changeClienteName, setChangeClienteName] = useState('');
- const [changeClienteAutocomplete, setChangeClienteAutocomplete] = useState(false);
  const [changeMesaModal, setChangeMesaModal] = useState(false);
  const { clientes } = useRxClientes();
 
@@ -160,35 +160,33 @@ export function SidebarDetails({
  (async () => {
  const rxDb = await initVerticalRxDb();
  const orgId = localStorage.getItem('pos_active_org_id') ||'';
+ // Las consultas son independientes: se lanzan en paralelo y se aplican
+ // juntas (un solo render). Antes eran 6-7 awaits en serie con un setState
+ // cada una, y al cambiar de subcomanda (el componente se remonta por key)
+ // el panel tardaba en completarse.
  const refresh = async () => {
  if (!activeComandaProp?.id) return;
- const c = await rxDb.comandas.findOne(activeComandaProp.id).exec();
- if (!alive) return;
- setLiveComanda(c ? c.toJSON() : activeComandaProp);
- const p = await rxDb.pagos.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).exec();
- if (!alive) return;
- setPagos(p.map((d: any) => d.toJSON()));
- const v = await rxDb.ventas.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).exec();
- if (!alive) return;
- setVentasComanda(v.map((d: any) => d.toJSON()));
- const hc = activeComandaProp.habitacion_cuenta_id
- ? await rxDb.habitacion_cuentas.findOne(activeComandaProp.habitacion_cuenta_id).exec()
- : null;
+ const comandaId = activeComandaProp.id;
+ const [c, p, v, hc, rac, ms] = await Promise.all([
+ rxDb.comandas.findOne(comandaId).exec(),
+ rxDb.pagos.find({ selector: { comanda_id: comandaId, _deleted: { $ne: true } } }).exec(),
+ rxDb.ventas.find({ selector: { comanda_id: comandaId, _deleted: { $ne: true } } }).exec(),
+ activeComandaProp.habitacion_cuenta_id
+ ? rxDb.habitacion_cuentas.findOne(activeComandaProp.habitacion_cuenta_id).exec()
+ : Promise.resolve(null),
+ rxDb.habitacion_cuentas.find({ selector: { organization_id: orgId, estado:'activa', _deleted: { $ne: true } } }).exec(),
+ rxDb.mesas.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).exec(),
+ ]);
  if (!alive) return;
  const hcJson = hc ? hc.toJSON() : null;
+ const roomMesa = hcJson ? await rxDb.mesas.findOne(hcJson.mesa_id).exec() : null;
+ if (!alive) return;
+ setLiveComanda(c ? c.toJSON() : activeComandaProp);
+ setPagos(p.map((d: any) => d.toJSON()));
+ setVentasComanda(v.map((d: any) => d.toJSON()));
  setLinkedHabitacionCuenta(hcJson);
- if (!hcJson) {
- setLinkedMesa(null);
- } else {
- const roomMesa = await rxDb.mesas.findOne(hcJson.mesa_id).exec();
- if (!alive) return;
  setLinkedMesa(roomMesa ? roomMesa.toJSON() : null);
- }
- const rac = await rxDb.habitacion_cuentas.find({ selector: { organization_id: orgId, estado:'activa', _deleted: { $ne: true } } }).exec();
- if (!alive) return;
  setActiveRoomAccounts(rac.map((d: any) => d.toJSON()));
- const ms = await rxDb.mesas.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).exec();
- if (!alive) return;
  setAllMesas(ms.map((d: any) => d.toJSON()));
  };
  await refresh();
@@ -246,7 +244,7 @@ export function SidebarDetails({
  const handleUpdateItem = async () => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
- showToast.error('Error','Este ítem ya fue enviado a cocina y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
  setEditingItem(null);
  return;
  }
@@ -269,7 +267,7 @@ export function SidebarDetails({
  const handleDeleteItem = async () => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
- showToast.error('Error','Este ítem ya fue enviado a cocina y no puede eliminarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.error('Error','Este ítem ya fue confirmado y no puede eliminarse. Use "Anular ítem" si ya no está disponible.');
  setEditingItem(null);
  return;
  }
@@ -328,7 +326,7 @@ export function SidebarDetails({
  const handleUpdateModifiers = async (selected: string[]) => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
- showToast.error('Error','Este ítem ya fue enviado a cocina y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
  setEditingModifiers(false);
  setEditingItem(null);
  return;
@@ -741,6 +739,21 @@ export function SidebarDetails({
  }
  };
 
+ // "Cambiar cliente" es una página dentro del mismo sheet, no un modal.
+ if (changeClienteModal) {
+ return (
+ <SidebarCambiarCliente
+ folio={activeComanda?.folio}
+ mesaNombre={selectedMesa.nombre}
+ nombre={changeClienteName}
+ onNombreChange={setChangeClienteName}
+ sugerencias={filteredChangeClientes}
+ onBack={() => setChangeClienteModal(false)}
+ onGuardar={handleConfirmChangeCliente}
+ />
+ );
+ }
+
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
  {/* Header — en desktop el fondo completo toma el color de estado (verde/naranja);
@@ -938,7 +951,9 @@ export function SidebarDetails({
  <span className="text-[11px] text-muted-foreground">Añade productos usando el menú.</span>
  </div>
  ) : (
- <div className="flex flex-col">
+ // Espacio al final para que el pill "Añadir" flotante (sobresale ~18px del
+ // footer) no tape el último ítem al llegar al fondo del scroll.
+ <div className={cn("flex flex-col", !editingItem && activeComanda?.estado !=='cuenta'&&"pb-8")}>
  {comandaItems.map((item, index) => (
  <ComandaItemRow
  key={item.id}
@@ -973,26 +988,30 @@ export function SidebarDetails({
  </footer>
  ) : (
  <footer className={cn("relative p-4 bg-card flex flex-col gap-3 shrink-0",
- (editingItem || activeComanda?.estado ==='cuenta') &&"border-t border-border")}>
+ "border-t border-border",
+ // Con el pill "Añadir" flotando sobre el borde, deja espacio para que no tape los totales.
+ !editingItem && activeComanda?.estado !=='cuenta'&&"pt-6")}>
  {isMobile && hasMoreBelow && !editingItem && activeComanda?.estado !=='cuenta'&& (
  <CaretDown
  aria-hidden="true"
  size={18}
  weight="bold"
- className="absolute -top-3 left-1/2 -translate-x-1/2 text-muted-foreground/70 animate-bounce pointer-events-none"
+ className="absolute -top-10 left-1/2 -translate-x-1/2 text-muted-foreground/70 animate-bounce pointer-events-none"
  />
  )}
  {!editingItem ? (
  <>
  {activeComanda?.estado !=='cuenta'&& (
  <Button
- className="w-full h-10 font-bold text-xs bg-orange-500 hover:bg-orange-600 text-white shrink-0"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ // Pill flotante: sale del flujo del footer y queda centrada sobre su borde
+ // superior, así no ocupa una fila propia ni va a todo el ancho.
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-orange-500 hover:bg-orange-500 text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
- <Basket size={16} weight="bold"className="mr-1.5"/>
- Añadir Productos {totalItems > 0 &&`· Total Items: ${totalItems}`}
+ <Plus size={15} weight="bold"className="mr-1.5"/>
+ Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}
  </Button>
  )}
- <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-muted/60 text-sm font-semibold text-muted-foreground">
+ <div className="flex flex-col gap-1.5 px-2 py-1 text-sm font-semibold text-muted-foreground">
  {/* En móvil, mientras se está tomando el pedido (todavía no se pidió la
  cuenta), solo se muestra el Total — subtotal/IVA/cobros son detalle
  que no hace falta ver a cada rato y le quitan espacio a la lista de
@@ -1009,15 +1028,16 @@ export function SidebarDetails({
  title="Cambiar el IVA de esta comanda"
  className="flex items-center justify-between cursor-pointer hover:text-foreground transition-colors -mx-1 px-1 rounded-md"
  >
- <span className="underline decoration-dotted underline-offset-2">
+ <span className="flex items-center gap-1">
  IVA {ivaPorcentaje}%{ivaEsOverride ?' (fijo)':''}
+ <PencilSimple size={12} className="opacity-60"/>
  </span>
  <span className="font-bold text-foreground">${ivaCalculado.toFixed(2)}</span>
  </button>
  </>
  )}
  <div className={cn("flex items-center justify-between",
- (!isMobile || activeComanda?.estado ==='cuenta') &&"pt-2 mt-1 border-t border-border")}>
+ (!isMobile || activeComanda?.estado ==='cuenta') &&"pt-2 mt-1 border-t border-dashed border-border")}>
  <span className="text-base font-black text-foreground">Total</span>
  <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
  </div>
@@ -1031,9 +1051,12 @@ export function SidebarDetails({
  type="button"
  onClick={() => setShowPagosModal(true)}
  title="Ver detalle de los cobros"
- className="flex items-center justify-between pt-2 mt-1 border-t border-border text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors"
+ className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-emerald-500/10 text-emerald-600 cursor-pointer hover:bg-emerald-500/15 hover:text-emerald-700 transition-colors"
  >
- <span className="font-bold underline decoration-dotted underline-offset-2">Ya cobrado</span>
+ <span className="flex items-center gap-1.5 font-bold">
+ Ya cobrado
+ <Eye size={14} weight="bold"className="opacity-70"/>
+ </span>
  <span className="font-black">${totalPagado.toFixed(2)}</span>
  </button>
  <div className="flex items-center justify-between">
@@ -1105,7 +1128,7 @@ export function SidebarDetails({
  <Printer size={18} weight="bold"className="mr-1.5"/> Pre-cuenta
  </Button>
  <Button
- className="w-full h-10 font-bold bg-primary text-primary-foreground"onClick={() => setCloseCuentaModalOpen(true)}
+ className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"onClick={() => setCloseCuentaModalOpen(true)}
  disabled={total === 0}
  >
  <Check size={18} weight="bold"className="mr-1.5"/> Cobrar Cuenta
@@ -1158,13 +1181,16 @@ export function SidebarDetails({
  // se puede anular (con motivo) si ya no está disponible.
  <div className="flex flex-col gap-3">
  <div className="flex items-center justify-between">
- <span className="font-extrabold text-xs text-foreground">{editingItem.nombre}</span>
- <Button variant="ghost"size="icon"className="h-6 w-6"onClick={() => setEditingItem(null)}>
+ <span className="flex items-center gap-1.5 min-w-0 font-extrabold text-base text-foreground">
+ <CheckCircle size={16} weight="fill"className="text-emerald-500/70 shrink-0"aria-label="Confirmado"/>
+ <span className="truncate">{editingItem.nombre}</span>
+ </span>
+ <Button variant="ghost"size="icon"className="h-6 w-6 shrink-0"onClick={() => setEditingItem(null)}>
  <X size={14} />
  </Button>
  </div>
  <p className="text-[11px] text-muted-foreground">
- Este ítem ya fue enviado a cocina y no puede modificarse. Si ya no está disponible, anúlalo.
+ Este ítem ya fue confirmado y no puede modificarse. Si ya no está disponible, anúlalo.
  </p>
  {!anulandoItem ? (
  <Button
@@ -1472,52 +1498,6 @@ export function SidebarDetails({
  type="button"variant="ghost"disabled={procesandoHab}onClick={() => setShowRoomChargeModal(false)}
  className="w-full text-muted-foreground">
  Cancelar
- </Button>
- </div>
- </DialogContent>
- </Dialog>
-
- <Dialog open={changeClienteModal} onOpenChange={setChangeClienteModal}>
- <DialogContent className="max-w-sm">
- <DialogHeader>
- <DialogTitle>Cambiar Cliente</DialogTitle>
- <DialogDescription>
- Escribe el nombre del cliente para esta comanda. Puedes elegir uno registrado o escribir uno nuevo.
- </DialogDescription>
- </DialogHeader>
- <div className="relative">
- <Input
- type="text"autoFocus
- placeholder="Consumidor Final (Defecto)"value={changeClienteName}
- onChange={(e) => {
- setChangeClienteName(e.target.value);
- setChangeClienteAutocomplete(true);
- }}
- onFocus={() => setChangeClienteAutocomplete(true)}
- onBlur={() => setTimeout(() => setChangeClienteAutocomplete(false), 200)}
- className="w-full"/>
- {changeClienteAutocomplete && filteredChangeClientes.length > 0 && (
- <div className="absolute top-full mt-1 w-full bg-card border border-border rounded-lg shadow-lg overflow-hidden z-10 flex flex-col">
- {filteredChangeClientes.map((nombre) => (
- <button
- key={nombre}
- type="button"onClick={() => {
- setChangeClienteName(nombre);
- setChangeClienteAutocomplete(false);
- }}
- className="w-full text-left px-3 py-2 text-sm font-medium transition-colors">
- {nombre}
- </button>
- ))}
- </div>
- )}
- </div>
- <div className="flex items-center justify-end gap-2 pt-2">
- <Button variant="outline"onClick={() => setChangeClienteModal(false)}>
- Cancelar
- </Button>
- <Button onClick={handleConfirmChangeCliente}>
- Guardar
  </Button>
  </div>
  </DialogContent>

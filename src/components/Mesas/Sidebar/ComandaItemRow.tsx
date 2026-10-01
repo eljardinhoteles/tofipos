@@ -1,5 +1,5 @@
 import { memo } from'react';
-import { Lock } from'@phosphor-icons/react';
+import { CheckCircle } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 
 export interface ComandaItemData {
@@ -45,14 +45,16 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  {/* Contenido */}
  <div className="flex flex-col flex-1 min-w-0">
  <div className="flex items-center justify-between gap-2">
- <span className={cn("font-bold text-base truncate flex items-center gap-1.5",
+ <span className={cn("font-bold text-base truncate",
  isAnulado ?"line-through text-muted-foreground":"text-foreground")}>
- {isLocked && !isAnulado && <Lock size={12} weight="bold"className="text-muted-foreground shrink-0"/>}
  {item.nombre}
  </span>
- <span className={cn("font-black text-base shrink-0",
+ <span className="flex items-center gap-1.5 shrink-0">
+ <span className={cn("font-black text-base",
  (isAnulado || isFullyPaid) ?"line-through text-muted-foreground":"text-foreground")}>
  ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+ </span>
+ {isLocked && !isAnulado && <CheckCircle size={14} weight="fill"className="text-emerald-500/70 shrink-0"aria-label="Confirmado"/>}
  </span>
  </div>
 

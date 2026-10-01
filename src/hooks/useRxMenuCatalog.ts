@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
+import { readHookCache, commitHookCache } from './rxHookCache'
 
 export function useRxMenuCatalog() {
-  const [menuItems, setMenuItems] = useState<any[]>([])
-  const [categorias, setCategorias] = useState<any[]>([])
+  const [menuItems, setMenuItems] = useState<any[]>(() => readHookCache<any[]>('menuItems', []))
+  const [categorias, setCategorias] = useState<any[]>(() => readHookCache<any[]>('categorias', []))
   const dbEpoch = useDbEpoch()
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function useRxMenuCatalog() {
         selector: { organization_id: orgId, _deleted: { $ne: true } }
       }).$.subscribe((docs: any[]) => {
         if (!alive) return
-        setMenuItems(docs.map((doc: any) => doc.toJSON()))
+        setMenuItems(commitHookCache('menuItems', docs.map((doc: any) => doc.toJSON())))
       })
 
       catSub = rxDb.categorias.find({
@@ -32,7 +33,7 @@ export function useRxMenuCatalog() {
           if ((a.orden ?? 0) !== (b.orden ?? 0)) return (a.orden ?? 0) - (b.orden ?? 0)
           return (a.nombre || '').localeCompare(b.nombre || '')
         })
-        setCategorias(sortedCats)
+        setCategorias(commitHookCache('categorias', sortedCats))
       })
     })().catch(() => {})
 

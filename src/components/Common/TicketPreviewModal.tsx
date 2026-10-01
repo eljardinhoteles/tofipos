@@ -37,6 +37,13 @@ export function TicketPreviewModal({
  // una vez por cuenta regresiva, sin importar si el interval tuvo algún
  // tick de más antes de que clearInterval surtiera efecto.
  const firedRef = useRef(false);
+ // Valor vigente de la cuenta regresiva: el interval lo lee de aquí en vez de
+ // usar un updater de setState con efectos secundarios (toast, onPrint, onClose).
+ const countdownRef = useRef<number | null>(null);
+ const updateCountdown = (value: number | null) => {
+ countdownRef.current = value;
+ setCountdown(value);
+ };
 
  const clearTimer = () => {
  if (timerRef.current) {
@@ -50,7 +57,7 @@ export function TicketPreviewModal({
  useEffect(() => {
  if (!opened) {
  clearTimer();
- setCountdown(null);
+ updateCountdown(null);
  firedRef.current = false;
  }
  return clearTimer;
@@ -68,28 +75,28 @@ export function TicketPreviewModal({
  // eso duplicaría el envío a imprimir cuando ambos lleguen a 0.
  if (timerRef.current) return;
  firedRef.current = false;
- setCountdown(COUNTDOWN_SECONDS);
+ updateCountdown(COUNTDOWN_SECONDS);
  timerRef.current = setInterval(() => {
- setCountdown(prev => {
- if (prev === null) return null;
- if (prev <= 1) {
+ const prev = countdownRef.current;
+ if (prev === null) return;
+ if (prev > 1) {
+ updateCountdown(prev - 1);
+ return;
+ }
  clearTimer();
+ updateCountdown(null);
  if (!firedRef.current) {
  firedRef.current = true;
  showToast.success('Enviado a Impresora','El documento se envió a la cola de impresión local (80mm).');
  if (onPrint) onPrint();
  }
  onClose();
- return null;
- }
- return prev - 1;
- });
  }, 1000);
  };
 
  const cancelCountdown = () => {
  clearTimer();
- setCountdown(null);
+ updateCountdown(null);
  };
 
  const renderFormattedContent = (text?: string) => {

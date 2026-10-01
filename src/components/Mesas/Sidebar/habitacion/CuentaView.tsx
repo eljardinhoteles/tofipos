@@ -312,7 +312,7 @@ export function CuentaView({
 
       {/* Footer y Acciones — mismo bloque de total y grid de botones que SidebarDetails */}
       <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
-        <div className="flex flex-col gap-0.5 p-3.5 rounded-xl bg-muted/60">
+        <div className="flex flex-col gap-0.5 px-2 py-1">
           {filtroSub === 'todas' ? (
             <div className="flex items-center justify-between">
               <span className="text-base font-black text-foreground">Total Cuenta</span>
@@ -341,13 +341,13 @@ export function CuentaView({
 
         <div className="grid grid-cols-2 gap-2">
           <Button
-            variant="secondary" className="w-full font-bold text-emerald-600 bg-emerald-50"
+            className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"
             onClick={() => onCheckout({ extras: [], incluidos: [], subcuentaId: filtroSub === 'todas' ? undefined : filtroSub })}
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Checkout
           </Button>
           <Button
-            variant="ghost" className="w-full font-bold text-destructive"
+            variant="ghost" className="w-full h-10 font-bold text-destructive"
             onClick={handleAnular}
             disabled={anulando || !puedeAnular}
             title={puedeAnular ? undefined : 'No se puede anular: esta cuenta ya tiene comandas cargadas'}

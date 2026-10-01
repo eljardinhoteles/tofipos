@@ -72,7 +72,7 @@ export default function MenuV2() {
  return (
  <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
  {/* ── HEADER PRINCIPAL ─────────────────────────────── */}
- <header className="h-14 px-6 bg-card border-b border-border flex items-center shadow-xs shrink-0 gap-3">
+ <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center shadow-xs shrink-0 gap-3">
  <button
  type="button"title="Nuevo Producto"onClick={() => {
  setSelectedMenuProductId(null);

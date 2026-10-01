@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
+import { readHookCache, commitHookCache } from './rxHookCache'
 
 export function useRxClientes() {
-  const [clientes, setClientes] = useState<any[]>([])
+  const [clientes, setClientes] = useState<any[]>(() => readHookCache<any[]>('clientes', []))
   const dbEpoch = useDbEpoch()
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export function useRxClientes() {
       })
       sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return
-        setClientes(docs.map((doc: any) => doc.toJSON()))
+        setClientes(commitHookCache('clientes', docs.map((doc: any) => doc.toJSON())))
       })
     })().catch(() => {})
 

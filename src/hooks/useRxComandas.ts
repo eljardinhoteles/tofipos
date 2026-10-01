@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
+import { readHookCache, commitHookCache } from './rxHookCache'
 
 /**
  * Suscripción compartida a todas las comandas de la organización.
@@ -17,10 +18,12 @@ import { useDbEpoch } from './useDbEpoch'
  * que `memo()` en componentes hijos siga siendo efectivo.
  */
 export function useRxComandas() {
-  const [comandas, setComandas] = useState<any[]>([])
+  // Se lee del caché una sola vez (inicializador perezoso) y se comparte con la ref.
+  const [initial] = useState<any[]>(() => readHookCache<any[]>('comandas', []))
+  const [comandas, setComandas] = useState<any[]>(initial)
   const dbEpoch = useDbEpoch()
   const cacheRef = useRef(new Map<string, { json: any; snapshot: string }>())
-  const listRef = useRef<any[]>([])
+  const listRef = useRef<any[]>(initial)
 
   useEffect(() => {
     let alive = true
@@ -50,7 +53,7 @@ export function useRxComandas() {
         cacheRef.current = nextCache
         if (changed) {
           listRef.current = next
-          setComandas(next)
+          setComandas(commitHookCache('comandas', next))
         }
       })
     })().catch(() => {})

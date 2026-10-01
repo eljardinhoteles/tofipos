@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
+import { readHookCache, commitHookCache } from './rxHookCache'
 
 /**
  * Suscripción compartida a todas las mesas de la organización.
  * Ver useRxComandas.ts para el motivo de centralizar esto.
  */
 export function useRxMesas() {
-  const [mesas, setMesas] = useState<any[]>([])
+  const [mesas, setMesas] = useState<any[]>(() => readHookCache<any[]>('mesas', []))
   const dbEpoch = useDbEpoch()
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export function useRxMesas() {
       })
       sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return
-        setMesas(docs.map((doc: any) => doc.toJSON()))
+        setMesas(commitHookCache('mesas', docs.map((doc: any) => doc.toJSON())))
       })
     })().catch(() => {})
 
