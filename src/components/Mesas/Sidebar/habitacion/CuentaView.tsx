@@ -49,7 +49,7 @@ export function CuentaView({
       const rxDb = await initVerticalRxDb();
       const docs = await rxDb.comandas.find({ selector: { habitacion_cuenta_id: cuenta.id, _deleted: { $ne: true } } }).exec();
       if (!alive) return;
-      setComandas(docs.map((d: any) => d.toJSON()));
+      setComandas(docs.map((d: any) => d.toJSON()).filter((c: any) => c.estado !== 'anulada'));
     })();
     return () => { alive = false; };
   }, [cuenta.id]);
@@ -283,7 +283,7 @@ export function CuentaView({
                     isOdd && "bg-muted/70", onOpenComanda && "enabled:cursor-pointer enabled:hover:border-l-primary")}
                 >
                   <div className="w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
-                    <Receipt size={14} />
+                    <Receipt size={14} weight="bold" />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">

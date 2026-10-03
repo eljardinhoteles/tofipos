@@ -1,8 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from'react';
-import { X, Plus, Eye, Printer, Trash, Minus, Check, Bed, Basket, CheckCircle, CaretDown, Phone, EnvelopeSimple, MapPin, IdentificationCard, NotePencil, PencilSimple, Scissors, Buildings, User, GiftIcon } from'@phosphor-icons/react';
+import { useState, useEffect, useMemo, useRef, useCallback } from'react';
+import { X, Plus, Printer, Check, CaretDown } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
-import { ComandaItemRow } from'./ComandaItemRow';
 import { useComandaIva } from'../../../hooks/useComandaIva';
 import { SidebarComandaIvaModal } from'./SidebarComandaIvaModal';
 import { useRxClientes } from'../../../hooks/useRxClientes';
@@ -12,37 +11,30 @@ import { SidebarCloseCuentaModal } from'./SidebarCloseCuentaModal';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
-import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, liberarMesaSiSinOperativas, anularComandaItem } from'../../../db/rxdb';
+import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, liberarMesaSiSinOperativas, anularComandaItem, aplicarCortesiaItem, moverItemASubcomanda } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { useUI } from'../../../context/UIContext';
 import { useAuth } from'../../../context/AuthContext';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { deltaGrupo, mergeItemsCocina } from'../../../lib/kitchenDelta';
-import { SubcuentaChips } from'./habitacion/SubcuentaChips';
+import { ItemActionsPanel } from'./ItemActionsPanel';
+import { ComandaItemsList, TodasList } from'./ComandaItemsList';
+import { ComandaTotales } from'./ComandaTotales';
+import { calcularAnticipoMesa, esVentaDividida, repartirAnticipo, textoAplicado, tieneAnticipoAplicado } from'../../../lib/anticipoMesa';
+import { useComandaLive } from'../../../hooks/useComandaLive';
+import { ComandaHeader } from'./ComandaHeader';
+import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
+import { ComandaAcciones } from'./ComandaAcciones';
+import { RoomChargeDialog, DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
 import { queueKitchenPrint, queueReceiptPrint } from'../../../lib/printServerClient';
 import { generarPrecuenta } from'../../../services/printTemplateEngine';
 import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
-import {
- Dialog,
- DialogContent,
- DialogHeader,
- DialogTitle,
- DialogDescription,
-} from'@/components/ui/dialog';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from'@/components/ui/collapsible';
-import { Input } from'@/components/ui/input';
 import { SidebarCambiarCliente } from'./SidebarCambiarCliente';
-import { ArrowCounterClockwise, CircleNotch } from'@phosphor-icons/react';
 
-const TIPO_CLIENTE_LABEL: Record<string, string> = {
- persona_natural:'Persona natural',
- juridico:'Jurídico',
- extranjero:'Extranjero',
- agencia:'Agencia',
-};
+
 
 interface SidebarDetailsProps {
  selectedMesa: Mesa;
@@ -61,6 +53,8 @@ interface SidebarDetailsProps {
  // Mesa Múltiple: muestra todos los ítems de la mesa agrupados por subcomanda.
  vistaTodas?: boolean;
  onSelectSubcomanda?: (id: string) => void;
+ // Mesa normal: convierte la mesa en Mesa Múltiple (undefined = no disponible).
+ onActivarMultiple?: () => Promise<void> | void;
 }
 
 const EMPTY_ARRAY: any[] = [];
@@ -76,6 +70,7 @@ export function SidebarDetails({
  grupo,
  vistaTodas = false,
  onSelectSubcomanda,
+ onActivarMultiple,
 }: SidebarDetailsProps) {
  const isMobile = useIsMobile();
  const onResuelta = onResueltaProp ?? onClose;
@@ -107,16 +102,24 @@ export function SidebarDetails({
  // usuario alcance a revisar/cancelar.
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [editingItem, setEditingItem] = useState<any | null>(null);
- // Flujo inline de anulación de un ítem ya confirmado (bloqueado): mismo
- // patrón "confirmando + motivo" que MovimientoHistorialCard.tsx.
- const [anulandoItem, setAnulandoItem] = useState(false);
- const [anularMotivo, setAnularMotivo] = useState('');
- // Mismo patrón "confirmando + motivo", para marcar cortesía (item servido
- // pero no cobrado) — solo disponible al pedir cuenta, ver comentario en
- // el botón. A diferencia de anular, precio pasa a 0 pero el item sigue
- // yendo a cocina normal (no lleva flag anulado).
- const [marcandoCortesia, setMarcandoCortesia] = useState(false);
- const [cortesiaMotivo, setCortesiaMotivo] = useState('');
+ const [activandoMultiple, setActivandoMultiple] = useState(false);
+ const [confirmDividir, setConfirmDividir] = useState(false);
+ const [confirmCuentaPendientes, setConfirmCuentaPendientes] = useState(false);
+ // Mesa Múltiple: otras subcomandas a las que se puede mover el ítem.
+ const destinosMover = useMemo(
+ () => (grupo?.comandas ?? []).filter((c: any) => c.id !== activeComandaProp?.id && !!c.subcomanda_nombre),
+ [grupo, activeComandaProp?.id]
+ );
+ const handleMoverItem = async (destId: string, cantidad: number) => {
+ if (!editingItem) return;
+ try {
+ await moverItemASubcomanda(editingItem.id, destId, cantidad);
+ setEditingItem(null);
+ showToast.success('Producto movido');
+ } catch (e) {
+ showToast.error('No se pudo mover', e instanceof Error ? e.message : undefined);
+ }
+ };
  const { currentMesero } = useAuth();
  const [showPagosModal, setShowPagosModal] = useState(false);
 
@@ -130,77 +133,16 @@ export function SidebarDetails({
  const [closePayerName, setClosePayerName] = useState('');
 
  const [showRoomChargeModal, setShowRoomChargeModal] = useState(false);
- const [selectedRoomChargeId, setSelectedRoomChargeId] = useState<string | null>(null);
- const [selectedSubcuentaId, setSelectedSubcuentaId] = useState<string | null>(null);
- const [activeRoomAccounts, setActiveRoomAccounts] = useState<any[]>([]);
- const [allMesas, setAllMesas] = useState<any[]>([]);
  const [clienteInfoOpen, setClienteInfoOpen] = useState(false);
  const [changeClienteModal, setChangeClienteModal] = useState(false);
  const [changeClienteName, setChangeClienteName] = useState('');
  const [changeMesaModal, setChangeMesaModal] = useState(false);
  const { clientes } = useRxClientes();
 
- const [editCantidad, setEditCantidad] = useState(1);
- const [editPrecio, setEditPrecio] = useState(0);
-
- const [liveComanda, setLiveComanda] = useState<any | null>(activeComandaProp || null);
- const [pagos, setPagos] = useState<any[]>([]);
- // Ventas vinculadas a esta comanda (Centro de Ventas) — trae abonos
- // registrados antes de que la comanda existiera como mesa, p.ej. al
- // asignar mesa a una reserva con pagos previos.
- const [ventasComanda, setVentasComanda] = useState<any[]>([]);
- const [, setLinkedHabitacionCuenta] = useState<any | null>(null);
- const [linkedMesa, setLinkedMesa] = useState<any | null>(null);
 
  const { mesaView, setMesaView } = useUI();
 
- useEffect(() => {
- let alive = true;
- let subs: Array<{ unsubscribe: () => void }> = [];
- (async () => {
- const rxDb = await initVerticalRxDb();
- const orgId = localStorage.getItem('pos_active_org_id') ||'';
- // Las consultas son independientes: se lanzan en paralelo y se aplican
- // juntas (un solo render). Antes eran 6-7 awaits en serie con un setState
- // cada una, y al cambiar de subcomanda (el componente se remonta por key)
- // el panel tardaba en completarse.
- const refresh = async () => {
- if (!activeComandaProp?.id) return;
- const comandaId = activeComandaProp.id;
- const [c, p, v, hc, rac, ms] = await Promise.all([
- rxDb.comandas.findOne(comandaId).exec(),
- rxDb.pagos.find({ selector: { comanda_id: comandaId, _deleted: { $ne: true } } }).exec(),
- rxDb.ventas.find({ selector: { comanda_id: comandaId, _deleted: { $ne: true } } }).exec(),
- activeComandaProp.habitacion_cuenta_id
- ? rxDb.habitacion_cuentas.findOne(activeComandaProp.habitacion_cuenta_id).exec()
- : Promise.resolve(null),
- rxDb.habitacion_cuentas.find({ selector: { organization_id: orgId, estado:'activa', _deleted: { $ne: true } } }).exec(),
- rxDb.mesas.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).exec(),
- ]);
- if (!alive) return;
- const hcJson = hc ? hc.toJSON() : null;
- const roomMesa = hcJson ? await rxDb.mesas.findOne(hcJson.mesa_id).exec() : null;
- if (!alive) return;
- setLiveComanda(c ? c.toJSON() : activeComandaProp);
- setPagos(p.map((d: any) => d.toJSON()));
- setVentasComanda(v.map((d: any) => d.toJSON()));
- setLinkedHabitacionCuenta(hcJson);
- setLinkedMesa(roomMesa ? roomMesa.toJSON() : null);
- setActiveRoomAccounts(rac.map((d: any) => d.toJSON()));
- setAllMesas(ms.map((d: any) => d.toJSON()));
- };
- await refresh();
- if (activeComandaProp?.id) {
- subs.push(rxDb.comandas.findOne(activeComandaProp.id).$.subscribe(() => refresh()));
- subs.push(rxDb.pagos.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).$.subscribe(() => refresh()));
- subs.push(rxDb.ventas.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).$.subscribe(() => refresh()));
- }
- })().catch(() => {});
- return () => {
- alive = false;
- subs.forEach(s => s.unsubscribe());
- };
- }, [activeComandaProp?.id, activeComandaProp?.habitacion_cuenta_id]);
+ const { liveComanda, pagos, ventasComanda, linkedMesa, activeRoomAccounts, allMesas, ventasMesa, comandasOperativasMesa } = useComandaLive(activeComandaProp);
 
  useEffect(() => {
  if (closeCuentaModalOpen && activeComandaProp) {
@@ -218,17 +160,6 @@ export function SidebarDetails({
  return clientes.find(c => c.nombre?.trim().toLowerCase() === nombre.toLowerCase()) || null;
  }, [activeComanda?.cliente, clientes]);
 
- useEffect(() => {
- if (editingItem) {
- setEditCantidad(editingItem.cantidad);
- setEditPrecio(editingItem.precio);
- }
- // Cambiar de ítem (o cerrar el panel) cancela cualquier flujo de
- // anulación a medio llenar, para no arrastrar un motivo viejo al ítem nuevo.
- setAnulandoItem(false);
- setAnularMotivo('');
- }, [editingItem]);
-
  // Un ítem queda bloqueado (no editable/borrable) cuando ya formaba parte
  // del último lote confirmado a cocina — evita que ediciones locales
  // desincronicen lo que la cocina ya está preparando. Items agregados
@@ -241,7 +172,7 @@ export function SidebarDetails({
  item.created_at <= activeComanda.confirmada_at &&
  !item?.anulado;
 
- const handleUpdateItem = async () => {
+ const handleUpdateItem = async (cantidad: number) => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
  showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
@@ -253,10 +184,7 @@ export function SidebarDetails({
  setEditingItem(null);
  return;
  }
- await updateRxComandaItem(editingItem.id, {
- cantidad: editCantidad,
- precio: editPrecio
- });
+ await updateRxComandaItem(editingItem.id, { cantidad });
 
  // Nota: ya no se resetea `confirmada` aquí. Este punto solo se alcanza
  // para ítems SIN bloquear (nuevos, no enviados aún a cocina) — editarlos
@@ -282,35 +210,28 @@ export function SidebarDetails({
  setEditingItem(null);
  };
 
- const handleAnularItem = async () => {
+ // Anula todo el ítem o solo `cantidad` de sus unidades.
+ const handleAnularItem = async (motivo: string, cantidad: number) => {
  if (!editingItem) return;
- if (!anularMotivo.trim()) {
- showToast.error('Error','Debe indicar un motivo para anular el ítem.');
- return;
- }
- await anularComandaItem(editingItem.id, anularMotivo.trim(), currentMesero?.id);
- setAnulandoItem(false);
- setAnularMotivo('');
+ await anularComandaItem(editingItem.id, motivo, currentMesero?.id, cantidad);
  setEditingItem(null);
  };
 
- // Cortesía: el item completo (todas sus unidades) se sirvió pero no se
- // cobra — precio a $0, sin tocar `anulado` (cocina lo sigue viendo
- // normal). Solo disponible al pedir cuenta — ver comentario en el botón.
- const handleMarcarCortesia = async () => {
+ // Cortesía por cantidad y porcentaje (ver aplicarCortesiaItem).
+ const handleMarcarCortesia = async (motivo: string, porcentaje: number, cantidad: number) => {
  if (!editingItem) return;
- if (!cortesiaMotivo.trim()) {
- showToast.error('Error','Debe indicar un motivo para marcar cortesía.');
+ try {
+ await aplicarCortesiaItem(editingItem.id, motivo, porcentaje, cantidad);
+ } catch (e) {
+ showToast.error('No se pudo aplicar la cortesía', e instanceof Error ? e.message : undefined);
  return;
  }
- await updateRxComandaItem(editingItem.id, {
- precio: 0,
- cortesia_cantidad: editingItem.cantidad,
- cortesia_motivo: cortesiaMotivo.trim(),
- });
- setMarcandoCortesia(false);
- setCortesiaMotivo('');
  setEditingItem(null);
+ };
+
+ const handleConfirmDividir = async () => {
+ setActivandoMultiple(true);
+ try { await onActivarMultiple?.(); setConfirmDividir(false); } catch { showToast.error('No se pudo activar mesa múltiple'); } finally { setActivandoMultiple(false); }
  };
 
  const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
@@ -461,21 +382,21 @@ export function SidebarDetails({
  () => comandaItems.reduce((acc, item) => acc + (item.cantidad || 0), 0),
  [comandaItems]
  );
+ // Cobrado de ESTA comanda: lo registrado por división de cuenta (SidebarSplit).
+ // El dinero de una venta normal (abono de reserva, cobro hecho en la mesa) ya
+ // no se descuenta de la comanda: es anticipo de la mesa (ver anticipoMesa).
  const totalPagadoVentas = useMemo(() => {
  return ventasComanda.reduce((accVenta: number, v: any) => {
+ if (!esVentaDividida(v)) return accVenta;
  const movs = v.movimientos ?? [];
- // Las ventas "Dividido - ..." (SidebarSplit, cualquiera de los 3
- // métodos: iguales/monto/productos) registran el cobro ya recibido en
- // el momento como movimiento 'ajuste' (no 'pago': el método de pago
- // real se ancla después en Centro de Ventas) — sin esto, el saldo
- // restante no bajaba y mostraba el total completo de nuevo aunque ya
- // se hubiera cobrado esa parte.
- const esSplit = typeof v.referencia ==='string' && v.referencia.includes('Dividido - ');
+ // Las ventas "Dividido - ..." registran el cobro recibido en el momento
+ // como movimiento 'ajuste' (el método real se ancla después en Centro de
+ // Ventas); los 'pago' y reembolsos posteriores también cuentan.
  const sumaVenta = movs.reduce((acc: number, m: any) => {
  if (m.anulado) return acc;
  if (m.tipo ==='pago') return acc + (m.monto ?? 0);
  if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
- if (m.tipo ==='ajuste'&& esSplit) return acc + (m.monto ?? 0);
+ if (m.tipo ==='ajuste') return acc + (m.monto ?? 0);
  return acc;
  }, 0);
  return accVenta + sumaVenta;
@@ -486,6 +407,19 @@ export function SidebarDetails({
  [pagos, totalPagadoVentas]
  );
  const saldoPendiente = Math.max(0, total - totalPagado);
+ // Anticipo de la mesa (a favor de la mesa, compartido por todas sus cuentas):
+ // se ofrece al pedir cuenta y se decide al cobrar si se usa o se cobra aparte.
+ const anticipo = useMemo(
+ () => calcularAnticipoMesa(ventasMesa, new Set(comandasOperativasMesa)),
+ [ventasMesa, comandasOperativasMesa]
+ );
+ // Cuánto del anticipo se aplica al cobrar: por defecto todo lo que cubra la
+ // cuenta; el cajero puede bajarlo o ponerlo en 0 (cobro nuevo). Sin vuelto:
+ // nunca más que lo que falta por cobrar.
+ const [anticipoDetalleOpen, setAnticipoDetalleOpen] = useState(false);
+ const [anticipoUsarInput, setAnticipoUsarInput] = useState<number | null>(null);
+ const anticipoMaxUsar = Math.min(anticipo.disponible, saldoPendiente);
+ const anticipoUsar = anticipoUsarInput === null ? anticipoMaxUsar : Math.min(anticipoMaxUsar, Math.max(0, anticipoUsarInput));
  // Venta vigente (no anulada) sobre esta comanda, si existe — se reutiliza
  // al cerrar la cuenta en vez de crear una paralela que duplicaría el
  // cobro e ignoraría abonos ya registrados (p.ej. desde una reserva).
@@ -612,7 +546,7 @@ export function SidebarDetails({
  activeComanda, withBebida(itemsTicket), selectedMesa.nombre, esAdicional, linkedMesa?.nombre, false, withBebida(anulados)
  );
  setPreviewContent(content);
- setPreviewTitle(`${esAdicional ?'Adicional Cocina':'Orden de Cocina'} - ${selectedMesa.nombre}`);
+ setPreviewTitle(`${esAdicional ?'Adicional Cocina':'Comanda de Cocina'} - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
@@ -671,7 +605,7 @@ export function SidebarDetails({
  linkedMesa?.nombre
  );
  setPreviewContent(content);
- setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
+ setPreviewTitle(`Comanda de Cocina - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
@@ -724,7 +658,7 @@ export function SidebarDetails({
  withBebida(itemsAnuladosDesdeUltimaConfirmacion)
  );
  setPreviewContent(content);
- setPreviewTitle(`Orden de Cocina - ${selectedMesa.nombre}`);
+ setPreviewTitle(`Comanda de Cocina - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
@@ -738,6 +672,19 @@ export function SidebarDetails({
  setPreviewOpened(true);
  }
  };
+
+ // Unidades aún sin enviar a cocina en esta comanda (ítems nuevos o cantidad extra).
+ const unidadesPendientesCocina = itemsNuevos.reduce((acc: number, i: any) => acc + (i.cantidad || 0), 0);
+ // Pedir la cuenta con productos sin enviar no se bloquea: se avisa y decide el mesero.
+ const handlePedirCuenta = () => {
+ if (unidadesPendientesCocina > 0) setConfirmCuentaPendientes(true);
+ else onAction(selectedMesa,'cuenta');
+ };
+
+ // Hooks antes de cualquier return anticipado. Callback estable para las listas memoizadas (el prop llega como función inline).
+ const onSelectSubRef = useRef(onSelectSubcomanda);
+ onSelectSubRef.current = onSelectSubcomanda;
+ const handleSelectSubcomanda = useCallback((id: string) => onSelectSubRef.current?.(id), []);
 
  // "Cambiar cliente" es una página dentro del mismo sheet, no un modal.
  if (changeClienteModal) {
@@ -754,217 +701,76 @@ export function SidebarDetails({
  );
  }
 
+ // Cargar la comanda a una habitación activa (y subcuenta). El diálogo solo
+ // elige destino; la escritura y el cierre se resuelven aquí.
+ const handleTransferirHabitacion = async (cuentaId: string, subcuentaId: string | null) => {
+ if (!activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoHab(true);
+ try {
+ await updateRxComanda(activeComanda.id, {
+ habitacion_cuenta_id: cuentaId,
+ habitacion_subcuenta_id: subcuentaId,
+ total,
+ confirmada: true,
+ sincronizado: true,
+ });
+ await liberarMesaSiSinOperativas(activeComanda.mesa_id);
+ setShowRoomChargeModal(false);
+ showToast.success('Transferencia exitosa','La comanda fue asignada a la habitación.');
+ onResuelta();
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error','No se pudo transferir la comanda a la habitación.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoHab(false);
+ }
+ };
+
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
  {/* Header — en desktop el fondo completo toma el color de estado (verde/naranja);
  en móvil el fondo queda neutro y solo el badge de mesa lleva el color, ya que
  un header sólido se veía mal dentro del bottom-sheet redondeado. */}
- <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
- activeComanda?.estado ==='cuenta'?"md:bg-orange-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
- <div className="flex items-center gap-3">
- <button
- type="button"
- title="Cambiar mesa"
- onClick={() => setChangeMesaModal(true)}
- className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
- activeComanda?.estado ==='cuenta'?"bg-orange-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
- {selectedMesa.nombre.replace(/^Mesa\s*/i,'')}
- </button>
- <div className="flex flex-col">
- <h3 className={cn("font-extrabold text-base leading-tight", activeComanda?.estado ==='cuenta'?"md:text-white":"md:text-primary-foreground")}>
- {vistaTodas ?'Toda la mesa': (activeComanda?.cliente ||'Público General')}
- </h3>
- <div className="flex items-center gap-1.5">
- <span className={cn("text-[10px] font-bold text-muted-foreground", activeComanda?.estado ==='cuenta'?"md:text-white/70":"md:text-primary-foreground/70")}>
- {vistaTodas ? `${gruposTodas.length} subcomandas` : `ORDEN #${activeComanda?.folio}`} · {selectedMesa.nombre}
- </span>
- {linkedMesa && (
- <span className={cn("flex items-center gap-1 w-fit px-1.5 py-0.5 rounded-md text-[10px] font-extrabold",
- activeComanda?.estado ==='cuenta'?"bg-orange-600/10 text-orange-600 md:bg-white/20 md:text-white":"bg-primary/10 text-primary md:bg-primary-foreground/20 md:text-primary-foreground")}>
- <Bed size={11} weight="fill"/>
- Hab. {linkedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || linkedMesa.nombre}
- </span>
- )}
- </div>
- </div>
- </div>
-
- <Button
- variant="ghost"size="icon-lg"onClick={onClose}
- className={cn("rounded-xl text-muted-foreground",
- activeComanda?.estado ==='cuenta'?"md:text-white":"md:text-primary-foreground")}
- >
- <X size={18} weight="bold"/>
- </Button>
- </header>
+ <ComandaHeader
+ mesaNombre={selectedMesa.nombre}
+ titulo={vistaTodas ?'Toda la mesa': (activeComanda?.cliente ||'Público General')}
+ subtitulo={vistaTodas ? `${gruposTodas.length} subcomandas` : `COMANDA #${activeComanda?.folio}`}
+ enCuenta={activeComanda?.estado ==='cuenta'}
+ linkedMesa={linkedMesa}
+ puedeDividir={!!onActivarMultiple && !vistaTodas}
+ dividiendo={activandoMultiple}
+ onCambiarMesa={() => setChangeMesaModal(true)}
+ onDividir={() => setConfirmDividir(true)}
+ onClose={onClose}
+ />
 
  {/* Datos del cliente, colapsable — siempre visible para poder cambiar el cliente */}
  {!vistaTodas && (
- <Collapsible open={clienteInfoOpen} onOpenChange={setClienteInfoOpen} className="shrink-0 border-b border-border">
- <div className="w-full flex items-center justify-between px-4 py-2.5 transition-colors">
- <CollapsibleTrigger className="flex-1 flex items-center gap-2 cursor-pointer">
- <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
- <IdentificationCard size={14} />
- Datos del Cliente
- </span>
- <CaretDown
- size={14}
- className={cn("text-muted-foreground transition-transform", clienteInfoOpen &&"rotate-180")}
+ <ClienteInfoCollapsible
+ open={clienteInfoOpen}
+ onOpenChange={setClienteInfoOpen}
+ onEditar={handleOpenChangeCliente}
+ linkedMesa={linkedMesa}
+ clienteVinculado={clienteVinculado}
+ clienteNombre={activeComanda?.cliente}
  />
- </CollapsibleTrigger>
- <Button
- variant="ghost"size="icon-sm"onClick={handleOpenChangeCliente}
- title="Cambiar cliente"className="text-muted-foreground shrink-0">
- <PencilSimple size={14} />
- </Button>
- </div>
- <CollapsibleContent>
- <div className="px-4 pb-3 flex flex-col gap-2 text-xs">
- {linkedMesa && (
- <div className="flex items-center gap-2 text-foreground">
- <Bed size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">
- Habitación {linkedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || linkedMesa.nombre}
- </span>
- </div>
- )}
- {clienteVinculado ? (
- <>
- {clienteVinculado.tipo_cliente && (
- <div className="flex items-center gap-2 text-foreground">
- <User size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">
- {TIPO_CLIENTE_LABEL[clienteVinculado.tipo_cliente] ?? clienteVinculado.tipo_cliente}
- </span>
- </div>
- )}
- {clienteVinculado.telefono && (
- <div className="flex items-center gap-2 text-foreground">
- <Phone size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.telefono}</span>
- </div>
- )}
- {clienteVinculado.email && (
- <div className="flex items-center gap-2 text-foreground">
- <EnvelopeSimple size={14} className="text-primary shrink-0"/>
- <span className="font-semibold truncate select-text cursor-text">{clienteVinculado.email}</span>
- </div>
- )}
- {clienteVinculado.direccion && (
- <div className="flex items-center gap-2 text-foreground">
- <MapPin size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.direccion}</span>
- </div>
- )}
- {clienteVinculado.dni && (
- <div className="flex items-center gap-2 text-foreground">
- <IdentificationCard size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.dni}</span>
- </div>
- )}
- {clienteVinculado.notas && (
- <div className="flex items-start gap-2 text-muted-foreground">
- <NotePencil size={14} className="text-primary shrink-0 mt-0.5"/>
- <span className="italic select-text cursor-text">{clienteVinculado.notas}</span>
- </div>
- )}
- {!clienteVinculado.telefono && !clienteVinculado.email && !clienteVinculado.direccion && !clienteVinculado.dni && !clienteVinculado.notas && (
- <span className="text-muted-foreground">Sin datos adicionales registrados.</span>
- )}
-
- {(clienteVinculado.nombre_factura || clienteVinculado.numero_doc || clienteVinculado.direccion_fiscal || clienteVinculado.email_factura) && (
- <div className="flex flex-col gap-2 pt-2 mt-1 border-t border-border/60">
- <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
- <Buildings size={12} /> Facturación
- </span>
- {clienteVinculado.nombre_factura && (
- <div className="flex items-center gap-2 text-foreground">
- <User size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.nombre_factura}</span>
- </div>
- )}
- {clienteVinculado.numero_doc && (
- <div className="flex items-center gap-2 text-foreground">
- <IdentificationCard size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">
- {clienteVinculado.tipo_doc ?`${clienteVinculado.tipo_doc.toUpperCase()}: ${clienteVinculado.numero_doc}`: clienteVinculado.numero_doc}
- </span>
- </div>
- )}
- {clienteVinculado.direccion_fiscal && (
- <div className="flex items-center gap-2 text-foreground">
- <MapPin size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.direccion_fiscal}</span>
- </div>
- )}
- {clienteVinculado.email_factura && (
- <div className="flex items-center gap-2 text-foreground">
- <EnvelopeSimple size={14} className="text-primary shrink-0"/>
- <span className="font-semibold truncate select-text cursor-text">{clienteVinculado.email_factura}</span>
- </div>
- )}
- </div>
- )}
- </>
- ) : (
- <span className="text-muted-foreground">
- {activeComanda?.cliente ?'Cliente no registrado en la base de datos.':'Sin cliente asignado — Público General.'}
- </span>
- )}
- </div>
- </CollapsibleContent>
- </Collapsible>
  )}
 
  {/* Lista de productos */}
  <main ref={productListRef}className="flex-1 overflow-y-auto">
  {vistaTodas ? (
- <div className="flex flex-col">
- {gruposTodas.map(g => (
- <div key={g.comanda.id}>
- <button
- type="button"
- onClick={() => onSelectSubcomanda?.(g.comanda.id)}
- className="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-2 bg-muted border-y border-border cursor-pointer"
- >
- <span className="font-extrabold text-xs uppercase tracking-wide text-foreground truncate">{g.comanda.subcomanda_nombre || g.comanda.cliente}</span>
- <span className="font-black text-xs text-foreground shrink-0">${g.total.toFixed(2)}</span>
- </button>
- {g.items.length === 0 ? (
- <div className="px-4 py-3 text-[11px] text-muted-foreground">Sin productos</div>
- ) : g.items.map((item, index) => (
- <ComandaItemRow
- key={item.id}
- item={item}
- index={index}
- isLocked={!!g.comanda.confirmada_at && !!item.created_at && item.created_at <= g.comanda.confirmada_at && !item.anulado}
- onClick={() => onSelectSubcomanda?.(g.comanda.id)}
- />
- ))}
- </div>
- ))}
- </div>
- ) : comandaItems.length === 0 ? (
- <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
- <Basket size={48} className="text-muted-foreground/40"/>
- <span className="font-bold text-xs text-foreground">Comanda vacía</span>
- <span className="text-[11px] text-muted-foreground">Añade productos usando el menú.</span>
- </div>
+ <TodasList grupos={gruposTodas} onSelectSubcomanda={handleSelectSubcomanda} />
  ) : (
- // Espacio al final para que el pill "Añadir" flotante (sobresale ~18px del
- // footer) no tape el último ítem al llegar al fondo del scroll.
- <div className={cn("flex flex-col", !editingItem && activeComanda?.estado !=='cuenta'&&"pb-8")}>
- {comandaItems.map((item, index) => (
- <ComandaItemRow
- key={item.id}
- item={item}
- index={index}
- isSelected={editingItem?.id === item.id}
- isLocked={esItemBloqueado(item)}
- onClick={() => setEditingItem(item)}
+ <ComandaItemsList
+ items={comandaItems}
+ selectedId={editingItem?.id}
+ confirmada={!!activeComanda?.confirmada}
+ confirmadaAt={activeComanda?.confirmada_at}
+ padBottom={!editingItem && activeComanda?.estado !=='cuenta'}
+ onSelect={setEditingItem}
  />
- ))}
- </div>
  )}
  </main>
 
@@ -987,7 +793,8 @@ export function SidebarDetails({
  <span className="text-[11px] text-center text-muted-foreground">Elige una subcomanda para añadir, cobrar o cargar a habitación.</span>
  </footer>
  ) : (
- <footer className={cn("relative p-4 bg-card flex flex-col gap-3 shrink-0",
+ <footer className={cn("relative p-4 flex flex-col gap-3 shrink-0",
+ editingItem ?"bg-muted/50": "bg-card",
  "border-t border-border",
  // Con el pill "Añadir" flotando sobre el borde, deja espacio para que no tape los totales.
  !editingItem && activeComanda?.estado !=='cuenta'&&"pt-6")}>
@@ -1011,145 +818,52 @@ export function SidebarDetails({
  Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}
  </Button>
  )}
- <div className="flex flex-col gap-1.5 px-2 py-1 text-sm font-semibold text-muted-foreground">
- {/* En móvil, mientras se está tomando el pedido (todavía no se pidió la
- cuenta), solo se muestra el Total — subtotal/IVA/cobros son detalle
- que no hace falta ver a cada rato y le quitan espacio a la lista de
- productos, que es lo que se usa activamente en ese momento. */}
- {(!isMobile || activeComanda?.estado ==='cuenta') && (
- <>
- <div className="flex items-center justify-between">
- <span>Subtotal</span>
- <span className="font-bold text-foreground">${subtotal.toFixed(2)}</span>
- </div>
- <button
- type="button"
- onClick={() => setIvaModalOpen(true)}
- title="Cambiar el IVA de esta comanda"
- className="flex items-center justify-between cursor-pointer hover:text-foreground transition-colors -mx-1 px-1 rounded-md"
- >
- <span className="flex items-center gap-1">
- IVA {ivaPorcentaje}%{ivaEsOverride ?' (fijo)':''}
- <PencilSimple size={12} className="opacity-60"/>
- </span>
- <span className="font-bold text-foreground">${ivaCalculado.toFixed(2)}</span>
- </button>
- </>
- )}
- <div className={cn("flex items-center justify-between",
- (!isMobile || activeComanda?.estado ==='cuenta') &&"pt-2 mt-1 border-t border-dashed border-border")}>
- <span className="text-base font-black text-foreground">Total</span>
- <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
- </div>
- {/* Cuenta dividida (SidebarSplit) registra pagos parciales por
- persona/ítem antes del cierre — sin esto no había forma de ver
- cuánto ya se cobró sin abrir el modal de pagos aparte. Igual que
- subtotal/IVA, solo aplica cuando ya se pidió la cuenta en móvil. */}
- {totalPagado > 0 && (!isMobile || activeComanda?.estado ==='cuenta') && (
- <>
- <button
- type="button"
- onClick={() => setShowPagosModal(true)}
- title="Ver detalle de los cobros"
- className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-emerald-500/10 text-emerald-600 cursor-pointer hover:bg-emerald-500/15 hover:text-emerald-700 transition-colors"
- >
- <span className="flex items-center gap-1.5 font-bold">
- Ya cobrado
- <Eye size={14} weight="bold"className="opacity-70"/>
- </span>
- <span className="font-black">${totalPagado.toFixed(2)}</span>
- </button>
- <div className="flex items-center justify-between">
- <span className="text-base font-black text-foreground">Restante</span>
- <span className="text-xl font-black text-orange-600">${saldoPendiente.toFixed(2)}</span>
- </div>
- </>
- )}
- </div>
+ <ComandaTotales
+ subtotal={subtotal}
+ iva={ivaCalculado}
+ ivaPorcentaje={ivaPorcentaje}
+ ivaEsOverride={ivaEsOverride}
+ total={total}
+ totalPagado={totalPagado}
+ saldoPendiente={saldoPendiente}
+ // El anticipo de la mesa solo aparece al pedir cuenta.
+ anticipo={activeComanda?.estado ==='cuenta'? anticipo.disponible : 0}
+ // En móvil, mientras se toma el pedido solo se muestra el Total: el
+ // detalle le quita espacio a la lista de productos.
+ detallado={!isMobile || activeComanda?.estado ==='cuenta'}
+ onEditarIva={() => setIvaModalOpen(true)}
+ onVerPagos={() => setShowPagosModal(true)}
+ onVerAnticipo={() => setAnticipoDetalleOpen(true)}
+ />
 
- {activeComanda?.estado !=='cuenta'? (
- <div className="grid grid-cols-2 gap-2">
- <Button
- variant={!hayConfirmadaCocina ?"default":"secondary"}
- className={cn("w-full h-10 font-bold", !hayConfirmadaCocina ?"":"bg-muted text-foreground")}
- onClick={handleConfirmOrder}
- disabled={sinItemsCocina}
- >
- {!hayConfirmadaCocina ? (
- <Check size={18} weight="bold"className="mr-1.5"/>
- ) : (
- <Printer size={18} weight="bold"className="mr-1.5"/>
- )}
- {!hayConfirmadaCocina
- ?'Confirmar': hayNuevosCocina
- ?`Adicional (${nuevosCocina.length})`:'Reimprimir'}
- </Button>
- <Button
- variant="secondary"className="w-full h-10 font-bold text-primary bg-primary/10"onClick={() => onAction(selectedMesa,'cuenta')}
- disabled={total === 0 || !activeComanda?.confirmada}
- >
- <Check size={18} weight="bold"className="mr-1.5"/>
- Pedir Cuenta
- </Button>
-
- <Button
- variant="secondary"className="w-full h-10 font-bold text-blue-600 bg-blue-50"onClick={() => {
+ <ComandaAcciones
+ enCuenta={activeComanda?.estado ==='cuenta'}
+ total={total}
+ saldoPendiente={saldoPendiente}
+ hayConfirmadaCocina={hayConfirmadaCocina}
+ hayNuevosCocina={hayNuevosCocina}
+ nuevosCocinaCount={nuevosCocina.length}
+ sinItemsCocina={sinItemsCocina}
+ confirmada={!!activeComanda?.confirmada}
+ sinProductos={comandaItems.length === 0}
+ mesaSinItems={mesaSinItems}
+ onConfirmarCocina={handleConfirmOrder}
+ onPedirCuenta={handlePedirCuenta}
+ onCargarHabitacion={() => {
  if (activeRoomAccounts.length === 0) {
  showToast.error('Aviso','No hay habitaciones activas para cargar.');
  return;
  }
  setShowRoomChargeModal(true);
  }}
- disabled={comandaItems.length === 0 || !activeComanda?.confirmada}
- >
- <Bed size={18} weight="bold"className="mr-1.5"/> Cargar Hab.
- </Button>
- {mesaSinItems ? (
- // Mesa abierta sin ningún pedido (el cliente se fue): se cierra
- // directo, sin diálogo de motivo.
- <Button
- variant="destructive"className="w-full h-10 font-bold"onClick={() => onAction(selectedMesa,'cerrar_vacia')}
- >
- Cerrar mesa
- </Button>
- ) : (
- <Button
- variant="ghost"className="w-full h-10 font-bold text-destructive"onClick={() => onAction(selectedMesa,'cancelar')}
- >
- Anular
- </Button>
- )}
- </div>
- ) : (
- <div className="grid grid-cols-2 gap-2">
- <Button
- variant="secondary"className="w-full h-10 font-bold text-amber-600 bg-amber-50"onClick={handlePrintPrecuenta}
- >
- <Printer size={18} weight="bold"className="mr-1.5"/> Pre-cuenta
- </Button>
- <Button
- className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"onClick={() => setCloseCuentaModalOpen(true)}
- disabled={total === 0}
- >
- <Check size={18} weight="bold"className="mr-1.5"/> Cobrar Cuenta
- </Button>
-
- <Button
- variant="secondary"className="w-full h-10 font-bold text-violet-600 bg-violet-50"onClick={() => onAction(selectedMesa,'dividido')}
- disabled={total === 0 || saldoPendiente <= 0.001}
- title={saldoPendiente <= 0.001 ?'La cuenta ya está pagada en su totalidad': undefined}
- >
- <Scissors size={18} weight="bold"className="mr-1.5"/> Dividir Cuenta
- </Button>
- <Button
- variant="secondary"className="w-full h-10 font-bold text-muted-foreground bg-muted"onClick={() => onAction(selectedMesa,'reabrir')}
- disabled={hayCortesia}
- title={hayCortesia ?'No se puede reabrir: esta cuenta ya tiene un ítem de cortesía aplicado': undefined}
- >
- <ArrowCounterClockwise size={18} weight="bold"className="mr-1.5"/> Reabrir
- </Button>
- </div>
- )}
+ onCerrarVacia={() => onAction(selectedMesa,'cerrar_vacia')}
+ onAnular={() => onAction(selectedMesa,'cancelar')}
+ hayCortesia={hayCortesia}
+ onPrecuenta={handlePrintPrecuenta}
+ onCobrar={() => setCloseCuentaModalOpen(true)}
+ onDividirCuenta={() => onAction(selectedMesa,'dividido')}
+ onReabrir={() => onAction(selectedMesa,'reabrir')}
+ />
  </>
  ) : editingItem.anulado ? (
  // Estado terminal: un ítem anulado no admite ninguna acción más,
@@ -1176,120 +890,22 @@ export function SidebarDetails({
  Cerrar
  </Button>
  </div>
- ) : esItemBloqueado(editingItem) ? (
- // Ítem ya confirmado/enviado a cocina: no se edita ni se borra, solo
- // se puede anular (con motivo) si ya no está disponible.
- <div className="flex flex-col gap-3">
- <div className="flex items-center justify-between">
- <span className="flex items-center gap-1.5 min-w-0 font-extrabold text-base text-foreground">
- <CheckCircle size={16} weight="fill"className="text-emerald-500/70 shrink-0"aria-label="Confirmado"/>
- <span className="truncate">{editingItem.nombre}</span>
- </span>
- <Button variant="ghost"size="icon"className="h-6 w-6 shrink-0"onClick={() => setEditingItem(null)}>
- <X size={14} />
- </Button>
- </div>
- <p className="text-[11px] text-muted-foreground">
- Este ítem ya fue confirmado y no puede modificarse. Si ya no está disponible, anúlalo.
- </p>
- {!anulandoItem ? (
- <Button
- variant="destructive"className="w-full bg-destructive/10 text-destructive"onClick={() => setAnulandoItem(true)}
- >
- <Trash size={14} className="mr-1"/> Anular ítem
- </Button>
  ) : (
- <div className="flex items-center gap-2">
- <Input
- type="text"placeholder="Motivo de anulación"value={anularMotivo}
- onChange={(e) => setAnularMotivo(e.target.value)}
- className="h-8 text-xs flex-1"/>
- <Button type="button"variant="destructive"size="sm"onClick={handleAnularItem} className="h-8 text-xs font-bold shrink-0">
- Confirmar
- </Button>
- <Button type="button"variant="ghost"size="sm"onClick={() => { setAnulandoItem(false); setAnularMotivo(''); }} className="h-8 text-xs shrink-0">
- Cancelar
- </Button>
- </div>
- )}
- {/* Cortesía: solo al pedir cuenta — un item que se regala (cumpleañero,
- guía de agencia, etc.) se decide al cerrar, no durante el servicio. El
- item sigue yendo a cocina normal, solo cambia el cobro a $0. */}
- {activeComanda?.estado ==='cuenta'&& !(editingItem.cortesia_cantidad > 0) && (
- !marcandoCortesia ? (
- <Button
- type="button"variant="secondary"className="w-full font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100"onClick={() => setMarcandoCortesia(true)}
- >
- <GiftIcon size={14} className="mr-1"/> Marcar como cortesía
- </Button>
- ) : (
- <div className="flex items-center gap-2">
- <Input
- type="text"placeholder="Motivo de cortesía"value={cortesiaMotivo}
- onChange={(e) => setCortesiaMotivo(e.target.value)}
- className="h-8 text-xs flex-1"/>
- <Button type="button"size="sm"onClick={handleMarcarCortesia} className="h-8 text-xs font-bold shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white">
- Confirmar
- </Button>
- <Button type="button"variant="ghost"size="sm"onClick={() => { setMarcandoCortesia(false); setCortesiaMotivo(''); }} className="h-8 text-xs shrink-0">
- Cancelar
- </Button>
- </div>
- )
- )}
- {editingItem.cortesia_cantidad > 0 && (
- <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col gap-0.5">
- <span className="text-[11px] font-bold text-emerald-700">Cortesía aplicada</span>
- {editingItem.cortesia_motivo && (
- <span className="text-[10px] text-emerald-700/80">Motivo: {editingItem.cortesia_motivo}</span>
- )}
- </div>
- )}
- </div>
- ) : (
- <div className="flex flex-col gap-3">
- <div className="flex items-center justify-between">
- <span className="font-extrabold text-xs text-foreground">Editando Producto</span>
- <Button variant="ghost"size="icon"className="h-6 w-6"onClick={() => setEditingItem(null)}>
- <X size={14} />
- </Button>
- </div>
-
- <div className="flex items-center justify-center gap-4">
- <Button
- variant="outline"size="icon"className="h-8 w-8 rounded-full"onClick={() => setEditCantidad(Math.max(1, editCantidad - 1))}
- >
- <Minus size={14} />
- </Button>
- <span className="font-black text-lg text-foreground w-6 text-center">{editCantidad}</span>
- <Button
- variant="outline"size="icon"className="h-8 w-8 rounded-full"onClick={() => setEditCantidad(editCantidad + 1)}
- >
- <Plus size={14} />
- </Button>
- </div>
-
- {editingMenuItem?.modificadores && editingMenuItem.modificadores.length > 0 && (
- <Button
- type="button"variant="secondary"className="w-full font-bold text-primary bg-primary/10"onClick={() => setEditingModifiers(true)}
- >
- Editar opciones
- </Button>
- )}
-
- <div className="grid grid-cols-2 gap-2">
- <Button
- variant="destructive"className="w-full bg-destructive/10 text-destructive"onClick={handleDeleteItem}
- >
- <Trash size={14} className="mr-1"/> Eliminar
- </Button>
- <Button
- className="w-full"onClick={handleUpdateItem}
- >
- Guardar
- </Button>
- </div>
- </div>
+ <ItemActionsPanel
+ key={editingItem.id}
+ item={editingItem}
+ confirmado={esItemBloqueado(editingItem)}
+ destinos={activeComanda?.estado ==='cuenta'? [] : destinosMover.map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
+ ocultarEstado={activeComanda?.estado ==='cuenta'}
+ tieneOpciones={!!editingMenuItem?.modificadores && editingMenuItem.modificadores.length > 0}
+ onClose={() => setEditingItem(null)}
+ onGuardar={handleUpdateItem}
+ onEliminar={handleDeleteItem}
+ onEditarOpciones={() => setEditingModifiers(true)}
+ onMover={handleMoverItem}
+ onAnular={handleAnularItem}
+ onCortesia={handleMarcarCortesia}
+ />
  )}
  </footer>
  )}
@@ -1298,7 +914,7 @@ export function SidebarDetails({
  opened={showPagosModal}
  onClose={() => setShowPagosModal(false)}
  pagos={[...pagos, ...pagosDeVentas]}
- totalPagado={totalPagado}
+ totalPagado={[...pagos, ...pagosDeVentas].reduce((acc: number, p: any) => acc + (p.monto ?? 0), 0)}
  />
 
  <SidebarComandaIvaModal
@@ -1319,6 +935,9 @@ export function SidebarDetails({
  opened={closeCuentaModalOpen}
  onClose={() => setCloseCuentaModalOpen(false)}
  saldoPendiente={saldoPendiente}
+ anticipo={anticipo.disponible}
+ anticipoUsar={anticipoUsar}
+ onAnticipoUsarChange={setAnticipoUsarInput}
  closePayerName={closePayerName}
  setClosePayerName={setClosePayerName}
  procesando={procesandoCierre}
@@ -1327,7 +946,13 @@ export function SidebarDetails({
  enCursoRef.current = true;
  setProcesandoCierre(true);
  try {
- if (saldoPendiente > 0.01) {
+ // Anticipo de la mesa: se usa (cubre parte o todo el saldo) o se ignora y
+ // se cobra todo aparte. Todo se registra en la MISMA venta del anticipo.
+ const hayAnticipo = anticipo.disponible > 0.001;
+ const aplica = hayAnticipo ? anticipoUsar : 0;
+ const cobrarAhora = Math.max(0, saldoPendiente - aplica);
+
+ if (saldoPendiente > 0.01 || hayAnticipo) {
  await updateRxComanda(activeComanda.id, {
  total: total,
  updated_at: new Date().toISOString(),
@@ -1342,22 +967,45 @@ export function SidebarDetails({
  // eso es lo operativamente crítico, el ajuste se puede corregir
  // después a mano en Centro de Ventas.
  try {
- if (ventaVigente) {
- // Ya existe una venta sobre esta comanda (p.ej. abonos de
- // reserva previos a asignar mesa, o un cobro por división
- // desde SidebarSplit) — se completa esa misma venta en vez de
- // crear una paralela. Igual que el flujo sin reserva (rama
- // `else`), el saldo pendiente queda como 'ajuste' — NO se
- // auto-cobra con un 'pago' aquí, el cobro real se ancla
- // después en Centro de Ventas.
- // Se agrega directamente `saldoPendiente` (lo que falta por
- // cobrar, ya descontando pagos y ajustes de split previos —
- // ver `totalPagado`/`totalPagadoVentas` más arriba) en vez de
- // recalcular "total - ajustes previos": ese recálculo asumía
- // que todo lo ya cobrado de esta venta estaba en movimientos
- // 'ajuste', pero un split registra el cobro también como
- // 'ajuste' (ver SidebarSplit) y quedaba contado dos veces,
- // dando un delta ~0 y perdiendo el saldo real al cerrar.
+ if (hayAnticipo) {
+ const ventaBase = anticipo.ventas[0].venta;
+ // Lo que se usa del anticipo queda anotado (movimiento neutro) en la
+ // venta que lo contiene, para que las otras cuentas de la mesa vean
+ // el disponible real.
+ for (const parte of repartirAnticipo(anticipo, aplica)) {
+ await agregarVentaMovimiento({
+ venta_id: parte.ventaId,
+ tipo:'comentario',
+ motivo: textoAplicado(parte.monto, activeComanda.folio),
+ });
+ }
+ // Si el anticipo de ESTA comanda queda sin usar (total o parcialmente),
+ // se deja la marca igual para que siga disponible para las otras cuentas
+ // de la mesa cuando esta comanda ya esté cerrada.
+ const conParte = new Set(repartirAnticipo(anticipo, aplica).map(p => p.ventaId));
+ for (const { venta } of anticipo.ventas) {
+ if (venta.comanda_id === activeComanda.id && !conParte.has(venta.id) && !tieneAnticipoAplicado(venta)) {
+ await agregarVentaMovimiento({ venta_id: venta.id, tipo:'comentario', motivo: textoAplicado(0, activeComanda.folio) });
+ }
+ }
+ // Lo que falta (o todo, si no se usa el anticipo) es un cobro nuevo
+ // dentro de la misma venta.
+ if (cobrarAhora > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaBase.id,
+ tipo:'ajuste',
+ monto: cobrarAhora,
+ motivo:'Ajuste al cerrar cuenta',
+ });
+ }
+ // Lo que no se use queda a favor de la mesa en la misma venta (no hay
+ // vuelto: no se devuelve nada al cerrar).
+ } else if (ventaVigente) {
+ // Ya existe una venta sobre esta comanda — se completa esa misma venta
+ // en vez de crear una paralela. El saldo pendiente queda como 'ajuste'
+ // (no se auto-cobra con un 'pago'; el cobro real se ancla después en
+ // Centro de Ventas). Se agrega directamente `saldoPendiente`, que ya
+ // descuenta los cobros de división (ver `totalPagadoVentas`).
  if (saldoPendiente > 0.001) {
  await agregarVentaMovimiento({
  venta_id: ventaVigente.id,
@@ -1404,143 +1052,46 @@ export function SidebarDetails({
  }}
  />
 
- <Dialog open={showRoomChargeModal} onOpenChange={(open) => { if (!procesandoHab) setShowRoomChargeModal(open); }}>
- <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
- <DialogHeader className="border-b border-border pb-3 text-left">
- <DialogTitle className="font-extrabold text-base text-foreground">
- Cargar a habitación abierta
- </DialogTitle>
- <DialogDescription className="text-xs text-muted-foreground">
- Selecciona una habitación activa para transferir la comanda #{activeComanda?.folio}.
- </DialogDescription>
- </DialogHeader>
+ <RoomChargeDialog
+ opened={showRoomChargeModal}
+ onOpenChange={setShowRoomChargeModal}
+ folio={activeComanda?.folio}
+ cuentas={activeRoomAccounts}
+ mesas={allMesas}
+ procesando={procesandoHab}
+ onConfirm={handleTransferirHabitacion}
+ />
 
- <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
- {activeRoomAccounts.map((cuenta) => {
- const roomMesa = allMesas.find((m) => m.id === cuenta.mesa_id);
- const fullName = roomMesa?.nombre || cuenta.mesa_id;
- const roomNum = fullName.match(/Hab\.\s*(\d+)/)?.[1] || fullName.split('')[0];
- const roomType = fullName.match(/\(([^)]+)\)/)?.[1] ||'';
- const isSelected = selectedRoomChargeId === cuenta.id;
+ <DividirMesaDialog
+ opened={confirmDividir}
+ onOpenChange={setConfirmDividir}
+ procesando={activandoMultiple}
+ onConfirm={handleConfirmDividir}
+ />
 
- return (
- <button
- key={cuenta.id}
- type="button"onClick={() => { setSelectedRoomChargeId(cuenta.id); setSelectedSubcuentaId(null); }}
- className={cn("flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none",
- isSelected
- ?"border-primary bg-primary/10 shadow-sm":"border-border bg-card")}
- >
- <div className="flex items-center gap-3 min-w-0">
- <div className={cn("w-10 h-10 rounded-xl flex flex-col items-center justify-center font-black text-sm shrink-0 leading-none",
- isSelected ?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground")}>
- <span className="text-[9px] uppercase font-extrabold opacity-70">HAB</span>
- <span>{roomNum}</span>
- </div>
- <div className="flex flex-col min-w-0">
- <span className="font-extrabold text-sm text-foreground truncate">{cuenta.huesped}</span>
- {roomType && <span className="text-xs font-semibold text-muted-foreground truncate">{roomType}</span>}
- </div>
- </div>
- {isSelected && (
- <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-sm">
- <Check size={14} weight="bold"/>
- </div>
- )}
- </button>
- );
- })}
- </div>
+ <CuentaConPendientesDialog
+ opened={confirmCuentaPendientes}
+ onOpenChange={setConfirmCuentaPendientes}
+ pendientes={unidadesPendientesCocina}
+ onConfirm={() => { setConfirmCuentaPendientes(false); onAction(selectedMesa,'cuenta'); }}
+ />
 
- {(() => {
- const cuentaSel = activeRoomAccounts.find((c) => c.id === selectedRoomChargeId);
- const subs = cuentaSel?.subcuentas ?? [];
- if (subs.length === 0) return null;
- return (
- <div className="flex flex-col gap-2 pt-3 border-t border-border">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cargar a la subcuenta</span>
- <SubcuentaChips subcuentas={subs} value={selectedSubcuentaId} onChange={setSelectedSubcuentaId} nombrePrincipal={cuentaSel?.principal_nombre || 'Principal'} />
- </div>
- );
- })()}
+ <AnticipoDetalleDialog
+ opened={anticipoDetalleOpen}
+ onOpenChange={setAnticipoDetalleOpen}
+ disponible={anticipo.disponible}
+ ventas={anticipo.ventas}
+ />
 
- <div className="flex flex-col gap-2 pt-3 border-t border-border">
- <Button
- type="button"onClick={async () => {
- if (!selectedRoomChargeId || !activeComanda || enCursoRef.current) return;
- enCursoRef.current = true;
- setProcesandoHab(true);
- try {
- await updateRxComanda(activeComanda.id, {
- habitacion_cuenta_id: selectedRoomChargeId,
- habitacion_subcuenta_id: selectedSubcuentaId,
- total,
- confirmada: true,
- sincronizado: true,
- });
- await liberarMesaSiSinOperativas(activeComanda.mesa_id);
- setShowRoomChargeModal(false);
- showToast.success('Transferencia exitosa','La comanda fue asignada a la habitación.');
- onResuelta();
- } catch (error) {
- console.error(error);
- showToast.error('Error','No se pudo transferir la comanda a la habitación.');
- } finally {
- enCursoRef.current = false;
- setProcesandoHab(false);
- }
- }}
- disabled={!selectedRoomChargeId || procesandoHab}
- className="w-full bg-primary text-primary-foreground font-bold h-11 text-sm shadow-md gap-1.5">
- {procesandoHab ? (<><CircleNotch size={18} className="animate-spin"/> Transfiriendo…</>) :'Transferir a Habitación'}
- </Button>
- <Button
- type="button"variant="ghost"disabled={procesandoHab}onClick={() => setShowRoomChargeModal(false)}
- className="w-full text-muted-foreground">
- Cancelar
- </Button>
- </div>
- </DialogContent>
- </Dialog>
-
- <Dialog open={changeMesaModal} onOpenChange={setChangeMesaModal}>
- <DialogContent className="max-w-lg">
- <DialogHeader>
- <DialogTitle>Cambiar Mesa</DialogTitle>
- <DialogDescription>
- Selecciona la nueva mesa para la orden #{activeComanda?.folio}. Solo se muestran mesas libres.
- </DialogDescription>
- </DialogHeader>
- {mesasDisponiblesParaCambio.length === 0 ? (
- <p className="text-sm text-muted-foreground text-center py-6">
- No hay mesas libres disponibles en este momento.
- </p>
- ) : (
- <div className="grid grid-cols-4 gap-2 max-h-80 overflow-y-auto py-1">
- {mesasDisponiblesParaCambio.map((mesa) => (
- <button
- key={mesa.id}
- type="button"
- onClick={() => setMesaSeleccionadaParaCambio(mesa)}
- className={cn("aspect-square rounded-xl border flex flex-col items-center justify-center gap-0.5 font-black text-base transition-colors cursor-pointer",
- mesaSeleccionadaParaCambio?.id === mesa.id
- ?"bg-primary text-primary-foreground border-primary"
- :"border-border bg-muted/40 hover:bg-muted")}>
- {mesa.nombre.replace(/^Mesa\s*/i,'')}
- </button>
- ))}
- </div>
- )}
- <div className="flex items-center justify-end gap-2 pt-2">
- <Button variant="outline"onClick={() => setChangeMesaModal(false)}>
- Cancelar
- </Button>
- <Button disabled={!mesaSeleccionadaParaCambio} onClick={handleConfirmChangeMesa}>
- Confirmar
- </Button>
- </div>
- </DialogContent>
- </Dialog>
+ <CambiarMesaDialog
+ opened={changeMesaModal}
+ onOpenChange={setChangeMesaModal}
+ folio={activeComanda?.folio}
+ mesas={mesasDisponiblesParaCambio}
+ seleccionada={mesaSeleccionadaParaCambio}
+ onSelect={setMesaSeleccionadaParaCambio}
+ onConfirm={handleConfirmChangeMesa}
+ />
 
  <TicketPreviewModal
  opened={previewOpened}

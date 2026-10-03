@@ -4,7 +4,7 @@ import'dayjs/locale/es';
 import { X, Calendar, User, Receipt, Bed } from'@phosphor-icons/react';
 import { type Mesa } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
-import { createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
+import { initVerticalRxDb, createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
 import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -33,6 +33,18 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  const clienteMatch = clienteSeleccionado?.nombre.trim().toLowerCase() === huesped.trim().toLowerCase()
  ? clienteSeleccionado
  : null;
+ // Evita duplicar la cuenta si la habitación ya tiene una activa
+ // (otro dispositivo, o la mesa figuraba libre por error).
+ const rxDb = await initVerticalRxDb();
+ const existente = await rxDb.habitacion_cuentas.findOne({
+ selector: { mesa_id: selectedMesa.id, estado:'activa', _deleted: { $ne: true } }
+ }).exec();
+ if (existente) {
+ await updateRxMesa(selectedMesa.id, { estado:'ocupada'});
+ showToast.error('La habitación ya tiene una cuenta abierta');
+ onClose();
+ return;
+ }
  const cuentaId = crypto.randomUUID();
  const now = new Date().toISOString();
 

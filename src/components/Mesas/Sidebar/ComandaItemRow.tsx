@@ -26,78 +26,64 @@ interface ComandaItemRowProps {
  isLocked?: boolean;
 }
 
-export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClick, isSelected, isLocked }: ComandaItemRowProps) {
+export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSelected, isLocked }: ComandaItemRowProps) {
  const pagado = item.pagado_cantidad || 0;
  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
  const isAnulado = !!item.anulado;
- const isCortesia = (item.cortesia_cantidad || 0) > 0;
+ const isCortesia = (item.cortesia_cantidad || 0) > 0 || !!item.cortesia_motivo;
  const isReadOnly = !onClick;
- const isOdd = index % 2 === 1;
 
+ const dinero = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+ const tachado = isAnulado || isFullyPaid;
+
+ // Lista legible: cantidad ("2") | nombre y detalle en texto plano | precio.
+ // Sin fondos ni recuadros; la jerarquía la dan el peso y el color del texto.
  const content = (
- <div className="flex items-center gap-3 w-full px-4 py-3">
- {/* Badge de cantidad */}
- <div className={cn("w-8 h-8 rounded-md font-bold text-sm flex items-center justify-center border shrink-0",
- isAnulado ?"bg-destructive/10 border-destructive/30 text-destructive": isFullyPaid ?"bg-emerald-100 border-emerald-300 text-emerald-800":"bg-muted border-border text-foreground")}>
+ <div className="flex items-start gap-3 w-full px-4 py-3">
+ <span className={cn("w-8 shrink-0 self-center text-center text-xl leading-6 font-bold tracking-[-0.04em]",
+ isAnulado ?"text-destructive": isFullyPaid ?"text-emerald-700":"text-primary")}>
  {item.cantidad}
- </div>
+ </span>
 
- {/* Contenido */}
- <div className="flex flex-col flex-1 min-w-0">
- <div className="flex items-center justify-between gap-2">
- <span className={cn("font-bold text-base truncate",
+ <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+ <div className="flex items-start justify-between gap-3">
+ <span className={cn("font-bold text-[17px] leading-6 break-words",
  isAnulado ?"line-through text-muted-foreground":"text-foreground")}>
  {item.nombre}
  </span>
- <span className="flex items-center gap-1.5 shrink-0">
- <span className={cn("font-black text-base",
- (isAnulado || isFullyPaid) ?"line-through text-muted-foreground":"text-foreground")}>
- ${(item.precio * item.cantidad).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+ <span className="flex items-center gap-1.5 shrink-0 leading-6">
+ <span className={cn("font-medium text-base tabular-nums",
+ tachado ?"line-through text-muted-foreground":"text-foreground")}>
+ {dinero(item.precio * item.cantidad)}
  </span>
  {isLocked && !isAnulado && <CheckCircle size={14} weight="fill"className="text-emerald-500/70 shrink-0"aria-label="Confirmado"/>}
  </span>
  </div>
 
- {(item.modificadores?.length || pagado > 0 || item.cantidad > 1 || isAnulado || isCortesia) ? (
- <div className="flex items-center justify-between gap-2 mt-1">
- <div className="flex items-center gap-1 flex-wrap">
- {item.modificadores && item.modificadores.length > 0 &&
- item.modificadores.map((mod, i) => (
- <span key={`${mod}-${i}`} className="px-1.5 py-0.5 rounded bg-muted border border-border text-foreground font-semibold text-xs">
- {mod}
- </span>
- ))
- }
- {isAnulado && (
- <span className="px-1.5 py-0.5 rounded font-bold text-xs text-white bg-destructive">
- ANULADO
+ {item.modificadores && item.modificadores.length > 0 && (
+ <span className="flex items-baseline gap-2 text-[15px] font-medium text-[#9a6b3d] leading-snug">
+ <span aria-hidden="true"className="w-1.5 h-1.5 rounded-full bg-[#9a6b3d] shrink-0 translate-y-[-1px]"/>
+ <span>{item.modificadores.join(' · ')}</span>
  </span>
  )}
- {isCortesia && (
- <span className="px-1.5 py-0.5 rounded font-bold text-xs text-white bg-emerald-600">
- CORTESÍA
- </span>
- )}
+
+ {(isAnulado || isCortesia || pagado > 0) && (
+ <div className="flex items-center gap-2 flex-wrap text-[13px] font-bold">
+ {isAnulado && <span className="text-destructive">ANULADO</span>}
+ {isCortesia && <span className="text-emerald-700">CORTESÍA</span>}
  {pagado > 0 && (
- <span className={cn("px-1.5 py-0.5 rounded font-bold text-xs text-white",
- isFullyPaid ?"bg-emerald-600":"bg-amber-600")}>
+ <span className={isFullyPaid ?"text-emerald-700":"text-amber-700"}>
  {isFullyPaid ?'Pagado':`${pagado} pagados`}
  </span>
  )}
  </div>
- {item.cantidad > 1 && (
- <span className="text-xs text-muted-foreground font-semibold shrink-0">
- ${item.precio.toLocaleString('en-US', { minimumFractionDigits: 2 })} c/u
- </span>
  )}
- </div>
- ) : null}
 
  {isAnulado && item.anulado_motivo && (
- <span className="text-xs text-muted-foreground mt-0.5 truncate">Motivo: {item.anulado_motivo}</span>
+ <span className="text-[15px] text-muted-foreground">Motivo: {item.anulado_motivo}</span>
  )}
  {isCortesia && item.cortesia_motivo && (
- <span className="text-xs text-muted-foreground mt-0.5 truncate">Motivo: {item.cortesia_motivo}</span>
+ <span className="text-[15px] text-muted-foreground">Motivo: {item.cortesia_motivo}</span>
  )}
  </div>
  </div>
@@ -106,7 +92,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  return (
  <div className={cn("w-full transition-opacity", (isFullyPaid || isAnulado) &&"opacity-60")}>
  {isReadOnly ? (
- <div className={cn("w-full text-left", isOdd &&"bg-muted/70")}>
+ <div className="w-full text-left">
  {content}
  </div>
  ) : (
@@ -115,11 +101,13 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, index, onClic
  className={cn("w-full text-left cursor-pointer focus:outline-none focus-visible:bg-primary/10 border-l-4",
  isSelected
  ?"bg-primary/10 border-l-primary"
- :cn("border-l-transparent", isOdd &&"bg-muted/70"))}
+ :"border-l-transparent")}
  >
  {content}
  </button>
  )}
+ {/* Separador tenue, con margen para no tocar los bordes */}
+ <div aria-hidden="true"className="mx-4 border-b border-border/60"/>
  </div>
  );
 });

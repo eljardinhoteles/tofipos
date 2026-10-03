@@ -1,3 +1,4 @@
+import { ComandaTotales } from'./ComandaTotales';
 import { useEffect, useState, useMemo } from'react';
 import { X, Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
@@ -267,22 +268,17 @@ export function SidebarReceiptViewer({
  ))}
  </main>
 
- {/* Totales y Acciones — mismo bloque que SidebarDetails */}
+ {/* Totales y Acciones — mismo resumen que SidebarDetails (ComandaTotales) */}
  <footer className="p-4 border-t border-border bg-card flex flex-col gap-3 shrink-0">
- <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-muted/60 text-sm font-semibold text-muted-foreground">
- <div className="flex items-center justify-between">
- <span>Subtotal</span>
- <span className="font-bold text-foreground">${subtotal.toFixed(2)}</span>
- </div>
- <div className="flex items-center justify-between">
- <span>IVA ({ivaPorcentaje}%)</span>
- <span className="font-bold text-foreground">${ivaCalculado.toFixed(2)}</span>
- </div>
- <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
- <span className="text-base font-black text-foreground">Total Pagado</span>
- <span className="text-xl font-black text-emerald-600">${totalPagado.toFixed(2)}</span>
- </div>
- </div>
+ <ComandaTotales
+ tarjeta
+ subtotal={subtotal}
+ iva={ivaCalculado}
+ ivaPorcentaje={ivaPorcentaje}
+ total={totalPagado}
+ etiquetaTotal="Total Pagado"
+ tono="success"
+ />
 
  <div className={cn("grid gap-2", esComandaEnHabitacionActiva ?"grid-cols-1":"grid-cols-2")}>
  <Button

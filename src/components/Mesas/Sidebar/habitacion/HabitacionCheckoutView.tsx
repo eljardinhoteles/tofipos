@@ -33,6 +33,13 @@ interface CortesiaDraft {
   motivo: string;
 }
 
+// UUID v4-formato derivado de un texto (SHA-256), para ids idempotentes.
+async function idDeterminista(texto: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  const h = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 export function HabitacionCheckoutView({
   cuenta,
   selectedMesa,
@@ -83,7 +90,12 @@ export function HabitacionCheckoutView({
       const rxDb = await initVerticalRxDb();
       const docs = await rxDb.comandas.find({ selector: { habitacion_cuenta_id: cuenta.id, _deleted: { $ne: true } } }).exec();
       if (!alive) return;
-      const list = docs.map((d: any) => d.toJSON());
+      // Solo comandas pendientes de cobro: las ya cobradas (cerrado/facturado)
+      // o anuladas de un checkout parcial por subcuenta no deben volver a
+      // seleccionarse (doble venta) ni contar como "pendientes" al decidir si
+      // se cierra la cuenta y se libera la mesa.
+      const list = docs.map((d: any) => d.toJSON())
+        .filter((c: any) => !['cerrado', 'facturado', 'anulada'].includes(c.estado));
       setComandas(list);
       // Por defecto se seleccionan todas las precuentas, como antes; el
       // usuario puede desmarcar las que no quiere pagar en este cobro.
@@ -227,9 +239,32 @@ export function HabitacionCheckoutView({
       }
     }
 
+    if (isProcessing) return;
     setIsProcessing(true);
     try {
       const now = new Date().toISOString();
+
+      // 1) La venta va primero: si el proceso se interrumpe después, las
+      // comandas siguen pendientes y el reintento no pierde el cobro. El id
+      // es determinista (cuenta + comandas) para que el reintento no
+      // duplique la venta en Centro de Ventas.
+      if (total > 0.001) {
+        const rxDb = await initVerticalRxDb();
+        const ventaId = await idDeterminista(`hab-checkout:${cuenta.id}:${comandasSeleccionadas.map(c => c.id).sort().join(',')}`);
+        const yaExiste = await rxDb.ventas.findOne(ventaId).exec();
+        if (!yaExiste) {
+          const folios = comandasSeleccionadas.map(c => `#${c.folio}`).join(', ');
+          await createRxVenta({
+            id: ventaId,
+            origen:'habitacion',
+            tipo:'directa',
+            cliente_id: cuenta.cliente_id || undefined,
+            cliente_nombre: payerName.trim() || cuenta.huesped || undefined,
+            referencia: `${selectedMesa.nombre}${etiquetaSubcuenta ? ` · ${etiquetaSubcuenta}` : ''} · Comandas ${folios}`,
+            organization_id: localStorage.getItem('pos_active_org_id') ||'',
+          }, total);
+        }
+      }
 
       for (const c of comandasSeleccionadas) {
         const items = itemsByComanda[c.id] || [];
@@ -258,24 +293,6 @@ export function HabitacionCheckoutView({
       if (!quedanPendientes) {
         await updateRxHabitacionCuenta(cuenta.id, { estado:'cerrada', check_out: now.split('T')[0] });
         await updateRxMesa(selectedMesa.id, { estado:'libre'});
-      }
-
-      // Registra el cobro en Centro de Ventas — una sola venta consolidada
-      // por todo el checkout, sin importar cuántas comandas se cobraron a
-      // la vez. Sin esto, el checkout de habitación nunca generaba el
-      // registro que Centro de Ventas lista (a diferencia del checkout de
-      // mesa, que sí lo hacía vía createRxVenta).
-      if (total > 0.001) {
-        const folios = comandasSeleccionadas.map(c => `#${c.folio}`).join(', ');
-        await createRxVenta({
-          id: crypto.randomUUID(),
-          origen:'habitacion',
-          tipo:'directa',
-          cliente_id: cuenta.cliente_id || undefined,
-          cliente_nombre: payerName.trim() || cuenta.huesped || undefined,
-          referencia: `${selectedMesa.nombre}${etiquetaSubcuenta ? ` · ${etiquetaSubcuenta}` : ''} · Comandas ${folios}`,
-          organization_id: localStorage.getItem('pos_active_org_id') ||'',
-        }, total);
       }
 
       showToast.success('Checkout completado');
@@ -325,7 +342,7 @@ export function HabitacionCheckoutView({
 
         <div className="flex flex-col gap-1.5">
           <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">
-            <Receipt size={14} /> Precuentas a cobrar
+            <Receipt size={14} weight="bold" /> Precuentas a cobrar
           </span>
           <div className="flex flex-col rounded-xl border border-border overflow-hidden">
             {comandas.map((c, index) => {
@@ -372,7 +389,7 @@ export function HabitacionCheckoutView({
                         )}
                         <span className="font-black text-sm text-foreground">${totalNeto.toFixed(2)}</span>
                       </div>
-                      <CaretDown size={14} className={cn("transition-transform", isExpanded &&"rotate-180")} />
+                      <CaretDown size={16} weight="bold" className={cn("transition-transform", isExpanded &&"rotate-180")} />
                     </CollapsibleTrigger>
                   </div>
 
@@ -410,7 +427,7 @@ export function HabitacionCheckoutView({
                                 onClick={() => setDraft(item.id, { cantidad: enCortesia ? 0 : item.cantidad })}
                                 className={cn("shrink-0", enCortesia &&"bg-amber-100 text-amber-800 hover:bg-amber-100")}
                               >
-                                <Gift size={12} weight="bold" /> {enCortesia ?`Cortesía (${draft.cantidad}/${item.cantidad})`:'No cobrar'}
+                                <Gift size={14} weight="bold" /> {enCortesia ?`Cortesía (${draft.cantidad}/${item.cantidad})`:'No cobrar'}
                               </Button>
 
                               {enCortesia && item.cantidad > 1 && (
@@ -448,11 +465,14 @@ export function HabitacionCheckoutView({
 
       {/* Footer — mismo bloque de total que SidebarDetails/CuentaView */}
       <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
-        <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-muted/60 text-sm font-semibold text-muted-foreground">
+        <div className="flex flex-col gap-1.5 px-2 py-1 text-sm font-semibold text-muted-foreground">
           <div className="flex items-center justify-between">
-            <span className="text-base font-black text-foreground">
-              Total a Cobrar ({comandasSeleccionadas.length}/{comandas.length})
-            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-base font-black text-foreground">Total a Cobrar</span>
+              <span className="text-xs font-semibold text-muted-foreground">
+                {comandasSeleccionadas.length}/{comandas.length} precuentas
+              </span>
+            </div>
             <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
           </div>
         </div>
@@ -461,14 +481,14 @@ export function HabitacionCheckoutView({
           <Button
             type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
             onClick={() => handleImprimirConsolidado(false)}
-            className="w-full font-bold"
+            className="w-full h-10 font-bold text-amber-600 bg-amber-50"
           >
             <Printer size={18} weight="bold" className="mr-1.5" /> Completa
           </Button>
           <Button
             type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
             onClick={() => handleImprimirConsolidado(true)}
-            className="w-full font-bold"
+            className="w-full h-10 font-bold text-amber-600 bg-amber-50"
           >
             <Printer size={18} weight="bold" className="mr-1.5" /> Consumos
           </Button>
@@ -477,14 +497,14 @@ export function HabitacionCheckoutView({
           <Button
             type="button" disabled={isProcessing || comandasSeleccionadas.length === 0}
             onClick={() => setConfirmCobroOpened(true)}
-            className="w-full font-bold"
+            className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Cobrar
           </Button>
           <Button
             type="button" variant="ghost" disabled={isProcessing}
             onClick={onBack}
-            className="w-full font-bold"
+            className="w-full h-10 font-bold"
           >
             Cancelar
           </Button>

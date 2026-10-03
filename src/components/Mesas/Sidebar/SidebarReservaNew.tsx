@@ -68,7 +68,9 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  });
  sub = query.$.subscribe((docs: any[]) => {
  if (!alive) return;
- setZonas(docs.map((doc: any) => doc.toJSON()));
+ // Habitaciones y el piso sintético de reservas no son zonas del restaurante.
+ setZonas(docs.map((doc: any) => doc.toJSON())
+ .filter((z: any) => !['habitaciones', 'reservas'].includes(String(z.nombre ?? '').trim().toLowerCase())));
  });
  })().catch(() => {});
  return () => {

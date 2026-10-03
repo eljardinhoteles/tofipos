@@ -13,7 +13,13 @@ import {
 interface SidebarCloseCuentaModalProps {
  opened: boolean;
  onClose: () => void;
+ /** Lo que falta por cobrar de la cuenta, sin descontar el anticipo. */
  saldoPendiente: number;
+ /** Anticipo de la mesa disponible (0 = no hay, no se ofrece). */
+ anticipo?: number;
+ /** Cuánto del anticipo se aplica a esta cuenta (0 hasta min(anticipo, saldo)). */
+ anticipoUsar?: number;
+ onAnticipoUsarChange?: (monto: number) => void;
  closePayerName: string;
  setClosePayerName: (val: string) => void;
  onConfirm: () => void;
@@ -25,11 +31,17 @@ export function SidebarCloseCuentaModal({
  opened,
  onClose,
  saldoPendiente,
+ anticipo = 0,
+ anticipoUsar = 0,
+ onAnticipoUsarChange,
  closePayerName,
  setClosePayerName,
  onConfirm,
  procesando = false
 }: SidebarCloseCuentaModalProps) {
+ const hayAnticipo = anticipo > 0.001;
+ const maxUsar = Math.min(anticipo, saldoPendiente);
+ const cobrarAhora = Math.max(0, saldoPendiente - anticipoUsar);
  return (
  <Dialog open={opened} onOpenChange={(open) => !open && !procesando && onClose()}>
  <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
@@ -44,8 +56,31 @@ export function SidebarCloseCuentaModal({
 
  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 flex flex-col">
  <span className="text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300">Total a Cobrar</span>
- <span className="font-black text-3xl text-emerald-600 dark:text-emerald-400">${saldoPendiente.toFixed(2)}</span>
+ <span className="font-black text-3xl text-emerald-600 dark:text-emerald-400">${cobrarAhora.toFixed(2)}</span>
  </div>
+
+ {hayAnticipo && (
+ <div className="flex flex-col gap-2 p-3 rounded-xl bg-sky-500/10 border border-sky-500/20">
+ <div className="flex items-center justify-between">
+ <Label className="font-semibold text-xs text-sky-800">Anticipo disponible</Label>
+ <span className="font-black text-sm text-sky-700">${anticipo.toFixed(2)}</span>
+ </div>
+ <div className="flex items-center gap-2">
+ <Input
+ type="number" step="0.01" min={0} max={maxUsar} value={anticipoUsar || ''} placeholder="0.00"
+ onChange={(e) => onAnticipoUsarChange?.(Math.min(maxUsar, Math.max(0, parseFloat(e.target.value) || 0)))}
+ className="h-10 font-bold bg-card"
+ />
+ <Button type="button" variant="outline" className="h-10 font-bold shrink-0 bg-card" onClick={() => onAnticipoUsarChange?.(maxUsar)}>Todo</Button>
+ <Button type="button" variant="outline" className="h-10 font-bold shrink-0 bg-card" onClick={() => onAnticipoUsarChange?.(0)}>Nada</Button>
+ </div>
+ <p className="text-[11px] text-sky-800/80">
+ {anticipo > maxUsar + 0.005
+ ? `Se usa hasta cubrir la cuenta. Quedan $${(anticipo - anticipoUsar).toFixed(2)} de anticipo sin usar.`
+ : 'Se descuenta de lo que se cobra ahora.'}
+ </p>
+ </div>
+ )}
 
  <div className="flex flex-col gap-1.5">
  <Label className="font-semibold text-xs text-muted-foreground">Nombre de quien paga</Label>

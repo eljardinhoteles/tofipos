@@ -3,12 +3,15 @@ import { type Reserva } from'../db/database';
 import { Clock, Users, CheckCircle, X } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
+import { cn } from'@/lib/utils';
 
 import { CalendarToolbar } from'../components/Reservas/CalendarToolbar';
 import { CalendarGrid } from'../components/Reservas/CalendarGrid';
 import { ProductSelector } from'../components/Mesas/ProductSelector';
 import { updateRxComanda, updateRxMesa, updateRxReserva, initVerticalRxDb } from'../db/rxdb';
 import { useRxReservas } from'../hooks/useRxReservas';
+import { useRxComandas } from'../hooks/useRxComandas';
+import { isOperativeComanda } from'../db/comandaState';
 import { toISO } from'../components/Reservas/reservaUtils';
 
 export default function ReservasV2() {
@@ -42,11 +45,20 @@ export default function ReservasV2() {
  // 'Reservas'): son placeholders que el sync crea en Supabase para
  // satisfacer la FK de comandas sin mesa física — nunca deben poder
  // asignarse como mesa real de una reserva.
- const mesasLibres = mesas.filter(m =>
- m.estado ==='libre'&&
- m.piso !=='Reservas'&&
+ // Mismas mesas que ofrece "Cambiar mesa": libres de verdad (sin comanda
+ // operativa apuntándoles, aunque mesa.estado quede desfasado) y sin
+ // habitaciones, que tienen su propio flujo de cuentas.
+ const { comandas } = useRxComandas() as { comandas: any[] };
+ const mesasOcupadas = new Set(comandas.filter(c => isOperativeComanda(c)).map(c => c.mesa_id));
+ const mesasLibres = mesas
+ .filter(m =>
+ m.estado !=='cuenta'&&
+ !mesasOcupadas.has(m.id) &&
+ m.piso?.toLowerCase() !=='reservas'&&
+ m.piso?.toLowerCase() !=='habitaciones'&&
  !/^(reserva_|delivery_|local_)/.test(m.id)
- );
+ )
+ .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
 
  useEffect(() => {
  let alive = true;
@@ -252,17 +264,27 @@ export default function ReservasV2() {
 
  <div className="flex flex-col gap-2">
  <label className="text-xs font-bold text-foreground">Mesa disponible</label>
- <select
- value={mesaSeleccionada ||''}
- onChange={(e) => setMesaSeleccionada(e.target.value || null)}
- className="h-10 px-3 text-xs bg-muted border border-border rounded-lg focus:outline-none focus:border-primary font-semibold">
- <option value="">Seleccionar mesa...</option>
+ {mesasLibres.length === 0 ? (
+ <p className="text-sm text-muted-foreground text-center py-6">
+ No hay mesas libres disponibles en este momento.
+ </p>
+ ) : (
+ <div className="grid grid-cols-4 gap-2 max-h-72 overflow-y-auto py-1">
  {mesasLibres.map(m => (
- <option key={m.id} value={m.id}>
- {m.nombre} ({m.piso ||'Sin zona'})
- </option>
+ <button
+ key={m.id}
+ type="button"
+ onClick={() => setMesaSeleccionada(mesaSeleccionada === m.id ? null : m.id)}
+ title={m.piso || 'Sin zona'}
+ className={cn("aspect-square rounded-xl border flex flex-col items-center justify-center font-black text-base transition-colors cursor-pointer",
+ mesaSeleccionada === m.id
+ ?"bg-primary text-primary-foreground border-primary"
+ :"border-border bg-muted/40 hover:bg-muted")}>
+ {m.nombre.replace(/^Mesa\s*/i,'')}
+ </button>
  ))}
- </select>
+ </div>
+ )}
  </div>
 
  <button

@@ -40,7 +40,7 @@ export function SidebarCambiarCliente({
         <div className="flex flex-col min-w-0">
           <h3 className="font-extrabold text-base text-foreground leading-tight">Cambiar Cliente</h3>
           <span className="text-[10px] font-bold text-muted-foreground truncate">
-            ORDEN #{folio} · {mesaNombre}
+            COMANDA #{folio} · {mesaNombre}
           </span>
         </div>
       </header>

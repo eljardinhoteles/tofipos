@@ -103,7 +103,7 @@ export function TicketPreviewModal({
  const safeText = stripEscPos(text ??'');
  const lines = safeText.split('\n');
  return (
- <div className="w-full text-foreground bg-card font-mono text-xs leading-snug whitespace-pre">
+ <div className="w-max min-w-full text-foreground font-mono text-[11px] sm:text-xs leading-snug whitespace-pre">
  {lines.map((line, idx) => (
  <div key={idx}>{line}</div>
  ))}
@@ -115,7 +115,7 @@ export function TicketPreviewModal({
 
  return (
  <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
- <DialogContent showCloseButton={false} className="max-w-md max-h-[90vh] flex flex-col gap-4 p-6">
+ <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 max-w-md max-h-[90vh] max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-screen max-sm:h-dvh max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2 text-base">
  <FileText size={18} className="text-primary"/> {title}
@@ -123,27 +123,27 @@ export function TicketPreviewModal({
  <DialogDescription className="sr-only">Vista previa del documento a imprimir</DialogDescription>
  </DialogHeader>
 
- <div className="flex-1 overflow-y-auto p-4 bg-muted border border-border rounded-xl shadow-inner">
+ <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4 bg-card border border-border rounded-xl">
  {renderFormattedContent(content)}
  </div>
 
  {isCounting ? (
- <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
- <Button type="button"variant="outline"onClick={cancelCountdown} className="font-bold text-xs gap-1.5">
+ <div className="grid grid-cols-2 items-center gap-2 pt-1 shrink-0">
+ <Button type="button"variant="outline"onClick={cancelCountdown} className="h-12 font-bold text-sm gap-1.5">
  <X size={16} /> Cancelar
  </Button>
- <span className="flex-1 text-center font-black text-sm text-emerald-600 tabular-nums">
+ <span className="text-center font-black text-sm text-emerald-600 tabular-nums">
  Imprimiendo en {countdown}…
  </span>
  </div>
  ) : (
- <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
- <Button type="button"variant="outline"onClick={onClose} className="font-bold text-xs">
+ <div className="grid grid-cols-2 gap-2 pt-1 shrink-0">
+ <Button type="button"variant="outline"onClick={onClose} className="h-12 font-bold text-sm">
  Cerrar
  </Button>
  <Button
  type="button"onClick={startCountdown}
- className="bg-emerald-600 text-white font-extrabold text-xs gap-1.5">
+ className="h-12 bg-emerald-600 text-white font-extrabold text-sm gap-1.5">
  <Printer size={16} /> Imprimir
  </Button>
  </div>

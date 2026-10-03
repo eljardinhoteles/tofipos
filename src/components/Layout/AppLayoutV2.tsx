@@ -278,7 +278,7 @@ export function AppLayoutV2() {
       <div className="flex-1 h-full min-w-0 flex flex-col overflow-hidden">
         <main
           className="flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-200"
-          style={!isMobile && isSidebarVisible ? { paddingRight: 420 } : undefined}
+          style={!isMobile && isSidebarVisible ? { paddingRight: 462 } : undefined}
         >
           <div className="h-full w-full min-w-0 overflow-hidden relative">
             {(currentPath === '/ordenes' || currentPath.includes('/ordenes')) && <div className="h-full"><OrdenesV2 /></div>}
@@ -328,7 +328,7 @@ export function AppLayoutV2() {
         >
           <DrawerPortal>
             <DrawerOverlay />
-            <DrawerContent className="fixed top-0 right-0 bottom-0 w-[420px] max-w-[90vw] bg-card shadow-xl z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden rounded-none">
+            <DrawerContent className="fixed top-0 right-0 bottom-0 w-[462px] max-w-[90vw] bg-card shadow-xl z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden rounded-none">
               <DrawerTitle className="sr-only">Panel de mesa</DrawerTitle>
               <DrawerDescription className="sr-only">
                 Acciones y detalles de la mesa seleccionada

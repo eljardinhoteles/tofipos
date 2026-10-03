@@ -190,7 +190,7 @@ export function generarComandaCocina(
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
 
   t += p(POS.ALIGN_LEFT);
-  t += `ORDEN: #${comanda.folio}\n`;
+  t += `COMANDA: #${comanda.folio}\n`;
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
 
   if (esAdicional) {
@@ -296,7 +296,7 @@ export function generarComandaCocina(
     }
     t += `------------------------\n`;
     t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
-    t += `ORDEN: #${comanda.folio}\n`;
+    t += `COMANDA: #${comanda.folio}\n`;
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);

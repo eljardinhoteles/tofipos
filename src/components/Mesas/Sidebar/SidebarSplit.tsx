@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from'react';
 import {
- ArrowLeft, Users, Receipt, CurrencyCircleDollar, Check,
- Printer, Plus, Minus
+ ArrowLeft, Users, CurrencyCircleDollar, Check,
+ Printer
 } from'@phosphor-icons/react';
-import type { Mesa, ComandaItem } from'../../../db/database';
+import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
@@ -15,7 +15,6 @@ import {
  initVerticalRxDb,
  createRxVenta,
  updateRxComanda,
- updateRxComandaItem,
  liberarMesaSiSinOperativas
 } from'../../../db/rxdb';
 import { cn } from'@/lib/utils';
@@ -31,9 +30,8 @@ interface SidebarSplitProps {
 }
 
 export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack, onSuccess }: SidebarSplitProps) {
- const [splitMethod, setSplitMethod] = useState<'iguales'|'productos'|'monto'| null>(null);
+ const [splitMethod, setSplitMethod] = useState<'iguales'|'monto'| null>(null);
  const [saldoInicialSplit, setSaldoInicialSplit] = useState<number>(0);
- const [selectedItems, setSelectedItems] = useState<{id: string, qtyToPay: number}[]>([]);
  const [personas, setPersonas] = useState(2);
  const [selectedPersonaIdx, setSelectedPersonaIdx] = useState<number | null>(null);
  const [paidPersonaIndexes, setPaidPersonaIndexes] = useState<number[]>([]);
@@ -41,7 +39,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  const [cobrarModalState, setCobrarModalState] = useState<{
  monto: number;
  label: string;
- itemsPagados?: any[];
  onSuccessCallback?: () => void;
  } | null>(null);
 
@@ -120,6 +117,10 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  const totalOriginal = totalesOriginales.total;
  const totalPagadoVentas = useMemo(() => {
  return ventasPrevias.reduce((accVenta: number, v: any) => {
+ // El dinero de una venta normal (abono de reserva, cobro hecho en la mesa)
+ // es anticipo de la mesa y se decide al cobrar la cuenta; aquí solo cuenta
+ // lo que se cobró por división.
+ if (!(typeof v.referencia ==='string' && v.referencia.includes('Dividido - '))) return accVenta;
  const movs = v.movimientos ?? [];
  // Las ventas "Dividido - ..." creadas por este mismo split (cualquiera
  // de los 3 métodos) registran el cobro ya recibido como 'ajuste' (el
@@ -143,47 +144,18 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  );
  const saldoPendiente = Math.max(0, totalOriginal - totalPagado);
 
- // Dividir "por productos" asume que se sabe qué ítems cubre lo ya
- // cobrado — un pago previo POR PRODUCTOS sí lo sabe (son estos mismos
- // ítems, vía `pagado_cantidad`), así que no bloquea, permite seguir
- // dividiendo el resto. Lo que sí bloquea es un abono que no fue por
- // productos (p.ej. de una reserva antes de asignar mesa, o un pago
- // "por partes iguales"/"por monto"): ahí no hay forma de saber qué
- // ítems cubre ese monto.
- const hasNonProductPayments = useMemo(() => {
- const pagoLegacyNoProductos = pagos.some(p => !p.tipo_division || !p.tipo_division.includes('(Productos)'));
- const hayVentaNoProductos = ventasPrevias.some((v: any) => {
- const esSplitPorProductos = typeof v.referencia ==='string' && v.referencia.includes('(Productos)');
- if (esSplitPorProductos) return false;
- const movs = v.movimientos ?? [];
- return movs.some((m: any) => !m.anulado && (m.tipo ==='pago'|| m.tipo ==='ajuste') && (m.monto ?? 0) > 0.001);
- });
- return pagoLegacyNoProductos || hayVentaNoProductos;
- }, [pagos, ventasPrevias]);
-
  const montoPorPersona = saldoInicialSplit / personas;
 
- const totalesSeleccionados = useMemo(() => {
- if (selectedItems.length === 0) return { subtotalNeto: 0, ivaTotal: 0, total: 0 };
- const itemsTemporales = selectedItems.map(si => {
- const item = comandaItems.find(i => i.id === si.id);
- return { ...item, cantidad: si.qtyToPay } as ComandaItem;
- });
- return calcularTotalesComanda(itemsTemporales, menuItems, ivaPorcentaje, preciosConIva);
- }, [selectedItems, comandaItems, menuItems, ivaPorcentaje, preciosConIva]);
-
- const selectSplitMethod = (method:'iguales'|'productos'|'monto') => {
+ const selectSplitMethod = (method:'iguales'|'monto') => {
  setSplitMethod(method);
  setSaldoInicialSplit(saldoPendiente);
  setSelectedPersonaIdx(null);
  setPaidPersonaIndexes([]);
  setMontoCustom('');
- setSelectedItems([]);
  };
 
  const procesarPagoSimple = async (
  monto: number,
- itemsPagados?: any[],
  label?: string,
  onSuccessCallback?: () => void,
  nameOfPayer?: string
@@ -193,7 +165,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  // Sin método: la división de cuenta en Mesas ya no elige método de pago
  // — se define después al anclar en Centro de Ventas.
  const labelDivision = nameOfPayer?.trim()
- ?`Dividido - ${nameOfPayer.trim()}${itemsPagados && itemsPagados.length > 0 ?'(Productos)':''}`:`Dividido - ${label ||'Parte'}${itemsPagados && itemsPagados.length > 0 ?'(Productos)':''}`;
+ ?`Dividido - ${nameOfPayer.trim()}`:`Dividido - ${label ||'Parte'}`;
  await createRxVenta({
  id: crypto.randomUUID(),
  origen:'mesa',
@@ -205,29 +177,12 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
  }, monto);
 
- if (itemsPagados && itemsPagados.length > 0) {
- for (const item of itemsPagados) {
- const comandaItem = comandaItems.find(i => i.id === item.id);
- if (comandaItem) {
- await updateRxComandaItem(item.id, {
- pagado_cantidad: (comandaItem.pagado_cantidad || 0) + item.qtyToPay
- });
- }
- }
- }
-
  showToast.success('Pago y Ticket',`Cobro registrado por $${monto.toFixed(2)}.`);
 
  const labelText = nameOfPayer?.trim() || label ||'Parte';
- const itemsMapeados = (itemsPagados || []).map(si => {
- const item = comandaItems.find(i => i.id === si.id);
- if (!item) return si;
- return { ...item, qtyToPay: si.qtyToPay || si.cantidad || 1 };
- });
-
  const ticketText = generarPrecuentaDividida(
  activeComanda,
- itemsMapeados,
+ [],
  selectedMesa.nombre,
  labelText,
  monto,
@@ -244,7 +199,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
 
  if (onSuccessCallback) onSuccessCallback();
 
- setSelectedItems([]);
  setMontoCustom('');
  setCobrarModalState(null);
 
@@ -260,12 +214,16 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
  }).exec();
  const totalPagosLegacy = pagosActualizados.reduce((acc, p) => acc + p.monto, 0);
+ // Solo lo cobrado por división: un abono/anticipo de la mesa se decide al
+ // cerrar la cuenta y no la salda desde aquí.
  const totalVentas = ventasActualizadas.reduce((accVenta, doc: any) => {
- const movs = doc.toJSON().movimientos ?? [];
- const sumaVenta = movs.reduce((acc: number, m: any) => {
+ const v = doc.toJSON();
+ if (!(typeof v.referencia ==='string' && v.referencia.includes('Dividido - '))) return accVenta;
+ const sumaVenta = (v.movimientos ?? []).reduce((acc: number, m: any) => {
  if (m.anulado) return acc;
  if (m.tipo ==='pago') return acc + (m.monto ?? 0);
  if (m.tipo ==='reembolso') return acc - (m.monto ?? 0);
+ if (m.tipo ==='ajuste') return acc + (m.monto ?? 0);
  return acc;
  }, 0);
  return accVenta + sumaVenta;
@@ -350,21 +308,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  </button>
 
  <button
- type="button"disabled={hasNonProductPayments}
- onClick={() => !hasNonProductPayments && selectSplitMethod('productos')}
- className={cn("p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors",
- hasNonProductPayments ?"opacity-50 cursor-not-allowed":"cursor-pointer")}
- >
- <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
- <Receipt size={20} />
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-sm text-foreground">Por productos</span>
- <span className="text-xs text-muted-foreground">Elige los artículos que paga cada persona.</span>
- </div>
- </button>
-
- <button
  type="button"onClick={() => selectSplitMethod('monto')}
  className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
@@ -444,58 +387,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  </div>
  )}
 
- {splitMethod ==='productos'&& (
- <div className="flex flex-col gap-3">
- <span className="text-xs font-bold text-foreground/80">Selecciona lo que deseas pagar ahora:</span>
- <div className="flex flex-col gap-2">
- {comandaItems.filter(item => !item.anulado && (item.cantidad - (item.pagado_cantidad || 0)) > 0).map(item => {
- const qtyPendiente = item.cantidad - (item.pagado_cantidad || 0);
- const selectedQty = selectedItems.find(si => si.id === item.id)?.qtyToPay || 0;
- return (
- <div key={item.id} className="p-3 rounded-xl bg-muted border border-border flex items-center justify-between">
- <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">{item.nombre}</span>
- <span className="text-[10px] text-muted-foreground font-bold">Pendientes: {qtyPendiente} • ${item.precio.toFixed(2)} c/u</span>
- </div>
-
- <div className="flex items-center gap-2">
- {selectedQty > 0 && (
- <button
- type="button"onClick={() => {
- setSelectedItems(prev => {
- const existing = prev.find(si => si.id === item.id);
- if (existing && existing.qtyToPay > 1) {
- return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay - 1 } : si);
- }
- return prev.filter(si => si.id !== item.id);
- });
- }}
- className="w-7 h-7 rounded-lg bg-destructive/10 text-destructive font-extrabold flex items-center justify-center cursor-pointer">
- <Minus size={14} />
- </button>
- )}
- <span className="font-black text-xs w-4 text-center">{selectedQty}</span>
- <button
- type="button"disabled={selectedQty >= qtyPendiente}
- onClick={() => {
- setSelectedItems(prev => {
- const existing = prev.find(si => si.id === item.id);
- if (existing) {
- return prev.map(si => si.id === item.id ? { ...si, qtyToPay: si.qtyToPay + 1 } : si);
- }
- return [...prev, { id: item.id, qtyToPay: 1 }];
- });
- }}
- className="w-7 h-7 rounded-lg bg-primary text-primary-foreground font-extrabold flex items-center justify-center cursor-pointer disabled:opacity-30">
- <Plus size={14} />
- </button>
- </div>
- </div>
- );
- })}
- </div>
- </div>
- )}
  </>
  )}
  </main>
@@ -570,35 +461,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  </footer>
  )}
 
- {splitMethod ==='productos'&& selectedItems.length > 0 && (
- <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
- <button
- type="button"onClick={() => {
- const label = payerName.trim() ||"Cuenta por Productos";
- const itemsMapeados = selectedItems.map(si => {
- const item = comandaItems.find(i => i.id === si.id);
- return { ...item, qtyToPay: si.qtyToPay };
- });
- const text = generarPrecuentaDividida(activeComanda, itemsMapeados, selectedMesa.nombre, label, totalesSeleccionados.total, ivaPorcentaje);
- setPreviewTicketText(text);
- setPreviewOnPrint(() => () => {
- queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
- });
- }}
- className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
- <Printer size={16} /> Pre-cuenta
- </button>
- <button
- type="button"
- disabled={!payerName.trim()}
- title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
- onClick={() => setCobrarModalState({ monto: totalesSeleccionados.total, label:'Pago de Productos', itemsPagados: selectedItems })}
- className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
- Cobrar (${totalesSeleccionados.total.toFixed(2)})
- </button>
- </footer>
- )}
-
  {/* Modal de cobro */}
  {cobrarModalState && (
  <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
@@ -617,7 +479,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <button
  type="button"
  disabled={!payerName.trim()}
- onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.itemsPagados, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
+ onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
  className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
  Cobrar e Imprimir
  </button>

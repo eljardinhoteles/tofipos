@@ -190,29 +190,53 @@ async function reconciliarMesasDeHabitacion(db: any) {
   const orgId = localStorage.getItem('pos_active_org_id') || ''
   if (!orgId) return
 
-  const [cuentasActivas, comandasEnHabitacion] = await Promise.all([
+  const [cuentasActivas, comandasAbiertas] = await Promise.all([
     db.habitacion_cuentas.find({
       selector: { organization_id: orgId, estado: 'activa', _deleted: { $ne: true } }
     }).exec(),
     db.comandas.find({
       selector: {
         organization_id: orgId,
-        habitacion_cuenta_id: { $ne: null },
         estado: { $nin: ['cerrado', 'facturado', 'anulada'] },
         _deleted: { $ne: true }
       }
     }).exec(),
   ])
 
+  // Mesas de habitación con huésped: nunca se liberan aquí.
+  const mesasConHuesped = new Set<string>(
+    cuentasActivas.map((c: any) => String(c.mesa_id)).filter(Boolean)
+  )
+  // Mesas con consumo propio todavía en curso (comanda directa, o cargo a
+  // habitación aún sin enviar: sincronizado === false).
+  const mesasEnUso = new Set<string>()
   const mesasAReconciliar = new Set<string>()
-  cuentasActivas.forEach((cuenta: any) => {
-    if (cuenta?.mesa_id) mesasAReconciliar.add(String(cuenta.mesa_id))
-  })
-  comandasEnHabitacion.forEach((comanda: any) => {
-    if (comanda?.mesa_id) mesasAReconciliar.add(String(comanda.mesa_id))
+  comandasAbiertas.forEach((comanda: any) => {
+    if (!comanda?.mesa_id) return
+    const mesaId = String(comanda.mesa_id)
+    if (!comanda.habitacion_cuenta_id || comanda.sincronizado === false) mesasEnUso.add(mesaId)
+    else mesasAReconciliar.add(mesaId) // cargo ya enviado a habitación
   })
 
+  // Reparación de checkouts interrumpidos: cuenta activa cuyas comandas ya
+  // están todas cobradas (y hay al menos una) → cerrarla y liberar la mesa.
+  const comandasHab = await db.comandas.find({
+    selector: { organization_id: orgId, habitacion_cuenta_id: { $ne: null }, _deleted: { $ne: true } }
+  }).exec()
+  for (const cuenta of cuentasActivas as any[]) {
+    const propias = comandasHab.filter((c: any) => c.habitacion_cuenta_id === cuenta.id && c.estado !== 'anulada')
+    if (propias.length === 0 || propias.some((c: any) => !['cerrado', 'facturado'].includes(c.estado))) continue
+    const now = new Date().toISOString()
+    await cuenta.update({ $set: { estado: 'cerrada', check_out: cuenta.check_out || now.split('T')[0], updated_at: now, _modified: now } } as any)
+    const mesa = await db.mesas.findOne(cuenta.mesa_id).exec()
+    if (mesa && mesa.toJSON().estado !== 'libre') {
+      await mesa.update({ $set: { estado: 'libre', _modified: now } } as any)
+    }
+    mesasConHuesped.delete(String(cuenta.mesa_id))
+  }
+
   await Promise.all([...mesasAReconciliar].map(async (mesaId) => {
+    if (mesasConHuesped.has(mesaId) || mesasEnUso.has(mesaId)) return
     const mesa = await db.mesas.findOne(mesaId).exec()
     if (!mesa) return
     if (mesa.toJSON().estado !== 'libre') {
@@ -2135,19 +2159,10 @@ export async function liberarMesaSiSinOperativas(mesaId: string) {
   const db = await initVerticalRxDb()
   const docs = await db.comandas.find({ selector: { mesa_id: mesaId, _deleted: { $ne: true } } }).exec()
   const operativas = docs.map((d: any) => d.toJSON()).filter((c: any) => isOperativeComanda(c))
-  if (operativas.length > 0) {
-    // Mesa Múltiple: las subcomandas vacías no se pueden cobrar ni cargar, así
-    // que si todo lo que queda abierto son subcomandas sin ítems se descartan
-    // (anuladas) para que la mesa no quede ocupada sin nada por resolver.
-    if (!operativas.every((c: any) => !!c.subcomanda_nombre)) return
-    const items = await db.comanda_items.find({
-      selector: { comanda_id: { $in: operativas.map((c: any) => c.id) }, _deleted: { $ne: true } }
-    }).exec()
-    if (items.some((i: any) => !i.anulado && (i.cantidad || 0) > 0)) return
-    for (const c of operativas) {
-      await updateRxComanda(c.id, { estado: 'anulada', motivo_anulacion: 'Subcomanda vacía' })
-    }
-  }
+  // Si queda alguna comanda operativa (incluidas subcomandas vacías de Mesa
+  // Múltiple) la mesa sigue ocupada: las vacías ya no se descartan solas, se
+  // cierran a mano con "Cerrar mesa".
+  if (operativas.length > 0) return
   await updateRxMesa(mesaId, { estado: 'libre' })
 }
 
@@ -2232,37 +2247,196 @@ export async function updateRxComandaItem(id: string, patch: Partial<RxComandaIt
   return result
 }
 
+// Mesa Múltiple: mueve un ítem (o parte de sus unidades) a otra subcomanda de
+// la misma mesa. Conserva lo ya enviado a cocina: lo que cocina ya recibió no
+// debe volver a salir como "nuevo" en la comanda destino.
+export async function moverItemASubcomanda(itemId: string, destComandaId: string, cantidad?: number) {
+  const db = await initVerticalRxDb()
+  const orgId = getActiveOrgIdStrict()
+  const itemDoc = await db.comanda_items.findOne(itemId).exec(true)
+  const item = itemDoc.toJSON() as RxComandaItem
+  if (item.comanda_id === destComandaId) return
+  if (item.anulado) throw new Error('No se puede mover un ítem anulado')
+  if ((item.pagado_cantidad || 0) > 0) throw new Error('No se puede mover un ítem con unidades pagadas')
+  if ((item.cortesia_cantidad || 0) > 0) throw new Error('No se puede mover un ítem con cortesía')
+
+  const srcDoc = await db.comandas.findOne(item.comanda_id).exec(true)
+  const destDoc = await db.comandas.findOne(destComandaId).exec(true)
+  const src = srcDoc.toJSON() as any
+  const dest = destDoc.toJSON() as any
+  if (src.mesa_id !== dest.mesa_id) throw new Error('La subcomanda destino es de otra mesa')
+
+  const cant = Math.max(1, Math.min(cantidad ?? item.cantidad, item.cantidad))
+  const parse = (c: any): Record<string, number> => {
+    try { return c.cantidades_snapshot ? JSON.parse(c.cantidades_snapshot) : {} } catch { return {} }
+  }
+  const srcSnap = parse(src)
+  const destSnap = parse(dest)
+
+  // Unidades del ítem que cocina ya recibió en la comanda origen.
+  const enviadoOrigen = src.confirmada_at && item.created_at && item.created_at <= src.confirmada_at
+    ? item.cantidad
+    : Math.min(item.cantidad, srcSnap[item.id] ?? 0)
+  // Se mueven primero las unidades aún no enviadas.
+  const enviadoMovido = Math.max(0, cant - (item.cantidad - enviadoOrigen))
+
+  const now = new Date().toISOString()
+  const destItems = await db.comanda_items.find({
+    selector: { comanda_id: destComandaId, _deleted: { $ne: true } }
+  }).exec()
+  const destTieneOtros = destItems.some((d: any) => !d.toJSON().anulado)
+
+  // Un ítem ya enviado no puede caer en una subcomanda con productos sin
+  // enviar y sin ningún envío previo: cocina lo recibiría repetido en el
+  // siguiente ticket. Primero hay que enviar lo pendiente de esa cuenta.
+  if (enviadoMovido > 0 && !dest.confirmada_at && destTieneOtros) {
+    throw new Error(`Primero envía a cocina los productos pendientes de ${dest.subcomanda_nombre || 'esa cuenta'}`)
+  }
+
+  // created_at decide si cocina lo considera enviado en la comanda destino.
+  let createdAt = item.created_at || now
+  const destPatch: Record<string, unknown> = {}
+  if (enviadoMovido > 0) {
+    if (dest.confirmada_at) {
+      if (createdAt > dest.confirmada_at) createdAt = dest.confirmada_at
+    } else if (!destTieneOtros) {
+      destPatch.confirmada = true
+      destPatch.confirmada_at = src.confirmada_at
+      if (createdAt > src.confirmada_at) createdAt = src.confirmada_at
+    }
+  } else if (dest.confirmada_at && createdAt <= dest.confirmada_at) {
+    createdAt = now
+  }
+
+  let movidoId = item.id
+  if (cant === item.cantidad) {
+    await itemDoc.update({ $set: { comanda_id: destComandaId, created_at: createdAt, updated_at: now, _modified: now } } as any)
+  } else {
+    movidoId = crypto.randomUUID()
+    const { _rev, _attachments, _meta, ...base } = item as any
+    await db.comanda_items.insert({
+      ...base,
+      id: movidoId,
+      comanda_id: destComandaId,
+      cantidad: cant,
+      created_at: createdAt,
+      updated_at: now,
+      organization_id: orgId,
+      _deleted: false,
+      _modified: now,
+    } as RxComandaItem)
+    await itemDoc.update({ $set: { cantidad: item.cantidad - cant, updated_at: now, _modified: now } } as any)
+  }
+
+  // Snapshots: el origen ya no debe esperar más unidades de las que tiene.
+  const restante = item.cantidad - cant
+  if (srcSnap[item.id] !== undefined && srcSnap[item.id] > restante) {
+    srcSnap[item.id] = restante
+    await srcDoc.update({ $set: { cantidades_snapshot: JSON.stringify(srcSnap), updated_at: now, _modified: now } } as any)
+  }
+  // Destino: si solo parte de lo movido ya estaba enviado, el resto sale como nuevo.
+  if (enviadoMovido > 0 && enviadoMovido < cant && (dest.confirmada_at || destPatch.confirmada_at)) {
+    destSnap[movidoId] = enviadoMovido
+    destPatch.cantidades_snapshot = JSON.stringify(destSnap)
+  }
+  if (Object.keys(destPatch).length > 0) {
+    await destDoc.update({ $set: { ...destPatch, updated_at: now, _modified: now } } as any)
+  }
+
+  await createAuditLog({
+    entity: 'comanda_item',
+    entityId: item.id,
+    action: 'update',
+    summary: `Se movieron ${cant} × ${item.nombre} de la subcomanda ${src.subcomanda_nombre || src.cliente || src.folio} a ${dest.subcomanda_nombre || dest.cliente || dest.folio}`,
+    before: item,
+    after: { ...item, comanda_id: destComandaId, cantidad: cant },
+    source: 'rxdb'
+  })
+}
+
 // Anula un ítem puntual ya confirmado/enviado a cocina (se acabó el insumo,
 // error de cocina). Nunca se borra — se marca `anulado` con motivo
 // obligatorio, igual que anularVentaMovimiento. Función dedicada (no vía
 // updateRxComandaItem) para que el audit log quede como 'status_change'
 // inequívoco, no un 'update' genérico.
-export async function anularComandaItem(itemId: string, motivo: string, usuarioId?: string) {
+// Duplica un ítem como fila nueva de la misma comanda (para dividir unidades).
+async function dividirItem(db: any, doc: any, cantidadNueva: number, extra: Partial<RxComandaItem>) {
+  const item = doc.toJSON() as any
+  const now = new Date().toISOString()
+  const { _rev, _attachments, _meta, ...base } = item
+  const nuevoId = crypto.randomUUID()
+  await db.comanda_items.insert({
+    ...base,
+    ...extra,
+    id: nuevoId,
+    cantidad: cantidadNueva,
+    updated_at: now,
+    _deleted: false,
+    _modified: now,
+  } as RxComandaItem)
+  await doc.update({ $set: { cantidad: item.cantidad - cantidadNueva, updated_at: now, _modified: now } } as any)
+  return nuevoId
+}
+
+// Anula un ítem, o solo `cantidad` de sus unidades (las demás siguen vivas).
+export async function anularComandaItem(itemId: string, motivo: string, usuarioId?: string, cantidad?: number) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.comanda_items.findOne(itemId).exec(true)
   const before = doc?.toJSON()
   const now = new Date().toISOString()
-  const result = await doc.update({
-    $set: {
-      anulado: true,
-      anulado_motivo: motivo,
-      anulado_at: now,
-      anulado_por: usuarioId,
-      updated_at: now,
-      _modified: now
-    }
-  } as any)
+  const anulacion = { anulado: true, anulado_motivo: motivo, anulado_at: now, anulado_por: usuarioId }
+  const cant = Math.max(1, Math.min(cantidad ?? before.cantidad, before.cantidad))
+  let result
+  if (cant < before.cantidad) {
+    await dividirItem(db, doc, cant, anulacion)
+    result = doc
+  } else {
+    result = await doc.update({ $set: { ...anulacion, updated_at: now, _modified: now } } as any)
+  }
   await createAuditLog({
     entity: 'comanda_item',
     entityId: itemId,
     action: 'status_change',
-    summary: `Anuló el ítem ${before?.nombre || itemId}: ${motivo}`,
+    summary: `Anuló ${cant < before.cantidad ? `${cant} de ${before.cantidad} unidades de` : 'el ítem'} ${before?.nombre || itemId}: ${motivo}`,
     before,
-    after: result.toJSON(),
+    after: { ...before, ...anulacion, cantidad: cant },
     source: 'rxdb'
   })
   return result
+}
+
+// Cortesía por cantidad y porcentaje (100 / 50 / 25...). 100% usa el mismo
+// modelo de siempre (precio 0 + cortesia_cantidad). Un porcentaje menor
+// rebaja el precio de esas unidades y deja el porcentaje en el motivo
+// ("50% · motivo"); cortesia_cantidad queda en 0 para que ni el cálculo de
+// totales ni el checkout de habitación lo descuenten por segunda vez.
+export async function aplicarCortesiaItem(itemId: string, motivo: string, porcentaje: number, cantidad?: number) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.comanda_items.findOne(itemId).exec(true)
+  const before = doc.toJSON() as any
+  if ((before.pagado_cantidad || 0) > 0) throw new Error('El ítem ya tiene unidades pagadas')
+  const pct = Math.max(1, Math.min(100, porcentaje))
+  const cant = Math.max(1, Math.min(cantidad ?? before.cantidad, before.cantidad))
+  const now = new Date().toISOString()
+  const patch = pct === 100
+    ? { precio: 0, cortesia_cantidad: cant, cortesia_motivo: motivo }
+    : { precio: Math.round(before.precio * (1 - pct / 100) * 100) / 100, cortesia_cantidad: 0, cortesia_motivo: `${pct}% · ${motivo}` }
+  if (cant < before.cantidad) {
+    await dividirItem(db, doc, cant, patch)
+  } else {
+    await doc.update({ $set: { ...patch, updated_at: now, _modified: now } } as any)
+  }
+  await createAuditLog({
+    entity: 'comanda_item',
+    entityId: itemId,
+    action: 'update',
+    summary: `Cortesía ${pct}% en ${cant} × ${before.nombre}: ${motivo}`,
+    before,
+    after: { ...before, ...patch, cantidad: cant },
+    source: 'rxdb'
+  })
 }
 
 export async function updateRxMesa(id: string, patch: Partial<RxMesa>) {

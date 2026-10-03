@@ -377,10 +377,11 @@ export default function OrdenesV2() {
   <table className="w-full text-left text-xs">
   <thead className="bg-muted border-b border-border text-muted-foreground font-bold uppercase tracking-wider">
   <tr>
-  <th className="px-6 py-3.5">Mesa / Folio</th>
+  <th className="pl-6 pr-2 py-3.5">N.º</th>
+  <th className="px-6 py-3.5 hidden sm:table-cell">Fecha</th>
+  <th className="px-6 py-3.5">Mesa</th>
   <th className="px-6 py-3.5 hidden md:table-cell">Items</th>
   <th className="px-6 py-3.5">Total</th>
-  <th className="px-6 py-3.5 hidden sm:table-cell">Fecha</th>
   <th className="px-6 py-3.5">Estado</th>
   {esAdmin && <th className="px-6 py-3.5">Acciones</th>}
   </tr>
@@ -408,31 +409,25 @@ export default function OrdenesV2() {
   onClick={() => openReadOnlyComanda(comanda)}
   className="hover:bg-muted/50 cursor-pointer transition-colors"
   >
-  <td className="px-6 py-3.5">
-  <div className="flex items-center gap-1.5">
-  <span className="font-bold text-foreground truncate max-w-[150px]">
-  {mesa?.nombre || 'Mesa Eliminada'}
-  </span>
+  <td className="pl-6 pr-2 py-3.5 whitespace-nowrap">
+  <div className="font-black text-foreground tabular-nums">#{comanda.folio}</div>
+  <div className="flex flex-col items-start gap-1 mt-1">
   {habitacionCuenta && (
-  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold shrink-0">
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">
   <Door size={11} weight="bold" /> Habitación
   </span>
   )}
   {esDeReserva && (
-  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-bold shrink-0">
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-bold">
   <Calendar size={11} weight="bold" /> Reserva
   </span>
   )}
+  {!habitacionCuenta && !esDeReserva && (
+  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-bold">
+  <ForkKnife size={11} weight="bold" /> Mesa
+  </span>
+  )}
   </div>
-  <div className="text-muted-foreground text-[11px] truncate max-w-[150px]">
-  {clienteLabel || `Folio: ${comanda.folio}`}
-  </div>
-  </td>
-  <td className="px-6 py-3.5 hidden md:table-cell">
-  <span className="font-semibold">{itemCount}</span> <span className="text-muted-foreground">items</span>
-  </td>
-  <td className="px-6 py-3.5 font-bold text-foreground">
-  ${total.toFixed(2)}
   </td>
   <td className="px-6 py-3.5 hidden sm:table-cell">
   <div className="font-semibold text-foreground">
@@ -441,6 +436,22 @@ export default function OrdenesV2() {
   <div className="text-muted-foreground text-[11px]">
   {dayjs(comanda.created_at).format('DD MMM')}
   </div>
+  </td>
+  <td className="px-6 py-3.5">
+  <div className="flex items-center gap-1.5">
+  <span className="font-bold text-foreground truncate max-w-[150px]">
+  {mesa?.nombre || 'Mesa Eliminada'}
+  </span>
+  </div>
+  <div className="text-muted-foreground text-[11px] truncate max-w-[150px]">
+  {clienteLabel || 'Sin cliente'}
+  </div>
+  </td>
+  <td className="px-6 py-3.5 hidden md:table-cell">
+  <span className="font-semibold">{itemCount}</span> <span className="text-muted-foreground">items</span>
+  </td>
+  <td className="px-6 py-3.5 font-bold text-foreground">
+  ${total.toFixed(2)}
   </td>
   <td className="px-6 py-3.5">
   {comanda.estado ==='cerrado'|| comanda.estado ==='facturado'? (

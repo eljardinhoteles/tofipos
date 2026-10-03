@@ -57,7 +57,7 @@ export function TableSidebar({
   // de la comanda: en móvil el teclado encoge el sheet y el footer quedaba
   // encajado entre el input y el teclado.
   const [agregandoSub, setAgregandoSub] = useState(false);
-  const { crearSubcomanda } = useTableActions();
+  const { crearSubcomanda, activarMesaMultiple } = useTableActions();
 
   const [newPisoName, setNewPisoName] = useState('');
   const [editingPisoId, setEditingPisoId] = useState<string | null>(null);
@@ -602,6 +602,9 @@ export function TableSidebar({
               grupo={viewingComandaId ? undefined : grupoCocina}
               vistaTodas={esMultiple && vistaTodas}
               onSelectSubcomanda={(id) => { setActiveSubcomandaId(id); setVistaTodas(false); }}
+              onActivarMultiple={!esMultiple && !viewingComandaId && !activeComanda.habitacion_cuenta_id
+                ? () => activarMesaMultiple(selectedMesaEffective, activeComanda)
+                : undefined}
             />
           );
           if (!esMultiple || viewingComandaId) return details;
