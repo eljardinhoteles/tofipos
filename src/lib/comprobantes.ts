@@ -7,6 +7,7 @@ import {
 } from './offlineStorage';
 import { initVerticalRxDb } from '../db/rxdb';
 import { comprimirImagenComprobante } from './imageCompressor';
+import { showToast } from './toast';
 
 // Cache en memoria para URLs de ObjectURL locales (offline-file://)
 const localUrlCache = new Map<string, string>();
@@ -88,13 +89,15 @@ async function subirDirectoAR2(file: File, uploadUrl: string): Promise<void> {
 export async function subirComprobante(rawFile: File, organizationId: string, registroId: string): Promise<string> {
   const file = await comprimirImagenComprobante(rawFile);
 
-  if (navigator.onLine) {
+  const estabaOnline = navigator.onLine;
+  if (estabaOnline) {
     try {
       const { uploadUrl, publicUrl } = await obtenerPresignedR2Url(file, organizationId, registroId);
       await subirDirectoAR2(file, uploadUrl);
       return publicUrl;
     } catch (e) {
       console.warn('Subida directa R2 falló/no configurada, guardando en cola offline:', e);
+      showToast.warning('Adjunto guardado solo en este dispositivo', 'No se pudo subir a la nube; se reintentará automáticamente.');
     }
   }
 
@@ -208,8 +211,19 @@ export function resolverComprobanteUrl(url: string): string {
  * Sincroniza en background los comprobantes pendientes de IndexedDB hacia Cloudflare R2
  * cuando la conexión a internet es restaurada.
  */
+let sincronizando = false;
+
 export async function sincronizarComprobantesPendientesR2(): Promise<{ procesados: number; fallidos: number }> {
-  if (!navigator.onLine) return { procesados: 0, fallidos: 0 };
+  if (!navigator.onLine || sincronizando) return { procesados: 0, fallidos: 0 };
+  sincronizando = true;
+  try {
+    return await sincronizarPendientes();
+  } finally {
+    sincronizando = false;
+  }
+}
+
+async function sincronizarPendientes(): Promise<{ procesados: number; fallidos: number }> {
 
   const pendientes = await listarComprobantesPendientes();
   if (pendientes.length === 0) return { procesados: 0, fallidos: 0 };
@@ -266,4 +280,13 @@ if (typeof window !== 'undefined') {
       console.error('Error en sync automático de comprobantes:', err)
     );
   });
+
+  // Reintento periódico: si el Worker estaba caído o mal configurado al subir,
+  // 'online' no vuelve a dispararse y el adjunto se quedaría local para siempre.
+  const reintentar = () => {
+    if (document.visibilityState === 'hidden') return;
+    sincronizarComprobantesPendientesR2().catch(() => {});
+  };
+  setTimeout(reintentar, 10_000);
+  setInterval(reintentar, 60_000);
 }

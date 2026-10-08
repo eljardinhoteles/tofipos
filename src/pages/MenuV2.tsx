@@ -1,12 +1,16 @@
 import { useMemo, useState } from'react';
 import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
-import { Trash, Plus, Check, X, MagnifyingGlass, List, PencilLine, SquaresFour, CaretUp, CaretDown, NumberCircleOneIcon } from'@phosphor-icons/react';
+import { Trash, Plus, Check, List, SquaresFour, CaretUp, CaretDown, CaretRight, Gear } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxdb';
+import { Button } from '@/components/ui/button';
+import { ReservaHeader } from '@/components/Mesas/Sidebar/ReservaHeader';
+import { PageFrame, PageHeader, PageContent, PageToolbar, HeaderSearch, headerPrimaryButtonClass, toolbarChipClass } from '../components/Common/PageHeader';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from'@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { CsvUploader } from '@/components/Menu/CsvUploader';
 import {
  Sheet,
  SheetContent,
@@ -14,16 +18,17 @@ import {
  SheetTitle,
  SheetDescription,
 } from '@/components/ui/sheet';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CATEGORY_ICONS, getCategoryIcon } from '@/lib/categoryIcons';
 
 export default function MenuV2() {
  const [searchQuery, setSearchQuery] = useState('');
  const [selectedCategory, setSelectedCategory] = useState<string>('all');
- const [editingCategory, setEditingCategory] = useState<{ id: string; nombre: string } | null>(null);
+ const [editingCategory, setEditingCategory] = useState<{ id: string; nombre: string; icono: string | null; es_comida_incluida: boolean; imprimir_primero: boolean } | null>(null);
  const [newCategoryName, setNewCategoryName] = useState('');
  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
- const { openConfirm, setMenuView, setSelectedMenuProductId, selectedMenuProductId } = useUI();
+ const { openConfirm, menuView, setMenuView, setSelectedMenuProductId, selectedMenuProductId } = useUI();
+ // Con el formulario de producto nuevo abierto en el sidebar, el botón de crear sobra.
+ const creandoProducto = menuView === 'producto' && !selectedMenuProductId;
 
  const { menuItems: safeMenuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
 
@@ -35,6 +40,15 @@ export default function MenuV2() {
  return matchesSearch && matchesCategory;
  });
  }, [safeMenuItems, searchQuery, selectedCategory]);
+
+ const conteoPorCategoria = useMemo(() => {
+ const map = new Map<string, number>();
+ for (const it of safeMenuItems) {
+ const cat = it.categoria_nombre || '';
+ map.set(cat, (map.get(cat) ?? 0) + 1);
+ }
+ return map;
+ }, [safeMenuItems]);
 
  const products = useMemo(() => filteredItems.map(item => ({
  id: item.id,
@@ -70,64 +84,73 @@ export default function MenuV2() {
   };
 
  return (
- <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
- {/* ── HEADER PRINCIPAL ─────────────────────────────── */}
- <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center shadow-xs shrink-0 gap-3">
- <button
- type="button"title="Nuevo Producto"onClick={() => {
- setSelectedMenuProductId(null);
- setMenuView('producto');
- }}
- className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-[background-color,transform] shadow-xs cursor-pointer shrink-0">
- <Plus size={18} weight="bold"/>
+ <PageFrame>
+ <PageHeader
+ title={`${safeMenuItems.length} ${safeMenuItems.length === 1 ? 'Producto' : 'Productos'}`}
+ subtitle={`${safeDbCategorias.length} ${safeDbCategorias.length === 1 ? 'categoría' : 'categorías'}`}
+ search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar productos..." />}
+ actions={
+ <>
+ <button type="button" onClick={() => { setSelectedMenuProductId(null); setMenuView('producto'); }} title="Nuevo producto" aria-label="Nuevo producto" tabIndex={creandoProducto ? -1 : 0} className={cn(headerPrimaryButtonClass, creandoProducto ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-300 delay-300')}>
+ <Plus size={18} weight="bold" />
+   <span className="hidden 2xl:inline">Nuevo producto</span>
  </button>
+ </>
+ }
+ />
 
- <div className="w-[1px] h-6 bg-border shrink-0"/>
-
- {/* Buscador */}
- <div className="relative w-64 shrink-0">
- <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
- <Input
- type="text"placeholder="Buscar productos..."value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- className="pl-9 h-9 text-xs"/>
- </div>
-
-        <button
-          type="button" onClick={() => setIsManageCategoriesOpen(true)}
-          className="h-9 px-3 rounded-lg bg-muted text-foreground font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer shrink-0">
-          <SquaresFour size={18} />
-          Categorías
-        </button>
-
-        <div className="flex-1"/>
-
-        <CsvUploader />
- </header>
-
- {/* Chips de Categorías — fila propia debajo del header */}
- <div className="h-13 px-6 bg-card border-b border-border flex items-center shrink-0 overflow-x-auto hide-scrollbar">
- <div className="flex items-center gap-2 min-w-max">
- <button
- type="button"onClick={() => setSelectedCategory('all')}
- className={cn("px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer",
- selectedCategory ==='all'?"bg-primary text-primary-foreground border-primary shadow-xs":"bg-card text-muted-foreground border-border")}
- >
+ <PageContent>
+ {/* Chips de Categorías — solo móvil; en escritorio van en la columna lateral */}
+ <div className="md:hidden shrink-0">
+ <PageToolbar>
+ <button type="button" onClick={() => setSelectedCategory('all')} className={toolbarChipClass(selectedCategory === 'all')}>
  Todos
  </button>
  {safeDbCategorias.map(cat => (
- <button
- key={cat.id}
- type="button"onClick={() => setSelectedCategory(cat.nombre)}
- className={cn("px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer",
- selectedCategory === cat.nombre
- ?"bg-primary text-primary-foreground border-primary shadow-xs":"bg-card text-muted-foreground border-border")}
- >
+ <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.nombre)} className={toolbarChipClass(selectedCategory === cat.nombre)}>
  {cat.nombre}
  </button>
  ))}
+ <button type="button" onClick={() => setIsManageCategoriesOpen(true)} aria-label="Gestionar categorías" className="h-8 w-8 rounded-full border border-dashed border-border text-muted-foreground flex items-center justify-center shrink-0 cursor-pointer">
+ <Gear size={14} weight="bold" />
+ </button>
+ </PageToolbar>
  </div>
+
+ {/* Escritorio: columna de categorías + productos de la elegida */}
+ <div className="flex-1 min-h-0 flex">
+ <aside className="hidden md:flex w-[240px] shrink-0 border-r border-border bg-card flex-col overflow-y-auto py-3">
+ <div className="flex items-center justify-between pl-4 pr-2 pb-1">
+ <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Categorías</h2>
+ <Button type="button" variant="ghost" size="icon" title="Gestionar categorías" aria-label="Gestionar categorías"
+ onClick={() => setIsManageCategoriesOpen(true)} className="size-8 text-muted-foreground hover:text-foreground">
+ <Gear size={16} weight="bold" />
+ </Button>
  </div>
+ <nav className="flex flex-col">
+ {[
+ { id: 'all', nombre: 'Todos', icono: null as string | null | undefined, count: safeMenuItems.length },
+ ...safeDbCategorias.map(c => ({ id: c.nombre, nombre: c.nombre, icono: c.icono, count: conteoPorCategoria.get(c.nombre) ?? 0 })),
+ ].map(c => {
+ const Icon = c.id === 'all' ? List : getCategoryIcon(c.icono) ?? SquaresFour;
+ const activa = selectedCategory === c.id;
+ return (
+ <button
+ key={c.id}
+ type="button"
+ aria-current={activa ? 'true' : undefined}
+ onClick={() => setSelectedCategory(c.id)}
+ className={cn("flex items-center gap-3 h-11 pl-3.5 pr-4 border-l-[3px] text-left transition-colors cursor-pointer",
+ activa ? "border-primary bg-muted text-foreground" : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground")}
+ >
+ <Icon size={18} weight={activa ? "fill" : "regular"} className={cn("shrink-0", activa && "text-primary")} />
+ <span className={cn("flex-1 min-w-0 truncate text-sm", activa ? "font-extrabold" : "font-semibold")}>{c.nombre}</span>
+ <span className={cn("shrink-0 text-xs tabular-nums", activa ? "font-bold text-foreground" : "font-semibold text-muted-foreground/80")}>{c.count}</span>
+ </button>
+ );
+ })}
+ </nav>
+ </aside>
 
  {/* Grid de Productos */}
  <main className="flex-1 overflow-y-auto p-6">
@@ -160,20 +183,111 @@ export default function MenuV2() {
  </div>
  )}
  </main>
-
- {/* Drawer: Gestionar Categorías */}
- <Sheet open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
- <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
- <SheetHeader className="p-4 border-b border-border flex-row items-center gap-3 space-y-0">
- <SquaresFour size={24} className="text-primary shrink-0"/>
- <div className="flex flex-col gap-0.5">
- <SheetTitle>Categorías</SheetTitle>
- <SheetDescription>Agrupa tu menú igual que en tu carta física</SheetDescription>
  </div>
+
+ </PageContent>
+
+ {/* Drawer: Gestionar Categorías — pantalla 1: lista; pantalla 2: editar una categoría */}
+ <Sheet open={isManageCategoriesOpen} onOpenChange={(o) => { setIsManageCategoriesOpen(o); if (!o) setEditingCategory(null); }}>
+ <SheetContent showCloseButton={false} className="w-full sm:max-w-md flex flex-col gap-0 p-0 data-[side=right]:border-l-0">
+ {editingCategory ? (() => {
+ const ed = editingCategory;
+ const cat = safeDbCategorias.find(c => c.id === ed.id);
+ const nProductos = cat ? (conteoPorCategoria.get(cat.nombre) ?? 0) : 0;
+ const guardar = async () => {
+ if (!ed.nombre.trim()) { showToast.error('Escribe el nombre de la categoría'); return; }
+ await updateRxCategoria(ed.id, {
+ nombre: ed.nombre.trim(),
+ icono: ed.icono,
+ es_comida_incluida: ed.es_comida_incluida,
+ imprimir_primero: ed.imprimir_primero,
+ });
+ showToast.success('Categoría actualizada');
+ setEditingCategory(null);
+ };
+ return (
+ <>
+ <SheetHeader className="p-0 gap-0 space-y-0">
+ <SheetTitle className="sr-only">Editar categoría</SheetTitle>
+ <SheetDescription className="sr-only">Nombre, icono y ajustes de la categoría</SheetDescription>
+ <ReservaHeader tono="primary" badge={null} titulo="Editar categoría"
+ subtitulo={`${nProductos} ${nProductos === 1 ? 'producto' : 'productos'}`}
+ onBack={() => setEditingCategory(null)} onClose={() => setIsManageCategoriesOpen(false)} />
+ </SheetHeader>
+
+ <div className="p-4 flex flex-col gap-6 overflow-y-auto flex-1">
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cat-nombre" className="text-xs font-bold">Nombre</Label>
+ <Input id="cat-nombre" type="text" value={ed.nombre}
+ onChange={(e) => setEditingCategory(prev => prev && { ...prev, nombre: e.target.value })}
+ onKeyDown={(e) => { if (e.key === 'Enter') guardar(); }}
+ className="h-10 text-sm font-semibold" />
+ </div>
+
+ <div className="flex flex-col gap-2">
+ <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Icono</h4>
+ <div className="grid grid-cols-8 gap-1.5">
+ {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
+ <button key={key} type="button" title={key} aria-pressed={ed.icono === key}
+ onClick={() => setEditingCategory(prev => prev && { ...prev, icono: prev.icono === key ? null : key })}
+ className={cn("aspect-square rounded-xl flex items-center justify-center cursor-pointer transition-colors",
+ ed.icono === key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground")}>
+ <Icon size={18} weight="bold"/>
+ </button>
+ ))}
+ </div>
+ </div>
+
+ <div className="flex flex-col gap-2">
+ <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ajustes</h4>
+ <div className="rounded-2xl border border-border divide-y divide-border">
+ <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="text-sm font-bold text-foreground">Incluida en plan</span>
+ <span className="text-xs font-medium text-muted-foreground leading-snug">La comida de esta categoría va incluida en el plan del huésped.</span>
+ </div>
+ <Switch checked={ed.es_comida_incluida} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, es_comida_incluida: v })} />
+ </label>
+ <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="text-sm font-bold text-foreground">Imprime primero</span>
+ <span className="text-xs font-medium text-muted-foreground leading-snug">Sale primero en la comanda de cocina.</span>
+ </div>
+ <Switch checked={ed.imprimir_primero} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, imprimir_primero: v })} />
+ </label>
+ </div>
+ </div>
+ </div>
+
+ <div className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-2 shrink-0">
+ <Button type="button" variant="ghost" className="mr-auto font-bold text-destructive hover:text-destructive gap-1.5"
+ onClick={() => {
+ openConfirm('¿Eliminar Categoría?',`Los productos de "${ed.nombre}" se quedarán sin categoría.`,
+ async () => {
+ await updateRxCategoria(ed.id, { _deleted: true });
+ showToast.success('Categoría eliminada');
+ setEditingCategory(null);
+ }
+ );
+ }}>
+ <Trash size={16} /> Eliminar
+ </Button>
+ <Button type="button" variant="outline" className="font-bold" onClick={() => setEditingCategory(null)}>Cancelar</Button>
+ <Button type="button" className="font-bold" onClick={guardar}>Guardar</Button>
+ </div>
+ </>
+ );
+ })() : (
+ <>
+ <SheetHeader className="p-0 gap-0 space-y-0">
+ <SheetTitle className="sr-only">Categorías</SheetTitle>
+ <SheetDescription className="sr-only">Agrupa tu menú igual que en tu carta física</SheetDescription>
+ <ReservaHeader tono="primary" badge={<SquaresFour size={22} weight="bold" />} titulo="Categorías"
+ subtitulo={`${safeDbCategorias.length} ${safeDbCategorias.length === 1 ? 'categoría' : 'categorías'}`}
+ onClose={() => setIsManageCategoriesOpen(false)} />
  </SheetHeader>
 
  <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
- {/* Formulario Nueva Categoría */}
  <form
  onSubmit={async (e) => {
  e.preventDefault();
@@ -187,174 +301,63 @@ export default function MenuV2() {
  }}
  className="flex items-center gap-2">
  <Input
- type="text"placeholder="Nueva categoría..."value={newCategoryName}
+ type="text" placeholder="Nueva categoría..." value={newCategoryName}
  onChange={(e) => setNewCategoryName(e.target.value)}
- className="flex-1 h-9 text-xs"/>
- <button
- type="submit"disabled={!newCategoryName.trim()}
- className="h-9 px-3 rounded-lg bg-primary disabled:opacity-50 text-primary-foreground font-semibold text-xs flex items-center gap-1 cursor-pointer transition-all">
- <Plus size={14} weight="bold"/> Añadir
- </button>
+ className="flex-1 h-12 text-base font-semibold"/>
+ <Button type="submit" disabled={!newCategoryName.trim()} className="h-12 px-5 font-bold gap-1.5">
+ <Plus size={15} weight="bold"/> Añadir
+ </Button>
  </form>
 
- {/* Lista */}
- <div className="flex flex-col gap-2">
  {safeDbCategorias.length === 0 ? (
- <div className="py-8 text-center text-xs text-muted-foreground">Sin categorías aún</div>
+ <div className="py-8 text-center text-sm text-muted-foreground">Sin categorías aún</div>
  ) : (
- safeDbCategorias.map((cat, idx) => {
+ <div className="flex flex-col divide-y divide-border">
+ {safeDbCategorias.map((cat, idx) => {
  const CategoryIcon = getCategoryIcon(cat.icono);
+ const nProductos = conteoPorCategoria.get(cat.nombre) ?? 0;
+ const abrirEdicion = () => setEditingCategory({
+ id: cat.id, nombre: cat.nombre, icono: cat.icono ?? null,
+ es_comida_incluida: !!cat.es_comida_incluida, imprimir_primero: !!cat.imprimir_primero,
+ });
  return (
- <div
- key={cat.id}
- className={cn("flex flex-col gap-2.5 p-3 rounded-xl border transition-colors",
- editingCategory?.id === cat.id ?"bg-muted border-border":"border-border/60")}
- >
- <div className="flex items-center gap-2">
- <div className="flex flex-col gap-0.5 shrink-0">
- <button
- type="button"
- onClick={() => handleMoveCategory(idx,'up')}
- disabled={idx === 0}
- className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
- <CaretUp size={12} weight="bold"/>
+ <div key={cat.id} className="flex items-center gap-1 pr-1 py-1.5">
+ <div className="flex flex-col shrink-0">
+ <button type="button" aria-label="Subir" onClick={() => handleMoveCategory(idx,'up')} disabled={idx === 0}
+ className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:cursor-default cursor-pointer">
+ <CaretUp size={14} weight="bold"/>
  </button>
- <button
- type="button"
- onClick={() => handleMoveCategory(idx,'down')}
- disabled={idx === safeDbCategorias.length - 1}
- className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
- <CaretDown size={12} weight="bold"/>
+ <button type="button" aria-label="Bajar" onClick={() => handleMoveCategory(idx,'down')} disabled={idx === safeDbCategorias.length - 1}
+ className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:cursor-default cursor-pointer">
+ <CaretDown size={14} weight="bold"/>
  </button>
  </div>
-
- {/* Selector de ícono */}
- <Popover>
- <PopoverTrigger asChild>
- <button
- type="button"
- title="Elegir ícono"
- className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground cursor-pointer">
- {CategoryIcon ? <CategoryIcon size={16} weight="bold"/> : <SquaresFour size={16} />}
+ <button type="button" onClick={abrirEdicion}
+ className="flex-1 min-w-0 flex items-center gap-3 rounded-xl px-2 py-1.5 text-left cursor-pointer hover:bg-muted/60 transition-colors">
+ <span className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
+ {CategoryIcon ? <CategoryIcon size={18} weight="bold"/> : <SquaresFour size={18} />}
+ </span>
+ <span className="flex flex-col flex-1 min-w-0">
+ <span className="flex items-center gap-1.5 min-w-0">
+ <span className="font-bold text-sm text-foreground truncate">{cat.nombre}</span>
+ {cat.es_comida_incluida && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-info-soft text-info-foreground text-[10px] font-bold">Plan</span>}
+ {cat.imprimir_primero && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-warning-soft text-warning-foreground text-[10px] font-bold">1.º</span>}
+ </span>
+ <span className="text-xs font-medium text-muted-foreground">{nProductos} {nProductos === 1 ? 'producto' : 'productos'}</span>
+ </span>
+ <CaretRight size={14} weight="bold" className="text-muted-foreground/60 shrink-0" />
  </button>
- </PopoverTrigger>
- <PopoverContent className="w-72 p-2"align="start">
- <div className="grid grid-cols-8 gap-1">
- {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
- <button
- key={key}
- type="button"
- title={key}
- onClick={async () => {
- await updateRxCategoria(cat.id, { icono: cat.icono === key ? null : key });
- }}
- className={cn("w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors",
- cat.icono === key ?"bg-primary text-primary-foreground":"text-muted-foreground hover:bg-muted")}
- >
- <Icon size={16} weight="bold"/>
- </button>
- ))}
- </div>
- </PopoverContent>
- </Popover>
-
- {editingCategory?.id === cat.id ? (
- <Input
- type="text"value={editingCategory?.nombre ||''}
- onChange={(e) => setEditingCategory(editingCategory ? { ...editingCategory, nombre: e.target.value } : { id: cat.id, nombre: e.target.value })}
- onKeyDown={async (e) => {
- if (e.key ==='Enter') {
- if (editingCategory?.nombre.trim()) {
- await updateRxCategoria(cat.id, { nombre: editingCategory.nombre.trim() });
- showToast.success('Categoría actualizada');
- }
- setEditingCategory(null);
- }
- if (e.key ==='Escape') setEditingCategory(null);
- }}
- className="flex-1 font-bold h-8 text-xs"autoFocus
- />
- ) : (
- <div className="flex items-center gap-1.5 flex-1 min-w-0">
- <span className="font-semibold text-foreground truncate">{cat.nombre}</span>
- {cat.es_comida_incluida && (
- <span className="px-1.5 py-0.5 rounded-xs bg-emerald-100 text-emerald-700 text-[10px] font-bold shrink-0">Plan</span>
- )}
- </div>
- )}
- </div>
-
- <div className="flex items-center justify-end gap-1">
- {editingCategory?.id === cat.id ? (
- <>
- <button
- type="button"onClick={async () => {
- if (editingCategory?.nombre.trim()) {
- await updateRxCategoria(cat.id, { nombre: editingCategory.nombre.trim() });
- showToast.success('Categoría actualizada');
- }
- setEditingCategory(null);
- }}
- className="w-7 h-7 rounded-md text-foreground flex items-center justify-center cursor-pointer">
- <Check size={14} weight="bold"/>
- </button>
- <button
- type="button"onClick={() => setEditingCategory(null)}
- className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
- <X size={14} />
- </button>
- </>
- ) : (
- <>
- <button
- type="button"title={cat.es_comida_incluida ?'Quitar del plan':'Marcar como comida incluida en plan'}
- onClick={async () => {
- await updateRxCategoria(cat.id, { es_comida_incluida: !cat.es_comida_incluida });
- }}
- className={cn("w-7 h-7 rounded-md flex items-center justify-center cursor-pointer transition-colors",
- cat.es_comida_incluida ?"bg-emerald-500 text-white":"text-muted-foreground")}
- >
- <Check size={13} weight="bold"/>
- </button>
- <button
- type="button"title={cat.imprimir_primero ?'Quitar prioridad de impresión':'Imprimir primero en la comanda de cocina'}
- onClick={async () => {
- await updateRxCategoria(cat.id, { imprimir_primero: !cat.imprimir_primero });
- }}
- className={cn("w-7 h-7 rounded-md flex items-center justify-center cursor-pointer transition-colors",
- cat.imprimir_primero ?"bg-primary text-primary-foreground":"text-muted-foreground")}
- >
- <NumberCircleOneIcon size={14} weight="bold"/>
- </button>
- <button
- type="button"onClick={() => setEditingCategory(cat)}
- className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
- <PencilLine size={13} />
- </button>
- <button
- type="button"onClick={() => {
- openConfirm('¿Eliminar Categoría?',`Los productos de"${cat.nombre}"se quedarán sin categoría.`,
- async () => {
- await updateRxCategoria(cat.id, { _deleted: true });
- showToast.success('Categoría eliminada');
- }
- );
- }}
- className="w-7 h-7 rounded-md text-muted-foreground flex items-center justify-center cursor-pointer">
- <Trash size={13} />
- </button>
- </>
- )}
- </div>
  </div>
  );
- })
+ })}
+ </div>
  )}
  </div>
- </div>
+ </>
+ )}
  </SheetContent>
  </Sheet>
- </div>
+ </PageFrame>
  );
 }
 

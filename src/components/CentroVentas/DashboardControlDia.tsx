@@ -81,7 +81,7 @@ function SeccionOrigen({ icon: Icon, titulo, grupo }: {
     <div className="flex flex-col py-3 first:pt-0">
       <div className="flex items-center gap-2 mb-1">
         <span className="flex items-center gap-1.5 text-xs font-extrabold text-foreground whitespace-nowrap">
-          <Icon size={14} className="text-primary" /> {titulo}
+          <Icon size={14} className="text-muted-foreground" /> {titulo}
         </span>
         <div className="flex-1 border-b border-dotted border-border mb-[3px]" />
         <span className="text-xs font-black text-foreground whitespace-nowrap">${grupo.total.toFixed(2)}</span>
@@ -131,9 +131,9 @@ function StatTile({ icon: Icon, label, value, tone = 'neutral', sub }: {
   sub?: string;
 }) {
   const toneClasses: Record<string, string> = {
-    positive: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
-    info: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30',
-    warning: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
+    positive: 'text-muted-foreground bg-muted dark:bg-primary/30',
+    info: 'text-info-foreground bg-info/10 dark:bg-info/30',
+    warning: 'text-warning-foreground bg-warning-soft dark:bg-warning-foreground/30',
     neutral: 'text-muted-foreground bg-muted/50',
   };
 
@@ -312,12 +312,12 @@ export function DashboardControlDia({ date, items, onSelectVenta }: DashboardCon
               <span className="text-muted-foreground">{cobradoPorcentaje.toFixed(1)}% cobrado</span>
             </CardTitle>
             <div className="h-3 w-full bg-muted rounded-full overflow-hidden flex mt-2">
-              <div style={{ width: `${Math.min(cobradoPorcentaje, 100)}%` }} className="bg-emerald-500 h-full transition-all" />
-              <div style={{ width: `${Math.min(pendientePorcentaje, 100)}%` }} className="bg-amber-400 h-full transition-all" />
+              <div style={{ width: `${Math.min(cobradoPorcentaje, 100)}%` }} className="bg-primary h-full transition-all" />
+              <div style={{ width: `${Math.min(pendientePorcentaje, 100)}%` }} className="bg-warning-foreground h-full transition-all" />
             </div>
             <div className="flex gap-4 mt-2 text-[11px] font-semibold text-muted-foreground">
-              <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Cobrado</span>
-              <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-400" /> Pendiente</span>
+              <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-primary" /> Cobrado</span>
+              <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-warning-foreground" /> Pendiente</span>
             </div>
           </CardHeader>
         </Card>
@@ -356,7 +356,7 @@ export function DashboardControlDia({ date, items, onSelectVenta }: DashboardCon
               </Table>
               <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
                 <span className="text-xs font-bold">Total</span>
-                <span className="text-xs font-black text-blue-700">${metrics.totalCobrado.toFixed(2)}</span>
+                <span className="text-xs font-black text-info-foreground">${metrics.totalCobrado.toFixed(2)}</span>
               </div>
             </CardContent>
           </Card>
@@ -373,14 +373,14 @@ export function DashboardControlDia({ date, items, onSelectVenta }: DashboardCon
                     icon={Wallet}
                     label="Ventas a Crédito"
                     value={String(metrics.ventasCredito)}
-                    valueClassName={metrics.ventasCredito > 0 ? "text-rose-700" : undefined}
+                    valueClassName={metrics.ventasCredito > 0 ? "text-destructive" : undefined}
                   />
                   <FilaDato label="Ventas Directas" value={String(metrics.ventasValidas - metrics.ventasCredito)} />
                   <FilaDato
                     icon={Receipt}
                     label="Facturadas"
                     value={String(metrics.ventasFacturadas)}
-                    valueClassName="text-emerald-600"
+                    valueClassName="text-foreground"
                   />
                   <FilaDato label="Sin Facturar" value={String(metrics.ventasValidas - metrics.ventasFacturadas)} />
                 </TableBody>
@@ -391,14 +391,14 @@ export function DashboardControlDia({ date, items, onSelectVenta }: DashboardCon
 
         {/* Ventas Pendientes (Alertas) */}
         {metrics.ventasPendientes.length > 0 && (
-          <Card size="sm" className="shadow-xs border-amber-200 dark:border-amber-900/50 !gap-0 !py-0">
-            <CardHeader className="!px-4 !py-3 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20 rounded-t-[min(var(--radius-4xl),24px)]">
-              <CardTitle className="text-sm font-bold text-amber-800 dark:text-amber-400 flex items-center justify-between gap-2">
+          <Card size="sm" className="shadow-xs border-warning/40 dark:border-warning/50 !gap-0 !py-0">
+            <CardHeader className="!px-4 !py-3 border-b border-warning/40 dark:border-warning/40 bg-warning/30 dark:bg-warning-foreground/20 rounded-t-[min(var(--radius-4xl),24px)]">
+              <CardTitle className="text-sm font-bold text-warning-foreground dark:text-warning-foreground flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <WarningCircle size={18} />
                   Atención: {metrics.ventasPendientes.length} {metrics.ventasPendientes.length === 1 ? 'venta' : 'ventas'} con saldo pendiente
                 </span>
-                <Badge variant="outline" className="font-black text-amber-700 border-amber-300 bg-amber-100/50">
+                <Badge variant="outline" className="font-black text-warning-foreground border-warning bg-warning/50">
                   ${metrics.saldoPendiente.toFixed(2)}
                 </Badge>
               </CardTitle>
@@ -418,7 +418,7 @@ export function DashboardControlDia({ date, items, onSelectVenta }: DashboardCon
                       </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-black text-amber-600">
+                      <span className="text-sm font-black text-warning-foreground">
                         ${venta.saldo.toFixed(2)}
                       </span>
                       <ArrowRight size={16} className="text-muted-foreground" />

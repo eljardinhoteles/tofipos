@@ -1,10 +1,9 @@
 import { useState, useEffect } from'react';
-import {
- Minus, Plus, UserPlus, X
-} from'@phosphor-icons/react';
+import { Minus, Plus, CalendarPlus } from'@phosphor-icons/react';
+import { ReservaHeader } from'./ReservaHeader';
 import { showToast } from'@/lib/toast';
 import { useUI } from'../../../context/UIContext';
-import { initVerticalRxDb, createRxReserva, updateRxReserva, createRxComanda } from'../../../db/rxdb';
+import { initVerticalRxDb, createRxReserva, updateRxReserva, createRxComanda, siguienteFolio } from'../../../db/rxdb';
 import { Button } from'@/components/ui/button';
 import { Input } from'@/components/ui/input';
 import { ClienteSelector } from'@/components/Common/ClienteSelector';
@@ -140,8 +139,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  });
  } else {
  const now = new Date().toISOString();
- const rxDb = await initVerticalRxDb();
- const nextFolio = (await rxDb.comandas.find().exec()).length + 1;
+ const nextFolio = await siguienteFolio();
  await createRxComanda({
  id: comandaId, folio: nextFolio,
  mesa_id:'reserva_'+ reservaId,
@@ -178,28 +176,23 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  }
  };
 
+ const etiqueta = 'text-xs font-bold text-foreground';
+ const campo = 'h-12 text-base font-semibold';
+
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">
- {isEditMode ?'Editar Reserva':'Nueva Reserva'}
- </h3>
- <div className="flex items-center gap-1.5 text-xs text-primary font-bold mt-0.5">
- <UserPlus size={14} />
- <span>{nombre ||'Cliente sin asignar'}</span>
- </div>
- </div>
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <X size={18} weight="bold"/>
- </button>
- </header>
+ <ReservaHeader
+ badge={<CalendarPlus size={22} weight="bold" />}
+ titulo={isEditMode ? 'Editar reserva' : 'Nueva reserva'}
+ subtitulo={nombre.trim() || 'Cliente sin asignar'}
+ onClose={onBack}
+ />
 
- <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cliente</h4>
  <div className="flex flex-col gap-1.5">
- <Label>Nombre del cliente *</Label>
+ <Label className={etiqueta}>Nombre del cliente *</Label>
  <ClienteSelector
  value={nombre}
  placeholder="Buscar cliente o escribir nombre"
@@ -209,77 +202,72 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  setEmail(cliente.email ||'');
  }}
  />
- {nombreError && <span className="text-[10px] text-destructive font-bold">{nombreError}</span>}
+ {nombreError && <span className="text-xs text-destructive font-bold">{nombreError}</span>}
  </div>
+ </section>
 
- <div className="flex flex-col gap-1.5">
- <Label>Comensales</Label>
- <div className="flex items-center justify-center gap-4 bg-muted p-2 rounded-xl border border-border">
- <button
- type="button"onClick={() => setPersonas(Math.max(1, personas - 1))}
- className="w-9 h-9 rounded-lg bg-card border border-border text-foreground flex items-center justify-center font-bold">
- <Minus size={16} />
- </button>
- <span className="font-black text-xl text-foreground w-8 text-center">{personas}</span>
- <button
- type="button"onClick={() => setPersonas(Math.min(50, personas + 1))}
- className="w-9 h-9 rounded-lg bg-card border border-border text-foreground flex items-center justify-center font-bold">
- <Plus size={16} />
- </button>
- </div>
- </div>
-
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cuándo y cuántos</h4>
  <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1">
- <Label>Fecha</Label>
- <DatePickerField
- value={fecha}
- onChange={setFecha}
- />
- </div>
- <div className="flex flex-col gap-1">
- <Label>Hora</Label>
- <Input
- type="time"value={hora}
- onChange={e => setHora(e.target.value)}
- />
- </div>
- </div>
-
  <div className="flex flex-col gap-1.5">
- <Label>Zona preferida</Label>
+ <Label className={etiqueta}>Fecha</Label>
+ <DatePickerField value={fecha} onChange={setFecha} />
+ </div>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="reserva-hora" className={etiqueta}>Hora</Label>
+ <Input id="reserva-hora" type="time" value={hora} onChange={e => setHora(e.target.value)} className={campo} />
+ </div>
+ </div>
+ <div className="flex flex-col gap-1.5">
+ <Label className={etiqueta}>Comensales</Label>
+ <div className="flex items-center h-14 rounded-full border border-border overflow-hidden">
+ <button type="button" aria-label="Menos" disabled={personas <= 1} onClick={() => setPersonas(Math.max(1, personas - 1))}
+ className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
+ <Minus size={20} weight="bold" />
+ </button>
+ <span className="flex-1 text-center font-black text-2xl text-foreground tabular-nums">{personas}</span>
+ <button type="button" aria-label="Más" disabled={personas >= 50} onClick={() => setPersonas(Math.min(50, personas + 1))}
+ className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
+ <Plus size={20} weight="bold" />
+ </button>
+ </div>
+ </div>
+ </section>
+
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Detalles</h4>
+ <div className="flex flex-col gap-1.5">
+ <Label className={etiqueta}>Zona preferida</Label>
  <Select value={zonaId ||'__any__'} onValueChange={(v) => setZonaId(v ==='__any__'?'': v)}>
- <SelectTrigger className="w-full">
+ <SelectTrigger className="h-12 w-full px-3 text-base font-semibold rounded-2xl bg-card border-border shadow-xs">
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="__any__">Cualquier zona</SelectItem>
+ <SelectItem value="__any__" className="text-sm">Cualquier zona</SelectItem>
  {zonas.map(z => (
- <SelectItem key={z.id} value={z.id}>{z.nombre}</SelectItem>
+ <SelectItem key={z.id} value={z.id} className="text-sm">{z.nombre}</SelectItem>
  ))}
  </SelectContent>
  </Select>
  </div>
-
  <div className="flex flex-col gap-1.5">
- <Label>Notas de la reserva</Label>
+ <Label htmlFor="reserva-nota" className={etiqueta}>Notas de la reserva</Label>
  <Textarea
- rows={3}
- placeholder="Ej: Mesa cerca de la ventana..."value={nota}
+ id="reserva-nota" rows={3}
+ placeholder="Ej: Mesa cerca de la ventana..." value={nota}
  onChange={e => setNota(e.target.value)}
+ className="min-h-24 text-base font-medium"
  />
  </div>
+ </section>
  </main>
 
- <footer className="p-4 border-t border-border bg-card flex items-center justify-end gap-2 shrink-0">
- <Button type="button"variant="secondary"onClick={onBack}>
+ <footer className="p-4 border-t border-border bg-card flex items-center gap-2 shrink-0">
+ <Button type="button" variant="outline" onClick={onBack} disabled={isProcessing} className="h-12 px-5 font-bold">
  Cancelar
  </Button>
- <Button
- type="button"disabled={isProcessing}
- onClick={handleFinish}
- >
- {isEditMode ?'Guardar Cambios':'Crear Reserva'}
+ <Button type="button" disabled={isProcessing} onClick={handleFinish} className="h-12 flex-1 font-bold">
+ {isProcessing ? 'Guardando…' : isEditMode ? 'Guardar cambios' : 'Crear reserva'}
  </Button>
  </footer>
  </div>

@@ -130,7 +130,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
 
   if (adding) {
     return (
-      <div className="shrink-0 border-b border-border bg-muted px-3 pt-5 pb-3 md:pt-3 flex flex-col gap-3">
+      <div className="shrink-0 border-b border-border bg-primary/10 px-3 pt-5 pb-3 md:pt-3 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Input
             autoFocus
@@ -173,7 +173,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
   }
 
   return (
-    <div className="relative shrink-0 border-b border-border bg-muted md:h-[72px]">
+    <div className="relative shrink-0 border-b border-border bg-primary/10 md:h-[72px]">
       {borde.izq && (
         <button
           type="button"
@@ -202,7 +202,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
           aria-label="Ver toda la mesa"
           className={cn(
             'shrink-0 w-12 h-12 rounded-full border flex items-center justify-center cursor-pointer transition-colors',
-            vistaTodas ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border bg-card'
+            vistaTodas ? 'border-primary bg-primary text-white' : 'border-border bg-card'
           )}
         >
           <ListBullets size={20} weight="bold" />
@@ -221,12 +221,12 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
               onClick={() => onSelect(c.id)}
               className={cn(cardBase,
                 enCuenta
-                  ? (isActive ? 'border-orange-500 bg-orange-500 text-white' : 'border-orange-400 bg-orange-100 text-orange-800')
-                  : (isActive ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border bg-card'))}
+                  ? (isActive ? 'border-warning bg-warning-foreground text-white' : 'border-warning bg-warning-soft text-warning-foreground')
+                  : (isActive ? 'border-primary bg-primary text-white' : 'border-border bg-card'))}
             >
               <span className="w-full text-xs font-extrabold leading-tight truncate">{c.subcomanda_nombre}</span>
               <span className={cn('text-[10px] font-medium leading-tight',
-                isActive ? 'text-white/80' : enCuenta ? 'text-orange-700' : 'text-muted-foreground')}>
+                isActive ? 'text-white/80' : enCuenta ? 'text-warning-foreground' : 'text-muted-foreground')}>
                 {cantidad} {cantidad === 1 ? 'item' : 'items'}
               </span>
             </button>

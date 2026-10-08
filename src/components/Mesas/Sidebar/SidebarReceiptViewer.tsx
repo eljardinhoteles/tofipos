@@ -1,11 +1,15 @@
 import { ComandaTotales } from'./ComandaTotales';
+import { folioLabel } from '../../../lib/folio';
+import { ComandaLiquidacion } from'./ComandaLiquidacion';
+import { liquidacionComanda } from'../../../lib/anticipoMesa';
 import { useEffect, useState, useMemo } from'react';
 import { X, Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { ComandaItemRow } from'./ComandaItemRow';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
-import { SidebarPagosModal } from'./SidebarPagosModal';
+import { useNavigate } from 'react-router-dom';
+import { CurrencyDollar } from'@phosphor-icons/react';
 import { generarTicketPago, generarPrecuenta } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
@@ -34,13 +38,14 @@ export function SidebarReceiptViewer({
  onClose,
  onAction: _onAction,
 }: SidebarReceiptViewerProps) {
- const [showPagosModal, setShowPagosModal] = useState(false);
+ const navigate = useNavigate();
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [pagos, setPagos] = useState<any[]>([]);
  const [pagosDeVentas, setPagosDeVentas] = useState<any[]>([]);
+ const [ventasMesa, setVentasMesa] = useState<any[]>([]);
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
  const { openConfirm } = useUI();
@@ -146,6 +151,25 @@ export function SidebarReceiptViewer({
  };
  }, [activeComanda?.id]);
 
+ // Ventas de TODAS las comandas de la mesa: las marcas de anticipo de esta
+ // cuenta viven en la venta de la reserva, no en una venta propia.
+ useEffect(() => {
+ let alive = true;
+ let sub: { unsubscribe: () => void } | null = null;
+ (async () => {
+ if (!activeComanda?.mesa_id) { setVentasMesa([]); return; }
+ const rxDb = await initVerticalRxDb();
+ const comandas = await rxDb.comandas.find({ selector: { mesa_id: activeComanda.mesa_id, _deleted: { $ne: true } } }).exec();
+ if (!alive) return;
+ const ids = comandas.map((c: any) => c.id);
+ if (ids.length === 0) { setVentasMesa([]); return; }
+ sub = rxDb.ventas.find({ selector: { comanda_id: { $in: ids }, _deleted: { $ne: true } } }).$.subscribe((docs: any[]) => {
+ if (alive) setVentasMesa(docs.map((d: any) => d.toJSON()));
+ });
+ })().catch(() => {});
+ return () => { alive = false; sub?.unsubscribe(); };
+ }, [activeComanda?.mesa_id, activeComanda?.id]);
+
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
  const { menuItems } = useRxMenuCatalog();
 
@@ -156,8 +180,28 @@ export function SidebarReceiptViewer({
  const subtotal = totales.subtotalNeto;
  const ivaCalculado = totales.ivaTotal;
 
- const todosPagos = useMemo(() => [...pagos, ...pagosDeVentas], [pagos, pagosDeVentas]);
+ const liquidacion = useMemo(
+ () => (activeComanda?.folio != null ? liquidacionComanda(ventasMesa, folioLabel(activeComanda)) : null),
+ [ventasMesa, activeComanda]
+ );
+ // Con anticipo, los pagos de la venta son de la reserva (no de esta cuenta):
+ // el recibo muestra lo que de verdad pagó esta comanda.
+ const todosPagos = useMemo(() => {
+ if (!liquidacion) return [...pagos, ...pagosDeVentas];
+ const fecha = activeComanda?.updated_at || new Date().toISOString();
+ const orgId = activeComanda?.organization_id || '';
+ const res: any[] = [...pagos];
+ if (liquidacion.anticipoAplicado > 0.005) res.push({ id: 'anticipo', comanda_id: activeComanda?.id, monto: liquidacion.anticipoAplicado, fecha, organization_id: orgId, tipo_division: 'Anticipo aplicado' });
+ if (liquidacion.porCobrar > 0.005) res.push({ id: 'por-cobrar', comanda_id: activeComanda?.id, monto: liquidacion.porCobrar, fecha, organization_id: orgId });
+ return res;
+ }, [pagos, pagosDeVentas, liquidacion, activeComanda?.id, activeComanda?.updated_at, activeComanda?.organization_id]);
  const totalPagado = useMemo(() => todosPagos.reduce((acc, p) => acc + p.monto, 0), [todosPagos]);
+
+// Venta donde se maneja el cobro: la que guarda las marcas de anticipo de
+ // esta cuenta, o la propia de la comanda.
+ const ventaIdCentro = liquidacion?.ventaId
+ || ventasMesa.find((v: any) => v.comanda_id === activeComanda?.id)?.id
+ || null;
 
  const isFacturado = activeComanda?.estado ==='facturado';
  const isAnulada = activeComanda?.estado ==='anulada';
@@ -181,16 +225,16 @@ export function SidebarReceiptViewer({
  número de la mesa/habitación, título + subtítulo, fondo temático en
  desktop según el estado de la comanda. */}
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
- esComandaEnHabitacionActiva ?"md:bg-sky-600 md:text-white": isAnulada ?"md:bg-red-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
+ esComandaEnHabitacionActiva ?"md:bg-info md:text-white": isAnulada ?"md:bg-destructive md:text-white":"md:bg-primary md:text-primary-foreground")}>
  <div className="flex items-center gap-3">
  <div className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0",
- esComandaEnHabitacionActiva ?"bg-sky-600 text-white md:bg-white/15": isAnulada ?"bg-red-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
+ esComandaEnHabitacionActiva ?"bg-info text-white md:bg-white/15": isAnulada ?"bg-destructive text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
  {badgeNum}
  </div>
  <div className="flex flex-col min-w-0">
  <h3 className={cn("font-extrabold text-base leading-tight truncate",
  esComandaEnHabitacionActiva || isAnulada ?"md:text-white":"md:text-primary-foreground")}>
- Comanda #{activeComanda?.folio}
+ Comanda #{folioLabel(activeComanda)}
  </h3>
  <div className="flex items-center gap-1.5">
  {activeComanda?.created_at && (
@@ -214,8 +258,8 @@ export function SidebarReceiptViewer({
  <span className={cn("px-3 py-1 rounded-full font-black text-xs uppercase shrink-0",
  esComandaEnHabitacionActiva
  ?"bg-white/20 text-white": isFacturado
- ?"bg-primary/10 text-primary": isAnulada
- ?"bg-white/20 text-white":"bg-emerald-100 text-emerald-800")}>
+ ?"bg-muted text-muted-foreground": isAnulada
+ ?"bg-white/20 text-white":"bg-muted text-muted-foreground")}>
  {esComandaEnHabitacionActiva ?'En Habitación': isFacturado ?'Conciliada': isAnulada ?'Anulada':'Cobrada'}
  </span>
  <Button
@@ -252,11 +296,11 @@ export function SidebarReceiptViewer({
  </div>
 
  {isAnulada && activeComanda?.motivo_anulacion && (
-      <div className="px-4 py-2.5 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900 shrink-0">
-        <span className="text-[10px] font-bold uppercase text-red-600 dark:text-red-400 tracking-wider block mb-0.5">
+      <div className="px-4 py-2.5 bg-destructive/10 dark:bg-destructive/30 border-b border-destructive/15 dark:border-destructive shrink-0">
+        <span className="text-[10px] font-bold uppercase text-destructive dark:text-destructive tracking-wider block mb-0.5">
           Motivo de Anulación
         </span>
-        <p className="text-xs text-red-800 dark:text-red-300 font-medium leading-relaxed">
+        <p className="text-xs text-destructive dark:text-white font-medium leading-relaxed">
           {activeComanda.motivo_anulacion}
         </p>
       </div>
@@ -275,10 +319,11 @@ export function SidebarReceiptViewer({
  subtotal={subtotal}
  iva={ivaCalculado}
  ivaPorcentaje={ivaPorcentaje}
- total={totalPagado}
- etiquetaTotal="Total Pagado"
+ total={liquidacion ? liquidacion.consumo : totalPagado}
+ etiquetaTotal={liquidacion ? 'Total cuenta' : 'Total Pagado'}
  tono="success"
  />
+ {liquidacion && <ComandaLiquidacion liquidacion={liquidacion} />}
 
  <div className={cn("grid gap-2", esComandaEnHabitacionActiva ?"grid-cols-1":"grid-cols-2")}>
  <Button
@@ -323,9 +368,15 @@ export function SidebarReceiptViewer({
  {!esComandaEnHabitacionActiva && (
  <Button
  variant="secondary"className="w-full font-bold"
- onClick={() => setShowPagosModal(true)}
+ disabled={!ventaIdCentro}
+ title={ventaIdCentro ? undefined : 'Esta comanda no tiene una venta en Centro de Ventas'}
+ onClick={() => {
+ if (!ventaIdCentro) return;
+ try { sessionStorage.setItem('pos_venta_a_abrir', ventaIdCentro); } catch { /* sin storage: abre sin selección */ }
+ navigate('/v2/centro-ventas');
+ }}
  >
- Ver Pagos
+ <CurrencyDollar size={18} weight="bold" className="mr-1.5" /> Ver en C. de Ventas
  </Button>
  )}
  {isAnulada && esAdmin && (
@@ -339,13 +390,6 @@ export function SidebarReceiptViewer({
   )}
  </div>
  </footer>
-
- <SidebarPagosModal
- opened={showPagosModal}
- onClose={() => setShowPagosModal(false)}
- pagos={todosPagos}
- totalPagado={totalPagado}
- />
 
  <TicketPreviewModal
  opened={previewOpened}

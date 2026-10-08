@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { MainSidebarV2 } from './MainSidebarV2';
-import { MobileNavbar } from './MobileNavbar';
+import { MobileNavbar, MenuCapaMovil } from './MobileNavbar';
 import { TableSidebar } from '../Mesas/TableSidebar';
 import {
   Drawer,
@@ -13,6 +13,10 @@ import {
   DrawerDescription,
   DrawerHandle,
 } from '@/components/ui/drawer';
+import { cn } from '@/lib/utils';
+import { useFolioVersion } from '../../lib/folio';
+import { MENU_EN_CAPAS, setMenuMovilAbierto, useMenuMovilAbierto } from '../../lib/menuMovil';
+import { setSheetMovilListo } from '../../lib/sheetMovil';
 import { useUI } from '../../context/UIContext';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -24,17 +28,71 @@ import { isOperativeComanda, pickComandaActiva } from '../../db/comandaState';
 import { initVerticalRxDb, subscribeSyncStatus, pingSyncStatus, forceSyncAll, type SyncStatus } from '../../db/rxdb';
 import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { GlobalModals } from '../Common/GlobalModals';
-import OrdenesV2 from '../../pages/OrdenesV2';
+import { AvisoCambioIvaModal } from '../Common/AvisoCambioIvaModal';
+import { ActividadDrawer } from '../Common/ActividadDrawer';
 import MesasV2 from '../../pages/MesasV2';
-import MenuV2 from '../../pages/MenuV2';
-import ReservasV2 from '../../pages/ReservasV2';
-import ClientesV2 from '../../pages/ClientesV2';
-import AjustesV2 from '../../pages/AjustesV2';
-import MetricasV2 from '../../pages/MetricasV2';
-import CentroVentasV2 from '../../pages/CentroVentasV2';
+
+// Mesas es la pantalla de arranque y se carga con la app. El resto va en trozos
+// aparte (gráficos, calendario, ajustes…): el celular analiza menos JavaScript
+// al abrir. El service worker los precachea, así que siguen funcionando offline.
+const importOrdenes = () => import('../../pages/OrdenesV2');
+const importMenu = () => import('../../pages/MenuV2');
+const importReservas = () => import('../../pages/ReservasV2');
+const importClientes = () => import('../../pages/ClientesV2');
+const importAjustes = () => import('../../pages/AjustesV2');
+const importMetricas = () => import('../../pages/MetricasV2');
+const importCentroVentas = () => import('../../pages/CentroVentasV2');
+const OrdenesV2 = lazy(importOrdenes);
+const MenuV2 = lazy(importMenu);
+const ReservasV2 = lazy(importReservas);
+const ClientesV2 = lazy(importClientes);
+const AjustesV2 = lazy(importAjustes);
+const MetricasV2 = lazy(importMetricas);
+const CentroVentasV2 = lazy(importCentroVentas);
+
+// Con la app ya lista y el celular libre, calienta los trozos restantes para que
+// cambiar de pantalla sea instantáneo (salen del precaché, sin red).
+const esMovil = () => typeof window !== 'undefined' && window.innerWidth < 768;
+
+function precargarPantallas() {
+  const pantallas = [importOrdenes, importReservas, importMenu, importClientes, importMetricas, importAjustes];
+  // Centro de Ventas solo se usa en PC: no se precarga en el celular.
+  if (!esMovil()) pantallas.splice(1, 0, importCentroVentas);
+  pantallas.forEach((cargar, i) => setTimeout(() => { cargar().catch(() => { }); }, i * 400));
+}
+
+function PantallaCargando() {
+  return <div className="h-full w-full bg-background" aria-hidden="true" />;
+}
+
+// Mientras el sheet móvil sube: silueta estable del panel (cabecera + filas) en
+// lugar de ver el contenido real llenarse a mitad de la animación.
+function SheetSkeleton() {
+  return (
+    <div className="absolute inset-0 flex flex-col animate-pulse" aria-hidden="true">
+      <div className="h-24 bg-muted flex items-center gap-3 px-4 pt-4">
+        <div className="size-12 rounded-xl bg-card/70" />
+        <div className="flex flex-col gap-2">
+          <div className="h-4 w-36 rounded-full bg-card/70" />
+          <div className="h-3 w-24 rounded-full bg-card/50" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-4 p-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="size-8 rounded-lg bg-muted" />
+            <div className="h-4 flex-1 rounded-full bg-muted" />
+            <div className="h-4 w-14 rounded-full bg-muted" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function AppLayoutV2() {
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     isPinned,
     selectedMesaId, setSelectedMesaId,
@@ -108,7 +166,7 @@ export function AppLayoutV2() {
         if (!alive) return;
         setSelectedMesa(doc ? doc.toJSON() : null);
       });
-    })().catch(() => {});
+    })().catch(() => { });
     return () => {
       alive = false;
       sub?.unsubscribe();
@@ -156,7 +214,7 @@ export function AppLayoutV2() {
             setCartComanda(pickComandaActiva(operativas, activeSubcomandaId) ?? null);
           })
       );
-    })().catch(() => {});
+    })().catch(() => { });
     return () => {
       alive = false;
       subs.forEach((s) => s.unsubscribe());
@@ -178,7 +236,7 @@ export function AppLayoutV2() {
           if (!alive) return;
           setCartItems(docs.map((d: any) => d.toJSON()));
         });
-    })().catch(() => {});
+    })().catch(() => { });
     return () => {
       alive = false;
       sub?.unsubscribe();
@@ -199,6 +257,22 @@ export function AppLayoutV2() {
     };
   }, [cartComanda, cartItems, selectedMesa, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva]);
 
+  // Centro de Ventas es solo de PC: si se llega por URL en el celular, vuelve a Mesas.
+  useEffect(() => {
+    if (isMobile && currentPath.includes('/centro-ventas')) navigate('/v2/mesas', { replace: true });
+  }, [isMobile, currentPath, navigate]);
+
+  // Precarga de pantallas cuando el celular ya está libre (no compite con el arranque).
+  useEffect(() => {
+    const idle = (window as any).requestIdleCallback as undefined | ((cb: () => void, o?: { timeout: number }) => number);
+    if (idle) {
+      const id = idle(precargarPantallas, { timeout: 8000 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(precargarPantallas, 4000);
+    return () => clearTimeout(t);
+  }, []);
+
   const isSidebarVisible = !isMobile && (
     isPinned ||
     selectedMesaId !== null ||
@@ -216,21 +290,47 @@ export function AppLayoutV2() {
     [selectedMesaId, mesaView, configView, menuView, reservaView, reservaProductosComandaId]
   );
 
+  // Solo los paneles que cargan datos (mesa con cuenta, detalle de reserva) se
+  // ocultan tras el esqueleto mientras suben. Los formularios (abrir mesa libre,
+  // configuración, nueva reserva, producto) no cargan nada: salen directo.
+  const sheetConCarga =
+    reservaView === 'detalle' ||
+    (selectedMesaId !== null && configView === 'none' && reservaView === 'none' && menuView !== 'producto' &&
+      !!selectedMesa && selectedMesa.estado !== 'libre');
+
   // Mantiene el contenido montado mientras el sheet móvil termina de deslizarse
   // al cerrar. Desmontar al instante hacía que el panel se vaciara/colapsara
   // a mitad de la animación (brusco, sobre todo en gama baja).
   // Al cerrar, el estado (mesa/configView) ya se limpió: se re-renderiza el
   // último contenido abierto, congelado, para que no cambie mientras sale.
   const [sheetContentMounted, setSheetContentMounted] = useState(false);
+  // El contenido se monta al abrir (para que cargue sus datos mientras el sheet
+  // sube) pero queda oculto tras un esqueleto hasta que termina de subir: así no
+  // se ve "armarse" a mitad de la animación (lista vacía, totales llenándose).
+  const [sheetListo, setSheetListo] = useState(false);
+  // El panel pesado se monta recién cuando la animación ya arrancó (2 cuadros):
+  // montarlo en el mismo instante que se abre el sheet atrasa el inicio del deslizamiento.
+  const [sheetMontarPanel, setSheetMontarPanel] = useState(false);
+  // true SOLO cuando vaul avisa que terminó de subir (sin el respaldo por tiempo de sheetListo).
+  const [sheetSubio, setSheetSubio] = useState(false);
   const lastSheetContent = useRef<ReactNode>(null);
   useEffect(() => {
     if (isMobileSheetOpen) {
       setSheetContentMounted(true);
-      return;
+      let r2 = 0;
+      const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setSheetMontarPanel(true)); });
+      // Respaldo por si onAnimationEnd de vaul no llega (p. ej. gama baja).
+      const reveal = setTimeout(() => setSheetListo(true), 380);
+      return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); clearTimeout(reveal); };
     }
-    const t = setTimeout(() => setSheetContentMounted(false), 450);
+    const t = setTimeout(() => { setSheetContentMounted(false); setSheetListo(false); setSheetMontarPanel(false); setSheetSubio(false); }, 450);
     return () => clearTimeout(t);
   }, [isMobileSheetOpen]);
+
+  // Avisa a MesasV2 cuándo el sheet ya está arriba (para cambiar el fondo sin que se vea).
+  useEffect(() => {
+    setSheetMovilListo(isMobile && isMobileSheetOpen && sheetSubio);
+  }, [isMobile, isMobileSheetOpen, sheetSubio]);
 
   const closeMobileSheet = useCallback(() => {
     setSelectedMesaId(null);
@@ -243,25 +343,25 @@ export function AppLayoutV2() {
   }, [setSelectedMesaId, setConfigView, setViewingComandaId, setReservaView, setSelectedReservaId, setMenuView, setSelectedMenuProductId]);
 
   const mobileSidebarContent = (
-                  <TableSidebar
-                    selectedMesa={selectedMesa}
-                    onClose={closeMobileSheet}
-                    onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
-                      if (res === 'productos') {
-                        setMesaView('productos');
-                      } else if (res === 'mapa') {
-                        setSelectedMesaId(null);
-                        setConfigView('none');
-                        setViewingComandaId(null);
-                        setMesaView('mapa');
-                      }
-                    }, setCheckoutView)}
-                    configView={configView}
-                    setConfigView={setConfigView}
-                    selectedConfigPiso={selectedConfigPiso}
-                    setSelectedConfigPiso={setSelectedConfigPiso}
-                    mesaEsDeHabitaciones={selectedMesaEsHabitacion}
-                  />
+    <TableSidebar
+      selectedMesa={selectedMesa}
+      onClose={closeMobileSheet}
+      onAction={(mesa, action) => handleTableAction(mesa, action, (res) => {
+        if (res === 'productos') {
+          setMesaView('productos');
+        } else if (res === 'mapa') {
+          setSelectedMesaId(null);
+          setConfigView('none');
+          setViewingComandaId(null);
+          setMesaView('mapa');
+        }
+      }, setCheckoutView)}
+      configView={configView}
+      setConfigView={setConfigView}
+      selectedConfigPiso={selectedConfigPiso}
+      setSelectedConfigPiso={setSelectedConfigPiso}
+      mesaEsDeHabitaciones={selectedMesaEsHabitacion}
+    />
   );
   // La copia congelada se guarda en un efecto (no durante el render) para poder
   // re-renderizar el último contenido mientras el sheet se desliza al cerrar.
@@ -269,26 +369,50 @@ export function AppLayoutV2() {
     if (isMobileSheetOpen) lastSheetContent.current = mobileSidebarContent;
   });
 
+  // Re-renderiza el layout cuando cambian las etiquetas de comandas repetidas (397-1).
+  useFolioVersion();
+ // Menú móvil en capas (experimento): la página baja y deja ver las tarjetas de módulos.
+ const menuAbierto = useMenuMovilAbierto();
+ const menuEnCapas = isMobile && MENU_EN_CAPAS;
+ useEffect(() => { setMenuMovilAbierto(false); }, [currentPath]);
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground select-none">
       {/* Sidebar V2 en desktop */}
       {!isMobile && <MainSidebarV2 />}
 
       {/* ÁREA PRINCIPAL V2 + nav móvil */}
-      <div className="flex-1 h-full min-w-0 flex flex-col overflow-hidden">
+      <div className={cn("flex-1 h-full min-w-0 flex flex-col overflow-hidden relative", menuEnCapas && "bg-nav")}>
+        {menuEnCapas && <MenuCapaMovil />}
         <main
-          className="flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-200"
+          // El contenido se encoge con la misma duración y curva que el panel de
+          // vaul (0.5s, cubic-bezier(0.32, 0.72, 0, 1)): así no queda ninguna franja
+          // descubierta mientras el panel se desliza.
+          className={cn(
+            "flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+            menuEnCapas && "z-10 bg-nav transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform",
+            menuEnCapas && "[&_header]:transition-[height,opacity] [&_header]:duration-300",
+            // Con el menú abierto el header de la página se colapsa (su título y botones repetirían la cabecera del menú) y no deja hueco.
+            menuEnCapas && menuAbierto && "translate-y-[31rem] rounded-t-3xl [&_header]:!h-0 [&_header]:overflow-hidden [&_header]:opacity-0 [&_header]:pointer-events-none"
+          )}
           style={!isMobile && isSidebarVisible ? { paddingRight: 462 } : undefined}
         >
+          {/* Con el menú abierto la página queda como "asomada": tocarla lo cierra. */}
+          {menuEnCapas && menuAbierto && (
+            <button type="button" aria-label="Cerrar menú" onClick={() => setMenuMovilAbierto(false)}
+              className="absolute inset-0 z-30 cursor-pointer" />
+          )}
           <div className="h-full w-full min-w-0 overflow-hidden relative">
-            {(currentPath === '/ordenes' || currentPath.includes('/ordenes')) && <div className="h-full"><OrdenesV2 /></div>}
-            {(currentPath === '/mesas' || currentPath.includes('/mesas')) && <div className="h-full"><MesasV2 /></div>}
-            {(currentPath === '/reservas' || currentPath.includes('/reservas')) && <div className="h-full"><ReservasV2 /></div>}
-            {(currentPath === '/menu' || currentPath.includes('/menu')) && <div className="h-full"><MenuV2 /></div>}
-            {(currentPath === '/clientes' || currentPath.includes('/clientes')) && <div className="h-full"><ClientesV2 /></div>}
-            {(currentPath === '/ajustes' || currentPath.includes('/ajustes')) && <div className="h-full"><AjustesV2 /></div>}
-            {(currentPath === '/metricas' || currentPath.includes('/metricas')) && <div className="h-full"><MetricasV2 /></div>}
-            {(currentPath === '/centro-ventas' || currentPath.includes('/centro-ventas')) && <div className="h-full overflow-y-auto"><CentroVentasV2 /></div>}
+            <Suspense fallback={<PantallaCargando />}>
+              {(currentPath === '/ordenes' || currentPath.includes('/ordenes')) && <div className="h-full"><OrdenesV2 /></div>}
+              {(currentPath === '/mesas' || currentPath.includes('/mesas')) && <div className="h-full"><MesasV2 /></div>}
+              {(currentPath === '/reservas' || currentPath.includes('/reservas')) && <div className="h-full"><ReservasV2 /></div>}
+              {(currentPath === '/menu' || currentPath.includes('/menu')) && <div className="h-full"><MenuV2 /></div>}
+              {(currentPath === '/clientes' || currentPath.includes('/clientes')) && <div className="h-full"><ClientesV2 /></div>}
+              {(currentPath === '/ajustes' || currentPath.includes('/ajustes')) && <div className="h-full"><AjustesV2 /></div>}
+              {(currentPath === '/metricas' || currentPath.includes('/metricas')) && <div className="h-full"><MetricasV2 /></div>}
+              {!isMobile && (currentPath === '/centro-ventas' || currentPath.includes('/centro-ventas')) && <div className="h-full overflow-y-auto"><CentroVentasV2 /></div>}
+            </Suspense>
           </div>
         </main>
         {isMobile && (
@@ -368,6 +492,7 @@ export function AppLayoutV2() {
           repositionInputs={!otroDialogAbierto && !esAndroid}
           dismissible
           handleOnly
+          onAnimationEnd={(open) => { if (open) { setSheetListo(true); setSheetSubio(true); } }}
           onOpenChange={(open) => {
             if (!open && !reservaProductosComandaId) {
               closeMobileSheet();
@@ -376,24 +501,29 @@ export function AppLayoutV2() {
         >
           <DrawerPortal>
             <DrawerOverlay />
-            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95vh] max-h-[95vh] bg-card rounded-t-3xl shadow-[0_-4px_12px_rgba(0,0,0,0.18)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[99dvh] max-h-[99dvh] pt-[env(safe-area-inset-top)] bg-card rounded-t-3xl shadow-[0_-4px_12px_rgba(0,0,0,0.18)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
               <DrawerTitle className="sr-only">Panel de mesa</DrawerTitle>
               <DrawerDescription className="sr-only">
                 Acciones y detalles de la mesa seleccionada
               </DrawerDescription>
-              {/* El header interno de SidebarDetails tiene su propio color de estado
-                  (verde/naranja); el handle flota sobre él en blanco translúcido
-                  para que combine en vez de dejar una franja de fondo neutro. */}
-              <DrawerHandle className="!bg-white/50" />
-              <div className="flex-1 overflow-hidden">
-                {isMobileSheetOpen ? mobileSidebarContent : sheetContentMounted ? lastSheetContent.current : null}
+              {/* En móvil el header del panel es neutro: la manija va en gris visible. */}
+              <DrawerHandle />
+              <div className="relative flex-1 overflow-hidden">
+                <div className={cn("h-full transition-opacity duration-150", sheetListo || !sheetConCarga ? "opacity-100" : "opacity-0 pointer-events-none")}>
+                  {isMobileSheetOpen
+                    ? (sheetMontarPanel || !sheetConCarga ? mobileSidebarContent : null)
+                    : sheetContentMounted ? lastSheetContent.current : null}
+                </div>
+                {!sheetListo && isMobileSheetOpen && sheetConCarga && <SheetSkeleton />}
               </div>
             </DrawerContent>
           </DrawerPortal>
         </Drawer>
       )}
-      
+
       <GlobalModals />
+      <AvisoCambioIvaModal />
+      {!isMobile && <ActividadDrawer />}
     </div>
   );
 }

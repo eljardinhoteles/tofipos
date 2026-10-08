@@ -45,7 +45,7 @@ export function SidebarSeleccionarMesa({ onSelectMesa, onClose }: SidebarSelecci
  onClick={() => onSelectMesa(mesa)}
  className="p-3 rounded-xl bg-muted border border-border flex items-center justify-between cursor-pointer">
  <span className="font-extrabold text-xs text-foreground">{mesa.nombre}</span>
- <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">Libre</span>
+ <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground font-bold text-[10px]">Libre</span>
  </div>
  ))}
  </main>

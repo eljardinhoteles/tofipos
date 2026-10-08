@@ -117,7 +117,7 @@ export function ImportarMenuCsvModal({ opened, onClose }: Props) {
  <div className="bg-card rounded-2xl shadow-xl w-full max-w-lg p-6 flex flex-col gap-4">
  <div className="flex items-center justify-between border-b border-border pb-3">
  <div className="flex items-center gap-2">
- <UploadSimple size={20} className="text-primary"/>
+ <UploadSimple size={20} className="text-muted-foreground"/>
  <h3 className="font-extrabold text-base text-foreground">Importar productos vía CSV</h3>
  </div>
  <Button variant="ghost"size="icon"className="h-7 w-7"onClick={onClose}>
@@ -151,7 +151,7 @@ export function ImportarMenuCsvModal({ opened, onClose }: Props) {
  <button type="button"onClick={handleReset} className="text-primary">Cambiar</button>
  </div>
  <div className="max-h-60 overflow-y-auto border border-border rounded-xl p-2">
- <span className="text-xs font-bold text-emerald-600">{validRows.length} filas válidas para importar</span>
+ <span className="text-xs font-bold text-foreground">{validRows.length} filas válidas para importar</span>
  </div>
  <div className="flex justify-end gap-2 pt-2">
  <Button variant="outline"size="sm"onClick={onClose}>Cancelar</Button>

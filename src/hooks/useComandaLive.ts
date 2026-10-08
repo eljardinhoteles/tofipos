@@ -1,3 +1,4 @@
+import { filtrarCuentasHabitacionVigentes } from '../lib/habitacionCuentas';
 import { useEffect, useState } from 'react';
 import { initVerticalRxDb } from '../db/rxdb';
 import { isOperativeComanda } from '../db/comandaState';
@@ -57,8 +58,10 @@ export function useComandaLive(activeComandaProp: any) {
         setPagos(p.map((d: any) => d.toJSON()));
         setVentasComanda(v.map((d: any) => d.toJSON()));
         setLinkedMesa(roomMesa ? roomMesa.toJSON() : null);
-        setActiveRoomAccounts(rac.map((d: any) => d.toJSON()));
-        setAllMesas(ms.map((d: any) => d.toJSON()));
+        const mesasJson = ms.map((d: any) => d.toJSON());
+        // Solo cuentas vigentes (habitación existente, una por habitación), en orden numérico.
+        setActiveRoomAccounts(filtrarCuentasHabitacionVigentes(rac.map((d: any) => d.toJSON()), mesasJson, orgId));
+        setAllMesas(mesasJson);
         setVentasMesa((ventasDeMesa as any[]).map((d: any) => d.toJSON()));
         setComandasOperativasMesa(comandasMesa.filter((x: any) => isOperativeComanda(x)).map((x: any) => x.id));
       };

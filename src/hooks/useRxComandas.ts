@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { initVerticalRxDb } from '../db/rxdb'
 import { useDbEpoch } from './useDbEpoch'
 import { readHookCache, commitHookCache } from './rxHookCache'
+import { buildFolioLabels, setFolioLabels, repetidosSinAvisar } from '../lib/folio'
+import { showToast } from '../lib/toast'
 
 /**
  * Suscripción compartida a todas las comandas de la organización.
@@ -52,6 +54,15 @@ export function useRxComandas() {
         })
         cacheRef.current = nextCache
         if (changed) {
+          // Números de comanda repetidos: se marcan como "397-1" y se avisa una vez
+          // por cada cantidad nueva de repetidos (sin cambiar el folio guardado).
+          const etiquetas = buildFolioLabels(next)
+          setFolioLabels(etiquetas)
+          const nuevos = repetidosSinAvisar([...etiquetas.keys()])
+          if (nuevos.length > 0) {
+            const ejemplo = next.find((c: any) => c.id === nuevos[0])
+            showToast.warning('Número de comanda repetido', ejemplo ? `Se marcó como #${etiquetas.get(ejemplo.id)} (la #${ejemplo.folio} ya existía).` : 'Se marcó con un sufijo.')
+          }
           listRef.current = next
           setComandas(commitHookCache('comandas', next))
         }

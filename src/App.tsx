@@ -209,7 +209,7 @@ export default function App() {
   if (activeOrganizationId && isSyncingInitial) {
     content = (
       <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-background text-center gap-4">
-        <ArrowsClockwise size={32} className="animate-spin text-primary" />
+        <ArrowsClockwise size={32} className="animate-spin text-muted-foreground" />
         <div className="flex flex-col gap-1">
           <h2 className="font-extrabold text-lg text-foreground">Sincronizando datos...</h2>
           <p className="text-xs text-muted-foreground max-w-sm">
@@ -401,7 +401,7 @@ export default function App() {
 
   return (
     <>
-      <SonnerToaster position="top-center" richColors />
+      <SonnerToaster position="top-center" />
       {content}
     </>
   );

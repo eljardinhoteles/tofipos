@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise, Paperclip, Trash, Plus,
   CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
-  Table, ForkKnife, BedIcon, Door, CloudCheck, CloudWarning, ArrowsClockwise,
+  CloudCheck, CloudWarning, ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,31 +35,10 @@ import { agregarVentaMovimiento, updateRxVenta, adjuntarComprobanteMovimiento, v
 import { subirComprobante, eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
+import { VentaComandasPanel } from './VentaComandasPanel';
+import { OrigenBadge } from '../Common/OrigenBadge';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
-import type { RxVentaMovimiento, VentaMovimientoTipo, VentaOrigen } from '../../db/rxdb';
-
-const ORIGEN_LABEL: Record<VentaOrigen, string> = {
-  mesa: 'Mesa',
-  reserva_restaurante: 'Reserva restaurante',
-  reserva_hotel: 'Reserva hotel',
-  habitacion: 'Checkout habitación',
-};
-
-const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
-  mesa: Table,
-  reserva_restaurante: ForkKnife,
-  reserva_hotel: BedIcon,
-  habitacion: Door,
-};
-
-// Mismos colores/relleno que ORIGEN_CLASSES en CentroVentasV2.tsx, para que
-// el badge de origen se vea idéntico en la lista y en el detalle.
-const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
-  mesa: 'bg-blue-600 text-white border-blue-600',
-  reserva_restaurante: 'bg-orange-600 text-white border-orange-600',
-  reserva_hotel: 'bg-sky-600 text-white border-sky-600',
-  habitacion: 'bg-violet-600 text-white border-violet-600',
-};
+import type { RxVentaMovimiento, VentaMovimientoTipo } from '../../db/rxdb';
 
 interface VentaDetalleAccionesProps {
   item: VentaConMovimientos;
@@ -101,13 +80,13 @@ const ACCION_ICON: Record<AccionId, typeof Receipt> = {
 // MOVIMIENTO_COLOR en el historial, así el chip activo anticipa de qué
 // color va a aparecer el movimiento una vez confirmado.
 const ACCION_COLOR: Record<AccionId, string> = {
-  pago: 'bg-emerald-600 border-emerald-600',
-  reembolsar: 'bg-amber-600 border-amber-600',
-  ajuste: 'bg-blue-600 border-blue-600',
-  anclar: 'bg-purple-600 border-purple-600',
-  marcar_credito: 'bg-indigo-600 border-indigo-600',
-  comentario: 'bg-slate-600 border-slate-600',
-  anular: 'bg-red-600 border-red-600',
+  pago: 'bg-primary border-primary',
+  reembolsar: 'bg-warning-foreground border-warning',
+  ajuste: 'bg-info border-info',
+  anclar: 'bg-special border-special',
+  marcar_credito: 'bg-info border-info',
+  comentario: 'bg-muted-foreground border-muted-foreground',
+  anular: 'bg-destructive border-destructive',
 };
 
 const MOVIMIENTO_ICON: Record<VentaMovimientoTipo, typeof Receipt> = {
@@ -137,14 +116,14 @@ const MOVIMIENTO_LABEL: Record<VentaMovimientoTipo, string> = {
 // monto, morado = facturación, rosa = cambio de tipo a crédito, gris =
 // informativo, rojo = anulación de la venta completa.
 const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
-  pago: 'bg-emerald-100 text-emerald-700',
-  reembolso: 'bg-amber-100 text-amber-700',
-  ajuste: 'bg-blue-100 text-blue-700',
-  anclar: 'bg-purple-100 text-purple-700',
-  facturar: 'bg-purple-100 text-purple-700',
-  marcar_credito: 'bg-indigo-100 text-indigo-700',
-  comentario: 'bg-slate-100 text-slate-700',
-  anular: 'bg-red-100 text-red-700',
+  pago: 'bg-muted text-muted-foreground',
+  reembolso: 'bg-warning-soft text-warning-foreground',
+  ajuste: 'bg-info/15 text-info-foreground',
+  anclar: 'bg-special-soft text-special-foreground',
+  facturar: 'bg-special-soft text-special-foreground',
+  marcar_credito: 'bg-info/15 text-info-foreground',
+  comentario: 'bg-muted text-muted-foreground',
+  anular: 'bg-destructive/15 text-destructive',
 };
 
 /**
@@ -182,6 +161,8 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const [clienteAbierto, setClienteAbierto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accion, setAccion] = useState<AccionId>('pago');
+  // Pestaña del detalle: movimientos de la venta o las comandas vinculadas.
+  const [pestana, setPestana] = useState<'historial' | 'comandas'>('historial');
   const [checkingSync, setCheckingSync] = useState(false);
   const [syncResult, setSyncResult] = useState<'ok' | 'reintentado' | 'error' | null>(null);
 
@@ -462,14 +443,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <div className="flex items-center justify-between gap-3">
               {/* Izquierda: info de la venta (fecha + origen). Derecha: estados (crédito/facturado/anulado) + sync. */}
               <div className="flex items-center gap-2 flex-wrap min-w-0">
-                {(() => {
-                  const OrigenIcon = ORIGEN_ICON[venta.origen];
-                  return (
-                    <Badge variant="outline" className={cn("font-bold shrink-0", ORIGEN_CLASSES[venta.origen])}>
-                      <OrigenIcon size={12} weight="bold" /> {ORIGEN_LABEL[venta.origen]}
-                    </Badge>
-                  );
-                })()}
+                <OrigenBadge origen={venta.origen} size="md" />
                 <span className="text-xs font-medium text-muted-foreground shrink-0">
                   Creada el {dayjs(venta.created_at).format('DD MMM YYYY, HH:mm')}
                 </span>
@@ -483,9 +457,9 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                   title="Verificar si esta venta está sincronizada en Supabase"
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50",
-                    syncResult === 'ok' && "border-emerald-200 text-emerald-700 bg-emerald-50",
-                    syncResult === 'reintentado' && "border-amber-200 text-amber-700 bg-amber-50",
-                    syncResult === 'error' && "border-red-200 text-red-700 bg-red-50",
+                    syncResult === 'ok' && "border-border text-muted-foreground bg-muted",
+                    syncResult === 'reintentado' && "border-warning/40 text-warning-foreground bg-warning-soft",
+                    syncResult === 'error' && "border-destructive/25 text-destructive bg-destructive/10",
                     !syncResult && "border-border text-muted-foreground hover:bg-muted/40"
                   )}
                 >
@@ -511,12 +485,12 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                 {/* Colores alineados a ACCION_COLOR: crédito=indigo, facturado=purple
                     (mismos que sus acciones correspondientes más abajo en este panel). */}
                 {venta.tipo === 'credito' && (
-                  <Badge variant="outline" className="font-bold border-indigo-200 text-indigo-700 bg-indigo-50">
+                  <Badge variant="outline" className="font-bold border-info/25 text-info-foreground bg-info/10">
                     <CreditCard size={12} weight="fill" /> Crédito
                   </Badge>
                 )}
                 {item.facturado && (
-                  <Badge variant="outline" className="font-bold border-purple-200 text-purple-700 bg-purple-50">
+                  <Badge variant="outline" className="font-bold border-special/30 text-special-foreground bg-special-soft">
                     <Receipt size={12} weight="fill" /> Facturado
                   </Badge>
                 )}
@@ -551,15 +525,15 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Saldo</span>
               {item.saldo > 0.01 ? (
-                <span className="font-black text-sm text-amber-600">
+                <span className="font-black text-sm text-warning-foreground">
                   ${item.saldo.toFixed(2)}
                 </span>
               ) : item.saldo < -0.01 ? (
-                <span className="font-black text-sm text-blue-600">
+                <span className="font-black text-sm text-info-foreground">
                   Excedente ${Math.abs(item.saldo).toFixed(2)}
                 </span>
               ) : (
-                <span className="font-black text-sm text-emerald-600">
+                <span className="font-black text-sm text-foreground">
                   Saldado ($0.00)
                 </span>
               )}
@@ -568,12 +542,12 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
 
           {/* Motivo de Anulación: crítico cuando aplica, pegado al bloque financiero */}
           {item.anulado && item.motivoAnulacion && (
-            <div className="flex flex-col gap-1.5 px-5 py-3 bg-red-50 dark:bg-red-950/30 border-t border-red-100 dark:border-red-900/50">
-              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+            <div className="flex flex-col gap-1.5 px-5 py-3 bg-destructive/10 dark:bg-destructive/30 border-t border-destructive/15 dark:border-destructive/50">
+              <div className="flex items-center gap-1.5 text-destructive dark:text-destructive">
                 <Prohibit size={14} weight="bold" />
                 <span className="text-[10px] font-extrabold uppercase tracking-wider">Motivo de Anulación</span>
               </div>
-              <p className="text-xs font-medium text-red-800 dark:text-red-300 leading-relaxed">
+              <p className="text-xs font-medium text-destructive dark:text-white leading-relaxed">
                 {item.motivoAnulacion}
               </p>
             </div>
@@ -721,12 +695,23 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           </DialogContent>
         </Dialog>
 
-        {/* Historial de movimientos — sub-cards cronológicas */}
+        {/* Pestañas: historial de movimientos / comandas de la venta */}
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider px-1">
-            Historial
-          </span>
-          {[...movimientos].reverse().map(m => (
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-muted w-fit">
+            {([['historial', 'Historial'], ['comandas', 'Comandas']] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPestana(id)}
+                className={cn('px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors',
+                  pestana === id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {pestana === 'comandas' && <VentaComandasPanel venta={venta} movimientos={movimientos} />}
+          {pestana === 'historial' && [...movimientos].reverse().map(m => (
             <MovimientoHistorialCard
               key={m.id}
               ventaId={venta.id}

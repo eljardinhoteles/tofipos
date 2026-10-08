@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife } from'@phosphor-icons/react';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
@@ -9,6 +9,7 @@ import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
 import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -87,6 +88,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const [recentProductIds, setRecentProductIds] = useState<string[]>(() => getRecentProductIds());
 
  const { menuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
+ const isMobile = useIsMobile();
 
  useEffect(() => {
  let alive = true;
@@ -180,6 +182,11 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const matchesSearch = !searchQueryDebounced ||
  item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
 
+ // En PC la búsqueda es global: la categoría elegida en la columna izquierda
+ // no debe limitar los resultados (antes buscar dentro de una categoría
+ // parecía que el buscador no encontraba nada).
+ if (!isMobile && searchQueryDebounced) return matchesSearch;
+
  if (selectedCategory === 'Favoritos') {
  return matchesSearch && item.favorito;
  }
@@ -203,7 +210,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  
  return a.nombre.localeCompare(b.nombre);
  });
- }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias]);
+ }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile]);
 
  const groupedItems = useMemo(() => {
  const groups: { category: string; items: typeof filteredItems }[] = [];
@@ -219,6 +226,30 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return groups;
  }, [filteredItems]);
 
+ // ── Escritorio: columna de categorías + columna con todos sus productos ──
+ // Sin búsqueda activa, en PC se ven siempre las categorías a la izquierda y los
+ // productos de la elegida a la derecha, para pedir sin ir y volver al home.
+ const pcSplit = !isMobile && !searchQueryDebounced;
+ const categoriaPC = selectedCategory ?? categories[0] ?? 'Favoritos';
+ const conteoPorCategoria = useMemo(() => {
+ const map = new Map<string, number>();
+ for (const it of safeMenuItems) {
+ if (it.activo === false) continue;
+ const cat = it.categoria_nombre || 'Sin Categoría';
+ map.set(cat, (map.get(cat) ?? 0) + 1);
+ }
+ return map;
+ }, [safeMenuItems]);
+ const itemsPC = useMemo(() => {
+ if (categoriaPC === 'Recientes') return recentItems;
+ return safeMenuItems
+ .filter(it => it.activo !== false && (categoriaPC === 'Favoritos'
+ ? it.favorito
+ : (it.categoria_nombre || 'Sin Categoría') === categoriaPC))
+ .sort((a, b) => a.nombre.localeCompare(b.nombre));
+ }, [safeMenuItems, categoriaPC, recentItems]);
+ const favoritosCount = useMemo(() => safeMenuItems.filter(it => it.activo !== false && it.favorito).length, [safeMenuItems]);
+
  const performAddToCart = useCallback(async (item: MenuItem, selectedModifiers: string[] = []) => {
  if (!activeComanda) return;
  const rxDb = await initVerticalRxDb();
@@ -227,6 +258,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  const existing = rxComandaItems.find(ci => {
  if (ci.item_id !== item.id) return false;
+ // Precio variable: cada toque es una línea propia (su precio se ajusta
+ // por separado); sumar cantidad aplicaría un precio ya cambiado a todo.
+ if ((item as any).precio_variable) return false;
  // Un ítem anulado es un estado terminal — nunca se reutiliza para sumar
  // cantidad, siempre debe crear una fila nueva independiente.
  if (ci.anulado) return false;
@@ -296,32 +330,32 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  }
 
  return (
- <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
-  {/* HEADER PRINCIPAL */}
-  <header className="h-16 md:h-[72px] px-4 bg-card border-b border-border flex items-center shrink-0 shadow-xs z-10 gap-2">
+ <div className="flex flex-col h-full w-full bg-nav text-foreground overflow-hidden">
+  {/* HEADER PRINCIPAL: mismo marco oscuro que el resto de páginas */}
+  <header className="h-16 md:h-[72px] px-4 md:px-6 bg-nav text-nav-foreground flex items-center shrink-0 z-10 gap-2">
     {!hideBackButton && (
       <button
         type="button" onClick={onBack}
-        className="w-10 h-10 rounded-lg bg-muted text-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
+        className="w-10 h-10 rounded-xl bg-nav-foreground/10 hover:bg-nav-foreground/15 text-nav-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
         <ArrowLeft size={18} weight="bold"/>
       </button>
     )}
     <div className="relative flex-1">
-      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-nav-foreground/60 z-10 pointer-events-none"/>
       <Input
         id="product-search-input"
         type="text" placeholder="Buscar productos..." value={searchQueryInput}
         onChange={(e) => setSearchQueryInput(e.target.value)}
-        className="w-full h-10 pl-9 pr-8 text-sm"/>
+        className="w-full h-10 pl-9 pr-8 text-sm font-semibold rounded-xl bg-nav-foreground/10 border-transparent shadow-none text-nav-foreground placeholder:text-nav-foreground/55 focus-visible:ring-nav-foreground/30"/>
       {searchQueryInput && (
         <button
           type="button" onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-nav-foreground/60 hover:text-nav-foreground">
           <X size={14} weight="bold"/>
         </button>
       )}
     </div>
-    {(selectedCategory || searchQueryDebounced) && (
+    {(isMobile ? (selectedCategory || searchQueryDebounced) : searchQueryDebounced) && (
       <button
         type="button"
         onClick={() => {
@@ -330,14 +364,88 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           setSearchQueryDebounced('');
         }}
         title="Volver a categorías"
-        className="w-10 h-10 rounded-lg bg-orange-500 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-orange-600">
+        className="w-10 h-10 rounded-xl bg-nav-foreground text-nav flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-nav-foreground/90">
         <ForkKnife size={18} weight="fill"/>
       </button>
     )}
   </header>
 
   {/* CONTENIDO PRINCIPAL */}
-  <div className="flex-1 relative flex flex-col min-h-0">
+  <div className="flex-1 relative flex flex-col min-h-0 bg-background rounded-t-2xl md:rounded-t-none md:rounded-tl-2xl overflow-hidden">
+    {pcSplit && (
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Categorías arriba, en filas que se acomodan solas (2–3 en pantallas típicas).
+            La barra crece con sus filas (sin scroll propio); solo se limita al 45% de la altura
+            de la ventana como tope de seguridad para dejar siempre espacio a los productos. */}
+        <nav
+          aria-label="Categorías"
+          className="@container shrink-0 bg-background px-3 py-2 @6xl:px-4 @6xl:py-3 flex flex-wrap gap-1.5 @6xl:gap-2 max-h-[45dvh] overflow-y-auto"
+        >
+          {[
+            { id: 'Favoritos', icon: Star, count: favoritosCount, plan: false, fav: true },
+            ...(recentItems.length > 0 ? [{ id: 'Recientes', icon: ClockCounterClockwise, count: recentItems.length, plan: false, fav: false }] : []),
+            ...categories.map(cat => ({ id: cat, icon: getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife, count: conteoPorCategoria.get(cat) ?? 0, plan: planCategoryNames.has(cat), fav: false })),
+          ].map(c => {
+            const Icon = c.icon;
+            const activa = categoriaPC === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedCategory(c.id)}
+                aria-pressed={activa}
+                className={cn("h-8 pl-2.5 pr-3 @6xl:h-10 @6xl:pl-3 @6xl:pr-3.5 rounded-full flex items-center gap-1.5 @6xl:gap-2 text-xs @6xl:text-sm whitespace-nowrap transition-colors cursor-pointer",
+                  c.fav
+                    ? (activa ? "bg-warning-foreground text-white font-extrabold shadow-xs" : "bg-warning-soft text-warning-foreground font-bold hover:bg-warning/20")
+                    : c.id === 'Recientes'
+                    ? (activa ? "bg-foreground text-background font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted")
+                    : c.plan
+                    ? (activa ? "bg-info text-white font-extrabold shadow-xs" : "bg-info/10 text-info-foreground font-bold hover:bg-info/15")
+                    : (activa ? "bg-primary text-primary-foreground font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted"))}
+              >
+                <Icon size={16} weight={c.fav || activa ? 'fill' : 'bold'} className="@6xl:size-[18px]" />
+                {c.id}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Columna de productos de la categoría elegida */}
+        <section className="@container flex-1 min-w-0 overflow-y-auto p-4">
+          {itemsPC.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+              <div className="w-20 h-20 flex items-center justify-center">
+                <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
+              </div>
+              <h3 className="font-extrabold text-foreground text-base">Sin productos</h3>
+              <p className="text-muted-foreground text-xs">
+                {categoriaPC === 'Favoritos' ? 'Marca productos con la estrella para verlos aquí.' : 'No hay productos disponibles en esta categoría.'}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">{categoriaPC}</span>
+              <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] @md:gap-3">
+                {itemsPC.map(item => (
+                  <ProductCardV2
+                    key={item.id}
+                    item={item}
+                    onAdd={handleAddProduct}
+                    currentQty={itemQuantities[item.id] || 0}
+                    ivaPorcentaje={ivaPorcentaje}
+                    preciosConIva={preciosConIva}
+                    categoryIcon={getCategoryIcon(categoryIconByName.get(item.categoria_nombre || ''))}
+                    isPlanItem={planCategoryNames.has(item.categoria_nombre || 'Sin Categoría')}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    )}
+
+    {!pcSplit && (
     <main className="@container flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+112px)] relative">
       {(!selectedCategory && !searchQueryDebounced) ? (
         /* HOME DE CATEGORÍAS */
@@ -353,7 +461,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     key={item.id}
                     type="button"
                     onClick={() => handleAddProduct(item)}
-                    className="flex items-center shrink-0 px-4 py-2.5 rounded-full bg-card border border-border shadow-sm hover:bg-muted transition-colors cursor-pointer"
+                    className="flex items-center shrink-0 px-4 py-2.5 rounded-full bg-card shadow-xs hover:bg-muted transition-colors cursor-pointer"
                   >
                     <span className="font-bold text-sm text-foreground whitespace-nowrap">{item.nombre}</span>
                   </button>
@@ -361,34 +469,31 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
               </div>
             </div>
           )}
+          {/* Mismo lenguaje que PC: categorías como pills (icono + nombre), aquí en grid. */}
           <div className="grid grid-cols-2 gap-2 @md:gap-3 @lg:grid-cols-3 @xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all active:scale-95 transform-gpu cursor-pointer"
+              className="h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full bg-warning-soft text-warning-foreground font-bold text-sm transition-all active:scale-95 transform-gpu cursor-pointer"
             >
-              <span className="font-semibold text-base text-left line-clamp-2">Favoritos</span>
-              <span className="shrink-0 w-9 h-9 @md:w-11 @md:h-11 rounded-full bg-amber-100 flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px] @md:[&>svg]:w-7 @md:[&>svg]:h-7">
-                <Star weight="fill" />
-              </span>
+              <Star size={20} weight="fill" className="shrink-0" />
+              <span className="truncate">Favoritos</span>
             </button>
             {categories.map((cat) => {
-              const CategoryIcon = getCategoryIcon(categoryIconByName.get(cat));
+              const CategoryIcon = getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife;
+              const plan = planCategoryNames.has(cat);
               return (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={cn("h-16 @md:h-24 flex items-center justify-between gap-3 @md:gap-1 px-4 @md:px-3 rounded-2xl border transition-all active:scale-95 transform-gpu shadow-sm cursor-pointer",
-                    planCategoryNames.has(cat)
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
-                      : "bg-card border-border text-foreground hover:bg-muted")}
+                  className={cn("h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full font-bold text-sm transition-all active:scale-95 transform-gpu cursor-pointer",
+                    plan
+                      ? "bg-info/10 text-info-foreground"
+                      : "bg-card text-foreground shadow-xs")}
                 >
-                  <span className="font-semibold text-base text-left leading-tight line-clamp-2">{cat}</span>
-                  <span className={cn("shrink-0 w-9 h-9 @md:w-11 @md:h-11 rounded-full flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px] @md:[&>svg]:w-7 @md:[&>svg]:h-7",
-                    planCategoryNames.has(cat) ? "bg-emerald-100" : "bg-muted text-neutral-600")}>
-                    {CategoryIcon && <CategoryIcon weight="bold" />}
-                  </span>
+                  <CategoryIcon size={20} weight="bold" className="shrink-0" />
+                  <span className="truncate">{cat}</span>
                 </button>
               );
             })}
@@ -435,11 +540,13 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         )
       )}
     </main>
+    )}
 
     {/* BOTÓN IZQUIERDO EN EL NAVBAR (Vía Portal) */}
     {navbarSlot && (!hideBackButton || selectedCategory || searchQueryDebounced) && createPortal(
-      <button
+      <Button
         type="button"
+        variant="warning"
         onClick={() => {
           if (selectedCategory || searchQueryDebounced) {
             setSelectedCategory(null);
@@ -449,34 +556,30 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             onBack();
           }
         }}
-        className={cn(
-          "flex items-center justify-center w-14 h-14 rounded-full shadow-lg cursor-pointer active:scale-95 transform-gpu transition-all",
-          (selectedCategory || searchQueryDebounced)
-            ? "bg-orange-500 text-white shadow-orange-500/30"
-            : "bg-nav text-nav-foreground shadow-black/20"
-        )}
+        aria-label={(selectedCategory || searchQueryDebounced) ? 'Volver a categorías' : 'Volver'}
+        className="size-14 rounded-full drop-shadow-lg active:scale-95"
       >
         {(selectedCategory || searchQueryDebounced) ? (
           <ForkKnife size={22} weight="fill" />
         ) : (
           <ArrowLeft size={22} weight="bold" />
         )}
-      </button>,
+      </Button>,
       navbarSlot
     )}
 
     {/* BOTÓN DERECHO EN EL NAVBAR (Vía Portal) */}
     {navbarSearchSlot && createPortal(
-      <button
-        type="button"
+      <Button
+        type="button" variant="warning" aria-label="Buscar productos"
         onClick={() => {
           const input = document.getElementById('product-search-input');
           if (input) input.focus();
         }}
-        className="flex items-center justify-center w-14 h-14 rounded-full bg-nav text-nav-foreground shadow-lg shadow-black/20 cursor-pointer active:scale-95 transform-gpu transition-transform"
+        className="size-14 rounded-full drop-shadow-lg active:scale-95"
       >
         <MagnifyingGlass size={22} weight="bold" />
-      </button>,
+      </Button>,
       navbarSearchSlot
     )}
   </div>
@@ -498,7 +601,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <h3 className="font-extrabold text-lg text-foreground">{detailItem.nombre}</h3>
             <span className="text-xs font-semibold text-muted-foreground">{detailItem.categoria_nombre}</span>
           </div>
-          <span className="text-xl font-black text-primary">
+          <span className="text-xl font-black text-foreground">
             ${(!preciosConIva && detailItem.iva_modalidad === 'sistema'
               ? detailItem.precio * (1 + ivaPorcentaje / 100)
               : detailItem.precio
@@ -587,7 +690,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md"
           : isPlanItem
-            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+            ? "bg-primary/10 border-primary/25 text-primary"
             : "bg-card text-foreground border-border")}
     >
       <button
@@ -598,11 +701,11 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
           await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
         }}
         className={cn("shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer @md:w-10 @md:h-10",
-          isSelected ? "bg-primary-foreground/20" : isPlanItem ? "bg-emerald-100" : "bg-muted")}>
+          isSelected ? "bg-primary-foreground/20" : isPlanItem ? "bg-primary/15" : "bg-muted")}>
         {isSelected ? (
           <span className="font-black text-sm text-primary-foreground @md:text-base">{currentQty}</span>
         ) : item.favorito ? (
-          <Star size={18} weight="fill" className="text-amber-400" />
+          <Star size={18} weight="fill" className="text-warning-foreground" />
         ) : (
           CategoryIcon && <CategoryIcon size={18} weight="bold" />
         )}
@@ -612,11 +715,11 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         {item.nombre}
       </span>
 
-      <span className={cn("shrink-0 font-black text-sm @md:hidden", isSelected ? "text-primary-foreground" : isPlanItem ? "text-emerald-700" : "text-primary")}>
+      <span className={cn("shrink-0 font-black text-sm @md:hidden", isSelected ? "text-primary-foreground" : isPlanItem ? "text-primary" : "text-primary")}>
         ${finalPrice.toFixed(2)}
       </span>
 
-      <span className={cn("hidden @md:block @md:absolute @md:top-4 @md:right-4 font-black text-base", isSelected ? "text-primary-foreground" : isPlanItem ? "text-emerald-700" : "text-primary")}>
+      <span className={cn("hidden @md:block @md:absolute @md:top-4 @md:right-4 font-black text-base", isSelected ? "text-primary-foreground" : isPlanItem ? "text-primary" : "text-primary")}>
         ${finalPrice.toFixed(2)}
       </span>
     </div>

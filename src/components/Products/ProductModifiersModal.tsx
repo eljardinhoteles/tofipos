@@ -84,31 +84,40 @@ function ProductModifiersDialogContent({
  const isLastStep = currentStep === modificadores.length - 1;
  const canProceed = !currentGroup.obligatorio || selectedOpts.length > 0;
 
+ const avanzar = (sel: { [groupId: string]: string[] }) => {
+ if (!isLastStep) {
+ setCurrentStep(s => s + 1);
+ } else {
+ const all: string[] = [];
+ Object.values(sel).forEach(opts => all.push(...opts));
+ onConfirm(all);
+ onClose();
+ }
+ };
+
  const toggle = (option: string) => {
+ if (currentGroup.multi) {
  setSelections(prev => {
  const current = prev[currentGroup.nombre] || [];
- if (currentGroup.multi) {
  return {
  ...prev,
  [currentGroup.nombre]: current.includes(option)
  ? current.filter(o => o !== option)
  : [...current, option]
  };
- }
- return { ...prev, [currentGroup.nombre]: [option] };
  });
+ return;
+ }
+ // Opción única: al elegir pasa solo al siguiente grupo (o agrega si es el
+ // último). La pausa breve deja ver la opción marcada.
+ const sel = { ...selections, [currentGroup.nombre]: [option] };
+ setSelections(sel);
+ setTimeout(() => avanzar(sel), 180);
  };
 
  const handleNext = () => {
  if (!canProceed) return;
- if (!isLastStep) {
- setCurrentStep(s => s + 1);
- } else {
- const all: string[] = [];
- Object.values(selections).forEach(opts => all.push(...opts));
- onConfirm(all);
- onClose();
- }
+ avanzar(selections);
  };
 
  return (
@@ -138,7 +147,7 @@ function ProductModifiersDialogContent({
  </div>
 
  {/* Options List */}
- <div className="max-h-64 overflow-y-auto flex flex-col gap-2">
+ <div className="h-72 overflow-y-auto flex flex-col gap-2 content-start">
  {currentGroup.opciones.map((option: string) => {
  const selected = selectedOpts.includes(option);
  return (
@@ -169,7 +178,7 @@ function ProductModifiersDialogContent({
  type="button"disabled={!canProceed}
  onClick={handleNext}
  className={cn("font-bold text-xs gap-1.5",
- isLastStep ?"bg-emerald-600 text-white":"")}
+ isLastStep ?"bg-primary text-white":"")}
  >
  <span>{isLastStep ?'Agregar':'Siguiente'}</span>
  {isLastStep && <Check size={16} weight="bold"/>}

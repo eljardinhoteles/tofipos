@@ -1,20 +1,29 @@
 import { useEffect, useState, useMemo } from'react';
 import {
- ArrowLeft, X, Plus, CreditCard, PencilSimple, Prohibit, CaretDown, CaretUp,
- DownloadSimple, Printer, Paperclip, Phone, WhatsappLogo, EnvelopeSimple,
- MapPin, IdentificationCard, NotePencil, User, Buildings,
+ Plus, CreditCard, PencilSimple, Prohibit, CaretDown,
+ DownloadSimple, Printer, Phone, WhatsappLogo, EnvelopeSimple,
+ MapPin, IdentificationCard, NotePencil, User, Buildings, CalendarCheck, CalendarBlank, Clock, Users, SquaresFour,
 } from'@phosphor-icons/react';
+import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { ReservaHeader, reservaHeaderActionClass } from './ReservaHeader';
+import { SidebarReservaAbono } from './SidebarReservaAbono';
+import { ItemActionsPanel } from './ItemActionsPanel';
+import { ComandaTotales } from './ComandaTotales';
+import { STATUS_LABEL } from '../../Reservas/reservaUtils';
 import { ComandaItemRow } from'./ComandaItemRow';
-import { SidebarReservaAbonoModal } from'./SidebarReservaAbonoModal';
 import { useUI } from'../../../context/UIContext';
 import { useAuth } from'../../../context/AuthContext';
 import { useComandaIva } from'../../../hooks/useComandaIva';
 import { useRxClientes } from'../../../hooks/useRxClientes';
+import { useRxComandas } from'../../../hooks/useRxComandas';
+import { AsignarMesaModal } from'../../Reservas/AsignarMesaModal';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { showToast } from'@/lib/toast';
 import {
  initVerticalRxDb, updateRxComandaItem, createRxComanda, updateRxReserva,
  createRxVenta, agregarVentaMovimiento,
+  siguienteFolio,
 } from'../../../db/rxdb';
 import { Button } from'@/components/ui/button';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
@@ -23,7 +32,7 @@ import { generarTicketReserva } from'../../../services/printTemplateEngine';
 import { queueReprintTicket } from'../../../lib/printServerClient';
 import { downloadTicketReservaAsImage } from'../../../lib/ticketImage';
 import { getOrgCache } from'../../../lib/orgCache';
-import { subirComprobante, resolverComprobanteUrlAsync } from'@/lib/comprobantes';
+import { subirComprobante } from'@/lib/comprobantes';
 
 /** Mismo criterio que ClientesV2: limpia el número y arma el deep link de WhatsApp. */
 function getWhatsAppLink(telefono: string): string | null {
@@ -38,33 +47,13 @@ const TIPO_CLIENTE_LABEL: Record<string, string> = {
  agencia:'Agencia',
 };
 
-/** Link al comprobante adjunto de un abono — resuelve la URL (R2 o blob local offline) al montar. */
-function PagoComprobanteLink({ url }: { url: string }) {
- const [href, setHref] = useState('');
- useEffect(() => {
- let alive = true;
- resolverComprobanteUrlAsync(url).then((resolved) => { if (alive) setHref(resolved); });
- return () => { alive = false; };
- }, [url]);
-
- if (!href) return null;
- return (
- <a
- href={href} target="_blank" rel="noreferrer"title="Ver comprobante"
- className="shrink-0 w-6 h-6 rounded-md bg-card border border-border flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
- >
- <Paperclip size={12} weight="bold" />
- </a>
- );
-}
-
 interface SidebarReservaDetailProps {
  reservaId: string;
  onBack: () => void;
  onClose: () => void;
 }
 
-export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSidebar }: SidebarReservaDetailProps) {
+export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: SidebarReservaDetailProps) {
  const { setReservaProductosComandaId, setReservaView, openConfirm } = useUI();
  const { currentMesero } = useAuth();
  const { clientes } = useRxClientes();
@@ -73,7 +62,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  const [previewContent, setPreviewContent] = useState('');
  const [isCreatingComanda, setIsCreatingComanda] = useState(false);
  const [abonoModalOpen, setAbonoModalOpen] = useState(false);
- const [showAbonos, setShowAbonos] = useState(false);
  const [showContacto, setShowContacto] = useState(false);
  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
 
@@ -84,11 +72,11 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  const [venta, setVenta] = useState<any | null>(null);
  const [comanda, setComanda] = useState<any | null>(null);
  const [zonas, setZonas] = useState<any[]>([]);
- const [, setMesas] = useState<any[]>([]);
+ const [mesas, setMesas] = useState<any[]>([]);
+ const { comandas: todasComandas } = useRxComandas() as { comandas: any[] };
+ const [asignarOpen, setAsignarOpen] = useState(false);
 
  const [editingItem, setEditingItem] = useState<any | null>(null);
- const [editCantidad, setEditCantidad] = useState(1);
- const [editPrecio, setEditPrecio] = useState(0);
 
  const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(comanda);
  const { menuItems } = useRxMenuCatalog();
@@ -160,13 +148,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  };
  }, [reservaId]);
 
- useEffect(() => {
- if (editingItem) {
- setEditCantidad(editingItem.cantidad);
- setEditPrecio(editingItem.precio);
- }
- }, [editingItem]);
-
  const totales = useMemo(
  () => calcularTotalesComanda(comandaItems, menuItems, ivaPorcentaje, preciosConIva),
  [comandaItems, menuItems, ivaPorcentaje, preciosConIva]
@@ -209,9 +190,9 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  const total = totales.total;
  const saldoPendiente = Math.max(0, total - totalAbonado);
 
- const handleUpdateItem = async () => {
+ const handleUpdateItem = async (cantidad: number, precio?: number) => {
  if (!editingItem) return;
- await updateRxComandaItem(editingItem.id, { cantidad: editCantidad, precio: editPrecio });
+ await updateRxComandaItem(editingItem.id, precio !== undefined ? { cantidad, precio } : { cantidad });
  setEditingItem(null);
  };
 
@@ -230,8 +211,7 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  try {
  const orgId = localStorage.getItem('pos_active_org_id') || '';
  const now = new Date().toISOString();
- const rxDb = await initVerticalRxDb();
- const nextFolio = (await rxDb.comandas.find().exec()).length + 1;
+ const nextFolio = await siguienteFolio();
  const nueva = await createRxComanda({
  id: crypto.randomUUID(),
  folio: nextFolio,
@@ -263,7 +243,9 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  const handleAnular = () => {
  openConfirm(
  'ANULAR RESERVA',
- '¿Estás seguro de que deseas anular esta reserva? Podrás verla más tarde en el historial de canceladas.',
+ totalAbonado > 0.005
+ ? `Esta reserva tiene $${totalAbonado.toFixed(2)} abonados. Anularla NO los devuelve: regístralo como reembolso en Centro de Ventas. ¿Anular de todos modos?`
+ : '¿Estás seguro de que deseas anular esta reserva? Podrás verla más tarde en el historial de canceladas.',
  async () => {
  try {
  await updateRxReserva(reserva.id, { estado: 'cancelada' });
@@ -348,6 +330,10 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  redTarjeta?: string;
  comprobanteFile?: File | null;
  }) => {
+ if (data.monto > saldoPendiente + 0.005) {
+ showToast.error('Abono mayor al saldo', `El abono no puede superar el saldo pendiente ($${saldoPendiente.toFixed(2)}).`);
+ return;
+ }
  try {
  const orgId = localStorage.getItem('pos_active_org_id') || '';
  let ventaId = venta?.id;
@@ -398,88 +384,77 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  }
  };
 
- return (
- <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <ArrowLeft size={18} weight="bold"/>
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">{reserva.nombre}</h3>
- <span className="text-[10px] font-bold text-muted-foreground uppercase">{reserva.estado}</span>
- </div>
- </div>
-
- <div className="flex items-center gap-1.5">
- {!isReadOnly && (
- <>
- <button
- type="button"onClick={handleEditar}title="Editar reserva"
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <PencilSimple size={16} weight="bold"/>
- </button>
- <button
- type="button"onClick={handleAnular}title="Anular reserva"
- className="w-9 h-9 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center cursor-pointer transition-colors">
- <Prohibit size={16} weight="bold"/>
- </button>
- </>
- )}
- <button
- type="button"onClick={onCloseSidebar}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <X size={18} weight="bold"/>
- </button>
- </div>
- </header>
-
- <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
- {(() => {
+ const editingMenuItem = editingItem ? menuItems.find((m: any) => m.id === editingItem.item_id) : undefined;
  const telefono = reserva.telefono || clienteVinculado?.telefono;
  const email = reserva.email || clienteVinculado?.email;
- if (!telefono && !email && !clienteVinculado) return null;
+ const hayContacto = !!(telefono || email || clienteVinculado);
+ const itemsActivos = comandaItems.filter((i: any) => !i.anulado);
+ // Asignar mesa (iniciar el servicio) solo el día de la reserva.
+ const esHoy = reserva.fecha === new Date().toLocaleDateString('en-CA');
+
+ // Registrar abono: página dentro del mismo sidebar, no un modal encima.
+ if (abonoModalOpen) {
+ return (
+ <SidebarReservaAbono
+ nombre={reserva.nombre}
+ saldoPendiente={saldoPendiente}
+ pagos={pagos}
+ onBack={() => setAbonoModalOpen(false)}
+ onClose={onCloseSidebar}
+ onConfirm={handleAbonar}
+ />
+ );
+ }
 
  return (
- <div className="rounded-xl bg-muted border border-border text-xs overflow-hidden">
- <button
- type="button"
- onClick={() => setShowContacto(v => !v)}
- className="w-full flex items-center justify-between p-4"
- >
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Contacto del cliente</span>
- {showContacto ? <CaretUp size={12} weight="bold" className="text-muted-foreground"/> : <CaretDown size={12} weight="bold" className="text-muted-foreground"/>}
- </button>
- {showContacto && (
- <div className="flex flex-col gap-3 px-4 pb-4">
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
+ <ReservaHeader
+ badge={<CalendarCheck size={22} weight="bold" />}
+ titulo={reserva.nombre}
+ subtitulo={`Reserva · ${STATUS_LABEL[reserva.estado as keyof typeof STATUS_LABEL] ?? reserva.estado}`}
+ cerrada={isReadOnly}
+ onClose={onCloseSidebar}
+ acciones={!isReadOnly && (
+ <>
+ <Button type="button" variant="ghost" size="icon-lg" title="Editar reserva" aria-label="Editar reserva" onClick={handleEditar} className={reservaHeaderActionClass()}>
+ <PencilSimple size={17} weight="bold" />
+ </Button>
+ <Button type="button" variant="ghost" size="icon-lg" title="Anular reserva" aria-label="Anular reserva" onClick={handleAnular} className={reservaHeaderActionClass(true)}>
+ <Prohibit size={17} weight="bold" />
+ </Button>
+ </>
+ )}
+ />
+
+ {/* Datos del cliente, colapsable (mismo bloque que el sidebar de mesa) */}
+ {hayContacto && (
+ <Collapsible open={showContacto} onOpenChange={setShowContacto} className="shrink-0 border-b border-border bg-muted/50">
+ <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer">
+ <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+ <IdentificationCard size={14} /> Datos del cliente
+ </span>
+ <CaretDown size={14} className={cn('text-muted-foreground transition-transform', showContacto && 'rotate-180')} />
+ </CollapsibleTrigger>
+ <CollapsibleContent>
+ <div className="flex flex-col gap-3 px-4 pb-4 text-xs">
  {clienteVinculado?.tipo_cliente && (
  <div className="flex items-center gap-2 text-foreground">
- <User size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">
- {TIPO_CLIENTE_LABEL[clienteVinculado.tipo_cliente] ?? clienteVinculado.tipo_cliente}
- </span>
+ <User size={14} className="text-muted-foreground shrink-0"/>
+ <span className="font-semibold select-text cursor-text">{TIPO_CLIENTE_LABEL[clienteVinculado.tipo_cliente] ?? clienteVinculado.tipo_cliente}</span>
  </div>
  )}
  {telefono && (
  <div className="flex items-center justify-between gap-2">
  <div className="flex items-center gap-2 min-w-0 text-foreground">
- <Phone size={14} className="text-primary shrink-0"/>
+ <Phone size={14} className="text-muted-foreground shrink-0"/>
  <span className="font-bold select-text cursor-text truncate">{telefono}</span>
  </div>
  <div className="flex items-center gap-1.5 shrink-0">
- <a
- href={`tel:${telefono}`}title="Llamar"
- className="w-8 h-8 rounded-lg bg-card border border-border text-primary flex items-center justify-center hover:bg-primary/10 transition-colors"
- >
+ <a href={`tel:${telefono}`} title="Llamar" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
  <Phone size={14} weight="bold"/>
  </a>
  {getWhatsAppLink(telefono) && (
- <a
- href={getWhatsAppLink(telefono)!}target="_blank"rel="noreferrer"title="Enviar WhatsApp"
- className="w-8 h-8 rounded-lg bg-card border border-border text-emerald-600 flex items-center justify-center hover:bg-emerald-50 transition-colors"
- >
+ <a href={getWhatsAppLink(telefono)!} target="_blank" rel="noreferrer" title="Enviar WhatsApp" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
  <WhatsappLogo size={16} weight="fill"/>
  </a>
  )}
@@ -489,69 +464,72 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  {email && (
  <div className="flex items-center justify-between gap-2">
  <div className="flex items-center gap-2 min-w-0 text-foreground">
- <EnvelopeSimple size={14} className="text-primary shrink-0"/>
+ <EnvelopeSimple size={14} className="text-muted-foreground shrink-0"/>
  <span className="font-bold select-text cursor-text truncate">{email}</span>
  </div>
- <a
- href={`mailto:${email}`}title="Enviar correo"
- className="w-8 h-8 rounded-lg bg-card border border-border text-primary flex items-center justify-center hover:bg-primary/10 transition-colors shrink-0"
- >
+ <a href={`mailto:${email}`} title="Enviar correo" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors shrink-0">
  <EnvelopeSimple size={14} weight="bold"/>
  </a>
  </div>
  )}
  {clienteVinculado?.direccion && (
- <div className="flex items-center gap-2 text-foreground">
- <MapPin size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.direccion}</span>
- </div>
+ <div className="flex items-center gap-2 text-foreground"><MapPin size={14} className="text-muted-foreground shrink-0"/><span className="font-semibold select-text cursor-text">{clienteVinculado.direccion}</span></div>
  )}
  {clienteVinculado?.dni && (
- <div className="flex items-center gap-2 text-foreground">
- <IdentificationCard size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.dni}</span>
- </div>
+ <div className="flex items-center gap-2 text-foreground"><IdentificationCard size={14} className="text-muted-foreground shrink-0"/><span className="font-semibold select-text cursor-text">{clienteVinculado.dni}</span></div>
  )}
  {clienteVinculado?.nombre_factura && (
- <div className="flex items-center gap-2 text-foreground">
- <Buildings size={14} className="text-primary shrink-0"/>
- <span className="font-semibold select-text cursor-text">{clienteVinculado.nombre_factura}</span>
- </div>
+ <div className="flex items-center gap-2 text-foreground"><Buildings size={14} className="text-muted-foreground shrink-0"/><span className="font-semibold select-text cursor-text">{clienteVinculado.nombre_factura}</span></div>
  )}
  {clienteVinculado?.notas && (
- <div className="flex items-start gap-2 text-muted-foreground">
- <NotePencil size={14} className="text-primary shrink-0 mt-0.5"/>
- <span className="font-medium select-text cursor-text">{clienteVinculado.notas}</span>
- </div>
+ <div className="flex items-start gap-2 text-muted-foreground"><NotePencil size={14} className="text-muted-foreground shrink-0 mt-0.5"/><span className="font-medium select-text cursor-text">{clienteVinculado.notas}</span></div>
  )}
  </div>
+ </CollapsibleContent>
+ </Collapsible>
  )}
- </div>
- );
- })()}
 
- <div className="p-4 rounded-xl bg-muted border border-border flex flex-col gap-2 text-xs">
- <div className="flex items-center justify-between">
- <span className="text-muted-foreground font-bold">Fecha</span>
- <span className="font-extrabold text-foreground">{reserva.fecha}</span>
+ <main className="flex-1 overflow-y-auto">
+ {/* Cuándo y para cuántos, de un vistazo */}
+ <div className="grid grid-cols-3 gap-2 p-4 pb-3">
+ {[
+ { icon: CalendarBlank, etiqueta: 'Fecha', valor: reserva.fecha },
+ { icon: Clock, etiqueta: 'Hora', valor: reserva.hora },
+ { icon: Users, etiqueta: 'Comensales', valor: `${reserva.personas}` },
+ ].map(({ icon: Icon, etiqueta, valor }) => (
+ <div key={etiqueta} className="rounded-xl bg-muted/60 px-3 py-2.5 flex flex-col gap-0.5 min-w-0">
+ <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"><Icon size={12} weight="bold" /> {etiqueta}</span>
+ <span className="text-sm font-black text-foreground truncate tabular-nums">{valor}</span>
  </div>
- <div className="flex items-center justify-between">
- <span className="text-muted-foreground font-bold">Hora</span>
- <span className="font-extrabold text-primary">{reserva.hora}</span>
+ ))}
  </div>
- <div className="flex items-center justify-between">
- <span className="text-muted-foreground font-bold">Comensales</span>
- <span className="font-extrabold text-foreground">{reserva.personas} personas</span>
+ {zonaNombre && (
+ <div className="px-4 pb-3">
+ <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-[11px] font-bold text-muted-foreground">
+ <MapPin size={12} weight="bold" /> {zonaNombre}
+ </span>
  </div>
- </div>
-
+ )}
  {reserva.nota && (
- <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-medium">"{reserva.nota}"</div>
+ <div className="mx-4 mb-3 p-3 rounded-xl bg-warning-soft text-xs text-warning-foreground font-medium">"{reserva.nota}"</div>
  )}
 
- <div className="flex flex-col gap-2 -mx-4">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-4">Productos pedidos</span>
- <div className="flex flex-col">
+ <div className="flex items-center justify-between px-4 py-2 border-y border-border bg-muted/40">
+ <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Productos pedidos</span>
+ <span className="text-[11px] font-bold text-muted-foreground">{itemsActivos.length}</span>
+ </div>
+ {itemsActivos.length === 0 ? (
+ <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+ <span className="text-sm font-bold text-foreground">Aún no hay productos</span>
+ <span className="text-xs text-muted-foreground">Añade lo que el cliente pidió para calcular el total y el abono.</span>
+ {!isReadOnly && (
+ <Button type="button" variant="outline" disabled={isCreatingComanda} onClick={handleAddProductos} className="gap-1.5 font-bold">
+ <Plus size={16} weight="bold" /> Añadir productos
+ </Button>
+ )}
+ </div>
+ ) : (
+ <div className="flex flex-col pb-6">
  {comandaItems.map((item, index) => (
  <ComandaItemRow
  key={item.id}
@@ -561,115 +539,81 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  />
  ))}
  </div>
- </div>
+ )}
  </main>
 
- <footer className="p-4 border-t border-border bg-card flex flex-col gap-3 shrink-0">
+ <footer className={cn('relative p-4 flex flex-col gap-3 shrink-0 border-t border-border', editingItem ? 'bg-muted/70' : 'bg-muted/40', !editingItem && !isReadOnly && itemsActivos.length > 0 && 'pt-6')}>
  {!editingItem ? (
  <>
- <div className="flex flex-col gap-2 text-xs font-semibold text-muted-foreground">
- <div className="flex items-center justify-between">
- <span>Total del pedido</span>
- <span className="font-black text-foreground">${total.toFixed(2)}</span>
- </div>
- <button
- type="button"
- onClick={() => setShowAbonos(v => !v)}
- disabled={pagos.length === 0}
- className="flex items-center justify-between disabled:cursor-default"
- >
- <span className="flex items-center gap-1">
- Total Abonado
- {pagos.length > 0 && (showAbonos ? <CaretUp size={12} weight="bold" /> : <CaretDown size={12} weight="bold" />)}
- </span>
- <span className="font-black text-emerald-600">${totalAbonado.toFixed(2)}</span>
- </button>
- <div className="flex items-center justify-between">
- <span>Saldo pendiente</span>
- <span className={`font-black ${saldoPendiente > 0 ? 'text-amber-600' : 'text-foreground'}`}>${saldoPendiente.toFixed(2)}</span>
- </div>
- {showAbonos && pagos.length > 0 && (
- <div className="flex flex-col gap-1.5 mt-1 p-2 rounded-lg bg-muted border border-border">
- {pagos.map((m: any) => (
- <div key={m.id} className="flex items-center justify-between gap-2 text-[11px]">
- <div className="flex flex-col min-w-0">
- <span className="font-bold text-foreground capitalize">
- {m.tipo === 'reembolso' ? 'Reembolso' : 'Abono'} · {m.metodo_pago}
- </span>
- <span className="text-muted-foreground">
- {m.created_at ? new Date(m.created_at).toLocaleString() : ''}
- </span>
- </div>
- <div className="flex items-center gap-1.5 shrink-0">
- {m.comprobante_url && <PagoComprobanteLink url={m.comprobante_url} />}
- <span className={`font-black ${m.tipo === 'reembolso' ? 'text-destructive' : 'text-emerald-600'}`}>
- {m.tipo === 'reembolso' ? '-' : '+'}${(m.monto ?? 0).toFixed(2)}
- </span>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- {!isReadOnly && (
- <div className="grid grid-cols-2 gap-2">
+ {!isReadOnly && itemsActivos.length > 0 && (
  <Button
- type="button"
- variant="secondary"
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"
  disabled={isCreatingComanda}
  onClick={handleAddProductos}
- className="gap-1.5"
  >
- <Plus size={16} weight="bold" />
- Productos
+ <Plus size={15} weight="bold" className="mr-1.5" /> Añadir productos
  </Button>
- <Button
- type="button"
- onClick={() => setAbonoModalOpen(true)}
- className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
- >
- <CreditCard size={16} weight="bold" />
- Abonar
- </Button>
- </div>
  )}
+ <ComandaTotales
+ subtotal={totales.subtotalNeto}
+ iva={totales.ivaTotal}
+ ivaPorcentaje={ivaPorcentaje}
+ total={total}
+ etiquetaTotal="Total del pedido"
+ totalPagado={totalAbonado}
+ saldoPendiente={saldoPendiente}
+ onVerPagos={pagos.length > 0 ? () => setAbonoModalOpen(true) : undefined}
+ />
  <div className="grid grid-cols-2 gap-2">
- <Button
- type="button"
- variant="secondary"
- disabled={isDownloadingImage}
- onClick={handleDescargarImagen}
- className="gap-1.5"
- >
- <DownloadSimple size={16} weight="bold" />
- Descargar imagen
+ {!isReadOnly && (
+ <>
+ <Button type="button" className="h-10 font-bold gap-1.5" onClick={() => setAbonoModalOpen(true)}>
+ <CreditCard size={18} weight="bold" /> Abonar
  </Button>
  <Button
- type="button"
- variant="secondary"
- onClick={handleImprimirPrecuenta}
- className="gap-1.5"
+ type="button" variant="warningSoft" disabled={!esHoy}
+ title={esHoy ? 'Asignar mesa e iniciar el servicio' : 'Solo se puede asignar mesa el día de la reserva'}
+ className="h-10 font-bold gap-1.5"
+ onClick={() => setAsignarOpen(true)}
  >
- <Printer size={16} weight="bold" />
- Imprimir
+ <SquaresFour size={18} weight="bold" /> Asignar mesa
+ </Button>
+ </>
+ )}
+ <Button type="button" variant="secondary" className="h-10 font-bold gap-1.5" onClick={handleImprimirPrecuenta}>
+ <Printer size={18} weight="bold" /> Imprimir
+ </Button>
+ <Button type="button" variant="secondary" className="h-10 font-bold gap-1.5" disabled={isDownloadingImage} onClick={handleDescargarImagen}>
+ <DownloadSimple size={18} weight="bold" /> Imagen
  </Button>
  </div>
+ {!isReadOnly && !esHoy && (
+ <p className="text-[11px] font-medium text-muted-foreground text-center -mt-1">
+ La mesa se asigna el día del servicio ({reserva.fecha}).
+ </p>
+ )}
  </>
  ) : (
- <div className="flex flex-col gap-2 p-3 rounded-xl bg-muted border border-border">
- <span className="font-extrabold text-xs text-foreground">Editando Producto</span>
- <div className="flex items-center justify-center gap-4 bg-card p-2 rounded-lg border border-border">
- <button type="button"onClick={() => setEditCantidad(Math.max(1, editCantidad - 1))} className="w-8 h-8 rounded bg-muted font-bold">-</button>
- <span className="font-black text-lg text-foreground">{editCantidad}</span>
- <button type="button"onClick={() => setEditCantidad(editCantidad + 1)} className="w-8 h-8 rounded bg-muted font-bold">+</button>
- </div>
- <div className="grid grid-cols-2 gap-2">
- <button type="button"onClick={handleDeleteItem} className="py-2 rounded-lg bg-destructive/10 text-destructive font-bold text-xs">Eliminar</button>
- <button type="button"onClick={handleUpdateItem} className="py-2 rounded-lg bg-primary text-primary-foreground font-bold text-xs">Guardar</button>
- </div>
- </div>
+ <ItemActionsPanel
+ key={editingItem.id}
+ item={editingItem}
+ confirmado={false}
+ destinos={[]}
+ tieneOpciones={false}
+ precioVariable={!!editingMenuItem?.precio_variable}
+ ocultarEstado
+ onClose={() => setEditingItem(null)}
+ onGuardar={handleUpdateItem}
+ onEliminar={handleDeleteItem}
+ onEditarOpciones={() => {}}
+ onMover={() => {}}
+ onAnular={() => {}}
+ onCortesia={() => {}}
+ />
  )}
  </footer>
+
+ <AsignarMesaModal reserva={asignarOpen ? reserva : null} mesas={mesas} comandas={todasComandas} onClose={() => setAsignarOpen(false)} />
 
  <TicketPreviewModal
  opened={previewOpened}
@@ -677,13 +621,6 @@ export function SidebarReservaDetail({ reservaId, onBack, onClose: onCloseSideba
  title={previewTitle}
  content={previewContent}
  onPrint={handleConfirmPrint}
- />
-
- <SidebarReservaAbonoModal
- opened={abonoModalOpen}
- onClose={() => setAbonoModalOpen(false)}
- saldoPendiente={saldoPendiente}
- onConfirm={handleAbonar}
  />
  </div>
  );

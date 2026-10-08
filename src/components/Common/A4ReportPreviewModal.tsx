@@ -131,10 +131,10 @@ export function A4ReportPreviewModal({
  return (
  <>
  <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
- <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-4 p-6 print:hidden">
+ <DialogContent className="max-w-2xl max-h-[90dvh] flex flex-col gap-4 p-6 print:hidden">
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2 text-base">
- <FileText size={18} className="text-primary"/> Vista Previa (Formato A4)
+ <FileText size={18} className="text-muted-foreground"/> Vista Previa (Formato A4)
  </DialogTitle>
  <DialogDescription className="sr-only">Vista previa del reporte de cocina consolidado en formato A4</DialogDescription>
  </DialogHeader>
@@ -151,7 +151,7 @@ export function A4ReportPreviewModal({
  </Button>
  <Button
  type="button"onClick={handlePrintSubmit}
- className="bg-emerald-600 text-white font-extrabold text-xs gap-1.5">
+ className="bg-primary text-white font-extrabold text-xs gap-1.5">
  <Printer size={16} /> Imprimir A4
  </Button>
  </div>

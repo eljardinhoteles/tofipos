@@ -71,7 +71,7 @@ export function SidebarComandaIvaModal({ opened, onClose, currentPorcentaje, esO
       <DialogContent className="max-w-sm gap-4">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Percent size={18} weight="bold" className="text-primary" />
+            <Percent size={18} weight="bold" className="text-muted-foreground" />
             IVA de esta comanda
           </DialogTitle>
           <DialogDescription>

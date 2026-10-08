@@ -1,19 +1,22 @@
 import { useState, useMemo, useEffect } from'react';
-import { X, CaretDown, Gift, Receipt, CreditCard, Printer } from'@phosphor-icons/react';
+import { folioLabel } from '../../../../lib/folio';
+import { X, CaretRight, Receipt, CreditCard, Printer, Percent } from'@phosphor-icons/react';
 import { type Mesa, type HabitacionCuenta } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa, createRxVenta } from'../../../../db/rxdb';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
-import { Checkbox } from'@/components/ui/checkbox';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from'@/components/ui/collapsible';
 import { cn } from'@/lib/utils';
+import { Checkbox } from'@/components/ui/checkbox';
 import { useIvaActivo } from'../../../../hooks/useIvaActivo';
+import { useRxMenuCatalog } from'../../../../hooks/useRxMenuCatalog';
+import { calcularTotalesComanda } from'../../../../lib/taxUtils';
 import { generarPrecuentaConsolidadaHabitacion } from'../../../../services/printTemplateEngine';
 import { queueReprintTicket } from'../../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../../Common/TicketPreviewModal';
 import { SubcuentaChips } from'./SubcuentaChips';
+import { CheckoutComandaDetalle, type CortesiaDraft } from'./CheckoutComandaDetalle';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -24,14 +27,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from'@/components/ui/alert-dialog';
-
-// Cambios pendientes de cortesía por item, mantenidos en memoria hasta que se
-// confirma el cobro — así el cajero puede ajustar varios items sin disparar
-// un write por cada tecla.
-interface CortesiaDraft {
-  cantidad: number;
-  motivo: string;
-}
 
 // UUID v4-formato derivado de un texto (SHA-256), para ids idempotentes.
 async function idDeterminista(texto: string): Promise<string> {
@@ -62,13 +57,16 @@ export function HabitacionCheckoutView({
   );
   const nombrePagador = (sel: string | null) =>
     subcuentas.find(x => x.id === sel)?.nombre || cuenta.huesped ||'';
-  const [payerName, setPayerName] = useState(nombrePagador(subSel));
-  const { porcentaje: ivaPorcentaje } = useIvaActivo();
+  const [payerName, setPayerName] = useState(() => nombrePagador(subSel));
+  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+  const { menuItems } = useRxMenuCatalog();
+  const [aplicandoIva, setAplicandoIva] = useState(false);
 
   const [comandas, setComandas] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [itemsByComanda, setItemsByComanda] = useState<Record<string, any[]>>({});
-  const [expandedComandaId, setExpandedComandaId] = useState<string | null>(null);
+  // Comanda cuyo detalle (cortesías por ítem) está abierto en su propia pantalla.
+  const [detalleComandaId, setDetalleComandaId] = useState<string | null>(null);
   const [cortesiaDrafts, setCortesiaDrafts] = useState<Record<string, CortesiaDraft>>({});
 
   // Confirmación antes de "Cobrar": el cierre en base de datos es
@@ -164,6 +162,52 @@ export function HabitacionCheckoutView({
     [comandasSeleccionadas, totalNetoPorComanda]
   );
 
+  // Comandas seleccionadas cuyo total no coincide con el IVA activo hoy (p. ej.
+  // consumos de días anteriores a 15% cuando el checkout cae en feriado a 8%).
+  // El IVA del checkout manda: se pueden recalcular con la tasa activa.
+  const ivaPendientes = useMemo(() => {
+    const out: Array<{ comanda: any; nuevoTotal: number }> = [];
+    // Sin catálogo cargado no se puede recalcular: evita falsos avisos al abrir.
+    if (menuItems.length === 0) return out;
+    for (const c of comandasSeleccionadas) {
+      if (!itemsByComanda[c.id]) continue; // items aún sin cargar / comanda vacía
+      const items = itemsByComanda[c.id].filter(i => !i.anulado);
+      const nuevoTotal = calcularTotalesComanda(items, menuItems, ivaPorcentaje, preciosConIva).total;
+      const totalCambia = Math.abs(nuevoTotal - (c.total || 0)) > 0.005;
+      const tasaDistinta = c.iva_porcentaje != null && c.iva_porcentaje !== ivaPorcentaje;
+      if (totalCambia || tasaDistinta) out.push({ comanda: c, nuevoTotal });
+    }
+    return out;
+  }, [comandasSeleccionadas, itemsByComanda, menuItems, ivaPorcentaje, preciosConIva]);
+
+  const totalConIvaActivo = useMemo(() => {
+    const nuevos = new Map(ivaPendientes.map(x => [x.comanda.id, x.nuevoTotal]));
+    return comandasSeleccionadas.reduce((acc, c) => {
+      const bruto = nuevos.get(c.id) ?? c.total ?? 0;
+      const cortesia = (c.total || 0) - (totalNetoPorComanda.get(c.id) ?? c.total ?? 0);
+      return acc + Math.max(0, bruto - cortesia);
+    }, 0);
+  }, [ivaPendientes, comandasSeleccionadas, totalNetoPorComanda]);
+
+  const aplicarIvaActivo = async () => {
+    if (ivaPendientes.length === 0) return;
+    setAplicandoIva(true);
+    try {
+      const patch = { iva_porcentaje: ivaPorcentaje, iva_precios_con_iva: preciosConIva };
+      for (const { comanda, nuevoTotal } of ivaPendientes) {
+        await updateRxComanda(comanda.id, { ...patch, total: nuevoTotal });
+      }
+      const nuevos = new Map(ivaPendientes.map(x => [x.comanda.id, x.nuevoTotal]));
+      setComandas(prev => prev.map(c => nuevos.has(c.id) ? { ...c, ...patch, total: nuevos.get(c.id) } : c));
+      showToast.success('IVA actualizado', `Se aplicó el ${ivaPorcentaje}% a ${ivaPendientes.length} comanda${ivaPendientes.length === 1 ? '' : 's'}.`);
+    } catch (err) {
+      console.error(err);
+      showToast.error('No se pudo aplicar el IVA');
+    } finally {
+      setAplicandoIva(false);
+    }
+  };
+
   const cambiarSubcuenta = (sel: string | null) => {
     setSubSel(sel);
     setSelectedIds(new Set(comandas
@@ -253,7 +297,7 @@ export function HabitacionCheckoutView({
         const ventaId = await idDeterminista(`hab-checkout:${cuenta.id}:${comandasSeleccionadas.map(c => c.id).sort().join(',')}`);
         const yaExiste = await rxDb.ventas.findOne(ventaId).exec();
         if (!yaExiste) {
-          const folios = comandasSeleccionadas.map(c => `#${c.folio}`).join(', ');
+          const folios = comandasSeleccionadas.map(c => `#${folioLabel(c)}`).join(', ');
           await createRxVenta({
             id: ventaId,
             origen:'habitacion',
@@ -304,12 +348,26 @@ export function HabitacionCheckoutView({
     }
   };
 
+  const comandaDetalle = detalleComandaId ? comandas.find(c => c.id === detalleComandaId) : null;
+  if (comandaDetalle) {
+    return (
+      <CheckoutComandaDetalle
+        comanda={comandaDetalle}
+        items={itemsByComanda[comandaDetalle.id] || []}
+        drafts={cortesiaDrafts}
+        onDraft={setDraft}
+        totalNeto={totalNetoPorComanda.get(comandaDetalle.id) ?? comandaDetalle.total ?? 0}
+        onBack={() => setDetalleComandaId(null)}
+      />
+    );
+  }
+
   return (
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
       {/* Header — mismo lenguaje que SidebarDetails/CuentaView */}
-      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-sky-600 md:text-white">
+      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-info md:text-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-sky-600 text-white md:bg-white/15">
+          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-info text-white md:bg-white/15">
             {roomNum}
           </div>
           <div className="flex flex-col">
@@ -319,7 +377,7 @@ export function HabitacionCheckoutView({
             </span>
           </div>
         </div>
-        <Button variant="ghost" size="icon-lg" onClick={onBack} className="rounded-xl text-muted-foreground md:text-white">
+        <Button variant="ghost" size="icon-lg" aria-label="Volver" onClick={onBack} className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white">
           <X size={18} weight="bold" />
         </Button>
       </header>
@@ -332,11 +390,12 @@ export function HabitacionCheckoutView({
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <Label>Nombre de quien paga</Label>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="checkout-pagador" className="text-xs font-bold text-foreground">Nombre de quien paga</Label>
           <Input
-            type="text" value={payerName}
+            id="checkout-pagador" type="text" value={payerName}
             onChange={(e) => setPayerName(e.target.value)}
+            className="h-12 text-base font-semibold"
           />
         </div>
 
@@ -344,119 +403,71 @@ export function HabitacionCheckoutView({
           <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">
             <Receipt size={14} weight="bold" /> Precuentas a cobrar
           </span>
-          <div className="flex flex-col rounded-xl border border-border overflow-hidden">
+          {ivaPendientes.length > 0 && (
+            <div className="flex items-center gap-3 rounded-xl bg-warning-soft border border-warning/40 p-3">
+              <div className="w-9 h-9 rounded-lg bg-card text-warning-foreground flex items-center justify-center shrink-0 shadow-xs">
+                <Percent size={18} weight="bold" />
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-xs font-extrabold text-warning-foreground leading-tight">
+                  {ivaPendientes.length} comanda{ivaPendientes.length === 1 ? '' : 's'} con IVA distinto al activo ({ivaPorcentaje}%)
+                </span>
+                <span className="text-[11px] font-semibold text-warning-foreground/80">
+                  Total ${total.toFixed(2)} → ${totalConIvaActivo.toFixed(2)} con IVA {ivaPorcentaje}%
+                </span>
+              </div>
+              <Button size="sm" className="shrink-0" disabled={aplicandoIva} onClick={aplicarIvaActivo}>
+                {aplicandoIva ? 'Aplicando…' : `Aplicar ${ivaPorcentaje}%`}
+              </Button>
+            </div>
+          )}
+          {/* Mismo estilo que la lista de la cuenta de habitación: filas a todo el ancho, intercaladas, sin líneas. */}
+          <div className="flex flex-col -mx-4">
             {comandas.map((c, index) => {
-              const isSelected = selectedIds.has(c.id);
-              const isExpanded = expandedComandaId === c.id;
               const isOdd = index % 2 === 1;
-              const items = itemsByComanda[c.id] || [];
+              const isSelected = selectedIds.has(c.id);
               const totalNeto = totalNetoPorComanda.get(c.id) ?? c.total ?? 0;
-              const tieneCortesia = totalNeto < (c.total || 0) - 0.001;
+              const descuento = (c.total || 0) - totalNeto;
+              const tieneCortesia = descuento > 0.001;
 
               return (
-                <Collapsible
-                  key={c.id}
-                  open={isExpanded}
-                  onOpenChange={(open) => setExpandedComandaId(open ? c.id : null)}
-                  className={cn("border-b border-border last:border-b-0", isOdd &&"bg-muted/70")}
-                >
-                  <div className="flex items-stretch">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => toggleSeleccion(c.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSeleccion(c.id); } }}
-                      className="flex-1 px-4 py-3 flex items-center gap-3 text-left cursor-pointer"
-                    >
-                      <Checkbox checked={isSelected} className="pointer-events-none shrink-0" />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-sm text-foreground truncate">Comanda #{c.folio}</span>
-                        <span className="text-[10px] text-muted-foreground font-semibold">
-                          {new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(c.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
-                        </span>
-                      </div>
+                <div key={c.id} className={cn("flex items-stretch px-4", isOdd && "bg-muted/70")}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleSeleccion(c.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSeleccion(c.id); } }}
+                    className="flex-1 min-w-0 py-3 flex items-center gap-3 text-left cursor-pointer"
+                  >
+                    <Checkbox checked={isSelected} className="pointer-events-none shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-sm text-foreground truncate">Comanda #{folioLabel(c)}</span>
+                      <span className="text-[10px] text-muted-foreground font-semibold">
+                        {new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(c.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
+                      </span>
                     </div>
-
-                    <CollapsibleTrigger
-                      className="pl-2 pr-4 flex items-center gap-1.5 text-muted-foreground cursor-pointer shrink-0"
-                      title="Ver items / aplicar cortesía"
-                    >
-                      <div className="flex flex-col items-end">
-                        {tieneCortesia && (
-                          <span className="text-[10px] font-bold text-muted-foreground line-through">
-                            ${c.total?.toFixed(2) ||'0.00'}
-                          </span>
-                        )}
-                        <span className="font-black text-sm text-foreground">${totalNeto.toFixed(2)}</span>
-                      </div>
-                      <CaretDown size={16} weight="bold" className={cn("transition-transform", isExpanded &&"rotate-180")} />
-                    </CollapsibleTrigger>
                   </div>
 
-                  <CollapsibleContent>
-                    <div className="px-4 pb-3 flex flex-col gap-2 border-t border-border/60 pt-3">
-                      {/* Los ítems anulados no se muestran aquí: ya no se cobran,
-                          no tiene sentido aplicarles cortesía. */}
-                      {items.filter(item => !item.anulado).length === 0 ? (
-                        <span className="text-[11px] text-muted-foreground">Sin items.</span>
-                      ) : items.filter(item => !item.anulado).map((item) => {
-                        const draft = cortesiaDrafts[item.id] || { cantidad: 0, motivo:''};
-                        const enCortesia = draft.cantidad > 0;
-                        return (
-                          <div key={item.id} className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-card border border-border">
-                            <div className="flex items-center gap-3">
-                              <div className={cn("w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0",
-                                enCortesia ?"bg-amber-100 border-amber-300 text-amber-800":"bg-muted border-border text-foreground")}>
-                                {item.cantidad}
-                              </div>
-                              <div className="flex items-center justify-between gap-2 flex-1 min-w-0">
-                                <span className={cn("text-sm text-foreground truncate", enCortesia ?"font-medium line-through text-muted-foreground":"font-bold")}>
-                                  {item.nombre}
-                                </span>
-                                <span className="font-black text-sm text-foreground shrink-0">
-                                  ${(item.precio * item.cantidad).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 pl-10">
-                              <Button
-                                type="button"
-                                size="xs"
-                                variant={enCortesia ?"default":"secondary"}
-                                onClick={() => setDraft(item.id, { cantidad: enCortesia ? 0 : item.cantidad })}
-                                className={cn("shrink-0", enCortesia &&"bg-amber-100 text-amber-800 hover:bg-amber-100")}
-                              >
-                                <Gift size={14} weight="bold" /> {enCortesia ?`Cortesía (${draft.cantidad}/${item.cantidad})`:'No cobrar'}
-                              </Button>
-
-                              {enCortesia && item.cantidad > 1 && (
-                                <Input
-                                  type="number" min={1} max={item.cantidad}
-                                  value={draft.cantidad}
-                                  onChange={(e) => {
-                                    const val = Math.max(1, Math.min(item.cantidad, Number(e.target.value) || 1));
-                                    setDraft(item.id, { cantidad: val });
-                                  }}
-                                  className="h-7 w-16 text-center text-xs shrink-0"
-                                />
-                              )}
-                            </div>
-
-                            {enCortesia && (
-                              <Input
-                                type="text" placeholder="Motivo de la cortesía (obligatorio)"
-                                value={draft.motivo}
-                                onChange={(e) => setDraft(item.id, { motivo: e.target.value })}
-                                className="h-8 text-xs ml-10"
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                  {/* El importe es también el botón del detalle: tocarlo abre los ítems (donde se ajusta ese importe). */}
+                  <div className="flex items-center py-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setDetalleComandaId(c.id)}
+                      title="Ver ítems / aplicar cortesía"
+                      aria-label={`Ver ítems de la comanda ${folioLabel(c)}`}
+                      className="h-auto min-h-11 min-w-28 pl-3 pr-2 py-1.5 gap-2 justify-between rounded-xl hover:bg-muted"
+                    >
+                      <span className="flex flex-col items-end leading-tight">
+                        {tieneCortesia && (
+                          <span className="text-[10px] font-bold text-warning-foreground">Cortesía −${descuento.toFixed(2)}</span>
+                        )}
+                        <span className="font-black text-sm text-foreground">${totalNeto.toFixed(2)}</span>
+                      </span>
+                      <CaretRight size={16} weight="bold" className="text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -464,7 +475,7 @@ export function HabitacionCheckoutView({
       </main>
 
       {/* Footer — mismo bloque de total que SidebarDetails/CuentaView */}
-      <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
+      <footer className="p-4 bg-muted/40 border-t border-border flex flex-col gap-3 shrink-0">
         <div className="flex flex-col gap-1.5 px-2 py-1 text-sm font-semibold text-muted-foreground">
           <div className="flex items-center justify-between">
             <div className="flex flex-col leading-tight">
@@ -473,22 +484,22 @@ export function HabitacionCheckoutView({
                 {comandasSeleccionadas.length}/{comandas.length} precuentas
               </span>
             </div>
-            <span className="text-xl font-black text-primary">${total.toFixed(2)}</span>
+            <span className="text-xl font-black text-foreground">${total.toFixed(2)}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <Button
-            type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
+            type="button" variant="warningSoft" disabled={comandasSeleccionadas.length === 0}
             onClick={() => handleImprimirConsolidado(false)}
-            className="w-full h-10 font-bold text-amber-600 bg-amber-50"
+            className="w-full h-10 font-bold"
           >
             <Printer size={18} weight="bold" className="mr-1.5" /> Completa
           </Button>
           <Button
-            type="button" variant="secondary" disabled={comandasSeleccionadas.length === 0}
+            type="button" variant="warningSoft" disabled={comandasSeleccionadas.length === 0}
             onClick={() => handleImprimirConsolidado(true)}
-            className="w-full h-10 font-bold text-amber-600 bg-amber-50"
+            className="w-full h-10 font-bold"
           >
             <Printer size={18} weight="bold" className="mr-1.5" /> Consumos
           </Button>
@@ -497,14 +508,14 @@ export function HabitacionCheckoutView({
           <Button
             type="button" disabled={isProcessing || comandasSeleccionadas.length === 0}
             onClick={() => setConfirmCobroOpened(true)}
-            className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"
+            variant="warning" className="w-full h-10 font-bold"
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Cobrar
           </Button>
           <Button
             type="button" variant="ghost" disabled={isProcessing}
             onClick={onBack}
-            className="w-full h-10 font-bold"
+            className="w-full h-10 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             Cancelar
           </Button>

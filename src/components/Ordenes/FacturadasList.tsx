@@ -1,4 +1,5 @@
 import { Bed, ForkKnife, User } from'@phosphor-icons/react';
+import { folioLabel } from '../../lib/folio';
 import { type Comanda, type Mesa, type ComandaItem } from'../../db/database';
 
 interface FacturadasListProps {
@@ -33,13 +34,13 @@ export function FacturadasList({ comandas, mesas, comandaItems, onViewInvoice }:
  className="transition-colors cursor-pointer">
  <td className="px-6 py-4">
  <div className="flex flex-col gap-1">
- <div className="flex items-center gap-1.5 text-primary font-extrabold text-sm">
+ <div className="flex items-center gap-1.5 text-foreground font-extrabold text-sm">
  <User size={14} />
  <span>{comanda.cliente ||'Sin cliente'}</span>
  </div>
 
  <span className="text-[11px] text-muted-foreground font-semibold pl-5">
- Comanda #{comanda.folio}
+ Comanda #{folioLabel(comanda)}
  </span>
 
  <div className="flex items-center gap-1.5 text-foreground/80 font-bold text-xs pl-5">
@@ -56,7 +57,7 @@ export function FacturadasList({ comandas, mesas, comandaItems, onViewInvoice }:
  </td>
 
  <td className="px-6 py-4 hidden sm:table-cell">
- <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs">
+ <span className="px-2.5 py-1 rounded-md bg-muted text-muted-foreground font-bold text-xs">
  {comanda.factura_nro ||'Sin factura'}
  </span>
  </td>

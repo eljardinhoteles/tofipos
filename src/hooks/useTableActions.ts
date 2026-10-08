@@ -1,7 +1,7 @@
 import { type Mesa } from '../db/database';
 import { showToast } from '@/lib/toast';
 import { useUI } from '../context/UIContext';
-import { createRxComanda, updateRxComanda, updateRxMesa, getVerticalRxDb, liberarMesaSiSinOperativas } from '../db/rxdb';
+import { createRxComanda, updateRxComanda, updateRxMesa, getVerticalRxDb, liberarMesaSiSinOperativas, siguienteFolio } from '../db/rxdb';
 import { isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../db/comandaState';
 import { useAuth } from '../context/AuthContext';
 
@@ -45,12 +45,7 @@ export function useTableActions() {
 
   const crearSubcomanda = async (mesa: Mesa, nombre: string) => {
     const orgId = getOrgId();
-    const rxDb = await getVerticalRxDb();
-    const allComandas = await rxDb.comandas.find({ selector: { organization_id: orgId } }).exec();
-    const nextFolio = allComandas.reduce((max, comanda) => {
-      const folio = Number((comanda as any)?.folio || 0);
-      return folio > max ? folio : max;
-    }, 0) + 1;
+    const nextFolio = await siguienteFolio(orgId);
     const id = crypto.randomUUID();
     await createRxComanda({
       id,
@@ -128,13 +123,7 @@ export function useTableActions() {
       const finalClientId = customerNameFromSidebar ? (clientId || undefined) : undefined;
       try {
         const rxDb = await getVerticalRxDb();
-        const allComandas = await rxDb.comandas.find({
-          selector: { organization_id: orgId }
-        }).exec();
-        const nextFolio = allComandas.reduce((max, comanda) => {
-          const folio = Number((comanda as any)?.folio || 0);
-          return folio > max ? folio : max;
-        }, 0) + 1;
+        const nextFolio = await siguienteFolio(orgId);
 
         await createRxComanda({
           id: comandaId,

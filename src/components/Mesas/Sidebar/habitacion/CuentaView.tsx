@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { folioLabel } from '../../../../lib/folio';
 import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { useHorizontalWheel } from '../../../../hooks/useHorizontalWheel';
@@ -39,7 +40,7 @@ export function CuentaView({
   const [nuevaSub, setNuevaSub] = useState('');
   // Id de la subcuenta que se está renombrando (reusa el mismo editor que "agregar").
   const [renombrandoId, setRenombrandoId] = useState<string | null>(null);
-  const subcuentas = cuenta.subcuentas ?? [];
+  const subcuentas = useMemo(() => cuenta.subcuentas ?? [], [cuenta.subcuentas]);
   const nombrePrincipal = cuenta.principal_nombre?.trim() || 'Principal';
   const nombreSub = (id?: string | null) => subcuentas.find(s => s.id === id)?.nombre ?? (id ? undefined : nombrePrincipal);
 
@@ -158,9 +159,9 @@ export function CuentaView({
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
       {/* Header — mismo lenguaje que SidebarDetails: badge circular con el
           número de la unidad, título + subtítulo, fondo temático en desktop. */}
-      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-sky-600 md:text-white">
+      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-info md:text-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-sky-600 text-white md:bg-white/15">
+          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-info text-white md:bg-white/15">
             {roomNum}
           </div>
           <div className="flex flex-col">
@@ -173,13 +174,13 @@ export function CuentaView({
           </div>
         </div>
 
-        <Button variant="ghost" size="icon-lg" onClick={onClose} className="rounded-xl text-muted-foreground md:text-white">
+        <Button variant="ghost" size="icon-lg" aria-label="Cerrar" onClick={onClose} className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white">
           <X size={18} weight="bold" />
         </Button>
       </header>
 
       {/* Subcuentas: p. ej. las 2 familias de una villa que llevan sus consumos por separado */}
-      <div className="shrink-0 border-b border-border bg-muted px-3 py-2.5 flex flex-col gap-2">
+      <div className="shrink-0 border-b border-border bg-muted/50 px-3 py-2.5 flex flex-col gap-2">
         {agregandoSub || renombrandoId ? (
           <div className="flex items-center gap-2">
             <Input
@@ -219,7 +220,7 @@ export function CuentaView({
                     aria-label={`Ver todas las comandas (${o.cantidad})`}
                     className={cn(
                       'shrink-0 w-12 h-12 rounded-full border flex items-center justify-center cursor-pointer',
-                      activo ? 'border-sky-600 bg-sky-600 text-white' : 'border-border bg-card'
+                      activo ? 'border-info bg-info text-white' : 'border-transparent bg-card shadow-(--shadow-btn)'
                     )}
                   >
                     <ListBullets size={20} weight="bold" />
@@ -233,7 +234,7 @@ export function CuentaView({
                   onClick={() => setFiltroSub(o.id)}
                   className={cn(
                     'shrink-0 min-w-[5.5rem] max-w-[10rem] h-12 rounded-full border px-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors',
-                    activo ? 'border-sky-600 bg-sky-600 text-white' : 'border-border bg-card'
+                    activo ? 'border-info bg-info text-white' : 'border-transparent bg-card shadow-(--shadow-btn)'
                   )}
                 >
                   <span className="w-full text-xs font-extrabold leading-tight truncate">{o.nombre}</span>
@@ -262,10 +263,12 @@ export function CuentaView({
       {/* Lista de comandas cargadas — mismo patrón zebra + badge que ComandaItemRow */}
       <main className="flex-1 overflow-y-auto">
         {comandasVisibles.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
-            <Receipt size={48} className="text-muted-foreground/40" />
-            <span className="font-bold text-xs text-foreground">Sin consumos aún</span>
-            <span className="text-[11px] text-muted-foreground">Las comandas cargadas a esta habitación aparecerán aquí.</span>
+          <div className="flex flex-col items-center justify-center gap-3 text-center px-8 py-16">
+            <span className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+              <Receipt size={28} weight="bold" />
+            </span>
+            <span className="font-extrabold text-sm text-foreground">Sin consumos aún</span>
+            <span className="text-xs text-muted-foreground max-w-[16rem]">Las comandas cargadas a esta habitación aparecerán aquí.</span>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -288,9 +291,9 @@ export function CuentaView({
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-sm text-foreground truncate">
-                        Comanda #{c.folio}
+                        Comanda #{folioLabel(c)}
                         {subcuentas.length > 0 && (
-                          <span className="ml-2 px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 text-[10px] font-extrabold">
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-info/15 text-info-foreground dark:bg-info/40 dark:text-info-soft text-[10px] font-extrabold">
                             {nombreSub(c.habitacion_subcuenta_id) ?? nombrePrincipal}
                           </span>
                         )}
@@ -311,12 +314,12 @@ export function CuentaView({
       </main>
 
       {/* Footer y Acciones — mismo bloque de total y grid de botones que SidebarDetails */}
-      <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
+      <footer className="p-4 bg-muted/40 border-t border-border flex flex-col gap-3 shrink-0">
         <div className="flex flex-col gap-0.5 px-2 py-1">
           {filtroSub === 'todas' ? (
             <div className="flex items-center justify-between">
               <span className="text-base font-black text-foreground">Total Cuenta</span>
-              <span className="text-xl font-black text-primary">${totalConIva.toFixed(2)}</span>
+              <span className="text-xl font-black text-foreground">${totalConIva.toFixed(2)}</span>
             </div>
           ) : (
             <>
@@ -333,7 +336,7 @@ export function CuentaView({
                     <PencilSimple size={16} weight="bold" />
                   </button>
                 </span>
-                <span className="text-xl font-black text-primary shrink-0">${totalConIva.toFixed(2)}</span>
+                <span className="text-xl font-black text-foreground shrink-0">${totalConIva.toFixed(2)}</span>
               </div>
             </>
           )}
@@ -341,13 +344,13 @@ export function CuentaView({
 
         <div className="grid grid-cols-2 gap-2">
           <Button
-            className="w-full h-10 font-bold bg-orange-500 hover:bg-orange-600 text-white"
+            variant="warning" className="w-full h-10 font-bold"
             onClick={() => onCheckout({ extras: [], incluidos: [], subcuentaId: filtroSub === 'todas' ? undefined : filtroSub })}
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Checkout
           </Button>
           <Button
-            variant="ghost" className="w-full h-10 font-bold text-destructive"
+            variant="dangerGhost" className="w-full h-10 font-semibold"
             onClick={handleAnular}
             disabled={anulando || !puedeAnular}
             title={puedeAnular ? undefined : 'No se puede anular: esta cuenta ya tiene comandas cargadas'}

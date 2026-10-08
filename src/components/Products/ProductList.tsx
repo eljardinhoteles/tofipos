@@ -34,7 +34,7 @@ export function ProductList({ products = [], onEdit, onDelete }: ProductListProp
  <tr key={product.id} className="transition-colors">
  <td className="p-3 font-extrabold text-foreground">{product.name}</td>
  <td className="p-3">
- <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10px]">
+ <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground font-bold text-[10px]">
  {product.category}
  </span>
  </td>

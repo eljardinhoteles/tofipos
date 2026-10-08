@@ -10,6 +10,8 @@ interface ClienteBuscadorProps {
   value: string;
   onChange: (clienteId: string) => void;
   placeholder?: string;
+  /** Clases extra del campo de búsqueda (p. ej. altura/tamaño de texto del formulario). */
+  inputClassName?: string;
   maxResults?: number;
 }
 
@@ -22,6 +24,7 @@ export function ClienteBuscador({
   value,
   onChange,
   placeholder = 'Buscar por nombre o identificación',
+  inputClassName,
   maxResults = 6,
 }: ClienteBuscadorProps) {
   const { clientes } = useRxClientes();
@@ -74,7 +77,7 @@ export function ClienteBuscador({
           placeholder={placeholder}
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          className="pl-8"
+          className={cn("pl-8", inputClassName)}
         />
       </div>
 

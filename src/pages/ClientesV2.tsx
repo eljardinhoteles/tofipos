@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from'react';
 import { type Cliente } from'../db/database';
 import {
- Users, Plus, Trash, PencilSimple, MagnifyingGlass,
- TrendUp, ClockCounterClockwise
+ Plus, Trash, PencilSimple, MagnifyingGlass,
+
 } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { useUI } from'../context/UIContext';
@@ -12,6 +12,7 @@ import { useRxComandas } from'../hooks/useRxComandas';
 import { initVerticalRxDb } from'../db/rxdb';
 import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
+import { PageFrame, PageHeader, PageContent, HeaderSearch, headerPrimaryButtonClass } from'../components/Common/PageHeader';
 
 const getWhatsAppLink = (telefono: string) => {
   const cleanNumber = telefono.replace(/\D/g, '');
@@ -24,7 +25,7 @@ export default function ClientesV2() {
  const [newOpened, setNewOpened] = useState(false);
  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
  const { openConfirm } = useUI();
- const itemsPerPage = 8;
+ const itemsPerPage = 15;
 
  const { clientes } = useRxClientes();
  const { comandas } = useRxComandas();
@@ -100,51 +101,30 @@ export default function ClientesV2() {
  };
 
  return (
- <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
- {/* ── HEADER PRINCIPAL ─────────────────────────────── */}
- <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
- <div className="flex items-center gap-3 shrink-0">
- <button
- type="button"title="Nuevo Cliente"onClick={() => {
- setEditingCliente(null);
- setNewOpened(true);
- }}
- className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
- <Plus size={18} weight="bold"/>
+ <PageFrame>
+ <PageHeader
+ title="Clientes"
+ subtitle={`${stats.total} ${stats.total === 1 ? 'Registrado' : 'Registrados'}`}
+ search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por nombre, teléfono o DNI..." />}
+ actions={
+ <button type="button" onClick={() => { setEditingCliente(null); setNewOpened(true); }} title="Nuevo cliente" aria-label="Nuevo cliente" className={headerPrimaryButtonClass}>
+ <Plus size={18} weight="bold" />
+   <span className="hidden 2xl:inline">Nuevo cliente</span>
  </button>
+ }
+ />
 
- <div className="w-[1px] h-6 bg-border shrink-0"/>
-
- <div className="relative w-72 shrink-0">
- <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
- <Input
- type="text"placeholder="Buscar por nombre, teléfono o DNI..."value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- className="pl-9 h-9 text-xs"/>
+ <PageContent>
+ {/* En móvil el buscador no cabe en el header: va en una fila propia */}
+ <div className="md:hidden px-6 py-2 shrink-0">
+ <div className="relative">
+ <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+ <Input type="text" placeholder="Buscar por nombre, teléfono o DNI..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-9 text-xs" />
  </div>
  </div>
-
- {/* Stats rápidos */}
- <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground shrink-0">
- <div className="flex items-center gap-1.5">
- <Users size={16} className="text-primary"/>
- <span>{stats.total} Total</span>
- </div>
- <div className="w-1 h-1 rounded-full bg-border"/>
- <div className="flex items-center gap-1.5">
- <TrendUp size={16} className="text-emerald-600"/>
- <span>{stats.thisMonth} Nuevos</span>
- </div>
- <div className="w-1 h-1 rounded-full bg-border"/>
- <div className="flex items-center gap-1.5">
- <ClockCounterClockwise size={16} className="text-amber-600"/>
- <span>{stats.frequent} Frecuentes</span>
- </div>
- </div>
- </header>
 
  {/* Contenido / Tabla */}
- <main className="flex-1 overflow-y-auto p-6 flex flex-col justify-between">
+ <main className="flex-1 overflow-y-auto min-h-0 bg-card">
  {filteredClientes.length === 0 ? (
  <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
  <div className="w-24 h-24 flex items-center justify-center">
@@ -154,9 +134,9 @@ export default function ClientesV2() {
  <p className="text-muted-foreground text-xs">Intenta cambiar el criterio de búsqueda o registra uno nuevo.</p>
  </div>
  ) : (
- <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden">
+ <div className="flex flex-col">
  <table className="w-full text-left text-xs">
- <thead className="bg-muted border-b border-border text-muted-foreground font-bold uppercase tracking-wider">
+ <thead className="sticky top-0 z-10 bg-muted shadow-[0_1px_0_var(--border)] text-muted-foreground font-bold uppercase tracking-wider">
  <tr>
  <th className="px-6 py-3.5">Cliente</th>
  <th className="px-6 py-3.5">Contacto</th>
@@ -184,7 +164,7 @@ export default function ClientesV2() {
  {cliente.telefono ? (
  <a
  href={getWhatsAppLink(cliente.telefono) ||'#'}
- target="_blank"rel="noreferrer"className="font-bold text-emerald-600">
+ target="_blank"rel="noreferrer"className="font-bold text-foreground">
  {cliente.telefono}
  </a>
  ) : (
@@ -197,7 +177,7 @@ export default function ClientesV2() {
  </td>
  <td className="px-6 py-4">
  <span className={cn("px-2.5 py-1 rounded-md font-semibold text-[11px]",
- cliente.dni ?"bg-primary/10 text-primary":"bg-muted text-muted-foreground")}>
+ cliente.dni ?"bg-muted text-muted-foreground":"bg-muted text-muted-foreground")}>
  {cliente.dni ||'Sin documento'}
  </span>
  </td>
@@ -208,7 +188,7 @@ export default function ClientesV2() {
  <span className="font-semibold text-foreground">{cliente.nombre_factura}</span>
  )}
  {cliente.numero_doc && (
- <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-bold text-[10px] w-fit">
+ <span className="px-2 py-0.5 rounded-md bg-special-soft text-special-foreground font-bold text-[10px] w-fit">
  {(cliente.tipo_doc ||'cedula').toUpperCase()} · {cliente.numero_doc}
  </span>
  )}
@@ -255,9 +235,11 @@ export default function ClientesV2() {
  </div>
  )}
 
- {/* Paginación */}
+ </main>
+
+ {/* Paginación (fija, fuera del scroll de la tabla) */}
  {filteredClientes.length > 0 && (
- <div className="flex items-center justify-between pt-4">
+ <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-card shrink-0">
  <span className="text-xs font-semibold text-muted-foreground">
  Mostrando {Math.min((page - 1) * itemsPerPage + 1, filteredClientes.length)}-
  {Math.min(page * itemsPerPage, filteredClientes.length)} de {filteredClientes.length}
@@ -265,30 +247,31 @@ export default function ClientesV2() {
 
  <div className="flex items-center gap-1">
  <button
- type="button"disabled={page === 1}
+ type="button" disabled={page === 1}
  onClick={() => setPage(p => Math.max(1, p - 1))}
- className="px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-muted-foreground disabled:opacity-40 cursor-pointer">
+ className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer disabled:cursor-default">
  Anterior
  </button>
  <span className="px-3 text-xs font-bold text-foreground">
  Página {page} de {totalPages}
  </span>
  <button
- type="button"disabled={page === totalPages}
+ type="button" disabled={page === totalPages}
  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
- className="px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-muted-foreground disabled:opacity-40 cursor-pointer">
+ className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer disabled:cursor-default">
  Siguiente
  </button>
  </div>
  </div>
  )}
- </main>
+
+ </PageContent>
 
  <ClienteFormModal
  opened={newOpened}
  onClose={handleCloseModal}
  editingCliente={editingCliente}
  />
- </div>
+ </PageFrame>
  );
 }

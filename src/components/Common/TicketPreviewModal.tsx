@@ -115,10 +115,10 @@ export function TicketPreviewModal({
 
  return (
  <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
- <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 max-w-md max-h-[90vh] max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-screen max-sm:h-dvh max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+ <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 max-w-md max-h-[90dvh] max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-screen max-sm:h-dvh max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2 text-base">
- <FileText size={18} className="text-primary"/> {title}
+ <FileText size={18} className="text-muted-foreground"/> {title}
  </DialogTitle>
  <DialogDescription className="sr-only">Vista previa del documento a imprimir</DialogDescription>
  </DialogHeader>
@@ -132,7 +132,7 @@ export function TicketPreviewModal({
  <Button type="button"variant="outline"onClick={cancelCountdown} className="h-12 font-bold text-sm gap-1.5">
  <X size={16} /> Cancelar
  </Button>
- <span className="text-center font-black text-sm text-emerald-600 tabular-nums">
+ <span className="text-center font-black text-sm text-primary tabular-nums">
  Imprimiendo en {countdown}…
  </span>
  </div>
@@ -143,7 +143,7 @@ export function TicketPreviewModal({
  </Button>
  <Button
  type="button"onClick={startCountdown}
- className="h-12 bg-emerald-600 text-white font-extrabold text-sm gap-1.5">
+ className="h-12 bg-primary text-white font-extrabold text-sm gap-1.5">
  <Printer size={16} /> Imprimir
  </Button>
  </div>

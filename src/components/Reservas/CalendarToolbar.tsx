@@ -1,16 +1,16 @@
 import { useState } from'react';
-import { CaretLeft, CaretRight, Plus, MagnifyingGlass, XCircle } from'@phosphor-icons/react';
+import { CaretLeft, CaretRight, Plus, CalendarDot } from'@phosphor-icons/react';
 import { type Reserva } from'../../db/database';
 import { STATUS_LABEL } from'./reservaUtils';
-import { Input } from'@/components/ui/input';
+import { Button, ButtonGroup } from'@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar } from'@/components/ui/calendar';
 
-interface CalendarToolbarProps {
- startDate: Date;
- setStartDate: (d: Date) => void;
- shiftDays: (n: number) => void;
- goToday: () => void;
+import { useUI } from'../../context/UIContext';
+import { cn } from'@/lib/utils';
+import { PageHeader, HeaderSearch, headerPrimaryButtonClass } from'../Common/PageHeader';
+
+interface CalendarHeaderProps {
  visibleDates: Date[];
  search: string;
  setSearch: (s: string) => void;
@@ -21,47 +21,83 @@ interface CalendarToolbarProps {
  onNewReserva: () => void;
 }
 
-export function CalendarToolbar({
- startDate,
- setStartDate,
- visibleDates,
- shiftDays,
- goToday,
- search,
- setSearch,
- searchOpen,
- setSearchOpen,
- reservas,
- onResultClick,
- onNewReserva
-}: CalendarToolbarProps) {
- const [monthPickerOpen, setMonthPickerOpen] = useState(false);
-
+// Header de Reservas: título, buscador con resultados y la acción principal.
+export function CalendarHeader({ visibleDates, search, setSearch, searchOpen, setSearchOpen, reservas, onResultClick, onNewReserva }: CalendarHeaderProps) {
+ const mes = visibleDates[0]?.toLocaleDateString('es-ES', { month:'long', year:'numeric'}) ?? '';
+ // Con el formulario de nueva reserva abierto en el sidebar, el botón sobra.
+ const { reservaView, selectedReservaId } = useUI();
+ const creandoReserva = reservaView === 'nueva' && !selectedReservaId;
  return (
- <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center justify-between shadow-xs shrink-0 gap-4">
- <div className="flex items-center gap-3 shrink-0">
- <button
- type="button"title="Nueva reserva"onClick={onNewReserva}
- className="w-9 h-9 rounded-lg bg-primary active:scale-95 text-primary-foreground flex items-center justify-center transition-all shadow-xs cursor-pointer">
+ <PageHeader
+ title="Reservas"
+ subtitle={<span className="inline-block first-letter:uppercase">{mes}</span>}
+ search={
+ <div className="relative">
+ <HeaderSearch
+ value={search}
+ placeholder="Buscar reserva..."
+ onChange={(v) => { setSearch(v); setSearchOpen(v.trim().length > 1); }}
+ />
+ {searchOpen && (
+ <div className="absolute top-11 left-0 w-96 max-w-full bg-card text-foreground rounded-xl shadow-xl border border-border p-2 z-50 flex flex-col gap-1 max-h-60 overflow-y-auto">
+ {reservas
+ .filter(r => r.nombre.toLowerCase().includes(search.toLowerCase()))
+ .map(r => (
+ <div
+ key={r.id}
+ onClick={() => { onResultClick(r); setSearchOpen(false); }}
+ className="p-2 rounded-xl cursor-pointer hover:bg-muted flex flex-col gap-0.5">
+ <span className="font-extrabold text-xs text-foreground">{r.nombre}</span>
+ <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+ <span>{r.fecha} · {r.hora}</span>
+ <span className="px-1.5 py-0.5 rounded-xl bg-card border border-border text-muted-foreground font-bold uppercase">
+ {STATUS_LABEL[r.estado] || r.estado}
+ </span>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ }
+ actions={(
+ // Siempre montado: al cerrar el sidebar el contenido tarda 0.5 s en volver a su
+ // ancho; si el botón apareciera de golpe se vería deslizarse. Se oculta al instante
+ // y reaparece con un fundido retrasado, cuando el header ya se acomodó.
+ <button type="button" onClick={onNewReserva} title="Nueva reserva" aria-label="Nueva reserva" tabIndex={creandoReserva ? -1 : 0}
+ className={cn(headerPrimaryButtonClass, creandoReserva ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-300 delay-300')}>
  <Plus size={18} weight="bold"/>
+   <span className="hidden 2xl:inline">Nueva reserva</span>
  </button>
+ )}
+ />
+ );
+}
 
- <div className="w-[1px] h-6 bg-border shrink-0"/>
+interface CalendarNavProps {
+ startDate: Date;
+ setStartDate: (d: Date) => void;
+ shiftDays: (n: number) => void;
+ goToday: () => void;
+ visibleDates: Date[];
+}
 
- <button
- type="button"title="Días anteriores"onClick={() => shiftDays(-1)}
- className="w-9 h-9 rounded-lg bg-muted active:scale-95 text-muted-foreground flex items-center justify-center transition-all cursor-pointer">
- <CaretLeft size={16} weight="bold"/>
- </button>
-
+// Navegación de fechas compacta: va en la primera celda del calendario (la
+// esquina sobre la columna de zonas), en una sola fila.
+export function CalendarNav({ startDate, setStartDate, shiftDays, goToday, visibleDates }: CalendarNavProps) {
+ const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+ const mes = visibleDates[0]?.toLocaleDateString('es-ES', { month:'long' }) ?? '';
+ return (
+ <div className="flex items-center gap-1.5 w-full">
+ <ButtonGroup className="flex-1 min-w-0">
+ <Button type="button" variant="ghost" size="icon" title="Días anteriores" onClick={() => shiftDays(-1)} className="h-8 w-7 shrink-0 text-muted-foreground">
+ <CaretLeft size={14} weight="bold"/>
+ </Button>
  <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
  <PopoverTrigger asChild>
- <button
- type="button"
- className="font-extrabold text-sm text-foreground px-2 capitalize rounded-lg hover:bg-muted transition-colors cursor-pointer"
- >
- {visibleDates[0]?.toLocaleDateString('es-ES', { month:'long', year:'numeric'})}
- </button>
+ <Button type="button" variant="ghost" title="Elegir fecha" className="h-8 px-2 min-w-0 flex-1 font-extrabold text-xs">
+ <span className="inline-block first-letter:uppercase truncate">{mes}</span>
+ </Button>
  </PopoverTrigger>
  <PopoverContent className="w-auto p-0" align="start">
  <Calendar
@@ -77,58 +113,13 @@ export function CalendarToolbar({
  />
  </PopoverContent>
  </Popover>
-
- <button
- type="button"onClick={goToday}
- className="px-3 py-1.5 rounded-lg bg-muted active:scale-95 text-foreground font-bold text-xs transition-all cursor-pointer">
- Hoy
- </button>
-
- <button
- type="button"title="Días siguientes"onClick={() => shiftDays(1)}
- className="w-9 h-9 rounded-lg bg-muted active:scale-95 text-muted-foreground flex items-center justify-center transition-all cursor-pointer">
- <CaretRight size={16} weight="bold"/>
- </button>
+ <Button type="button" variant="ghost" size="icon" title="Días siguientes" onClick={() => shiftDays(1)} className="h-8 w-7 shrink-0 text-muted-foreground">
+ <CaretRight size={14} weight="bold"/>
+ </Button>
+ </ButtonGroup>
+ <Button type="button" variant="outline" size="icon" title="Ir a hoy" aria-label="Ir a hoy" onClick={goToday} className="h-8 w-8 shrink-0">
+ <CalendarDot size={16} weight="bold"/>
+ </Button>
  </div>
-
- <div className="relative w-64 shrink-0">
- <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10"/>
- <Input
- type="text"placeholder="Buscar reserva..."value={search}
- onChange={(e) => {
- setSearch(e.target.value);
- setSearchOpen(e.target.value.trim().length > 1);
- }}
- className="pl-9 pr-8 h-9 text-xs"/>
- {search && (
- <button
- type="button"onClick={() => { setSearch(''); setSearchOpen(false); }}
- className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
- <XCircle size={14} />
- </button>
- )}
-
- {searchOpen && (
- <div className="absolute top-11 right-0 w-72 bg-card rounded-xl shadow-xl border border-border p-2 z-50 flex flex-col gap-1 max-h-60 overflow-y-auto">
- {reservas
- .filter(r => r.nombre.toLowerCase().includes(search.toLowerCase()))
- .map(r => (
- <div
- key={r.id}
- onClick={() => { onResultClick(r); setSearchOpen(false); }}
- className="p-2 rounded-lg cursor-pointer flex flex-col gap-0.5">
- <span className="font-extrabold text-xs text-foreground">{r.nombre}</span>
- <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
- <span>{r.fecha} · {r.hora}</span>
- <span className="px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-bold uppercase">
- {STATUS_LABEL[r.estado] || r.estado}
- </span>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- </header>
  );
 }

@@ -9,11 +9,22 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground",
-        outline: "border-border bg-background aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-transparent",
-        secondary: "bg-secondary text-secondary-foreground aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        // Primario: relleno con un brillo interior arriba y sombra corta (se siente "en relieve").
+        default: "bg-primary text-primary-foreground border-primary shadow-[inset_0_1px_0_oklch(1_0_0/0.2),var(--shadow-btn)] hover:brightness-110",
+        // Outline y secundario: tarjeta blanca con borde suave y sombra corta.
+        outline: "border-border bg-card text-foreground shadow-(--shadow-btn) hover:bg-muted/60 aria-expanded:bg-muted aria-expanded:text-foreground",
+        secondary: "border-border bg-card text-foreground shadow-(--shadow-btn) hover:bg-muted/60 aria-expanded:bg-muted aria-expanded:text-foreground",
+        // Secundarios con intención (misma tarjeta blanca, texto de color): acción de servicio, hotel, cuenta, división.
+        primarySoft: "border-border bg-card text-primary shadow-(--shadow-btn) hover:bg-primary/5",
+        infoSoft: "border-border bg-card text-info-foreground shadow-(--shadow-btn) hover:bg-info-soft",
+        warningSoft: "border-border bg-card text-warning-foreground shadow-(--shadow-btn) hover:bg-warning-soft",
+        specialSoft: "border-border bg-card text-special-foreground shadow-(--shadow-btn) hover:bg-special-soft",
+        // Principal de cuenta/cobro (naranja de "cuenta pedida").
+        warning: "bg-warning-foreground text-white border-warning-foreground shadow-[inset_0_1px_0_oklch(1_0_0/0.2),var(--shadow-btn)] hover:brightness-110",
         ghost: "aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive: "bg-destructive/10 text-destructive focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40",
+        // Acción de riesgo secundaria: solo texto en rojo atenuado.
+        dangerGhost: "text-destructive/80 hover:bg-destructive/10 hover:text-destructive",
         link: "text-primary underline-offset-4",
       },
       size: {
@@ -57,3 +68,22 @@ function Button({
 }
 
 export { Button, buttonVariants }
+
+// Botones pegados en un solo bloque (anterior | mes | siguiente, filtros…): comparten
+// borde y sombra y se separan con una línea fina.
+function ButtonGroup({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      role="group"
+      data-slot="button-group"
+      className={cn(
+        "inline-flex items-stretch divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-(--shadow-btn)",
+        "[&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:shadow-none",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { ButtonGroup }

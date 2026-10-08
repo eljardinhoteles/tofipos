@@ -1,7 +1,7 @@
 import { useState } from'react';
 import { Plus } from'@phosphor-icons/react';
 import { type Reserva } from'../../db/database';
-import { MiniReservaCard } from'./MiniReservaCard';
+import { ReservaCard } from'./ReservaCard';
 import { cn } from'@/lib/utils';
 
 interface CalendarCellProps {
@@ -12,9 +12,10 @@ interface CalendarCellProps {
  onCellClick: () => void;
  onCardClick: (id: string) => void;
  onAssign: (r: Reserva) => void;
- onCancel: (id: string) => void;
+ onCancel?: (id: string) => void;
  isMonthEnd?: boolean;
  codigoMap?: Record<string, string>;
+ mesaPorId?: Map<string, string>;
 }
 
 export function CalendarCell({
@@ -25,9 +26,9 @@ export function CalendarCell({
  onCellClick,
  onCardClick,
  onAssign,
- onCancel,
  isMonthEnd = false,
- codigoMap = {}
+ codigoMap = {},
+ mesaPorId
 }: CalendarCellProps) {
  const [hovered, setHovered] = useState(false);
 
@@ -45,14 +46,14 @@ export function CalendarCell({
  hovered &&"bg-muted/80")}
  >
  {dayReservas.map(r => (
- <MiniReservaCard
+ <ReservaCard
  key={r.id}
  reserva={r}
  isHighlighted={r.id === highlightedId}
  onClick={() => onCardClick(r.id)}
  onAssign={() => onAssign(r)}
- onCancel={() => onCancel(r.id)}
  codigo={codigoMap[r.id]}
+ mesaNombre={r.mesa_id ? mesaPorId?.get(r.mesa_id) : undefined}
  />
  ))}
 

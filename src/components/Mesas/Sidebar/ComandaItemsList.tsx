@@ -1,7 +1,8 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useState, startTransition } from 'react';
 import { Basket } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ComandaItemRow } from './ComandaItemRow';
+import { esParteRepartida } from '@/lib/reparto';
 
 type Item = any;
 
@@ -34,9 +35,21 @@ interface ComandaItemsListProps {
 // Un ítem queda bloqueado (no editable/borrable) cuando ya formaba parte del
 // último lote confirmado a cocina. Un ítem anulado no cuenta como bloqueado.
 const estaBloqueado = (item: Item, confirmada?: boolean, confirmadaAt?: string | null) =>
+  (esParteRepartida(item) && !item?.anulado) ||
   !!confirmada && !!confirmadaAt && !!item?.created_at && item.created_at <= confirmadaAt && !item?.anulado;
 
+// Comandas largas: se pintan primero las filas visibles y el resto entra en un
+// segundo paso de baja prioridad, para que el sidebar abra sin esperar a todas.
+const FILAS_INICIALES = 30;
+
 export const ComandaItemsList = memo(function ComandaItemsList({ items, selectedId, confirmada, confirmadaAt, padBottom, onSelect }: ComandaItemsListProps) {
+  const [completa, setCompleta] = useState(items.length <= FILAS_INICIALES);
+  useEffect(() => {
+    if (completa) return;
+    const t = setTimeout(() => startTransition(() => setCompleta(true)), 60);
+    return () => clearTimeout(t);
+  }, [completa]);
+  const visibles = completa ? items : items.slice(0, FILAS_INICIALES);
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
@@ -48,7 +61,7 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items, selected
   }
   return (
     <div className={cn('flex flex-col', padBottom && 'pb-8')}>
-      {items.map((item, index) => (
+      {visibles.map((item, index) => (
         <Fila
           key={item.id}
           item={item}

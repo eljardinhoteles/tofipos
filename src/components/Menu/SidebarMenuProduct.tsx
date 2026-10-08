@@ -11,6 +11,7 @@ import { Label } from'@/components/ui/label';
 import { Switch } from'@/components/ui/switch';
 import { Button } from'@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CsvUploader } from '@/components/Menu/CsvUploader';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export function SidebarMenuProduct() {
@@ -24,6 +25,7 @@ export function SidebarMenuProduct() {
  const [modificadores, setModificadores] = useState<ModifierGroup[]>([]);
  const [activo, setActivo] = useState(true);
  const [esBebida, setEsBebida] = useState(false);
+ const [precioVariable, setPrecioVariable] = useState(false);
  const [ivaModalidad, setIvaModalidad] = useState<'sistema'|'especifico'|'exento'>('sistema');
  const [ivaPorcentaje, setIvaPorcentaje] = useState(15);
  const [nombreError, setNombreError] = useState('');
@@ -60,6 +62,7 @@ export function SidebarMenuProduct() {
  setModificadores(editingProduct.modificadores || []);
  setActivo(editingProduct.activo ?? true);
  setEsBebida(editingProduct.es_bebida || false);
+ setPrecioVariable(editingProduct.precio_variable || false);
  setIvaModalidad(editingProduct.iva_modalidad ||'sistema');
  setIvaPorcentaje(editingProduct.iva_porcentaje !== undefined ? editingProduct.iva_porcentaje : 15);
  } else {
@@ -69,6 +72,7 @@ export function SidebarMenuProduct() {
  setModificadores([]);
  setActivo(true);
  setEsBebida(false);
+ setPrecioVariable(false);
  setIvaModalidad('sistema');
  setIvaPorcentaje(15);
  }
@@ -173,6 +177,7 @@ export function SidebarMenuProduct() {
  modificadores: modificadoresValidos,
  activo,
  es_bebida: esBebida,
+ precio_variable: precioVariable,
  iva_modalidad: ivaModalidad,
  iva_porcentaje: ivaModalidad === 'especifico' ? ivaPorcentaje : undefined,
  organization_id: orgId,
@@ -187,6 +192,7 @@ export function SidebarMenuProduct() {
  categoria_nombre: catNombre,
  activo,
  es_bebida: esBebida,
+ precio_variable: precioVariable,
  modificadores: modificadoresValidos,
  iva_modalidad: ivaModalidad,
  iva_porcentaje: ivaModalidad === 'especifico' ? ivaPorcentaje : undefined,
@@ -222,85 +228,122 @@ export function SidebarMenuProduct() {
  </div>
  </header>
 
- <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+ {/* Datos básicos */}
+ <section className="flex flex-col gap-4">
  <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Nombre del producto *</Label>
+ <Label htmlFor="producto-nombre" className="text-xs font-bold">Nombre del producto *</Label>
  <Input
- type="text"placeholder="Ej: Lomo Saltado"value={nombre}
+ id="producto-nombre" type="text" placeholder="Ej: Lomo Saltado" value={nombre}
  onChange={e => { setNombre(e.target.value); setNombreError(''); }}
- className="h-9 text-xs font-semibold"/>
- {nombreError && <span className="text-[10px] text-destructive font-bold">{nombreError}</span>}
+ className="h-10 text-sm font-semibold"/>
+ {nombreError && <span className="text-[11px] text-destructive font-bold">{nombreError}</span>}
  </div>
-  <div className="grid grid-cols-2 gap-3">
-  <div className="flex flex-col gap-1.5">
-  <Label className="text-xs font-bold">Categoría</Label>
-  {!isNuevaCategoria ? (
-  <Select
-  value={categoria}
-  onValueChange={val => {
-  if (val === '__new__') {
-  setIsNuevaCategoria(true);
-  setCategoria('');
-  } else {
-  setCategoria(val);
-  }
-  }}>
-  <SelectTrigger className="h-9 px-3 text-xs font-semibold rounded-2xl bg-input/50 border-transparent w-full">
-  <SelectValue placeholder="Selecciona..." />
-  </SelectTrigger>
-  <SelectContent>
-  {dbCategorias.map(c => (
-  <SelectItem key={c.id} value={c.nombre} className="text-xs font-medium">{c.nombre}</SelectItem>
-  ))}
-  <SelectItem value="__new__" className="text-xs font-bold text-primary">+ Nueva categoría</SelectItem>
-  </SelectContent>
-  </Select>
-  ) : (
-  <div className="relative">
-  <Input
-  type="text"placeholder="Nueva categoría"value={categoria}
-  onChange={e => setCategoria(e.target.value)}
-  className="h-9 pr-8 text-xs font-semibold"/>
-  <button type="button" onClick={() => { setIsNuevaCategoria(false); setCategoria(''); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
-  <X size={14} weight="bold" />
-  </button>
-  </div>
-  )}
-  </div>
-  <div className="flex flex-col gap-1.5">
-  <Label className="text-xs font-bold">Precio ($)</Label>
-  <Input
-  type="number"step="0.01"min={0}
-  placeholder="0.00"value={precio ||''}
-  onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
-  className="h-9 text-xs font-bold"/>
-  </div>
-  </div>
 
-  <div className="flex items-center gap-2">
-  <Switch id="esBebida"checked={esBebida} onCheckedChange={setEsBebida} />
-  <Label htmlFor="esBebida"className="text-xs font-bold cursor-pointer">
-  Es Bebida (imprime en barra)
-  </Label>
-  </div>
+ <div className="grid grid-cols-2 gap-3">
+ <div className="flex flex-col gap-1.5">
+ <Label className="text-xs font-bold">Categoría</Label>
+ {!isNuevaCategoria ? (
+ <Select
+ value={categoria}
+ onValueChange={val => {
+ if (val === '__new__') {
+ setIsNuevaCategoria(true);
+ setCategoria('');
+ } else {
+ setCategoria(val);
+ }
+ }}>
+ <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
+ <SelectValue placeholder="Selecciona..." />
+ </SelectTrigger>
+ <SelectContent>
+ {dbCategorias.map(c => (
+ <SelectItem key={c.id} value={c.nombre} className="text-sm font-medium">{c.nombre}</SelectItem>
+ ))}
+ <SelectItem value="__new__" className="text-sm font-bold text-muted-foreground">+ Nueva categoría</SelectItem>
+ </SelectContent>
+ </Select>
+ ) : (
+ <div className="relative">
+ <Input
+ type="text" placeholder="Nueva categoría" value={categoria}
+ onChange={e => setCategoria(e.target.value)}
+ className="h-10 pr-9 text-sm font-semibold"/>
+ <button type="button" aria-label="Elegir una existente" onClick={() => { setIsNuevaCategoria(false); setCategoria(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
+ <X size={14} weight="bold" />
+ </button>
+ </div>
+ )}
+ </div>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="producto-precio" className="text-xs font-bold">{precioVariable ? 'Precio de referencia' : 'Precio'}</Label>
+ <div className="relative">
+ <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground pointer-events-none">$</span>
+ <Input
+ id="producto-precio" type="number" inputMode="decimal" step="0.01" min={0}
+ placeholder="0.00" value={precio || ''}
+ onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
+ className="h-10 pl-7 text-sm font-bold"/>
+ </div>
+ </div>
+ </div>
+ </section>
 
-  <div className="flex flex-col gap-1.5">
-  <Label className="text-xs font-bold">Modalidad IVA</Label>
-  <Select value={ivaModalidad} onValueChange={val => setIvaModalidad(val as any)}>
-  <SelectTrigger className="h-9 px-3 text-xs font-semibold rounded-2xl bg-input/50 border-transparent w-full">
-  <SelectValue placeholder="Selecciona..." />
-  </SelectTrigger>
-  <SelectContent>
-  <SelectItem value="sistema" className="text-xs font-medium">IVA General del Sistema</SelectItem>
-  <SelectItem value="especifico" className="text-xs font-medium">Tasa de IVA Específica</SelectItem>
-  <SelectItem value="exento" className="text-xs font-medium">Exento de IVA (0%)</SelectItem>
-  </SelectContent>
-  </Select>
-  </div>
+ {/* Ajustes del producto: cada fila = qué es + interruptor a la derecha */}
+ <section className="flex flex-col gap-2">
+ <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ajustes</h4>
+ <div className="rounded-2xl border border-border divide-y divide-border">
+ <label htmlFor="precioVariable" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="text-sm font-bold text-foreground">Precio variable</span>
+ <span className="text-xs font-medium text-muted-foreground leading-snug">Se puede cambiar el precio al añadirlo a una comanda.</span>
+ </div>
+ <Switch id="precioVariable" checked={precioVariable} onCheckedChange={setPrecioVariable} />
+ </label>
+ <label htmlFor="esBebida" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="text-sm font-bold text-foreground">Es bebida</span>
+ <span className="text-xs font-medium text-muted-foreground leading-snug">Se imprime en barra.</span>
+ </div>
+ <Switch id="esBebida" checked={esBebida} onCheckedChange={setEsBebida} />
+ </label>
+ <div className="flex items-center justify-between gap-4 p-3.5">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="text-sm font-bold text-foreground">IVA</span>
+ <span className="text-xs font-medium text-muted-foreground leading-snug">
+ {ivaModalidad === 'sistema' ? 'Usa el IVA general.' : ivaModalidad === 'exento' ? 'Sin IVA (0%).' : 'Tasa propia de este producto.'}
+ </span>
+ </div>
+ <div className="flex items-center gap-2 shrink-0">
+ {ivaModalidad === 'especifico' && (
+ <div className="relative">
+ <Input type="number" inputMode="decimal" min={0} max={100} step="0.01" aria-label="Tasa de IVA"
+ value={Number.isNaN(ivaPorcentaje) ? '' : ivaPorcentaje}
+ onChange={e => setIvaPorcentaje(parseFloat(e.target.value))}
+ className="h-10 w-20 pr-6 text-sm font-bold text-right"/>
+ <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">%</span>
+ </div>
+ )}
+ <Select value={ivaModalidad} onValueChange={val => setIvaModalidad(val as any)}>
+ <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs !w-36">
+ <SelectValue placeholder="Selecciona..." />
+ </SelectTrigger>
+ <SelectContent>
+ <SelectItem value="sistema" className="text-sm font-medium">General</SelectItem>
+ <SelectItem value="especifico" className="text-sm font-medium">Tasa propia</SelectItem>
+ <SelectItem value="exento" className="text-sm font-medium">Exento (0%)</SelectItem>
+ </SelectContent>
+ </Select>
+ </div>
+ </div>
+ </div>
+ </section>
+
  {/* Grupos de modificadores (ej:"Tipo de papas"-> Fritas / Doradas) */}
  <div className="flex flex-col gap-2">
  <div className="flex items-center justify-between">
- <Label className="text-xs font-bold">Opciones adicionales</Label>
+ <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Opciones adicionales</h4>
  <div className="flex items-center gap-1">
  {MODIFIER_TEMPLATES.length > 0 && (
  <Popover>
@@ -398,7 +441,11 @@ export function SidebarMenuProduct() {
  </div>
  </main>
 
- <footer className="p-4 border-t border-border bg-card flex items-center justify-end gap-2 shrink-0">
+ <footer className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-2 shrink-0">
+ {/* Importar varios productos desde un CSV: solo al crear (y solo en PC). */}
+ {!editingProduct && (
+ <div className="hidden md:block mr-auto"><CsvUploader /></div>
+ )}
  {editingProduct && (
  <button
  type="button"onClick={() => {

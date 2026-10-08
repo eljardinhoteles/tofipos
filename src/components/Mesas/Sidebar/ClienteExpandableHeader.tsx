@@ -132,7 +132,7 @@ export function ClienteExpandableHeader({
  setTempValue(clienteNombre ||'');
  setIsChanging(true);
  }}
- className="flex-1 py-1.5 rounded-lg bg-amber-50 text-amber-700 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ className="flex-1 py-1.5 rounded-lg bg-warning-soft text-warning-foreground font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
  <Users size={14} /> Cambiar
  </button>
  )}

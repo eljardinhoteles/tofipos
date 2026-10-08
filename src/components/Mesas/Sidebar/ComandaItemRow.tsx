@@ -1,6 +1,7 @@
 import { memo } from'react';
 import { CheckCircle } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
+import { parseReparto } from'@/lib/reparto';
 
 export interface ComandaItemData {
  id: string;
@@ -13,6 +14,7 @@ export interface ComandaItemData {
  anulado_motivo?: string | null;
  cortesia_cantidad?: number | null;
  cortesia_motivo?: string | null;
+ reparto?: string | null;
 }
 
 interface ComandaItemRowProps {
@@ -26,14 +28,22 @@ interface ComandaItemRowProps {
  isLocked?: boolean;
 }
 
+// Las filas fuera de pantalla no se pintan ni calculan layout hasta que se
+// acercan (la altura estimada evita saltos en la barra de scroll).
+const FILA_FUERA_DE_PANTALLA = { contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' } as const;
+
+// toLocaleString crea un Intl.NumberFormat en cada llamada: con 100+ filas era
+// lo más caro de abrir la comanda. Formato manual equivalente (en-US, 2 decimales).
+const dinero = (n: number) => `$${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+
 export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSelected, isLocked }: ComandaItemRowProps) {
  const pagado = item.pagado_cantidad || 0;
  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
  const isAnulado = !!item.anulado;
  const isCortesia = (item.cortesia_cantidad || 0) > 0 || !!item.cortesia_motivo;
+ const reparto = parseReparto(item);
  const isReadOnly = !onClick;
 
- const dinero = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
  const tachado = isAnulado || isFullyPaid;
 
  // Lista legible: cantidad ("2") | nombre y detalle en texto plano | precio.
@@ -41,7 +51,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  const content = (
  <div className="flex items-start gap-3 w-full px-4 py-3">
  <span className={cn("w-8 shrink-0 self-center text-center text-xl leading-6 font-bold tracking-[-0.04em]",
- isAnulado ?"text-destructive": isFullyPaid ?"text-emerald-700":"text-primary")}>
+ isAnulado ?"text-destructive": isFullyPaid ?"text-foreground":"text-foreground")}>
  {item.cantidad}
  </span>
 
@@ -56,7 +66,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  tachado ?"line-through text-muted-foreground":"text-foreground")}>
  {dinero(item.precio * item.cantidad)}
  </span>
- {isLocked && !isAnulado && <CheckCircle size={14} weight="fill"className="text-emerald-500/70 shrink-0"aria-label="Confirmado"/>}
+ {isLocked && !isAnulado && <CheckCircle size={14} weight="fill"className="text-primary/70 shrink-0"aria-label="Confirmado"/>}
  </span>
  </div>
 
@@ -67,12 +77,18 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  </span>
  )}
 
- {(isAnulado || isCortesia || pagado > 0) && (
+ {(isAnulado || isCortesia || pagado > 0 || reparto) && (
  <div className="flex items-center gap-2 flex-wrap text-[13px] font-bold">
  {isAnulado && <span className="text-destructive">ANULADO</span>}
- {isCortesia && <span className="text-emerald-700">CORTESÍA</span>}
+ {isCortesia && <span className="text-foreground">CORTESÍA</span>}
+ {reparto && (
+ <span className="text-special-foreground">
+ {/* La parte ya dice "parte i/n" en su nombre (que también sale en los tickets): aquí solo se marca como repartida. */}
+ {reparto.tipo === 'parte' ? 'REPARTIDO' : `REPARTIDO ENTRE ${reparto.partes.length}`}
+ </span>
+ )}
  {pagado > 0 && (
- <span className={isFullyPaid ?"text-emerald-700":"text-amber-700"}>
+ <span className={isFullyPaid ?"text-foreground":"text-warning-foreground"}>
  {isFullyPaid ?'Pagado':`${pagado} pagados`}
  </span>
  )}
@@ -90,7 +106,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  );
 
  return (
- <div className={cn("w-full transition-opacity", (isFullyPaid || isAnulado) &&"opacity-60")}>
+ <div style={FILA_FUERA_DE_PANTALLA} className={cn("w-full transition-opacity", (isFullyPaid || isAnulado) &&"opacity-60")}>
  {isReadOnly ? (
  <div className="w-full text-left">
  {content}

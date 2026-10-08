@@ -1,12 +1,15 @@
 import { useEffect, useState } from'react';
 import {
  Phone, Envelope, IdentificationCard, MapPin,
- Buildings, Receipt, CopySimple, User, X
+ Buildings, CopySimple, User, UserPlus
 } from'@phosphor-icons/react';
 import { type Cliente } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, createRxCliente, updateRxCliente } from'../../db/rxdb';
-import { cn } from'@/lib/utils';
+import { ReservaHeader } from'../Mesas/Sidebar/ReservaHeader';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from'@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from'@/components/ui/select';
 import { Input } from'@/components/ui/input';
 import { Textarea } from'@/components/ui/textarea';
 import { Button } from'@/components/ui/button';
@@ -98,8 +101,6 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  }
  }, [opened, editingCliente, initialNombre]);
 
- if (!opened) return null;
-
  const copiarDatosCliente = () => {
  setForm(prev => ({
  ...prev,
@@ -181,216 +182,192 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  }
  };
 
- // z-[60]: por encima del Dialog (z-50) de RegistrarTransaccionModal — este
- // formulario puede abrirse anidado sobre ese wizard (paso "Crear cliente
- // nuevo") y debe quedar claramente por encima del overlay del Dialog.
- return (
- <div className="fixed inset-0 z-[60] bg-foreground/40 flex items-center justify-center p-4">
- <div className="bg-card rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col p-6 gap-5">
- <div className="flex items-center justify-between border-b border-border pb-3">
- <h3 className="font-extrabold text-base text-foreground">
- {editingCliente ?'Editar Cliente':'Nuevo Cliente'}
- </h3>
- <Button variant="ghost"size="icon"disabled={saving} onClick={onClose} className="h-7 w-7">
- <X size={16} />
- </Button>
+ const campoIcono = 'absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground';
+ const etiqueta = 'text-xs font-bold';
+ const campo = 'pl-9 h-11 text-base md:h-10 md:text-sm font-semibold';
+ const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+ const error = (k: string) => errors[k] && <span className="text-[11px] font-semibold text-destructive">{errors[k]}</span>;
+
+ const cabecera = (
+ <ReservaHeader tono="primary" badge={editingCliente ? <User size={22} weight="bold" /> : <UserPlus size={22} weight="bold" />}
+ titulo={editingCliente ?'Editar cliente':'Nuevo cliente'}
+ subtitulo={form.nombre.trim() || (editingCliente ?'Sin nombre':'Datos del cliente')}
+ onClose={onClose} />
+ );
+ const formulario = (
+ <>
+
+ <form id="cliente-form" onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
+ <div className="px-4 pt-4 shrink-0">
+ <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as'datos'|'facturacion')}>
+ <TabsList aria-label="Sección del cliente">
+ <TabsTrigger value="datos">Datos</TabsTrigger>
+ <TabsTrigger value="facturacion">Facturación</TabsTrigger>
+ </TabsList>
+ </Tabs>
  </div>
 
- {/* Tabs */}
- <div className="flex border-b border-border">
- <button
- type="button"onClick={() => setActiveTab('datos')}
- className={cn("flex-1 py-2 font-bold text-xs flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer",
- activeTab ==='datos'?"border-primary text-primary":"border-transparent text-muted-foreground")}
- >
- <User size={15} /> Datos del Cliente
- </button>
- <button
- type="button"onClick={() => setActiveTab('facturacion')}
- className={cn("flex-1 py-2 font-bold text-xs flex items-center justify-center gap-2 border-b-2 transition-colors cursor-pointer",
- activeTab ==='facturacion'?"border-primary text-primary":"border-transparent text-muted-foreground")}
- >
- <Receipt size={15} /> Facturación
- </button>
- </div>
-
- <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+ <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
  {activeTab ==='datos'? (
- <div className="flex flex-col gap-3">
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Tipo de Cliente</Label>
- <div className="grid grid-cols-4 gap-1 p-1 bg-muted rounded-xl text-xs font-bold">
- {(['persona_natural','juridico','extranjero','agencia'] as const).map((t) => (
- <button
- key={t}
- type="button"onClick={() => setForm(prev => ({ ...prev, tipo_cliente: t }))}
- className={cn("py-1.5 rounded-lg capitalize transition-all cursor-pointer",
- form.tipo_cliente === t ?"bg-card text-foreground shadow-xs":"text-muted-foreground")}
- >
- {t.replace('_','')}
- </button>
- ))}
- </div>
- </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Nombre Completo *</Label>
+ <>
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cliente</h4>
+ <Tabs value={form.tipo_cliente} onValueChange={(v) => set('tipo_cliente', v)}>
+ <TabsList aria-label="Tipo de cliente">
+ <TabsTrigger value="persona_natural">Persona</TabsTrigger>
+ <TabsTrigger value="juridico">Empresa</TabsTrigger>
+ <TabsTrigger value="extranjero">Extranjero</TabsTrigger>
+ <TabsTrigger value="agencia">Agencia</TabsTrigger>
+ </TabsList>
+ </Tabs>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-nombre" className={etiqueta}>Nombre completo *</Label>
  <div className="relative">
- <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"required
+ <User size={16} className={campoIcono} />
+ <Input id="cli-nombre" type="text" required
  placeholder={form.tipo_cliente ==='juridico'?'Ej: Empresa S.A.':'Ej: Juan Pérez'}
- value={form.nombre}
- onChange={(e) => setForm(prev => ({ ...prev, nombre: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ value={form.nombre} onChange={(e) => set('nombre', e.target.value)} className={campo} />
  </div>
- {errors.nombre && <span className="text-[11px] font-semibold text-destructive">{errors.nombre}</span>}
+ {error('nombre')}
  </div>
+ </section>
 
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Contacto</h4>
  <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Teléfono</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-tel" className={etiqueta}>Teléfono</Label>
  <div className="relative">
- <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="0991234567"value={form.telefono}
- onChange={(e) => setForm(prev => ({ ...prev, telefono: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <Phone size={16} className={campoIcono} />
+ <Input id="cli-tel" type="text" placeholder="0991234567" value={form.telefono}
+ onChange={(e) => set('telefono', e.target.value)} className={campo} />
  </div>
- {errors.telefono && <span className="text-[11px] font-semibold text-destructive">{errors.telefono}</span>}
+ {error('telefono')}
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">
- {form.tipo_cliente ==='extranjero'?'Pasaporte':'Cédula'}
- </Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-dni" className={etiqueta}>{form.tipo_cliente ==='extranjero'?'Pasaporte':'Cédula'}</Label>
  <div className="relative">
- <IdentificationCard size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Documento"value={form.dni}
- onChange={(e) => setForm(prev => ({ ...prev, dni: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <IdentificationCard size={16} className={campoIcono} />
+ <Input id="cli-dni" type="text" placeholder="Documento" value={form.dni}
+ onChange={(e) => set('dni', e.target.value)} className={campo} />
  </div>
  </div>
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Correo Electrónico</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-email" className={etiqueta}>Correo electrónico</Label>
  <div className="relative">
- <Envelope size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="email"placeholder="correo@ejemplo.com"value={form.email}
- onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <Envelope size={16} className={campoIcono} />
+ <Input id="cli-email" type="email" placeholder="correo@ejemplo.com" value={form.email}
+ onChange={(e) => set('email', e.target.value)} className={campo} />
  </div>
- {errors.email && <span className="text-[11px] font-semibold text-destructive">{errors.email}</span>}
+ {error('email')}
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Dirección</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-dir" className={etiqueta}>Dirección</Label>
  <div className="relative">
- <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Calle principal, sector..."value={form.direccion}
- onChange={(e) => setForm(prev => ({ ...prev, direccion: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <MapPin size={16} className={campoIcono} />
+ <Input id="cli-dir" type="text" placeholder="Calle principal, sector..." value={form.direccion}
+ onChange={(e) => set('direccion', e.target.value)} className={campo} />
  </div>
  </div>
+ </section>
 
- <div className="flex flex-col gap-1">
+ <section className="flex flex-col gap-3">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Notas</h4>
+ <div className="flex flex-col gap-1.5">
  <div className="flex items-center justify-between">
- <Label className="text-xs font-bold">Notas internas</Label>
+ <Label htmlFor="cli-notas" className={etiqueta}>Notas internas</Label>
  <span className="text-[10px] text-muted-foreground">{form.notas.length}/{NOTAS_MAX}</span>
  </div>
- <Textarea
- rows={2}
- maxLength={NOTAS_MAX}
- placeholder="Preferencias, alergias, observaciones..."value={form.notas}
- onChange={(e) => setForm(prev => ({ ...prev, notas: e.target.value }))}
- className="text-xs resize-none"/>
+ <Textarea id="cli-notas" rows={3} maxLength={NOTAS_MAX}
+ placeholder="Preferencias, alergias, observaciones..." value={form.notas}
+ onChange={(e) => set('notas', e.target.value)} className="min-h-24 text-base md:text-sm font-medium resize-none" />
  </div>
- </div>
+ </section>
+ </>
  ) : (
- <div className="flex flex-col gap-3">
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Nombre / Razón Social</Label>
+ <section className="flex flex-col gap-3">
+ <div className="flex items-center justify-between">
+ <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Datos de factura</h4>
+ <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={copiarDatosCliente} className="gap-1 text-xs">
+ <CopySimple size={14} /> Copiar del cliente
+ </Button>
+ </div>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-nf" className={etiqueta}>Nombre / razón social</Label>
  <div className="relative">
- <Buildings size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Nombre o empresa a facturar"value={form.nombre_factura}
- onChange={(e) => setForm(prev => ({ ...prev, nombre_factura: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <Buildings size={16} className={campoIcono} />
+ <Input id="cli-nf" type="text" placeholder="Nombre o empresa a facturar" value={form.nombre_factura}
+ onChange={(e) => set('nombre_factura', e.target.value)} className={campo} />
  </div>
  </div>
-
  <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Tipo de documento</Label>
- <select
- value={form.tipo_doc}
- onChange={(e) => setForm(prev => ({ ...prev, tipo_doc: e.target.value as any }))}
- className="h-9 px-3 text-xs bg-input/50 border border-transparent rounded-2xl focus:outline-none focus:border-ring font-semibold">
+ <div className="flex flex-col gap-1.5">
+ <Label className={etiqueta}>Tipo de documento</Label>
+ <Select value={form.tipo_doc} onValueChange={(v) => set('tipo_doc', v)}>
+ <SelectTrigger className="h-11 md:h-10 w-full px-3 text-base md:text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
+ <SelectValue />
+ </SelectTrigger>
+ <SelectContent>
  {TIPO_DOC_OPTIONS.map(opt => (
- <option key={opt.value} value={opt.value}>{opt.label}</option>
+ <SelectItem key={opt.value} value={opt.value} className="text-sm">{opt.label}</SelectItem>
  ))}
- </select>
+ </SelectContent>
+ </Select>
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Número de documento</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-nd" className={etiqueta}>Número</Label>
  <div className="relative">
- <IdentificationCard size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Número"value={form.numero_doc}
- onChange={(e) => setForm(prev => ({ ...prev, numero_doc: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <IdentificationCard size={16} className={campoIcono} />
+ <Input id="cli-nd" type="text" placeholder="Número" value={form.numero_doc}
+ onChange={(e) => set('numero_doc', e.target.value)} className={campo} />
  </div>
  </div>
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Dirección fiscal</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-df" className={etiqueta}>Dirección fiscal</Label>
  <div className="relative">
- <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="text"placeholder="Dirección legal / fiscal"value={form.direccion_fiscal}
- onChange={(e) => setForm(prev => ({ ...prev, direccion_fiscal: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <MapPin size={16} className={campoIcono} />
+ <Input id="cli-df" type="text" placeholder="Dirección legal / fiscal" value={form.direccion_fiscal}
+ onChange={(e) => set('direccion_fiscal', e.target.value)} className={campo} />
  </div>
  </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Email para facturas</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="cli-ef" className={etiqueta}>Email para facturas</Label>
  <div className="relative">
- <Envelope size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
- <Input
- type="email"placeholder="facturacion@empresa.com"value={form.email_factura}
- onChange={(e) => setForm(prev => ({ ...prev, email_factura: e.target.value }))}
- className="pl-9 h-9 text-xs"/>
+ <Envelope size={16} className={campoIcono} />
+ <Input id="cli-ef" type="email" placeholder="facturacion@empresa.com" value={form.email_factura}
+ onChange={(e) => set('email_factura', e.target.value)} className={campo} />
  </div>
- {errors.email_factura && <span className="text-[11px] font-semibold text-destructive">{errors.email_factura}</span>}
+ {error('email_factura')}
  </div>
- </div>
+ </section>
  )}
-
- <div className="flex items-center justify-between pt-3 border-t border-border">
- {activeTab ==='facturacion'? (
- <Button
- type="button"variant="ghost"size="sm"disabled={saving}
- onClick={copiarDatosCliente}
- className="text-xs gap-1 text-primary">
- <CopySimple size={14} /> Copiar datos del cliente
- </Button>
- ) : <div />}
-
- <div className="flex items-center gap-2">
- <Button type="submit"size="sm"disabled={saving} className="text-xs">
- {saving ?'Guardando...': editingCliente ?'Guardar Cambios':'Registrar'}
- </Button>
  </div>
- </div>
+
+ <footer className="p-4 border-t border-border bg-card flex items-center gap-2 shrink-0">
+ <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-12 px-5 font-bold">
+ Cancelar
+ </Button>
+ <Button type="submit" disabled={saving} className="h-12 flex-1 font-bold">
+ {saving ?'Guardando…': editingCliente ?'Guardar cambios':'Registrar cliente'}
+ </Button>
+ </footer>
  </form>
- </div>
- </div>
+
+ </>
+ );
+
+ return (
+ <Sheet open={opened} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
+ <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()} className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 data-[side=right]:border-l-0">
+ <SheetHeader className="p-0 gap-0 space-y-0">
+ <SheetTitle className="sr-only">{editingCliente ?'Editar cliente':'Nuevo cliente'}</SheetTitle>
+ <SheetDescription className="sr-only">Datos de contacto y facturación del cliente</SheetDescription>
+ {cabecera}
+ </SheetHeader>
+ {formulario}
+ </SheetContent>
+ </Sheet>
  );
 }

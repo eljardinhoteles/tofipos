@@ -196,10 +196,11 @@ Write-Host "printed $w bytes";
 // Impresoras activas a las que debe llegar un job, según su rol.
 // 'test' es especial: se resuelve por printer_id en el propio job, no por rol.
 function printersForJob(job) {
+  const printers = getPrinters();
   if (job.kind === 'test') {
-    return state.printers.filter(p => p.active && p.id === job.printer_id);
+    return printers.filter(p => p.active && p.id === job.printer_id);
   }
-  return state.printers.filter(p => p.active && (p.roles || []).includes(job.kind));
+  return printers.filter(p => p.active && (p.roles || []).includes(job.kind));
 }
 
 // Lock explícito: varios requests a /jobs pueden llegar casi simultáneos
@@ -269,6 +270,184 @@ async function processQueueInner() {
   }
 }
 
+// ── Nube: cola de impresión en Supabase ───────────────────────────────────────
+// Tras vincular el servidor (node server.js --pair POS1.xxxx), las tablets y PCs
+// encolan los trabajos en Supabase y este servidor los reclama y los imprime:
+// sin IP ni token por dispositivo. El servidor solo guarda su secreto propio y
+// habla con la Edge Function `print-server`. La API HTTP local sigue activa
+// como respaldo para imprimir desde esta misma PC sin internet.
+
+const VERSION = (() => { try { return require('./package.json').version; } catch { return 'dev'; } })();
+
+function listSystemPrinters() {
+  return new Promise((resolve, reject) => {
+    const child = spawn('powershell', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      '(Get-Printer | Select-Object -ExpandProperty Name) -join "|"',
+    ], { stdio: ['ignore', 'pipe', 'pipe'], shell: false });
+
+    const outChunks = [];
+    const errChunks = [];
+    child.stdout.on('data', d => outChunks.push(d));
+    child.stderr.on('data', d => errChunks.push(d));
+    child.on('close', code => {
+      if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString() || `exit code ${code}`));
+      const raw = Buffer.concat(outChunks).toString().trim();
+      resolve(raw ? raw.split('|').map(x => x.trim()).filter(Boolean) : []);
+    });
+    child.on('error', reject);
+  });
+}
+
+// Impresoras efectivas: vinculado → las de la nube (con copia persistida para
+// poder imprimir en local aunque arranque sin internet); si no → las locales.
+let cloudPrinters = Array.isArray(state.cloud_printers) ? state.cloud_printers : [];
+function getPrinters() {
+  return state.cloud ? cloudPrinters : state.printers;
+}
+
+function lanIps() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const ni of list || []) {
+      if (ni.family !== 'IPv4' || ni.internal) continue;
+      if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ni.address)) out.push(ni.address);
+    }
+  }
+  return out;
+}
+
+function parsePairingPackage(text) {
+  const m = String(text || '').trim().match(/^POS1\.([A-Za-z0-9_-]+)$/);
+  if (!m) throw new Error('Paquete de vinculación inválido (debe empezar con POS1.)');
+  const data = JSON.parse(Buffer.from(m[1], 'base64url').toString('utf8'));
+  if (!data.u || !data.c) throw new Error('Paquete de vinculación incompleto');
+  return data; // { u: url de Supabase, c: código de un solo uso, k: opcional (paquetes antiguos) }
+}
+
+async function cloudFetch(cfg, action, body, timeoutMs = 35000) {
+  const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/functions/v1/print-server`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // La clave anon es un JWT válido: pasa la verificación del gateway de Supabase
+      // aunque la función tenga "Verify JWT" activado. La autenticación real es el secreto.
+      ...(cfg.anon ? { apikey: cfg.anon, Authorization: `Bearer ${cfg.anon}` } : {}),
+      ...(cfg.secret ? { 'x-print-secret': cfg.secret } : {}),
+    },
+    body: JSON.stringify({ action, ...body }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+async function pairWithCloud(pkg) {
+  const data = await cloudFetch(
+    { url: pkg.u, anon: pkg.k || null },
+    'pair',
+    { code: pkg.c, hostname: os.hostname(), version: VERSION, printers: state.printers },
+    20000
+  );
+  state.cloud = { url: pkg.u, anon: pkg.k || null, server_id: data.server_id, secret: data.secret, organization_id: data.organization_id };
+  saveState();
+}
+
+function applyCloudPrinters(list) {
+  if (!Array.isArray(list)) return;
+  cloudPrinters = list.map(p => ({ id: p.id, name: p.name, target: p.target, roles: p.roles || [], active: p.active !== false }));
+  state.cloud_printers = cloudPrinters;
+  saveState();
+}
+
+async function handleCloudJob(job) {
+  const targets = printersForJob(job);
+  let error = null;
+  if (targets.length === 0) {
+    error = `sin impresora activa para el rol "${job.kind}"`;
+  } else {
+    const content = job.raw_text?.trim() ? job.raw_text : JSON.stringify(job.payload, null, 2);
+    const errors = [];
+    for (const printer of targets) {
+      try {
+        await printRawToPrinterName(printer.target, content);
+      } catch (err) {
+        errors.push(`${printer.name}: ${err.message}`);
+      }
+    }
+    if (errors.length) error = errors.join(' | ');
+  }
+  console.log(`[cloud] job ${job.id} (${job.kind}) → ${error ? 'FALLÓ: ' + error : 'ok'}`);
+  try {
+    await cloudFetch(state.cloud, 'ack', { server_id: state.cloud.server_id, job_id: job.id, status: error ? 'failed' : 'done', error }, 15000);
+  } catch (err) {
+    // Sin ack el job queda 'printing' y la nube lo marca fallido a los 2 min (no se reimprime).
+    console.warn('[cloud] no se pudo confirmar el job:', err.message);
+  }
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+let cloudLoopRunning = false;
+
+async function cloudLoop() {
+  if (cloudLoopRunning) return;
+  cloudLoopRunning = true;
+  let lastCatalog = 0;
+  let backoff = 2000;
+  console.log(`[cloud] conectado a la nube (servidor ${state.cloud.server_id})`);
+  while (state.cloud) {
+    try {
+      const report = { hostname: os.hostname(), version: VERSION, ips: lanIps() };
+      if (Date.now() - lastCatalog > 10 * 60 * 1000) {
+        lastCatalog = Date.now();
+        try { report.system_printers = await listSystemPrinters(); }
+        catch (err) {
+          // Reintenta en ~1 min (no en cada ciclo de 20 s).
+          lastCatalog = Date.now() - 9 * 60 * 1000;
+          console.warn('[cloud] no se pudo listar impresoras del sistema:', err.message);
+        }
+      }
+      const res = await cloudFetch(state.cloud, 'poll', { server_id: state.cloud.server_id, wait_seconds: 20, report });
+      backoff = 2000;
+      applyCloudPrinters(res.printers);
+      for (const job of res.jobs || []) await handleCloudJob(job);
+    } catch (err) {
+      if (err.status === 401) {
+        console.error('[cloud] este servidor fue desvinculado o su secreto es inválido. Vuelve a vincularlo con --pair.');
+        await sleep(60000);
+        continue;
+      }
+      console.warn(`[cloud] sin conexión con la nube (${err.message}); reintentando…`);
+      await sleep(backoff);
+      backoff = Math.min(backoff * 2, 30000);
+    }
+  }
+  cloudLoopRunning = false;
+}
+
+async function bootstrapCloud() {
+  const argIdx = process.argv.indexOf('--pair');
+  const pairInput = argIdx >= 0 ? process.argv[argIdx + 1] : process.env.POS_PAIR;
+  if (pairInput) {
+    try {
+      await pairWithCloud(parsePairingPackage(pairInput));
+      console.log('=========================================');
+      console.log(' Servidor vinculado con la nube correctamente.');
+      console.log('=========================================');
+    } catch (err) {
+      console.error(`No se pudo vincular con la nube: ${err.message}`);
+    }
+  } else if (!state.cloud) {
+    console.log('Modo local. Para vincular con la nube: node server.js --pair <paquete POS1.… desde Ajustes → Impresión>');
+  }
+  if (state.cloud) cloudLoop();
+}
+
 // ── Servidor ──────────────────────────────────────────────────────────────────
 
 const app = express();
@@ -282,31 +461,19 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     queue: state.queue.length,
-    printerConfigured: state.printers.some(p => p.active),
-    active: state.printers.some(p => p.active),
+    printerConfigured: getPrinters().some(p => p.active),
+    active: getPrinters().some(p => p.active),
+    cloud: Boolean(state.cloud),
   });
 });
 
 // Impresoras que Windows ya conoce (para elegir sin escribir nombres a mano).
-app.get('/system-printers', requireToken, (req, res) => {
-  const child = spawn('powershell', [
-    '-NoProfile', '-NonInteractive', '-Command',
-    '(Get-Printer | Select-Object -ExpandProperty Name) -join "|"',
-  ], { stdio: ['ignore', 'pipe', 'pipe'], shell: false });
-
-  const outChunks = [];
-  const errChunks = [];
-  child.stdout.on('data', d => outChunks.push(d));
-  child.stderr.on('data', d => errChunks.push(d));
-  child.on('close', code => {
-    if (code !== 0) {
-      return res.status(500).json({ ok: false, error: Buffer.concat(errChunks).toString() || `exit code ${code}` });
-    }
-    const raw = Buffer.concat(outChunks).toString().trim();
-    const printers = raw ? raw.split('|').map(s => s.trim()).filter(Boolean) : [];
-    res.json({ ok: true, printers });
-  });
-  child.on('error', err => res.status(500).json({ ok: false, error: err.message }));
+app.get('/system-printers', requireToken, async (req, res) => {
+  try {
+    res.json({ ok: true, printers: await listSystemPrinters() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // Impresoras configuradas por el usuario (subset del catálogo de Windows,
@@ -425,4 +592,5 @@ app.delete('/jobs/:id', requireToken, (req, res) => {
 const PORT = 18181;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`print server listening on 0.0.0.0:${PORT}`);
+  bootstrapCloud().catch(err => console.error('[cloud] error al iniciar:', err.message));
 });

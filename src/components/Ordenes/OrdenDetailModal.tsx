@@ -1,4 +1,5 @@
 import { useEffect, useState } from'react';
+import { folioLabel } from '../../lib/folio';
 import { X, MapPin } from'@phosphor-icons/react';
 import { type Mesa } from'../../db/database';
 import { useIvaActivo } from'../../hooks/useIvaActivo';
@@ -38,10 +39,10 @@ export function OrdenDetailModal({ comandaId, onClose, onAction: _onAction }: Or
  <div className="bg-card rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col p-6 gap-4">
  <div className="flex items-center justify-between border-b border-border pb-3">
  <div className="flex items-center gap-3">
- <MapPin size={24} className="text-primary"/>
+ <MapPin size={24} className="text-muted-foreground"/>
  <div className="flex flex-col">
  <h3 className="font-black text-lg text-foreground">Mesa {comanda.mesa_nombre ||'N/A'}</h3>
- <span className="text-xs font-bold text-muted-foreground">Folio #{comanda.folio}</span>
+ <span className="text-xs font-bold text-muted-foreground">Folio #{folioLabel(comanda)}</span>
  </div>
  </div>
  <button type="button"onClick={onClose} className="text-muted-foreground">
@@ -60,7 +61,7 @@ export function OrdenDetailModal({ comandaId, onClose, onAction: _onAction }: Or
 
  <div className="flex items-center justify-between pt-3 border-t border-border font-extrabold text-base">
  <span>Total</span>
- <span className="text-primary text-lg font-black">${total.toFixed(2)}</span>
+ <span className="text-foreground text-lg font-black">${total.toFixed(2)}</span>
  </div>
  </div>
  </div>

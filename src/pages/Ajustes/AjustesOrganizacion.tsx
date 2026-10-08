@@ -111,7 +111,7 @@ export default function AjustesOrganizacion() {
       <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
               <Building size={22} weight="fill" />
             </div>
             <div className="flex flex-col">

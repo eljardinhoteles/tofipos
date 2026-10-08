@@ -65,7 +65,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
       <div className={cn('flex items-center justify-between',
         detallado && (tarjeta ? 'pt-2 mt-1 border-t border-border' : 'pt-2 mt-1 border-t border-dashed border-border'))}>
         <span className="text-base font-black text-foreground">{etiquetaTotal}</span>
-        <span className={cn('text-xl font-black', tono === 'success' ? 'text-emerald-600' : 'text-primary')}>{money(total)}</span>
+        <span className={cn('text-xl font-black', tono === 'success' ? 'text-foreground' : 'text-foreground')}>{money(total)}</span>
       </div>
       {totalPagado > 0 && detallado && (
         // Cuenta dividida registra cobros parciales antes del cierre.
@@ -74,7 +74,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             type="button"
             onClick={onVerPagos}
             title="Ver detalle de los cobros"
-            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-emerald-500/10 text-emerald-600 cursor-pointer hover:bg-emerald-500/15 hover:text-emerald-700 transition-colors"
+            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-primary/10 text-primary cursor-pointer hover:bg-primary/15 hover:text-primary transition-colors"
           >
             <span className="flex items-center gap-1.5 font-bold">
               Ya cobrado
@@ -83,7 +83,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             <span className="font-black">{money(totalPagado)}</span>
           </button>
         ) : (
-          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-emerald-500/10 text-emerald-600">
+          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-primary/10 text-primary">
             <span className="font-bold">Ya cobrado</span>
             <span className="font-black">{money(totalPagado)}</span>
           </div>
@@ -96,7 +96,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             type="button"
             onClick={onVerAnticipo}
             title="Ver el detalle del anticipo"
-            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-sky-500/10 text-sky-700 cursor-pointer hover:bg-sky-500/15 transition-colors"
+            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-info/10 text-info-foreground cursor-pointer hover:bg-info/15 transition-colors"
           >
             <span className="flex items-center gap-1.5 font-bold">
               Anticipo disponible
@@ -105,7 +105,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             <span className="font-black">{money(anticipo)}</span>
           </button>
         ) : (
-          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-sky-500/10 text-sky-700">
+          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-info/10 text-info-foreground">
             <span className="font-bold">Anticipo disponible</span>
             <span className="font-black">{money(anticipo)}</span>
           </div>
@@ -114,7 +114,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
       {totalPagado > 0 && detallado && (
         <div className="flex items-center justify-between">
           <span className="text-base font-black text-foreground">Restante</span>
-          <span className="text-xl font-black text-orange-600">{money(saldoPendiente)}</span>
+          <span className="text-xl font-black text-warning-foreground">{money(saldoPendiente)}</span>
         </div>
       )}
     </div>

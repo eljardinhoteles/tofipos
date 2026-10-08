@@ -42,7 +42,7 @@ function DatoRow({ icon: Icon, value }: { icon: typeof Phone; value: string }) {
         type="button" onClick={handleCopy} title="Copiar"
         className={cn(
           "shrink-0 transition-colors cursor-pointer",
-          copied ? "text-emerald-600" : "text-muted-foreground/50 hover:text-primary"
+          copied ? "text-primary" : "text-muted-foreground/50 hover:text-primary"
         )}
       >
         {copied ? <CheckCircle size={12} weight="fill" /> : <Copy size={12} />}

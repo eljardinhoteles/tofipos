@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from'react';
+import { folioLabel } from '../../../lib/folio';
 import {
  ArrowLeft, Users, CurrencyCircleDollar, Check,
  Printer
@@ -172,7 +173,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  tipo:'directa',
  cliente_id: activeComanda.cliente_id || undefined,
  cliente_nombre: nameOfPayer?.trim() || activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio} · ${labelDivision}`,
+ referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)} · ${labelDivision}`,
  comanda_id: activeComanda.id,
  organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
  }, monto);
@@ -258,7 +259,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <div className="flex flex-col">
  <h3 className="font-extrabold text-base text-foreground leading-tight">Dividir Cuenta</h3>
  <span className="text-[10px] font-bold text-muted-foreground">
- {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{activeComanda?.folio}
+ {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{folioLabel(activeComanda)}
  </span>
  </div>
  </div>
@@ -278,7 +279,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  {!splitMethod ? (
  saldoPendiente <= 0.001 ? (
  <div className="flex flex-col items-center gap-2 py-10 text-center">
- <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+ <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
  <Check size={24} weight="bold"/>
  </div>
  <span className="font-extrabold text-sm text-foreground">Cuenta ya pagada</span>
@@ -310,7 +311,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <button
  type="button"onClick={() => selectSplitMethod('monto')}
  className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
- <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+ <div className="w-10 h-10 rounded-xl bg-special-soft text-special-foreground flex items-center justify-center shrink-0">
  <CurrencyCircleDollar size={20} />
  </div>
  <div className="flex flex-col">
@@ -349,15 +350,15 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  key={idx}
  onClick={() => !isPaid && setSelectedPersonaIdx(isSelected ? null : idx)}
  className={cn("p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
- isPaid ?"bg-emerald-50 border-emerald-300": isSelected ?"bg-primary/10 border-primary":"bg-card border-border")}
+ isPaid ?"bg-primary/10 border-primary/40": isSelected ?"bg-primary/10 border-primary":"bg-card border-border")}
  >
  <div className="flex items-center gap-3">
- <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isPaid ?"bg-emerald-600 text-white":"bg-muted text-foreground/80")}>
+ <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isPaid ?"bg-primary text-white":"bg-muted text-foreground/80")}>
  {isPaid ? <Check size={16} /> : idx + 1}
  </div>
  <div className="flex flex-col">
  <span className="font-extrabold text-xs text-foreground">Persona {idx + 1}</span>
- <span className="font-bold text-xs text-primary">${montoPorPersona.toFixed(2)}</span>
+ <span className="font-bold text-xs text-foreground">${montoPorPersona.toFixed(2)}</span>
  </div>
  </div>
  </div>
@@ -407,7 +408,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  });
  }
  }}
- className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
+ className="py-3 rounded-xl bg-warning-soft text-warning-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
  <Printer size={16} /> Pre-cuenta
  </button>
  <button
@@ -415,7 +416,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente || !payerName.trim()}
  title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
  onClick={() => setCobrarModalState({ monto: Number(montoCustom), label:'Pago Parcial'})}
- className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
+ className="py-3 rounded-xl bg-primary text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
  Cobrar Monto
  </button>
  </footer>
@@ -435,7 +436,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  });
  }
  }}
- className="py-3 rounded-xl bg-amber-50 text-amber-700 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
+ className="py-3 rounded-xl bg-warning-soft text-warning-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
  <Printer size={16} /> Pre-cuenta
  </button>
  <button
@@ -455,7 +456,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  });
  }
  }}
- className="py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
+ className="py-3 rounded-xl bg-primary text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
  Cobrar parte
  </button>
  </footer>
@@ -468,7 +469,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  <h3 className="font-extrabold text-base text-foreground">Cobrar e Imprimir</h3>
  <div className="p-4 rounded-xl bg-muted border border-border text-center flex flex-col gap-0.5">
  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monto</span>
- <span className="font-black text-2xl text-emerald-600">${cobrarModalState.monto.toFixed(2)}</span>
+ <span className="font-black text-2xl text-foreground">${cobrarModalState.monto.toFixed(2)}</span>
  </div>
  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
  <button
@@ -480,7 +481,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  type="button"
  disabled={!payerName.trim()}
  onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
- className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
+ className="px-4 py-2 rounded-lg bg-primary text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
  Cobrar e Imprimir
  </button>
  </div>

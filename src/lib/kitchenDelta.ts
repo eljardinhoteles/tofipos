@@ -3,6 +3,8 @@
 // lógica de "ítems nuevos" de SidebarDetails (creados tras confirmada_at, o con
 // cantidad mayor a la del snapshot) y la agrega a nivel de mesa.
 
+import { esParteRepartida } from './reparto'
+
 type AnyRec = Record<string, any>
 
 function parseSnapshot(comanda: AnyRec): Record<string, number> {
@@ -10,6 +12,8 @@ function parseSnapshot(comanda: AnyRec): Record<string, number> {
 }
 
 export function deltaComanda(comanda: AnyRec, items: AnyRec[]) {
+  // Las partes de un reparto de valor no son platos: cocina no las prepara.
+  items = items.filter(i => !esParteRepartida(i))
   const vivos = items.filter(i => !i.anulado)
   if (!comanda.confirmada_at) {
     return { nuevos: vivos, anulados: [] as AnyRec[] }
@@ -53,6 +57,6 @@ export function deltaGrupo(comandas: AnyRec[], items: AnyRec[]) {
     anulados.push(...d.anulados)
     porComanda.push({ comanda: c, items: propios, nuevos: d.nuevos })
   }
-  const vivos = items.filter(i => !i.anulado)
+  const vivos = items.filter(i => !i.anulado && !esParteRepartida(i))
   return { algunaConfirmada, nuevos, anulados, porComanda, vivos }
 }

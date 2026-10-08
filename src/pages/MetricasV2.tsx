@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from'react';
+import { esParteRepartida, nombreBaseReparto } from '../lib/reparto';
+import { useCallback, useEffect, useMemo, useState } from'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, CartesianGrid } from'recharts';
-import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise } from'@phosphor-icons/react';
+import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, Check, X } from'@phosphor-icons/react';
 import dayjs from'dayjs';
 import { initVerticalRxDb, forceSyncAll, pingSyncStatus } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
@@ -11,15 +12,35 @@ import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover'
 import { Calendar as CalendarPicker } from'@/components/ui/calendar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from'@/components/ui/chart';
 import { cn } from'@/lib/utils';
+import { PageFrame, PageHeader, PageContent, PageToolbar, headerIconButtonClass, toolbarChipClass } from'../components/Common/PageHeader';
 
 type DatesRange = [Date | null, Date | null];
 
-type SalePoint = { fecha: string; monto: number };
+type SalePoint = { fecha: string; monto: number; anterior?: number; fechaAnterior?: string };
 type HourPoint = { hora: string; ordenes: number; ventas: number };
+// Los ítems anulados no se operaron: no cuentan. Tampoco los de $0.00, que son
+// los incluidos en un plan (no son venta). Excepción: el plato origen de un reparto de valor
+// (queda a $0 pero sus unidades sí son consumo real).
+const esItemSinValor = (item: any) => !!item.anulado || (!Number(item.precio || 0) && !item.reparto);
+
 type TopItemPoint = { nombre: string; cantidad: number; total: number; margen?: number | null };
 type CategoryPoint = { nombre: string; monto: number };
 type WeekdayPoint = { dia: string; promedio: number; total: number };
 type CardMetric = { label: string; description: string; value: string; delta?: string; positive?: boolean; icon: React.ReactNode };
+
+// Un solo acento (azul) para todo lo que se grafica; las tarjetas van neutras y
+// el color semántico (verde/rojo) queda solo para subió/bajó.
+const CHIP_TARJETA = 'bg-muted text-muted-foreground';
+
+// Posición en un ranking: el primero va en oscuro, el resto en neutro.
+function RankBadge({ n }: { n: number }) {
+  return (
+    <span className={cn("shrink-0 h-6 min-w-8 px-2 rounded-full inline-flex items-center justify-center text-[11px] font-extrabold tabular-nums",
+      n === 1 ? "bg-foreground text-background" : "bg-muted text-muted-foreground")}>
+      #{n}
+    </span>
+  );
+}
 
 function money(value: number) {
  return`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -64,18 +85,23 @@ function statDelta(current: number, previous: number, prefix ='') {
 }
 
 const salesChartConfig = {
- monto: { label:'Ventas ($)', color:'var(--primary)'},
+ monto: { label:'Ventas ($)', color:'var(--info)'},
+ anterior: { label:'Periodo anterior ($)', color:'var(--muted-foreground)'},
 } satisfies ChartConfig;
 
 const ordersChartConfig = {
- ordenes: { label:'Órdenes', color:'var(--primary)'},
+ ordenes: { label:'Órdenes', color:'var(--info)'},
 } satisfies ChartConfig;
 
 const weekdayChartConfig = {
- promedio: { label:'Promedio $', color:'var(--primary)'},
+ promedio: { label:'Promedio $', color:'var(--info)'},
 } satisfies ChartConfig;
 
 export default function MetricasV2() {
+ // Categorías elegidas para filtrar las métricas (vacío = todas).
+ const [catFiltro, setCatFiltro] = useState<string[]>([]);
+ const [catOpen, setCatOpen] = useState(false);
+ const [compararAnterior, setCompararAnterior] = useState(true);
  const [periodo, setPeriodo] = useState<'hoy'|'7d'|'30d'|'mes'|'custom'>('7d');
  const [calendarOpen, setCalendarOpen] = useState(false);
  const [customRange, setCustomRange] = useState<DatesRange>([null, null]);
@@ -165,7 +191,7 @@ export default function MetricasV2() {
  // de movimientos embebido (ver comentario en RxVentaMovimiento, db/rxdb.ts).
  // Se aplana aquí a la misma forma {comanda_id, monto, fecha} que el resto
  // de este archivo ya consume, para no reescribir cada cálculo de abajo.
- const pagos = useMemo(() => {
+ const pagosBase = useMemo(() => {
  const flat: Array<{ comanda_id: string; monto: number; fecha: string; created_at: string }> = [];
  ventas.forEach((v) => {
  if (!v.comanda_id) return;
@@ -177,6 +203,43 @@ export default function MetricasV2() {
  return flat;
  }, [ventas]);
 
+ // ── Filtro por categorías ────────────────────────────────────────────────
+ // Los cobros no se reparten por producto, así que con el filtro activo las
+ // ventas salen de los ítems de esas categorías (precio × cantidad) en las
+ // comandas completadas, fechadas por la comanda. Sin filtro: cobros reales.
+ const filtrando = catFiltro.length > 0;
+ const categoriaDeItem = useMemo(() => {
+ const m = new Map<string, string>();
+ menuItems.forEach((it) => { if (it?.id && it?.categoria_id) m.set(it.id, it.categoria_id); });
+ return m;
+ }, [menuItems]);
+ const catSet = useMemo(() => new Set(catFiltro), [catFiltro]);
+ // ¿El ítem cuenta en las métricas? Ni los de valor $0 de un plan, ni los
+ // de otras categorías cuando hay filtro.
+ const itemCuenta = useCallback(
+ (item: any) => !esItemSinValor(item) && (!filtrando || catSet.has(categoriaDeItem.get(item.item_id) || '')),
+ [filtrando, catSet, categoriaDeItem]
+ );
+ const montoFiltrado = useMemo(() => {
+ const m = new Map<string, number>();
+ if (!filtrando) return m;
+ comandaItems.forEach((item) => {
+ if (esItemSinValor(item) || !catSet.has(categoriaDeItem.get(item.item_id) || '')) return;
+ m.set(item.comanda_id, (m.get(item.comanda_id) || 0) + Number(item.precio || 0) * Number(item.cantidad || 0));
+ });
+ return m;
+ }, [filtrando, comandaItems, catSet, categoriaDeItem]);
+ const pagos = useMemo(() => {
+ if (!filtrando) return pagosBase;
+ const flat: Array<{ comanda_id: string; monto: number; fecha: string; created_at: string }> = [];
+ comandas.forEach((c) => {
+ if (c.estado !== 'cerrado' && c.estado !== 'facturado') return;
+ const monto = montoFiltrado.get(c.id);
+ if (monto) flat.push({ comanda_id: c.id, monto, fecha: c.created_at, created_at: c.created_at });
+ });
+ return flat;
+ }, [filtrando, pagosBase, comandas, montoFiltrado]);
+
  const activeComandas = useMemo(() => comandas.filter((c) => {
  const fc = new Date(c.created_at);
  return fc >= datesLimit.inicio && fc <= datesLimit.fin;
@@ -187,8 +250,8 @@ export default function MetricasV2() {
  return fc >= previousLimit.inicio && fc <= previousLimit.fin;
  }), [comandas, previousLimit]);
 
- const activeCompletadas = useMemo(() => activeComandas.filter((c) => c.estado ==='cerrado'|| c.estado ==='facturado'), [activeComandas]);
- const previousCompletadas = useMemo(() => previousComandas.filter((c) => c.estado ==='cerrado'|| c.estado ==='facturado'), [previousComandas]);
+ const activeCompletadas = useMemo(() => activeComandas.filter((c) => (c.estado ==='cerrado'|| c.estado ==='facturado') && (!filtrando || montoFiltrado.has(c.id))), [activeComandas, filtrando, montoFiltrado]);
+ const previousCompletadas = useMemo(() => previousComandas.filter((c) => (c.estado ==='cerrado'|| c.estado ==='facturado') && (!filtrando || montoFiltrado.has(c.id))), [previousComandas, filtrando, montoFiltrado]);
 
  const activeAnuladas = useMemo(() => activeComandas.filter((c) => c.estado ==='anulada'), [activeComandas]);
  const previousAnuladas = useMemo(() => previousComandas.filter((c) => c.estado ==='anulada'), [previousComandas]);
@@ -254,14 +317,19 @@ export default function MetricasV2() {
  const menuById = new Map<string, any>();
  menuItems.forEach((item) => menuById.set(item.id, item));
 
- comandaItems.forEach((item) => {
- if (!validIds.has(item.comanda_id)) return;
- const current = counts.get(item.nombre) || { qty: 0, total: 0, margin: null as number | null };
+comandaItems.forEach((item) => {
+ if (!validIds.has(item.comanda_id) || !itemCuenta(item)) return;
+ // Una parte de un reparto de valor suma ingreso al plato original, no unidades:
+ // las unidades ya cuentan en el ítem origen (que quedó a $0).
+ const esParte = esParteRepartida(item);
+ const nombre = esParte ? nombreBaseReparto(String(item.nombre)) : item.nombre;
+ const current = counts.get(nombre) || { qty: 0, total: 0, margin: null as number | null };
  const total = Number(item.precio || 0) * Number(item.cantidad || 0);
  const cost = getItemCost(menuById.get(item.item_id));
- const itemMargin = cost == null ? null : (Number(item.precio || 0) - cost) * Number(item.cantidad || 0);
- counts.set(item.nombre, {
- qty: current.qty + Number(item.cantidad || 0),
+ // El costo del plato ya se descontó en el ítem origen: la parte aporta su valor completo.
+ const itemMargin = cost == null ? null : esParte ? total : (Number(item.precio || 0) - cost) * Number(item.cantidad || 0);
+ counts.set(nombre, {
+ qty: current.qty + (esParte ? 0 : Number(item.cantidad || 0)),
  total: current.total + total,
  margin: current.margin == null || itemMargin == null ? current.margin : current.margin + itemMargin,
  });
@@ -270,7 +338,7 @@ export default function MetricasV2() {
  return Array.from(counts.entries())
  .map(([nombre, stat]) => ({ nombre, cantidad: stat.qty, total: stat.total, margen: stat.margin }))
  .sort((a, b) => b.cantidad - a.cantidad);
- }, [activeCompletadas, comandaItems, menuItems]);
+ }, [activeCompletadas, comandaItems, menuItems, itemCuenta]);
 
  const topCategorias = useMemo<CategoryPoint[]>(() => {
  const categoryMap = new Map<string, string>();
@@ -286,7 +354,7 @@ export default function MetricasV2() {
  const validIds = new Set(activeCompletadas.map((c) => c.id));
 
  comandaItems.forEach((item) => {
- if (!validIds.has(item.comanda_id)) return;
+ if (!validIds.has(item.comanda_id) || !itemCuenta(item)) return;
  const categoryId = categoryMap.get(item.item_id) ||'otros';
  const categoryName = categoryNames.get(categoryId) ||'Otros';
  const total = Number(item.precio || 0) * Number(item.cantidad || 0);
@@ -306,45 +374,55 @@ export default function MetricasV2() {
  }
 
  return leading.length > 0 ? leading : sorted;
- }, [activeCompletadas, comandaItems, categorias, menuItems, ventasActuales]);
+ }, [activeCompletadas, comandaItems, categorias, menuItems, ventasActuales, itemCuenta]);
 
  // Con un solo día en rango (periodo "Hoy" o un rango personalizado de un
  // día), agrupar por día deja un único punto y el área no se puede trazar.
  // En ese caso agrupamos por hora para tener una curva legible.
  const chartData = useMemo<SalePoint[]>(() => {
  const days = daysBetween(datesLimit.inicio, datesLimit.fin);
+ const fechaDe = (p: { fecha?: string; created_at?: string }) => (p.fecha ? new Date(p.fecha) : new Date(p.created_at || Date.now()));
+ const enRango = (d: Date, r: { inicio: Date; fin: Date }) => d >= r.inicio && d <= r.fin;
 
+ // Cada punto lleva `anterior`: lo vendido en la misma posición del periodo
+ // anterior (misma hora, o el día que corresponde en orden).
  if (days <= 1) {
- const map = new Map<string, number>();
- for (let h = 0; h < 24; h += 1) map.set(`${String(h).padStart(2,'0')}:00`, 0);
-
+ const actual = new Map<string, number>();
+ const previo = new Map<string, number>();
+ for (let h = 0; h < 24; h += 1) {
+ const key = `${String(h).padStart(2,'0')}:00`;
+ actual.set(key, 0);
+ previo.set(key, 0);
+ }
  pagos.forEach((p) => {
- const paymentDate = p.fecha ? new Date(p.fecha) : new Date(p.created_at || Date.now());
- if (paymentDate >= datesLimit.inicio && paymentDate <= datesLimit.fin) {
- const key =`${String(paymentDate.getHours()).padStart(2,'0')}:00`;
- map.set(key, (map.get(key) || 0) + Number(p.monto || 0));
- }
+ const d = fechaDe(p);
+ const key = `${String(d.getHours()).padStart(2,'0')}:00`;
+ if (enRango(d, datesLimit)) actual.set(key, (actual.get(key) || 0) + Number(p.monto || 0));
+ else if (enRango(d, previousLimit)) previo.set(key, (previo.get(key) || 0) + Number(p.monto || 0));
  });
-
- return Array.from(map.entries()).map(([fecha, monto]) => ({ fecha, monto }));
+ return Array.from(actual.entries()).map(([fecha, monto]) => ({ fecha, monto, anterior: previo.get(fecha) || 0 }));
  }
 
- const map = new Map<string, number>();
+ const actual = new Map<string, number>();
+ const previo = new Map<string, number>();
  for (let i = 0; i < days; i += 1) {
- const d = shiftDays(datesLimit.inicio, i);
- map.set(d.toISOString().split('T')[0], 0);
+ actual.set(shiftDays(datesLimit.inicio, i).toISOString().split('T')[0], 0);
+ previo.set(shiftDays(previousLimit.inicio, i).toISOString().split('T')[0], 0);
  }
-
  pagos.forEach((p) => {
- const paymentDate = p.fecha ? new Date(p.fecha) : new Date(p.created_at || Date.now());
- if (paymentDate >= datesLimit.inicio && paymentDate <= datesLimit.fin) {
- const key = paymentDate.toISOString().split('T')[0];
- map.set(key, (map.get(key) || 0) + Number(p.monto || 0));
- }
+ const d = fechaDe(p);
+ const key = d.toISOString().split('T')[0];
+ if (enRango(d, datesLimit)) actual.set(key, (actual.get(key) || 0) + Number(p.monto || 0));
+ else if (enRango(d, previousLimit)) previo.set(key, (previo.get(key) || 0) + Number(p.monto || 0));
  });
-
- return Array.from(map.entries()).map(([fecha, monto]) => ({ fecha, monto }));
- }, [pagos, datesLimit]);
+ const claveAnterior = Array.from(previo.keys());
+ return Array.from(actual.entries()).map(([fecha, monto], i) => ({
+ fecha,
+ monto,
+ anterior: previo.get(claveAnterior[i]) || 0,
+ fechaAnterior: claveAnterior[i],
+ }));
+ }, [pagos, datesLimit, previousLimit]);
 
  const topProductsByQty = useMemo<TopItemPoint[]>(() => {
  const sorted = [...topProductos].sort((a, b) => b.cantidad - a.cantidad);
@@ -412,55 +490,51 @@ export default function MetricasV2() {
  { label:'Órdenes anuladas', description:'Órdenes canceladas dentro del periodo.', value: String(activeAnuladas.length), delta: statDelta(activeAnuladas.length, previousAnuladas.length), positive: activeAnuladas.length <= previousAnuladas.length, icon: <Warning size={20} weight="fill"/> },
  ];
 
+ const etiquetaPeriodo = periodo === 'hoy' ? 'Hoy' : periodo === '7d' ? 'Últimos 7 días' : periodo === '30d' ? 'Últimos 30 días' : periodo === 'mes' ? 'Este mes'
+ : customRange[0] ? `${dayjs(customRange[0]).format('DD/MM')}${customRange[1] ? ` - ${dayjs(customRange[1]).format('DD/MM')}` : ''}` : 'Rango personalizado';
  const peakHour = topHoras[0]?.hora ||'N/D';
  const peakOrders = topHoras[0]?.ordenes || 0;
  const peakSales = topHoras[0]?.ventas || 0;
 
  return (
- <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
- {/* Header */}
- <header className="h-14 md:h-[72px] px-6 bg-card border-b border-border flex items-center shrink-0 shadow-xs gap-3">
- <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
- {periodo ==='custom'&& customRange[0] && (
- <button
- type="button"onClick={() => setCalendarOpen(true)}
- className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/30 whitespace-nowrap cursor-pointer">
- {dayjs(customRange[0]).format('DD/MM')}
- {customRange[1] &&`- ${dayjs(customRange[1]).format('DD/MM')}`}
+ <PageFrame>
+ <PageHeader
+ title="Métricas"
+ subtitle={`${etiquetaPeriodo}${filtrando ? ` · ${catFiltro.length} ${catFiltro.length === 1 ? 'categoría' : 'categorías'}` : ''}`}
+ actions={
+ <button type="button" title="Recargar datos" aria-label="Recargar datos" onClick={handleForceSync} disabled={syncing}
+ className={cn(headerIconButtonClass, 'disabled:opacity-60')}>
+ <ArrowsClockwise size={18} weight="bold" className={syncing ? 'animate-spin' : ''}/>
  </button>
- )}
+ }
+ />
 
+ <PageContent>
+ {/* Periodo y categorías en una sola fila */}
+ <PageToolbar>
  {([
  { value:'hoy', label:'Hoy'},
  { value:'7d', label:'7d'},
  { value:'30d', label:'30d'},
  { value:'mes', label:'Este Mes'},
  { value:'custom', label:'Personalizado'},
- ] as const).map(({ value, label }) => {
- const active = periodo === value;
- return (
+ ] as const).map(({ value, label }) => (
  <button
  key={value}
- type="button"onClick={() => {
- setPeriodo(value);
- if (value ==='custom') setCalendarOpen(true);
- }}
- className={cn("px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border",
- active
- ?"bg-primary text-primary-foreground border-primary shadow-xs":"bg-card text-muted-foreground border-border")}
+ type="button" onClick={() => { setPeriodo(value); if (value === 'custom') setCalendarOpen(true); }}
+ className={toolbarChipClass(periodo === value)}
  >
  {label}
  </button>
- );
- })}
+ ))}
 
- {periodo ==='custom'&& (
+ {periodo ==='custom' && (
  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
  <PopoverTrigger asChild>
- <button
- type="button"title="Cambiar rango de fechas"
- className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 cursor-pointer">
- <CalendarBlank size={18} />
+ <button type="button" title="Cambiar rango de fechas"
+ className="h-8 px-3 rounded-full bg-muted text-foreground text-xs font-bold border border-border inline-flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap">
+ <CalendarBlank size={14} />
+ {customRange[0] ? `${dayjs(customRange[0]).format('DD/MM')}${customRange[1] ? ` - ${dayjs(customRange[1]).format('DD/MM')}` : ''}` : 'Elegir fechas'}
  </button>
  </PopoverTrigger>
  <PopoverContent className="w-auto p-0" align="start">
@@ -475,14 +549,52 @@ export default function MetricasV2() {
  </PopoverContent>
  </Popover>
  )}
- </div>
 
- <button
- type="button"title="Recargar datos"onClick={handleForceSync}disabled={syncing}
- className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 cursor-pointer ml-auto disabled:opacity-60">
- <ArrowsClockwise size={18} weight="bold"className={syncing ?'animate-spin':''}/>
+ {categorias.length > 0 && (
+ <>
+ <div className="w-px h-6 bg-border shrink-0" />
+ <Popover open={catOpen} onOpenChange={setCatOpen}>
+ <PopoverTrigger asChild>
+ <button type="button"
+ className="h-8 px-3 rounded-full border border-dashed border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:border-foreground/40 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap">
+ <Plus size={13} weight="bold" /> Categoría
  </button>
- </header>
+ </PopoverTrigger>
+ <PopoverContent align="start" className="w-60 p-1.5 flex flex-col gap-0.5 max-h-80 overflow-y-auto">
+ {categorias.map((cat: any) => {
+ const on = catFiltro.includes(cat.id);
+ return (
+ <button key={cat.id} type="button" aria-pressed={on}
+ onClick={() => setCatFiltro(prev => on ? prev.filter(x => x !== cat.id) : [...prev, cat.id])}
+ className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
+ <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
+ {on && <Check size={11} weight="bold" />}
+ </span>
+ <span className="truncate">{cat.nombre}</span>
+ </button>
+ );
+ })}
+ </PopoverContent>
+ </Popover>
+ {catFiltro.map((id) => {
+ const cat = categorias.find((c: any) => c.id === id);
+ if (!cat) return null;
+ return (
+ <span key={id} className="h-8 pl-3 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+ {cat.nombre}
+ <button type="button" aria-label={`Quitar ${cat.nombre}`} onClick={() => setCatFiltro(prev => prev.filter(x => x !== id))}
+ className="w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background cursor-pointer">
+ <X size={11} weight="bold" />
+ </button>
+ </span>
+ );
+ })}
+ {filtrando && (
+ <button type="button" onClick={() => setCatFiltro([])} className="h-8 px-2 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer shrink-0 whitespace-nowrap">Quitar todo</button>
+ )}
+ </>
+ )}
+ </PageToolbar>
 
  {/* Content */}
  <main className="flex-1 overflow-y-auto p-6 w-full flex flex-col gap-6">
@@ -498,14 +610,14 @@ export default function MetricasV2() {
  <span className="text-xs text-muted-foreground leading-snug">{card.description}</span>
  </div>
  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
- card.positive ?"bg-emerald-50 text-emerald-600":"bg-red-50 text-red-600")}>
+ CHIP_TARJETA)}>
  {card.icon}
  </div>
  </div>
 
  {card.delta && (
  <Badge variant="secondary" className={cn("w-fit font-extrabold text-[11px]",
- card.positive ?"bg-emerald-100 text-emerald-700":"bg-red-100 text-red-700")}>
+ card.positive ?"bg-success-soft text-success-foreground":"bg-destructive-soft text-destructive")}>
  {card.positive ?'↑':'↓'} {card.delta.replace(/^[+-]/,'')}
  </Badge>
  )}
@@ -524,8 +636,17 @@ export default function MetricasV2() {
  <div>
  <Card>
  <CardHeader>
+ <div className="flex items-start justify-between gap-3">
+ <div className="flex flex-col gap-0.5">
  <h3 className="font-extrabold text-base text-foreground">Evolución de ventas</h3>
- <p className="text-xs text-muted-foreground">Comparación de facturación diaria dentro del periodo seleccionado.</p>
+ <p className="text-xs text-muted-foreground">Facturación dentro del periodo seleccionado.</p>
+ </div>
+ <button type="button" aria-pressed={compararAnterior} onClick={() => setCompararAnterior(v => !v)}
+ className={cn("h-8 px-3 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors shrink-0",
+ compararAnterior ? "bg-muted text-foreground border-border" : "bg-card text-muted-foreground border-border hover:text-foreground")}>
+ {compararAnterior ? 'Comparando con periodo anterior' : 'Comparar con periodo anterior'}
+ </button>
+ </div>
  </CardHeader>
  <CardContent>
  {ventasActuales === 0 ? (
@@ -537,7 +658,15 @@ export default function MetricasV2() {
  <AreaChart data={chartData}>
  <CartesianGrid vertical={false} />
  <XAxis dataKey="fecha" tickLine={false} axisLine={false} tickMargin={8} />
- <ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} />
+ <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => (
+ <div className="flex w-full items-center justify-between gap-4">
+ <span className="text-muted-foreground">{name === 'anterior' ? 'Periodo anterior' : 'Este periodo'}</span>
+ <span className="font-mono font-bold text-foreground tabular-nums">{money(Number(value))}</span>
+ </div>
+ )} />} />
+ {compararAnterior && (
+ <Area dataKey="anterior" type="monotone" fill="none" stroke="var(--color-anterior)" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+ )}
  <Area dataKey="monto" type="monotone" fill="var(--color-monto)" fillOpacity={0.2} stroke="var(--color-monto)" strokeWidth={2} />
  </AreaChart>
  </ChartContainer>
@@ -605,7 +734,7 @@ export default function MetricasV2() {
  <div key={item.nombre}>
  <div className="flex items-start justify-between gap-3 mb-1.5">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
- <Badge variant={index === 0 ?"default":"secondary"} className="shrink-0">#{index + 1}</Badge>
+ <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
  <p className="text-sm font-bold text-foreground truncate">{item.nombre}</p>
  <p className="text-xs text-muted-foreground">{item.cantidad} unidades</p>
@@ -617,7 +746,7 @@ export default function MetricasV2() {
  </div>
  </div>
  <div className="h-2 rounded-full bg-muted overflow-hidden">
- <div className={cn("h-full rounded-full", index === 0 ?"bg-emerald-500":"bg-primary")} style={{ width:`${Math.min(100, pct)}%`}} />
+ <div className={cn("h-full rounded-full", index === 0 ?"bg-info":"bg-info/50")} style={{ width:`${Math.min(100, pct)}%`}} />
  </div>
  </div>
  );
@@ -638,7 +767,7 @@ export default function MetricasV2() {
  <div key={c.nombre}>
  <div className="flex items-start justify-between gap-3 mb-1.5">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
- <Badge variant={i === 0 ?"default":"secondary"} className="shrink-0">#{i + 1}</Badge>
+ <RankBadge n={i + 1} />
  <div className="min-w-0 flex-1">
  <p className="text-sm font-bold text-foreground truncate">{c.nombre}</p>
  <p className="text-xs text-muted-foreground">{pct.toFixed(0)}% de ventas</p>
@@ -647,7 +776,7 @@ export default function MetricasV2() {
  <span className="text-sm font-black text-foreground shrink-0">{money(c.monto)}</span>
  </div>
  <div className="h-2 rounded-full bg-muted overflow-hidden">
- <div className={cn("h-full rounded-full", i === 0 ?"bg-emerald-500":"bg-muted-foreground/40")} style={{ width:`${Math.min(100, pct)}%`}} />
+ <div className={cn("h-full rounded-full", i === 0 ?"bg-info":"bg-info/50")} style={{ width:`${Math.min(100, pct)}%`}} />
  </div>
  </div>
  );
@@ -667,13 +796,13 @@ export default function MetricasV2() {
  {clientesFidelizacion.map((client, index) => (
  <div key={client.nombre} className="p-3 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
- <Badge variant={index === 0 ?"default":"secondary"} className="shrink-0">#{index + 1}</Badge>
+ <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
  <p className="text-sm font-bold text-foreground truncate">{client.nombre}</p>
  <p className="text-xs text-muted-foreground">{client.visitas} visitas</p>
  </div>
  </div>
- <span className="text-sm font-black text-primary shrink-0">{money(client.gasto)}</span>
+ <span className="text-sm font-black text-foreground shrink-0">{money(client.gasto)}</span>
  </div>
  ))}
  </CardContent>
@@ -702,6 +831,7 @@ export default function MetricasV2() {
  </Card>
  </div>
  </main>
- </div>
+ </PageContent>
+ </PageFrame>
  );
 }

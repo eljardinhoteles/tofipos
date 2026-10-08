@@ -1,3 +1,4 @@
+import { esParteRepartida } from '../../../lib/reparto';
 import { useState } from'react';
 import {
  Sheet,
@@ -107,22 +108,28 @@ export function SidebarKitchenReport({
  const rxDb = await initVerticalRxDb();
  const mesasData: Array<{ mesaNombre: string; habitacionNombre?: string; clienteNombre?: string; items: any[] }> = [];
 
+ // Índices por id: evita un .find() sobre todas las mesas/comandas por cada mesa.
+ const mesaPorId = new Map(allMesas.map(m => [m.id, m]));
+ const comandaOperativaPorMesa = new Map<string, any>();
+ for (const c of allComandas) {
+ if (isOperativeComanda(c) && !comandaOperativaPorMesa.has(c.mesa_id)) comandaOperativaPorMesa.set(c.mesa_id, c);
+ }
  const sorted = Array.from(selectedReportMesas).sort((aId, bId) => {
- const a = allMesas.find(m => m.id === aId);
- const b = allMesas.find(m => m.id === bId);
+ const a = mesaPorId.get(aId);
+ const b = mesaPorId.get(bId);
  if (!a || !b) return 0;
  return a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity:'base'});
  });
 
  for (const mesaId of sorted) {
- const mesa = allMesas.find(m => m.id === mesaId);
- const comanda = allComandas.find(c => c.mesa_id === mesaId && isOperativeComanda(c));
+ const mesa = mesaPorId.get(mesaId);
+ const comanda = comandaOperativaPorMesa.get(mesaId);
  if (!mesa || !comanda) continue;
 
  const docs = await rxDb.comanda_items.find({
  selector: { comanda_id: comanda.id, _deleted: { $ne: true } }
  }).exec();
- const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado);
+ const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado && !esParteRepartida(it));
  if (items.length === 0) continue;
 
  const { habitacionNombre, clienteNombre } = mesaExtrasPorMesa(mesaId);
@@ -136,7 +143,7 @@ export function SidebarKitchenReport({
  const docs = await rxDb.comanda_items.find({
  selector: { comanda_id: reserva.comanda_id, _deleted: { $ne: true } }
  }).exec();
- const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado);
+ const items = docs.map((d: any) => d.toJSON()).filter((it: any) => !it.anulado && !esParteRepartida(it));
  if (items.length === 0) continue;
  mesasData.push({ mesaNombre: `Reserva — ${reserva.nombre} (${reserva.hora})`, items });
  }
@@ -161,7 +168,7 @@ export function SidebarKitchenReport({
  const header = (
  <div className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
  <div className="flex items-center gap-3">
- <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+ <div className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
  <ClipboardText size={20} weight="bold"/>
  </div>
  <div className="flex flex-col">
@@ -225,7 +232,7 @@ export function SidebarKitchenReport({
  </div>
 
  <div className="flex items-center justify-between pt-2">
- <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-extrabold text-xs flex items-center gap-1.5">
+ <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground font-extrabold text-xs flex items-center gap-1.5">
  <CalendarBlank size={14} weight="bold"/> Reservas de hoy
  </span>
  </div>
@@ -277,7 +284,7 @@ export function SidebarKitchenReport({
  <Drawer open={opened} dismissible handleOnly onOpenChange={v => !v && onClose()}>
  <DrawerPortal>
  <DrawerOverlay />
- <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95vh] max-h-[95vh] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+ <DrawerContent className="fixed bottom-0 left-0 right-0 h-dvh max-h-dvh pt-[env(safe-area-inset-top)] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
  <DrawerTitle className="sr-only">Reporte de Cocina</DrawerTitle>
  <DrawerDescription className="sr-only">Consolidado de mesas activas para reporte de cocina</DrawerDescription>
  <DrawerHandle />

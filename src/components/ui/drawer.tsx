@@ -47,7 +47,7 @@ function DrawerHandle({
         // Flota sobre el contenido (absolute) en vez de ocupar su propia fila:
         // así no deja una franja de fondo propio (blanca) por encima del header
         // real del panel, que a veces tiene su color de estado (verde/naranja).
-        "!absolute !top-2 !left-1/2 !-translate-x-1/2 !w-12 !h-1.5 !bg-border !m-0 z-10 shrink-0 cursor-grab active:cursor-grabbing group-data-[vaul-drawer-direction=top]/drawer-content:hidden group-data-[vaul-drawer-direction=left]/drawer-content:hidden group-data-[vaul-drawer-direction=right]/drawer-content:hidden",
+        "!absolute !top-2 !left-1/2 !-translate-x-1/2 !w-12 !h-1.5 !bg-muted-foreground/40 !m-0 z-10 shrink-0 cursor-grab active:cursor-grabbing group-data-[vaul-drawer-direction=top]/drawer-content:hidden group-data-[vaul-drawer-direction=left]/drawer-content:hidden group-data-[vaul-drawer-direction=right]/drawer-content:hidden",
         className
       )}
       {...props}

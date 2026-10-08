@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText } from '@phosphor-icons/react';
+import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText, CaretDown } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
 
   const autorDoc = m.usuario_id ? usuarios.find((u: any) => u.id === m.usuario_id || u.user_id === m.usuario_id) : undefined;
   
@@ -133,6 +134,21 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   const fileUrl = m.comprobante_url ? (comprobanteDisplayUrl || resolverComprobanteUrl(m.comprobante_url)) : '';
   const isPdf = m.comprobante_url?.toLowerCase().endsWith('.pdf');
 
+  const METODOS: Record<string, string> = {
+    efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia',
+    credito_agencia: 'Crédito de agencia', otros: 'Otros',
+  };
+  const detalles: Array<[string, string]> = [];
+  if (m.metodo_pago) detalles.push(['Método', METODOS[m.metodo_pago] ?? m.metodo_pago]);
+  if (m.transferencia_banco) detalles.push(['Banco', m.transferencia_banco]);
+  if (m.transferencia_referencia) detalles.push(['N.º de comprobante', m.transferencia_referencia]);
+  if (m.tarjeta_red) detalles.push(['Red de tarjeta', m.tarjeta_red]);
+  if (m.numero_factura) detalles.push(['Factura', m.numero_factura]);
+  if (m.motivo) detalles.push(['Motivo', m.motivo]);
+  detalles.push(['Fecha', dayjs(m.fecha).format('DD MMM YYYY, HH:mm')]);
+  if (autorNombre) detalles.push(['Registrado por', autorNombre]);
+  const toggleDetalle = () => setDetalleAbierto(v => !v);
+
   if (m.tipo === 'ajuste') {
     return (
       <div className={cn(
@@ -140,7 +156,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         m.anulado ? "opacity-60 bg-muted/20" : "hover:bg-muted/50"
       )}>
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <Icon size={14} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-blue-600"} />
+          <Icon size={14} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-info-foreground"} />
           <div className="flex flex-col min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={cn("text-xs font-semibold", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
@@ -171,7 +187,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           </span>
 
           {m.anulado && (
-            <Badge variant="outline" className="text-[9px] font-bold border-gray-300 text-gray-600 bg-gray-100 px-1.5 py-0">
+            <Badge variant="outline" className="text-[9px] font-bold border-border text-muted-foreground bg-muted px-1.5 py-0">
               Anulado
             </Badge>
           )}
@@ -210,23 +226,23 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
     return (
       <div className={cn(
         "group relative rounded-xl p-2.5 flex flex-col gap-2 transition-all",
-        m.anulado ? "opacity-60" : "hover:bg-amber-50/40"
+        m.anulado ? "opacity-60" : "hover:bg-warning/40"
       )}>
         <div className="flex items-center justify-between gap-2.5">
           {/* Izquierda: Icono + Texto del comentario + Autor */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-              m.anulado ? "text-muted-foreground" : "text-amber-700"
+              m.anulado ? "text-muted-foreground" : "text-warning-foreground"
             )}>
               <ChatText size={16} weight="bold" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <p className={cn("text-xs font-bold italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-amber-950")}>
+              <p className={cn("text-xs font-bold italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-warning-foreground")}>
                 "{m.motivo || 'Sin texto'}"
               </p>
               {autorNombre && (
-                <span className={cn("text-[10px] font-extrabold truncate opacity-0 group-hover:opacity-100 transition-opacity", m.anulado ? "text-muted-foreground/60" : "text-amber-800/80")}>
+                <span className={cn("text-[10px] font-extrabold truncate opacity-0 group-hover:opacity-100 transition-opacity", m.anulado ? "text-muted-foreground/60" : "text-warning-foreground/80")}>
                   por {autorNombre}
                 </span>
               )}
@@ -235,12 +251,12 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
 
           {/* Derecha: Fecha/Hora + Icono de anular */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className={cn("text-[10px] font-extrabold", m.anulado ? "text-muted-foreground/70" : "text-amber-800/70")}>
+            <span className={cn("text-[10px] font-extrabold", m.anulado ? "text-muted-foreground/70" : "text-warning-foreground/70")}>
               {dayjs(m.fecha).format('DD MMM, HH:mm')}
             </span>
 
             {m.anulado && (
-              <Badge variant="outline" className="text-[9px] font-bold border-gray-300 text-gray-600 bg-gray-100 px-1.5 py-0">
+              <Badge variant="outline" className="text-[9px] font-bold border-border text-muted-foreground bg-muted px-1.5 py-0">
                 Anulado
               </Badge>
             )}
@@ -249,7 +265,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               <button
                 type="button" onClick={() => setConfirmando(true)}
                 title="Anular este comentario"
-                className="p-1 text-amber-800/60 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                className="p-1 text-warning-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
               >
                 <Prohibit size={13} weight="bold" />
               </button>
@@ -287,13 +303,19 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       "group relative rounded-xl border border-border bg-card p-2.5 flex flex-col gap-2 transition-all shadow-2xs hover:border-primary/40 hover:shadow-xs",
       m.anulado && "opacity-60 bg-muted/20"
     )}>
-      {/* Fila única de contenido */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      {/* Fila única de contenido: al tocarla se despliegan los datos del movimiento */}
+      <div
+        role="button" tabIndex={0} aria-expanded={detalleAbierto}
+        onClick={toggleDetalle}
+        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleDetalle(); } }}
+        className="flex items-center gap-2.5 min-w-0 cursor-pointer"
+      >
         {/* Thumbnail con Badge de Icono de Tipo de Movimiento */}
         {admiteComprobante && m.comprobante_url ? (
           <div className="relative shrink-0">
             <a
               href={fileUrl}
+              onClick={(e) => e.stopPropagation()}
               target="_blank"
               rel="noreferrer"
               title="Ver comprobante"
@@ -307,7 +329,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <Paperclip size={18} className="text-primary" />
+                  <Paperclip size={18} className="text-muted-foreground" />
                 </div>
               )}
             </a>
@@ -336,7 +358,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               {label}
             </span>
             {m.monto != null && m.monto !== 0 && (
-              <span className="text-xs font-black text-primary shrink-0">${m.monto.toFixed(2)}</span>
+              <span className="text-xs font-black text-foreground shrink-0">${m.monto.toFixed(2)}</span>
             )}
           </div>
           <span className="text-[11px] text-muted-foreground truncate font-medium flex items-center gap-1.5">
@@ -344,7 +366,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               {m.motivo || m.numero_factura || (m.metodo_pago ? `Método: ${m.metodo_pago}` : 'Movimiento de venta')}
             </span>
             {montoAsociado > 0 && (
-              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 border-l border-border pl-1.5 shrink-0">
+              <span className="text-[10px] font-bold text-foreground dark:text-primary border-l border-border pl-1.5 shrink-0">
                 Cubre ${montoAsociado.toFixed(2)}
               </span>
             )}
@@ -355,22 +377,23 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         </div>
 
         {/* Bloque derecho: Fecha + Badges + Botón de Basura en 1 fila */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           <span className="text-[10px] font-bold text-muted-foreground/70 hidden sm:inline">
             {dayjs(m.fecha).format('DD MMM, HH:mm')}
           </span>
+          <CaretDown size={12} weight="bold" onClick={toggleDetalle} className={cn('text-muted-foreground/60 transition-transform cursor-pointer', detalleAbierto && 'rotate-180')} />
 
           {/* Badge de almacenamiento y botón de eliminar */}
           {admiteComprobante && m.comprobante_url && (
             <div className="flex items-center gap-1.5">
               {isOffline ? (
-                <Badge variant="outline" className="text-[9px] font-bold border-amber-300 text-amber-700 bg-amber-50 gap-1 px-1.5 py-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                <Badge variant="outline" className="text-[9px] font-bold border-warning text-warning-foreground bg-warning-soft gap-1 px-1.5 py-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-warning-foreground animate-pulse" />
                   Local
                 </Badge>
               ) : (
-                <Badge variant="outline" className="text-[9px] font-bold border-emerald-300 text-emerald-700 bg-emerald-50 gap-1 px-1.5 py-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <Badge variant="outline" className="text-[9px] font-bold border-primary/40 text-primary bg-primary/10 gap-1 px-1.5 py-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   R2
                 </Badge>
               )}
@@ -393,7 +416,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               "flex items-center gap-1 px-2 py-1 rounded-md bg-muted/60 border border-dashed border-border text-[10px] font-bold text-muted-foreground cursor-pointer hover:bg-muted hover:border-primary/40 transition-all",
               uploading && "opacity-50 pointer-events-none"
             )}>
-              <UploadSimple size={12} weight="bold" className="text-primary" />
+              <UploadSimple size={12} weight="bold" className="text-muted-foreground" />
               {uploading ? '...' : 'Adjuntar'}
               <input
                 type="file" accept="image/*,application/pdf" className="hidden"
@@ -416,6 +439,32 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           )}
         </div>
       </div>
+
+      {detalleAbierto && (
+        <div className="rounded-lg bg-muted/50 p-3 flex flex-col gap-3">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+            {detalles.map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="font-semibold text-muted-foreground">{k}</dt>
+                <dd className="font-bold text-foreground break-words text-right">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {m.comprobante_url && comprobanteDisplayUrl && !isPdf && (
+            <a href={fileUrl} target="_blank" rel="noreferrer" title="Abrir comprobante" className="block">
+              <img src={comprobanteDisplayUrl} alt="Comprobante" className="w-full max-h-64 object-contain rounded-md border border-border bg-card" />
+            </a>
+          )}
+          {m.comprobante_url && isPdf && (
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary flex items-center gap-1.5">
+              <Paperclip size={14} /> Abrir comprobante (PDF)
+            </a>
+          )}
+          {!m.comprobante_url && admiteComprobante && (
+            <span className="text-[11px] text-muted-foreground">Sin comprobante adjunto.</span>
+          )}
+        </div>
+      )}
 
       {m.anulado && (
         <span className="text-[10px] text-destructive font-medium italic truncate pl-11">

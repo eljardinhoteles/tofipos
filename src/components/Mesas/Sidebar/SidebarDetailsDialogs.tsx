@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, CircleNotch } from '@phosphor-icons/react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,11 +10,12 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { SubcuentaChips } from './habitacion/SubcuentaChips';
+import { HabitacionOpcion } from './habitacion/HabitacionOpcion';
 
 interface RoomChargeDialogProps {
   opened: boolean;
   onOpenChange: (open: boolean) => void;
-  folio?: number;
+  folio?: number | string;
   cuentas: any[];
   mesas: any[];
   procesando: boolean;
@@ -52,40 +53,15 @@ function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onCon
         </DialogHeader>
 
         <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
-          {cuentas.map((cuenta) => {
-            const roomMesa = mesas.find((m) => m.id === cuenta.mesa_id);
-            const fullName = roomMesa?.nombre || cuenta.mesa_id;
-            const roomNum = fullName.match(/Hab\.\s*(\d+)/)?.[1] || fullName.split('')[0];
-            const roomType = fullName.match(/\(([^)]+)\)/)?.[1] || '';
-            const isSelected = cuentaId === cuenta.id;
-
-            return (
-              <button
-                key={cuenta.id}
-                type="button"
-                onClick={() => { setCuentaId(cuenta.id); setSubcuentaId(null); }}
-                className={cn('flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none',
-                  isSelected ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card')}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={cn('w-10 h-10 rounded-xl flex flex-col items-center justify-center font-black text-sm shrink-0 leading-none',
-                    isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
-                    <span className="text-[9px] uppercase font-extrabold opacity-70">HAB</span>
-                    <span>{roomNum}</span>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-extrabold text-sm text-foreground truncate">{cuenta.huesped}</span>
-                    {roomType && <span className="text-xs font-semibold text-muted-foreground truncate">{roomType}</span>}
-                  </div>
-                </div>
-                {isSelected && (
-                  <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-sm">
-                    <Check size={14} weight="bold" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
+          {cuentas.map((cuenta) => (
+            <HabitacionOpcion
+              key={cuenta.id}
+              mesaNombre={mesas.find((m) => m.id === cuenta.mesa_id)?.nombre}
+              huesped={cuenta.huesped}
+              seleccionada={cuentaId === cuenta.id}
+              onSelect={() => { setCuentaId(cuenta.id); setSubcuentaId(null); }}
+            />
+          ))}
         </div>
 
         {subs.length > 0 && (
@@ -145,7 +121,7 @@ export function DividirMesaDialog({ opened, onOpenChange, procesando, onConfirm 
 interface CambiarMesaDialogProps {
   opened: boolean;
   onOpenChange: (open: boolean) => void;
-  folio?: number;
+  folio?: number | string;
   mesas: any[];
   seleccionada: any | null;
   onSelect: (mesa: any) => void;
@@ -245,11 +221,11 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
         <DialogHeader className="text-left">
           <DialogTitle className="font-extrabold text-base">Anticipo de la mesa</DialogTitle>
           <DialogDescription className="text-sm">
-            Disponible: <span className="font-black text-sky-700">{fmt(disponible)}</span>. Detalle tomado del registro en Centro de Ventas.
+            Disponible: <span className="font-black text-info-foreground">{fmt(disponible)}</span>. Detalle tomado del registro en Centro de Ventas.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 max-h-[55vh] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-3 max-h-[55dvh] overflow-y-auto pr-1">
           {ventas.map(({ venta, disponible: dispV }) => {
             const movs = [...(venta.movimientos ?? [])]
               .filter((m: any) => !m.anulado && (m.tipo === 'pago' || m.tipo === 'reembolso' || (m.tipo === 'comentario' && m.motivo?.startsWith('Anticipo aplicado: $') && !m.motivo.startsWith('Anticipo aplicado: $0.00'))))
@@ -258,7 +234,7 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
               <div key={venta.id} className="rounded-xl border border-border overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/60">
                   <span className="text-xs font-extrabold text-foreground truncate">{venta.referencia || 'Venta'}</span>
-                  <span className="text-xs font-black text-sky-700 shrink-0">{fmt(dispV)}</span>
+                  <span className="text-xs font-black text-info-foreground shrink-0">{fmt(dispV)}</span>
                 </div>
                 <div className="flex flex-col divide-y divide-border">
                   {movs.map((m: any) => {
@@ -278,7 +254,7 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
                             {esPago && m.transferencia_referencia ? ` · Ref. ${m.transferencia_referencia}` : ''}
                           </span>
                         </div>
-                        <span className={cn('text-sm font-black shrink-0', esPago ? 'text-emerald-600' : 'text-muted-foreground')}>
+                        <span className={cn('text-sm font-black shrink-0', esPago ? 'text-foreground' : 'text-muted-foreground')}>
                           {esPago ? '+' : '−'}{fmt(esPago || esDevolucion ? (m.monto ?? 0) : Number(/\$([\d.]+)/.exec(m.motivo ?? '')?.[1] ?? 0))}
                         </span>
                       </div>

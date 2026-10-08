@@ -11,6 +11,8 @@ interface UIContextType {
   setSelectedConfigPiso: (piso: string | null) => void;
   mesaView: 'mapa' | 'productos';
   setMesaView: (view: 'mapa' | 'productos') => void;
+  actividadOpen: boolean;
+  setActividadOpen: (open: boolean) => void;
   confirmModal: {
     opened: boolean;
     title: string;
@@ -65,6 +67,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [configView, setConfigView] = useState<'none' | 'pisos' | 'mesas' | 'nueva_mesa'>('none');
   const [selectedConfigPiso, setSelectedConfigPiso] = useState<string | null>(null);
   const [mesaView, setMesaView] = useState<'mapa' | 'productos'>('mapa');
+  const [actividadOpen, setActividadOpen] = useState(false);
   const [checkoutView, setCheckoutView] = useState(false);
   const [viewingComandaId, setViewingComandaId] = useState<string | null>(null);
   const [activeSubcomandaId, setActiveSubcomandaId] = useState<string | null>(null);
@@ -114,8 +117,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   };
 
   const assignModalRef = React.useRef<((reservaId: string) => void) | null>(null);
-  const registerAssignModal = (fn: (reservaId: string) => void) => { assignModalRef.current = fn; };
-  const openAssignModal = (reservaId: string) => { assignModalRef.current?.(reservaId); };
+  const registerAssignModal = React.useCallback((fn: (reservaId: string) => void) => { assignModalRef.current = fn; }, []);
+  const openAssignModal = React.useCallback((reservaId: string) => { assignModalRef.current?.(reservaId); }, []);
 
   useEffect(() => {
     localStorage.setItem('pos_sidebar_pinned', isPinned.toString());
@@ -132,6 +135,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       setSelectedConfigPiso,
       mesaView,
       setMesaView,
+      actividadOpen,
+      setActividadOpen,
       confirmModal,
       openConfirm,
       closeConfirm,
@@ -161,7 +166,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       selectedMesaEsHabitacion,
       setSelectedMesaEsHabitacion,
   }), [
-      isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, confirmModal,
+      isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, actividadOpen, confirmModal,
       promptModal, checkoutView, viewingComandaId, activeSubcomandaId, reservaView, selectedReservaId,
       reservaProductosComandaId, nuevaReservaPreset, menuView, selectedMenuProductId,
       selectedMesaEsHabitacion

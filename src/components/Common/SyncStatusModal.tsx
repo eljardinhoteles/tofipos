@@ -19,13 +19,14 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetFooter,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+  Drawer,
+  DrawerPortal,
+  DrawerOverlay,
+  DrawerContent,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerHandle,
+} from '@/components/ui/drawer';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const COLLECTION_LABELS: Record<string, string> = {
@@ -77,7 +78,7 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
   const filaEstado = (ok: boolean | null, okLabel: string, badLabel: string) => (
     <span className={cn(
       "px-2.5 py-1 rounded-full text-[11px] font-bold",
-      ok === null ? "bg-muted text-muted-foreground" : ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+      ok === null ? "bg-muted text-muted-foreground" : ok ? "bg-muted text-muted-foreground" : "bg-destructive/15 text-destructive"
     )}>
       {ok === null ? 'Verificando' : ok ? okLabel : badLabel}
     </span>
@@ -89,12 +90,12 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
       <div className={cn(
         "rounded-2xl border px-3.5 py-2.5 flex items-center gap-3",
         todoOk
-          ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-          : "bg-red-50 border-red-200 text-red-900"
+          ? "bg-muted border-border text-muted-foreground"
+          : "bg-destructive/10 border-destructive/25 text-destructive"
       )}>
         <span className={cn(
           "shrink-0",
-          todoOk ? "text-emerald-600" : "text-red-600"
+          todoOk ? "text-primary" : "text-destructive"
         )}>
           {!status.online ? <WifiSlash size={20} weight="bold" />
             : status.hasError ? <XCircle size={20} weight="bold" />
@@ -136,7 +137,7 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
             </div>
             <span className={cn(
               "px-2.5 py-1 rounded-full text-[11px] font-bold tabular-nums",
-              pendientes > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+              pendientes > 0 ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"
             )}>
               {pendientes}
             </span>
@@ -148,19 +149,19 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
       {collectionEntries.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <span className="px-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Colecciones</span>
-          <div className="rounded-2xl bg-muted/50 divide-y divide-border/60">
+          <div className="rounded-2xl bg-muted/50 grid grid-cols-1 sm:grid-cols-2 sm:gap-x-px">
             {collectionEntries.map(([key, col]) => (
-              <div key={key} className="flex items-center justify-between px-3.5 py-2.5">
+              <div key={key} className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className={cn(
                     "w-2 h-2 rounded-full shrink-0",
-                    col.error ? "bg-red-500" : col.stopped ? "bg-amber-500" : col.active ? "bg-emerald-500" : "bg-muted-foreground/40"
+                    col.error ? "bg-destructive" : col.stopped ? "bg-warning-foreground" : col.active ? "bg-primary" : "bg-muted-foreground/40"
                   )} />
                   <span className="text-sm font-semibold text-foreground truncate">{COLLECTION_LABELS[key] || key}</span>
                 </div>
                 <span className={cn(
                   "text-[11px] font-bold",
-                  col.error ? "text-red-600" : col.stopped ? "text-amber-600" : col.active ? "text-emerald-600" : "text-muted-foreground"
+                  col.error ? "text-destructive" : col.stopped ? "text-warning-foreground" : col.active ? "text-primary" : "text-muted-foreground"
                 )}>
                   {col.error ? 'Error' : col.stopped ? 'Detenido' : col.active ? 'Activo' : 'En espera'}
                 </span>
@@ -197,45 +198,48 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
     </>
   );
 
-  // Móvil: bottom sheet (sube desde abajo, junto al botón de sync); escritorio: diálogo.
+  // Móvil: panel que sube desde abajo y se cierra arrastrando la manija hacia
+  // abajo (vaul, igual que el resto de paneles); escritorio: diálogo.
   if (isMobile) {
     return (
-      <Sheet open={opened} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent
-          side="bottom"
-          showCloseButton={false}
-          className="gap-0 p-0 rounded-t-3xl h-[85dvh] max-h-[92dvh]">
-          <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-border shrink-0" />
-          <SheetHeader className="px-4 pt-3 pb-3 shrink-0">
-            <SheetTitle className="sr-only">Estado de Sincronización</SheetTitle>
-            <SheetDescription className="sr-only">
+      <Drawer open={opened} onOpenChange={(open) => { if (!open) onClose(); }} dismissible handleOnly>
+        <DrawerPortal>
+          <DrawerOverlay />
+          <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95dvh] max-h-[95dvh] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+            <DrawerHandle />
+            <DrawerTitle className="sr-only">Estado de Sincronización</DrawerTitle>
+            <DrawerDescription className="sr-only">
               Estado de la conexión y sincronización de datos con Supabase
-            </SheetDescription>
-            {estadoGeneral}
-          </SheetHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-            {cuerpo}
-          </div>
-          <SheetFooter className="mt-0 flex-row gap-2 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] border-t border-border shrink-0">
-            {acciones}
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+            </DrawerDescription>
+            <div className="px-4 pt-7 pb-3 shrink-0">{estadoGeneral}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+              {cuerpo}
+            </div>
+            <div className="flex flex-row gap-2 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] border-t border-border shrink-0">
+              {acciones}
+            </div>
+          </DrawerContent>
+        </DrawerPortal>
+      </Drawer>
     );
   }
 
   return (
     <Dialog open={opened} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-sm gap-4">
-        <DialogHeader>
+      {/* Alto acotado al viewport: cabecera y pie fijos, solo el cuerpo hace scroll,
+          así "Cerrar" y "Forzar Resync" siempre quedan a la vista. */}
+      <DialogContent className="max-w-md max-h-[85dvh] gap-0 p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3 shrink-0">
           <DialogTitle>Estado de Sincronización</DialogTitle>
           <DialogDescription className="sr-only">
             Estado de la conexión y sincronización de datos con Supabase
           </DialogDescription>
         </DialogHeader>
-        {estadoGeneral}
-        {cuerpo}
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+        <div className="px-5 pb-3 shrink-0">{estadoGeneral}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 flex flex-col gap-4">
+          {cuerpo}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-card shrink-0">
           {acciones}
         </div>
       </DialogContent>

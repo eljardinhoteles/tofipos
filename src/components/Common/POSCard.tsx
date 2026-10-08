@@ -44,7 +44,7 @@ export const POSCard = memo(function POSCard({
  {ivaLabel && (
  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{ivaLabel}</span>
  )}
- <span className="font-black text-lg text-primary">{amount}</span>
+ <span className="font-black text-lg text-foreground">{amount}</span>
  </div>
  )}
  </div>

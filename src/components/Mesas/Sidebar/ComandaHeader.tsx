@@ -25,14 +25,14 @@ interface ComandaHeaderProps {
 export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
   return (
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
- enCuenta?"md:bg-orange-600 md:text-white":"md:bg-primary md:text-primary-foreground")}>
+ enCuenta?"md:bg-warning-foreground md:text-white":"md:bg-primary md:text-primary-foreground")}>
  <div className="flex items-center gap-3">
  <button
  type="button"
  title="Cambiar mesa"
  onClick={onCambiarMesa}
  className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
- enCuenta?"bg-orange-600 text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
+ enCuenta?"bg-warning-foreground text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
  {mesaNombre.replace(/^Mesa\s*/i,'')}
  </button>
  <div className="flex flex-col">
@@ -45,7 +45,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  </span>
  {linkedMesa && (
  <span className={cn("flex items-center gap-1 w-fit px-1.5 py-0.5 rounded-md text-[10px] font-extrabold",
- enCuenta?"bg-orange-600/10 text-orange-600 md:bg-white/20 md:text-white":"bg-primary/10 text-primary md:bg-primary-foreground/20 md:text-primary-foreground")}>
+ enCuenta?"bg-warning-foreground/10 text-warning-foreground md:bg-white/20 md:text-white":"bg-primary/10 text-primary md:bg-primary-foreground/20 md:text-primary-foreground")}>
  <Bed size={11} weight="fill"/>
  Hab. {linkedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || linkedMesa.nombre}
  </span>

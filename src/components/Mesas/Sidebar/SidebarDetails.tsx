@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
+import { folioLabel } from '../../../lib/folio';
 import { X, Plus, Printer, Check, CaretDown } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
@@ -7,7 +8,7 @@ import { SidebarComandaIvaModal } from'./SidebarComandaIvaModal';
 import { useRxClientes } from'../../../hooks/useRxClientes';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SidebarPagosModal } from'./SidebarPagosModal';
-import { SidebarCloseCuentaModal } from'./SidebarCloseCuentaModal';
+import { SidebarCobrarCuenta } from'./SidebarCobrarCuenta';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
@@ -21,14 +22,16 @@ import { deltaGrupo, mergeItemsCocina } from'../../../lib/kitchenDelta';
 import { ItemActionsPanel } from'./ItemActionsPanel';
 import { ComandaItemsList, TodasList } from'./ComandaItemsList';
 import { ComandaTotales } from'./ComandaTotales';
-import { calcularAnticipoMesa, esVentaDividida, repartirAnticipo, textoAplicado, tieneAnticipoAplicado } from'../../../lib/anticipoMesa';
+import { calcularAnticipoMesa, esVentaDividida, repartirAnticipo, textoAplicado, tieneAnticipoAplicado, ajusteNecesario, textoCuentaCerrada } from'../../../lib/anticipoMesa';
 import { useComandaLive } from'../../../hooks/useComandaLive';
 import { ComandaHeader } from'./ComandaHeader';
 import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
 import { ComandaAcciones } from'./ComandaAcciones';
 import { RoomChargeDialog, DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
-import { queueKitchenPrint, queueReceiptPrint } from'../../../lib/printServerClient';
-import { generarPrecuenta } from'../../../services/printTemplateEngine';
+import { queueKitchenPrint, queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
+import { esParteRepartida } from'../../../lib/reparto';
+import { repartirItemEntreSubcomandas, deshacerRepartoItem } from'../../../db/rxdb';
+import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
 import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
@@ -120,9 +123,31 @@ export function SidebarDetails({
  showToast.error('No se pudo mover', e instanceof Error ? e.message : undefined);
  }
  };
+ const handleRepartirItem = async (destIds: string[], cantidad: number) => {
+ if (!editingItem) return;
+ try {
+ await repartirItemEntreSubcomandas(editingItem.id, destIds, cantidad);
+ setEditingItem(null);
+ showToast.success('Valor repartido', `Entre ${destIds.length} cuenta${destIds.length === 1 ? '' : 's'}.`);
+ } catch (e) {
+ showToast.error('No se pudo repartir', e instanceof Error ? e.message : undefined);
+ }
+ };
+ const handleDeshacerReparto = async () => {
+ if (!editingItem) return;
+ try {
+ await deshacerRepartoItem(editingItem.id);
+ setEditingItem(null);
+ showToast.success('Reparto deshecho');
+ } catch (e) {
+ showToast.error('No se pudo deshacer', e instanceof Error ? e.message : undefined);
+ }
+ };
  const { currentMesero } = useAuth();
  const [showPagosModal, setShowPagosModal] = useState(false);
 
+ // Org activa: se lee una sola vez (localStorage es síncrono y se repetía en cada cobro).
+ const orgIdLocal = useMemo(() => localStorage.getItem('pos_active_org_id') || '', []);
  const [closeCuentaModalOpen, setCloseCuentaModalOpen] = useState(false);
  // Evita dobles clics mientras cierran cuenta / cargan a habitación: el
  // proceso tarda unos segundos (escrituras + liberar mesa) antes de cerrar el
@@ -166,13 +191,15 @@ export function SidebarDetails({
  // después de esa confirmación (aún no enviados) siguen libres. Un ítem ya
  // anulado no cuenta como "bloqueado": es un estado terminal propio.
  const esItemBloqueado = (item: any) =>
+ // Una parte repartida nunca se edita ni se borra suelta: solo se deshace el reparto.
+ (esParteRepartida(item) && !item?.anulado) ||
  !!activeComanda?.confirmada &&
  !!activeComanda?.confirmada_at &&
  !!item?.created_at &&
  item.created_at <= activeComanda.confirmada_at &&
  !item?.anulado;
 
- const handleUpdateItem = async (cantidad: number) => {
+ const handleUpdateItem = async (cantidad: number, precio?: number) => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
  showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
@@ -184,7 +211,7 @@ export function SidebarDetails({
  setEditingItem(null);
  return;
  }
- await updateRxComandaItem(editingItem.id, { cantidad });
+ await updateRxComandaItem(editingItem.id, precio !== undefined && editingMenuItem?.precio_variable ? { cantidad, precio } : { cantidad });
 
  // Nota: ya no se resetea `confirmada` aquí. Este punto solo se alcanza
  // para ítems SIN bloquear (nuevos, no enviados aún a cocina) — editarlos
@@ -469,23 +496,31 @@ export function SidebarDetails({
  } catch { return {}; }
  }, [activeComanda?.cantidades_snapshot]);
 
+ // Lo que cocina debe ver: sin las partes repartidas (son valor, no platos).
+ const itemsCocina = useMemo(() => comandaItems.filter((i: any) => !esParteRepartida(i)), [comandaItems]);
+
+ // Una subcomanda que solo tiene partes de un reparto de valor no tiene nada que
+ // enviar a cocina: cuenta como confirmada para poder pedir la cuenta.
+ const soloPartesRepartidas = comandaItems.length > 0 && itemsCocina.length === 0;
+ const confirmadaEfectiva = !!activeComanda?.confirmada || soloPartesRepartidas;
+
  const itemsRealmenteNuevos = useMemo(() => activeComanda?.confirmada_at
- ? comandaItems.filter(item =>
+ ? itemsCocina.filter(item =>
  item.created_at && item.created_at > activeComanda.confirmada_at
  )
- : [], [activeComanda?.confirmada_at, comandaItems]);
+ : [], [activeComanda?.confirmada_at, itemsCocina]);
 
  const itemsConCantidadExtra = useMemo(() => {
  if (!activeComanda?.confirmada_at) return [];
  const res: any[] = [];
- for (const item of comandaItems) {
+ for (const item of itemsCocina) {
  const cantConfirmada = cantidadesSnapshot[item.id];
  if (cantConfirmada !== undefined && item.cantidad > cantConfirmada) {
  res.push({ ...item, cantidad: item.cantidad - cantConfirmada });
  }
  }
  return res;
- }, [activeComanda?.confirmada_at, comandaItems, cantidadesSnapshot]);
+ }, [activeComanda?.confirmada_at, itemsCocina, cantidadesSnapshot]);
 
  const itemsNuevos = useMemo(() => [...itemsRealmenteNuevos, ...itemsConCantidadExtra], [itemsRealmenteNuevos, itemsConCantidadExtra]);
  const hayItemsNuevos = itemsNuevos.length > 0;
@@ -502,10 +537,10 @@ export function SidebarDetails({
  // como sección final del próximo ticket de Adicional que se imprima (no
  // disparan una impresión aparte solo por anularse).
  const itemsAnuladosDesdeUltimaConfirmacion = useMemo(() => activeComanda?.confirmada_at
- ? comandaItems.filter(item =>
+ ? itemsCocina.filter(item =>
  item.anulado && item.anulado_at && item.anulado_at > activeComanda.confirmada_at
  )
- : [], [activeComanda?.confirmada_at, comandaItems]);
+ : [], [activeComanda?.confirmada_at, itemsCocina]);
 
  const kitchenGrupo = useMemo(
  () => (grupo ? deltaGrupo(grupo.comandas, grupo.items) : null),
@@ -513,13 +548,13 @@ export function SidebarDetails({
  );
  const nuevosCocina = kitchenGrupo ? kitchenGrupo.nuevos : itemsNuevos;
  const hayNuevosCocina = kitchenGrupo ? kitchenGrupo.nuevos.length > 0 : hayItemsNuevos;
- const hayConfirmadaCocina = kitchenGrupo ? kitchenGrupo.algunaConfirmada : !!activeComanda?.confirmada;
- const sinItemsCocina = kitchenGrupo ? kitchenGrupo.vivos.length === 0 : comandaItems.length === 0;
+ const hayConfirmadaCocina = kitchenGrupo ? kitchenGrupo.algunaConfirmada : confirmadaEfectiva;
+ const sinItemsCocina = kitchenGrupo ? kitchenGrupo.vivos.length === 0 : itemsCocina.length === 0;
  // Sin ningún ítem en toda la mesa (en mesa múltiple, en ninguna subcomanda):
  // "Anular" pasa a ser "Cerrar mesa", sin motivo.
  const mesaSinItems = kitchenGrupo
  ? kitchenGrupo.vivos.length === 0
- : !comandaItems.some((i: any) => !i.anulado);
+ : !itemsCocina.some((i: any) => !i.anulado);
 
  // Mesa Múltiple: un solo ticket a cocina con lo pendiente de TODAS las
  // subcomandas (ítems iguales juntos, sin nombres de subcomanda).
@@ -564,7 +599,7 @@ export function SidebarDetails({
  const handlePrintPrecuenta = () => {
  const content = generarPrecuenta(
  activeComanda,
- comandaItems,
+ itemsCocina,
  selectedMesa.nombre,
  ivaPorcentaje,
  [...pagos, ...pagosDeVentas],
@@ -575,7 +610,7 @@ export function SidebarDetails({
  setPreviewOnPrint(() => () => {
  queueReceiptPrint({
  comanda: activeComanda,
- items: comandaItems,
+ items: itemsCocina,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
  pagos: [...pagos, ...pagosDeVentas],
@@ -590,7 +625,7 @@ export function SidebarDetails({
  if (!activeComanda?.confirmada) {
  const ahora = new Date().toISOString();
  const snapshot = Object.fromEntries(
- comandaItems.map(item => [item.id, item.cantidad])
+ itemsCocina.map(item => [item.id, item.cantidad])
  );
  await updateRxComanda(activeComanda.id, {
  confirmada: true,
@@ -599,7 +634,7 @@ export function SidebarDetails({
  });
  const content = generarComandaCocina(
  activeComanda,
- withBebida(comandaItems),
+ withBebida(itemsCocina),
  selectedMesa.nombre,
  false,
  linkedMesa?.nombre
@@ -609,7 +644,7 @@ export function SidebarDetails({
  setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
- items: withBebida(comandaItems),
+ items: withBebida(itemsCocina),
  mesaNombre: selectedMesa.nombre,
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
@@ -630,7 +665,7 @@ export function SidebarDetails({
  setPreviewContent(content);
  setPreviewTitle(`Adicional Cocina - ${selectedMesa.nombre}`);
  const nuevoSnapshot = Object.fromEntries(
- comandaItems.map(item => [item.id, item.cantidad])
+ itemsCocina.map(item => [item.id, item.cantidad])
  );
  await updateRxComanda(activeComanda.id, {
  confirmada_at: new Date().toISOString(),
@@ -650,7 +685,7 @@ export function SidebarDetails({
  } else {
  const content = generarComandaCocina(
  activeComanda,
- withBebida(comandaItems),
+ withBebida(itemsCocina),
  selectedMesa.nombre,
  false,
  linkedMesa?.nombre,
@@ -662,7 +697,7 @@ export function SidebarDetails({
  setPreviewOnPrint(() => () => {
  queueKitchenPrint({
  comanda: activeComanda,
- items: withBebida(comandaItems),
+ items: withBebida(itemsCocina),
  mesaNombre: selectedMesa.nombre,
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
@@ -683,14 +718,15 @@ export function SidebarDetails({
 
  // Hooks antes de cualquier return anticipado. Callback estable para las listas memoizadas (el prop llega como función inline).
  const onSelectSubRef = useRef(onSelectSubcomanda);
- onSelectSubRef.current = onSelectSubcomanda;
+ // La ref se actualiza en un efecto (no durante el render).
+ useEffect(() => { onSelectSubRef.current = onSelectSubcomanda; });
  const handleSelectSubcomanda = useCallback((id: string) => onSelectSubRef.current?.(id), []);
 
  // "Cambiar cliente" es una página dentro del mismo sheet, no un modal.
  if (changeClienteModal) {
  return (
  <SidebarCambiarCliente
- folio={activeComanda?.folio}
+ folio={folioLabel(activeComanda)}
  mesaNombre={selectedMesa.nombre}
  nombre={changeClienteName}
  onNombreChange={setChangeClienteName}
@@ -728,6 +764,185 @@ export function SidebarDetails({
  }
  };
 
+
+ // Cobro de la cuenta (página "Cobrar"). `imprimir` envía el recibo al cerrar.
+ const handleConfirmarCobro = async (imprimir: boolean) => {
+ if (!activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoCierre(true);
+ try {
+ // Anticipo de la mesa: se usa (cubre parte o todo el saldo) o se ignora y
+ // se cobra todo aparte. Todo se registra en la MISMA venta del anticipo.
+ const hayAnticipo = anticipo.disponible > 0.001;
+ const aplica = hayAnticipo ? anticipoUsar : 0;
+
+ if (saldoPendiente > 0.01 || hayAnticipo) {
+ await updateRxComanda(activeComanda.id, {
+ total: total,
+ updated_at: new Date().toISOString(),
+ confirmada: true,
+ estado: activeComanda.estado ==='cuenta'?'cuenta': activeComanda.estado,
+ _modified: new Date().toISOString(),
+ });
+ // Sin método: se define después al anclar en Centro de Ventas.
+ // Aislado en su propio try/catch: si registrar el saldo en la venta
+ // falla (p.ej. la venta no se sincronizó todavía), NO debe bloquear
+ // el cierre de la comanda ni la liberación de la mesa más abajo —
+ // eso es lo operativamente crítico, el ajuste se puede corregir
+ // después a mano en Centro de Ventas.
+ try {
+ if (hayAnticipo) {
+ const ventaBase = anticipo.ventas[0].venta;
+ // Lo que se usa del anticipo queda anotado (movimiento neutro) en la
+ // venta que lo contiene, para que las otras cuentas de la mesa vean
+ // el disponible real.
+ for (const parte of repartirAnticipo(anticipo, aplica)) {
+ await agregarVentaMovimiento({
+ venta_id: parte.ventaId,
+ tipo:'comentario',
+ motivo: textoAplicado(parte.monto, folioLabel(activeComanda)),
+ });
+ }
+ // Si el anticipo de ESTA comanda queda sin usar (total o parcialmente),
+ // se deja la marca igual para que siga disponible para las otras cuentas
+ // de la mesa cuando esta comanda ya esté cerrada.
+ const conParte = new Set(repartirAnticipo(anticipo, aplica).map(p => p.ventaId));
+ for (const { venta } of anticipo.ventas) {
+ if (venta.comanda_id === activeComanda.id && !conParte.has(venta.id) && !tieneAnticipoAplicado(venta)) {
+ await agregarVentaMovimiento({ venta_id: venta.id, tipo:'comentario', motivo: textoAplicado(0, folioLabel(activeComanda)) });
+ }
+ }
+ // El consumo de esta cuenta ya está en el cargo de la venta (p. ej. los
+ // $200 de la reserva): lo que se cobra ahora NO sube el valor de la venta,
+ // se paga contra ese mismo cargo. Solo si el consumo acumulado lo supera
+ // se agrega la diferencia.
+ const extra = ajusteNecesario(ventaBase, saldoPendiente);
+ if (extra > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaBase.id,
+ tipo:'ajuste',
+ monto: extra,
+ motivo:'Ajuste al cerrar cuenta (consumo mayor al cargo de la venta)',
+ });
+ }
+ if (saldoPendiente > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaBase.id,
+ tipo:'comentario',
+ motivo: textoCuentaCerrada(saldoPendiente, folioLabel(activeComanda)),
+ });
+ }
+ // Lo que no se use queda a favor de la mesa en la misma venta (no hay
+ // vuelto: no se devuelve nada al cerrar).
+ } else if (ventaVigente) {
+ // Ya existe una venta sobre esta comanda — se completa esa misma venta
+ // en vez de crear una paralela. El saldo pendiente queda como 'ajuste'
+ // (no se auto-cobra con un 'pago'; el cobro real se ancla después en
+ // Centro de Ventas). Se agrega directamente `saldoPendiente`, que ya
+ // descuenta los cobros de división (ver `totalPagadoVentas`).
+ if (saldoPendiente > 0.001) {
+ const extra = ajusteNecesario(ventaVigente, saldoPendiente);
+ if (extra > 0.001) {
+ await agregarVentaMovimiento({
+ venta_id: ventaVigente.id,
+ tipo:'ajuste',
+ monto: extra,
+ motivo:'Ajuste al cerrar cuenta (consumo mayor al cargo de la venta)',
+ });
+ }
+ await agregarVentaMovimiento({
+ venta_id: ventaVigente.id,
+ tipo:'comentario',
+ motivo: textoCuentaCerrada(saldoPendiente, folioLabel(activeComanda)),
+ });
+ }
+ } else {
+ await createRxVenta({
+ id: crypto.randomUUID(),
+ origen:'mesa',
+ tipo:'directa',
+ cliente_id: activeComanda.cliente_id || undefined,
+ cliente_nombre: closePayerName?.trim() || activeComanda.cliente || undefined,
+ referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)}`,
+ comanda_id: activeComanda.id,
+ organization_id: activeComanda.organization_id || orgIdLocal,
+ }, saldoPendiente);
+ }
+ } catch (ventaError) {
+ console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
+ showToast.error('Aviso','La cuenta se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
+ }
+ }
+
+ 
+ // El total y el nombre de quien paga se guardan SIEMPRE al cerrar (no solo
+ // en una rama): una subcomanda pagada con parte del anticipo quedaba en el
+ // historial con valor 0 y sin datos.
+ await updateRxComanda(activeComanda.id, {
+ estado:'cerrado',
+ mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
+ total: total,
+ cliente: closePayerName?.trim() || activeComanda.cliente || undefined,
+ confirmada: true,
+ });
+
+ await liberarMesaSiSinOperativas(activeComanda.mesa_id);
+
+ // Recibo de cierre: nunca bloquea el cobro (si el servidor de impresión
+ // falla, la cuenta ya quedó cerrada y se puede reimprimir desde Órdenes).
+ if (imprimir) {
+ try {
+ const fecha = new Date().toISOString();
+ const orgId = activeComanda.organization_id || orgIdLocal;
+ const pagosRecibo: any[] = [...pagos, ...pagosDeVentas];
+ if (aplica > 0.001) pagosRecibo.push({ id: crypto.randomUUID(), comanda_id: activeComanda.id, monto: aplica, fecha, organization_id: orgId, tipo_division: 'Anticipo aplicado' });
+ const cobradoAhora = Math.max(0, saldoPendiente - aplica);
+ if (cobradoAhora > 0.001) pagosRecibo.push({ id: crypto.randomUUID(), comanda_id: activeComanda.id, monto: cobradoAhora, fecha, organization_id: orgId });
+ const rawText = generarTicketPago(activeComanda, comandaItems as any, pagosRecibo, selectedMesa.nombre, ivaPorcentaje, undefined, linkedMesa?.nombre);
+ await queueReprintTicket({ rawText, mesaNombre: selectedMesa.nombre, comanda: activeComanda });
+ showToast.success('Cuenta cobrada', `Recibo enviado a imprimir · ${selectedMesa.nombre}`);
+ } catch (err) {
+ console.warn('No se pudo enviar el recibo a imprimir', err);
+ showToast.warning('Cuenta cobrada', 'No se pudo enviar el recibo a la impresora.');
+ }
+ } else {
+ showToast.success('Cuenta cobrada', selectedMesa.nombre);
+ }
+
+ setCloseCuentaModalOpen(false);
+ onResuelta();
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error','Hubo un error al cerrar la cuenta.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoCierre(false);
+ }
+ };
+ if (closeCuentaModalOpen) {
+ return (
+ <SidebarCobrarCuenta
+ folio={folioLabel(activeComanda)}
+ mesaNombre={selectedMesa.nombre}
+ subtotal={subtotal}
+ iva={ivaCalculado}
+ ivaPorcentaje={ivaPorcentaje}
+ total={total}
+ totalPagado={totalPagado}
+ saldoPendiente={saldoPendiente}
+ anticipo={anticipo.disponible}
+ anticipoUsar={anticipoUsar}
+ onAnticipoUsarChange={setAnticipoUsarInput}
+ ultimaCuentaDeMesa={comandasOperativasMesa.filter((id: string) => id !== activeComanda?.id).length === 0}
+ closePayerName={closePayerName}
+ setClosePayerName={setClosePayerName}
+ procesando={procesandoCierre}
+ onBack={() => setCloseCuentaModalOpen(false)}
+ onConfirm={handleConfirmarCobro}
+ />
+ );
+ }
+
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
  {/* Header — en desktop el fondo completo toma el color de estado (verde/naranja);
@@ -736,7 +951,7 @@ export function SidebarDetails({
  <ComandaHeader
  mesaNombre={selectedMesa.nombre}
  titulo={vistaTodas ?'Toda la mesa': (activeComanda?.cliente ||'Público General')}
- subtitulo={vistaTodas ? `${gruposTodas.length} subcomandas` : `COMANDA #${activeComanda?.folio}`}
+ subtitulo={vistaTodas ? `${gruposTodas.length} subcomandas` : `COMANDA #${folioLabel(activeComanda)}`}
  enCuenta={activeComanda?.estado ==='cuenta'}
  linkedMesa={linkedMesa}
  puedeDividir={!!onActivarMultiple && !vistaTodas}
@@ -776,7 +991,7 @@ export function SidebarDetails({
 
  {/* Footer y Acciones */}
  {vistaTodas ? (
- <footer className="p-4 bg-card border-t border-border flex flex-col gap-3 shrink-0">
+ <footer className="p-4 bg-muted/40 border-t border-border flex flex-col gap-3 shrink-0">
  <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/60">
  <span className="text-base font-black text-foreground">Total mesa</span>
  <span className="text-xl font-black text-primary">${totalTodas.toFixed(2)}</span>
@@ -794,7 +1009,7 @@ export function SidebarDetails({
  </footer>
  ) : (
  <footer className={cn("relative p-4 flex flex-col gap-3 shrink-0",
- editingItem ?"bg-muted/50": "bg-card",
+ editingItem ?"bg-muted/70": "bg-muted/40",
  "border-t border-border",
  // Con el pill "Añadir" flotando sobre el borde, deja espacio para que no tape los totales.
  !editingItem && activeComanda?.estado !=='cuenta'&&"pt-6")}>
@@ -812,7 +1027,7 @@ export function SidebarDetails({
  <Button
  // Pill flotante: sale del flujo del footer y queda centrada sobre su borde
  // superior, así no ocupa una fila propia ni va a todo el ancho.
- className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-orange-500 hover:bg-orange-500 text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
  <Plus size={15} weight="bold"className="mr-1.5"/>
  Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}
@@ -844,7 +1059,7 @@ export function SidebarDetails({
  hayNuevosCocina={hayNuevosCocina}
  nuevosCocinaCount={nuevosCocina.length}
  sinItemsCocina={sinItemsCocina}
- confirmada={!!activeComanda?.confirmada}
+ confirmada={confirmadaEfectiva}
  sinProductos={comandaItems.length === 0}
  mesaSinItems={mesaSinItems}
  onConfirmarCocina={handleConfirmOrder}
@@ -896,8 +1111,11 @@ export function SidebarDetails({
  item={editingItem}
  confirmado={esItemBloqueado(editingItem)}
  destinos={activeComanda?.estado ==='cuenta'? [] : destinosMover.map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
+ destinosRepartir={destinosMover.filter((c: any) => c.estado !== 'cuenta').map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
  ocultarEstado={activeComanda?.estado ==='cuenta'}
+ cuentaPedida={activeComanda?.estado ==='cuenta'}
  tieneOpciones={!!editingMenuItem?.modificadores && editingMenuItem.modificadores.length > 0}
+ precioVariable={!!editingMenuItem?.precio_variable}
  onClose={() => setEditingItem(null)}
  onGuardar={handleUpdateItem}
  onEliminar={handleDeleteItem}
@@ -905,6 +1123,8 @@ export function SidebarDetails({
  onMover={handleMoverItem}
  onAnular={handleAnularItem}
  onCortesia={handleMarcarCortesia}
+ onRepartir={handleRepartirItem}
+ onDeshacerReparto={handleDeshacerReparto}
  />
  )}
  </footer>
@@ -931,131 +1151,11 @@ export function SidebarDetails({
  }}
  />
 
- <SidebarCloseCuentaModal
- opened={closeCuentaModalOpen}
- onClose={() => setCloseCuentaModalOpen(false)}
- saldoPendiente={saldoPendiente}
- anticipo={anticipo.disponible}
- anticipoUsar={anticipoUsar}
- onAnticipoUsarChange={setAnticipoUsarInput}
- closePayerName={closePayerName}
- setClosePayerName={setClosePayerName}
- procesando={procesandoCierre}
- onConfirm={async () => {
- if (!activeComanda || enCursoRef.current) return;
- enCursoRef.current = true;
- setProcesandoCierre(true);
- try {
- // Anticipo de la mesa: se usa (cubre parte o todo el saldo) o se ignora y
- // se cobra todo aparte. Todo se registra en la MISMA venta del anticipo.
- const hayAnticipo = anticipo.disponible > 0.001;
- const aplica = hayAnticipo ? anticipoUsar : 0;
- const cobrarAhora = Math.max(0, saldoPendiente - aplica);
-
- if (saldoPendiente > 0.01 || hayAnticipo) {
- await updateRxComanda(activeComanda.id, {
- total: total,
- updated_at: new Date().toISOString(),
- confirmada: true,
- estado: activeComanda.estado ==='cuenta'?'cuenta': activeComanda.estado,
- _modified: new Date().toISOString(),
- });
- // Sin método: se define después al anclar en Centro de Ventas.
- // Aislado en su propio try/catch: si registrar el saldo en la venta
- // falla (p.ej. la venta no se sincronizó todavía), NO debe bloquear
- // el cierre de la comanda ni la liberación de la mesa más abajo —
- // eso es lo operativamente crítico, el ajuste se puede corregir
- // después a mano en Centro de Ventas.
- try {
- if (hayAnticipo) {
- const ventaBase = anticipo.ventas[0].venta;
- // Lo que se usa del anticipo queda anotado (movimiento neutro) en la
- // venta que lo contiene, para que las otras cuentas de la mesa vean
- // el disponible real.
- for (const parte of repartirAnticipo(anticipo, aplica)) {
- await agregarVentaMovimiento({
- venta_id: parte.ventaId,
- tipo:'comentario',
- motivo: textoAplicado(parte.monto, activeComanda.folio),
- });
- }
- // Si el anticipo de ESTA comanda queda sin usar (total o parcialmente),
- // se deja la marca igual para que siga disponible para las otras cuentas
- // de la mesa cuando esta comanda ya esté cerrada.
- const conParte = new Set(repartirAnticipo(anticipo, aplica).map(p => p.ventaId));
- for (const { venta } of anticipo.ventas) {
- if (venta.comanda_id === activeComanda.id && !conParte.has(venta.id) && !tieneAnticipoAplicado(venta)) {
- await agregarVentaMovimiento({ venta_id: venta.id, tipo:'comentario', motivo: textoAplicado(0, activeComanda.folio) });
- }
- }
- // Lo que falta (o todo, si no se usa el anticipo) es un cobro nuevo
- // dentro de la misma venta.
- if (cobrarAhora > 0.001) {
- await agregarVentaMovimiento({
- venta_id: ventaBase.id,
- tipo:'ajuste',
- monto: cobrarAhora,
- motivo:'Ajuste al cerrar cuenta',
- });
- }
- // Lo que no se use queda a favor de la mesa en la misma venta (no hay
- // vuelto: no se devuelve nada al cerrar).
- } else if (ventaVigente) {
- // Ya existe una venta sobre esta comanda — se completa esa misma venta
- // en vez de crear una paralela. El saldo pendiente queda como 'ajuste'
- // (no se auto-cobra con un 'pago'; el cobro real se ancla después en
- // Centro de Ventas). Se agrega directamente `saldoPendiente`, que ya
- // descuenta los cobros de división (ver `totalPagadoVentas`).
- if (saldoPendiente > 0.001) {
- await agregarVentaMovimiento({
- venta_id: ventaVigente.id,
- tipo:'ajuste',
- monto: saldoPendiente,
- motivo:'Ajuste al cerrar cuenta',
- });
- }
- } else {
- await createRxVenta({
- id: crypto.randomUUID(),
- origen:'mesa',
- tipo:'directa',
- cliente_id: activeComanda.cliente_id || undefined,
- cliente_nombre: closePayerName?.trim() || activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio}`,
- comanda_id: activeComanda.id,
- organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
- }, saldoPendiente);
- }
- } catch (ventaError) {
- console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
- showToast.error('Aviso','La cuenta se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
- }
- }
-
- showToast.success('Ticket de Cierre',`Imprimiendo precuenta de ${selectedMesa.nombre}...`);
-
- await updateRxComanda(activeComanda.id, {
- estado:'cerrado',
- mesa_nombre: activeComanda.mesa_nombre || selectedMesa.nombre,
- });
-
- await liberarMesaSiSinOperativas(activeComanda.mesa_id);
- setCloseCuentaModalOpen(false);
- onResuelta();
- } catch (error) {
- console.error(error);
- showToast.error('Error','Hubo un error al cerrar la cuenta.');
- } finally {
- enCursoRef.current = false;
- setProcesandoCierre(false);
- }
- }}
- />
 
  <RoomChargeDialog
  opened={showRoomChargeModal}
  onOpenChange={setShowRoomChargeModal}
- folio={activeComanda?.folio}
+ folio={folioLabel(activeComanda)}
  cuentas={activeRoomAccounts}
  mesas={allMesas}
  procesando={procesandoHab}
@@ -1086,7 +1186,7 @@ export function SidebarDetails({
  <CambiarMesaDialog
  opened={changeMesaModal}
  onOpenChange={setChangeMesaModal}
- folio={activeComanda?.folio}
+ folio={folioLabel(activeComanda)}
  mesas={mesasDisponiblesParaCambio}
  seleccionada={mesaSeleccionadaParaCambio}
  onSelect={setMesaSeleccionadaParaCambio}

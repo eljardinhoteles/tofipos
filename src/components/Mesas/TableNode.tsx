@@ -47,14 +47,14 @@ export const TableNode = memo(function TableNode({
  onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
  className={cn("w-full min-w-0 min-h-0 aspect-square overflow-hidden rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
- // Seleccionada/sidebar abierto: azul sólido, siempre (salvo cuenta).
- ? activeComanda?.estado ==='cuenta'?"bg-orange-600 border-orange-600 text-white":"bg-sky-600 border-sky-600 text-white": isFree
+ // Seleccionada/sidebar abierto: azul (info) sólido, siempre (salvo cuenta).
+ ? activeComanda?.estado ==='cuenta'?"bg-warning-foreground border-warning text-white":"bg-info border-info text-white": isFree
  // Libre: blanca neutra, borde blanco (sin acento) — igual que una
  // mesa libre, la diferenciación vive en ocupada/seleccionada.
- ?"bg-card border-white text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":
+ ?"bg-card border-white text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-warning-soft border-warning text-warning-foreground":
  // Ocupada sin seleccionar: azul sutil (fondo/borde tenues), no
  // sólido — el sólido queda reservado para cuando está seleccionada.
- "bg-sky-50 border-sky-300 text-sky-700 dark:bg-sky-950/30 dark:border-sky-800 dark:text-sky-300")}
+ "bg-info/10 border-info/40 text-info-foreground dark:bg-info/30 dark:border-info")}
  >
  <div className="flex items-center justify-between">
  <span className="text-[10px] font-black uppercase tracking-wider">
@@ -94,7 +94,7 @@ export const TableNode = memo(function TableNode({
  // fondo en vez de fundirse en un bulto tipo"orejas".
  const chairClass = cn("absolute rounded-full transition-colors",
  isSelected
- ? effectiveState ==='cuenta'?"bg-orange-700": effectiveState ==='ocupada'?"bg-primary":"bg-primary/80": effectiveState ==='libre'?"bg-muted-foreground/30": effectiveState ==='cuenta'?"bg-orange-300":"bg-primary/40");
+ ? effectiveState ==='cuenta'?"bg-warning-foreground": effectiveState ==='ocupada'?"bg-primary":"bg-primary/80": effectiveState ==='libre'?"bg-muted-foreground/30": effectiveState ==='cuenta'?"bg-warning/20":"bg-primary/40");
 
  // El gráfico se limita a un máximo de 4 sillas (2 arriba + 2 a los lados)
  // sin importar la capacidad real de la mesa: con 6-8 el card se saturaba
@@ -116,7 +116,7 @@ export const TableNode = memo(function TableNode({
  onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
  className={cn("w-full min-w-0 min-h-0 aspect-square rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  isSelected
- ? effectiveState ==='cuenta'?"bg-orange-600 border-orange-600 text-white": effectiveState ==='ocupada'?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": effectiveState ==='libre'?"bg-card border-border text-muted-foreground": effectiveState ==='cuenta'?"bg-orange-50 border-orange-500 text-orange-800":"bg-primary/10 border-primary/50 text-primary")}
+ ? effectiveState ==='cuenta'?"bg-warning-foreground border-warning text-white": effectiveState ==='ocupada'?"bg-primary border-primary text-primary-foreground":"bg-primary border-primary text-primary-foreground": effectiveState ==='libre'?"bg-card border-border text-muted-foreground": effectiveState ==='cuenta'?"bg-warning-soft border-warning text-warning-foreground":"bg-primary/10 border-primary/50 text-primary")}
  >
  {/* Sillas alrededor de la mesa */}
  {renderChairs()}
@@ -124,14 +124,14 @@ export const TableNode = memo(function TableNode({
  <div className="flex items-center justify-between relative z-10">
  <span className={cn("text-[10px] font-black uppercase tracking-wider",
  isSelected 
- ?"text-white/90": effectiveState ==='libre'?"text-muted-foreground": effectiveState ==='cuenta'?"text-orange-600":"text-primary")}>
+ ?"text-white/90": effectiveState ==='libre'?"text-muted-foreground": effectiveState ==='cuenta'?"text-warning-foreground":"text-primary")}>
  {effectiveState ==='libre'?'Libre': effectiveState ==='cuenta'?'Cuenta':'Ocupada'}
  </span>
 
  {!isFree && (
  <div className="flex items-center gap-1">
  {effectiveState ==='cuenta'? (
- <Receipt size={14} className={isSelected ?"text-white":"text-orange-600"} />
+ <Receipt size={14} className={isSelected ?"text-white":"text-warning-foreground"} />
  ) : isMultiple ? (
  <Stack size={14} weight="fill" className={isSelected ?"text-white":"text-primary"} />
  ) : (
@@ -150,7 +150,7 @@ export const TableNode = memo(function TableNode({
 
  {roomBadge && (
  <span className={cn("px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wide",
- isSelected ?"bg-white/20 text-white":"bg-primary text-primary-foreground")}>
+ isSelected ?"bg-white/20 text-white":"bg-info text-white")}>
  HAB: {roomBadge.match(/\d+/)?.[0] || roomBadge}
  </span>
  )}

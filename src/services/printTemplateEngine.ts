@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { Comanda, ComandaItem, Pago, Reserva } from '../db/database';
 import { getOrgCache } from '../lib/orgCache';
+import { folioLabel } from '../lib/folio';
 
 /**
  * Servicio de Formateo y Generación de Documentos de Impresión Térmica
@@ -190,7 +191,7 @@ export function generarComandaCocina(
   t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
 
   t += p(POS.ALIGN_LEFT);
-  t += `COMANDA: #${comanda.folio}\n`;
+  t += `COMANDA: #${folioLabel(comanda)}\n`;
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
 
   if (esAdicional) {
@@ -296,7 +297,7 @@ export function generarComandaCocina(
     }
     t += `------------------------\n`;
     t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
-    t += `COMANDA: #${comanda.folio}\n`;
+    t += `COMANDA: #${folioLabel(comanda)}\n`;
     t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
@@ -370,7 +371,7 @@ export function generarPrecuenta(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`PRECUENTA #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`PRECUENTA #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
@@ -500,15 +501,19 @@ export function generarPrecuentaConsolidadaHabitacion(
 
   // ── Una sección por comanda ─────────────────────────────────────
   let granSubtotal = 0;
+  // Subtotal por tasa de IVA: cada comanda usa su propio IVA (snapshot o el
+  // aplicado en el checkout); si no tiene, la tasa general recibida.
+  const subtotalPorTasa = new Map<number, number>();
   comandas.forEach(({ comanda, items }) => {
     const itemsVisibles = items
       .filter(item => !item.anulado)
       .filter(item => !soloConsumo || item.precio > 0);
     if (itemsVisibles.length === 0) return;
+    const tasaComanda = comanda.iva_porcentaje ?? ivaPercent;
 
     const fechaComanda = comanda.created_at ? new Date(comanda.created_at).toLocaleDateString('es-ES') : '';
     t += p(POS.BOLD_ON);
-    t += `Comanda #${comanda.folio}${fechaComanda ? ` (${fechaComanda})` : ''}\n`;
+    t += `Comanda #${folioLabel(comanda)}${fechaComanda ? ` (${fechaComanda})` : ''}\n`;
     t += p(POS.BOLD_OFF);
     t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
     t += `${'-'.repeat(W)}\n`;
@@ -516,6 +521,7 @@ export function generarPrecuentaConsolidadaHabitacion(
     itemsVisibles.forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       granSubtotal += itemTotal;
+      subtotalPorTasa.set(tasaComanda, (subtotalPorTasa.get(tasaComanda) ?? 0) + itemTotal);
       t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
       if (item.modificadores && item.modificadores.length > 0) {
         item.modificadores.forEach((mod: string) => {
@@ -530,13 +536,20 @@ export function generarPrecuentaConsolidadaHabitacion(
   });
 
   // ── Totales ─────────────────────────────────────────────────────
-  const ivaFactor = ivaPercent / 100;
-  const ivaTotal = granSubtotal * ivaFactor;
+  // Una línea de IVA por cada tasa presente (un checkout puede mezclar 15% y 8%).
+  const tasas = [...subtotalPorTasa.entries()].sort((x, y) => y[0] - x[0]);
+  const ivaTotal = tasas.reduce((acc, [tasa, sub]) => acc + sub * (tasa / 100), 0);
   const totalGeneral = granSubtotal + ivaTotal;
 
   t += `${'-'.repeat(W)}\n`;
   t += justifyBetween('Subtotal:', `$${granSubtotal.toFixed(2)}`, W) + '\n';
-  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${ivaTotal.toFixed(2)}`, W) + '\n';
+  if (tasas.length <= 1) {
+    t += justifyBetween(`IVA (${tasas[0]?.[0] ?? ivaPercent}%):`, `$${ivaTotal.toFixed(2)}`, W) + '\n';
+  } else {
+    tasas.forEach(([tasa, sub]) => {
+      t += justifyBetween(`IVA (${tasa}%) s/ $${sub.toFixed(2)}:`, `$${(sub * (tasa / 100)).toFixed(2)}`, W) + '\n';
+    });
+  }
   t += `${'-'.repeat(W)}\n`;
   t += p(POS.BOLD_ON) + p(POS.SIZE_2X);
   t += justifyBetween('A PAGAR:', `$${totalGeneral.toFixed(2)}`, W) + '\n';
@@ -667,7 +680,7 @@ export function generarTicketPago(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`TICKET #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`TICKET #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
@@ -770,7 +783,7 @@ export function generarPrecuentaDividida(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`PRECUENTA #${comanda.folio}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`PRECUENTA #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from'react';
-import { Printer, ArrowsClockwise, ForkKnife, Receipt, Trash, FloppyDiskIcon } from'@phosphor-icons/react';
+import { Printer, ArrowsClockwise, ForkKnife, Receipt, Trash, FloppyDiskIcon, Copy, LinkSimple, LinkBreak } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { Input } from'@/components/ui/input';
 import { Button } from'@/components/ui/button';
@@ -10,6 +10,12 @@ import {
  savePrintToken,
  savePrintServerUrl,
  listSystemPrinters,
+ createPrintPairing,
+ unpairPrintServer,
+ fetchCloudPrintServer,
+ getCachedCloudPrintServer,
+ isCloudServerOnline,
+ type CloudPrintServer,
  listConfiguredPrinters,
  addConfiguredPrinter,
  updateConfiguredPrinter,
@@ -37,6 +43,10 @@ export default function AjustesImpresion() {
  const [loadingCatalog, setLoadingCatalog] = useState(false);
  const [connectingName, setConnectingName] = useState<string | null>(null);
  const [testingId, setTestingId] = useState<string | null>(null);
+ // Cola en la nube: servidor vinculado + paquete de vinculación pendiente.
+ const [cloudServer, setCloudServer] = useState<CloudPrintServer | null>(() => getCachedCloudPrintServer());
+ const [pairing, setPairing] = useState<{ package: string; code: string; expiresAt: string } | null>(null);
+ const [pairingBusy, setPairingBusy] = useState(false);
 
  useEffect(() => {
  const storedUrl = localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181';
@@ -47,7 +57,7 @@ export default function AjustesImpresion() {
 
  const refreshStatus = async () => {
  try {
- const status = await getPrintServerStatus();
+ const status = await getPrintServerStatus({ detailed: true });
  setServerOk(status.ok);
  setServerQueue(status.queue ?? null);
  setLastAction(`Servidor OK. Cola: ${status.queue ?? 0}`);
@@ -88,6 +98,60 @@ export default function AjustesImpresion() {
  refreshStatus();
  loadCatalog();
  }, []);
+ useEffect(() => {
+ let alive = true;
+ const refresh = async () => {
+ const server = await fetchCloudPrintServer();
+ if (!alive) return;
+ setCloudServer(server);
+ if (server && pairing) {
+ // El servidor acaba de vincularse: cierra el paso a paso y recarga impresoras.
+ setPairing(null);
+ await loadCatalog();
+ await refreshStatus();
+ showToast.success('Servidor vinculado', server.hostname ? `${server.hostname} ya imprime por la nube.` : 'Ya imprime por la nube.');
+ }
+ };
+ refresh();
+ // Pendiente de vincular: revisa cada 4 s. Ya vinculado: refresca el latido cada 15 s.
+ const id = setInterval(() => { refresh(); if (!pairing) refreshStatus(); }, pairing ? 4000 : 15000);
+ return () => { alive = false; clearInterval(id); };
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [pairing]);
+
+ const handleCreatePairing = async () => {
+ setPairingBusy(true);
+ try {
+ setPairing(await createPrintPairing());
+ } catch (err) {
+ showToast.error('No se pudo generar el paquete', err instanceof Error ? err.message : 'Error desconocido');
+ } finally {
+ setPairingBusy(false);
+ }
+ };
+
+ const handleCopyPairing = async () => {
+ if (!pairing) return;
+ try {
+ await navigator.clipboard.writeText(pairing.package);
+ showToast.success('Paquete copiado');
+ } catch {
+ showToast.error('No se pudo copiar', 'El navegador bloqueó el portapapeles. Vuelve a pulsar "Copiar paquete" o genera uno nuevo.');
+ }
+ };
+
+ const handleUnpair = async () => {
+ if (!cloudServer) return;
+ try {
+ await unpairPrintServer(cloudServer.id);
+ setCloudServer(null);
+ setConfiguredPrinters([]);
+ showToast.success('Servidor desvinculado', 'Las impresiones vuelven a usar la conexión local.');
+ await refreshStatus();
+ } catch (err) {
+ showToast.error('No se pudo desvincular', err instanceof Error ? err.message : 'Error desconocido');
+ }
+ };
 
  // Un solo botón guarda ambos ajustes (URL + token) — casi siempre se
  // configuran juntos al vincular un dispositivo nuevo al print server.
@@ -180,7 +244,7 @@ export default function AjustesImpresion() {
  return (
  <div className="flex flex-col gap-6 py-6">
  <div className="flex items-center gap-3 min-w-0">
- <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+ <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
  <Printer size={22} weight="fill"/>
  </div>
  <div className="flex flex-col min-w-0">
@@ -194,7 +258,7 @@ export default function AjustesImpresion() {
  <div className="grid grid-cols-2 gap-4 text-xs font-semibold flex-1">
  <div className="flex flex-col">
  <span className="text-muted-foreground">Servidor</span>
- <span className={cn(serverOk ?"text-emerald-600":"text-destructive","font-extrabold")}>
+ <span className={cn(serverOk ?"text-foreground":"text-destructive","font-extrabold")}>
  {serverOk === null ?'Sin verificar': serverOk ?'Online':'Offline'}
  </span>
  </div>
@@ -209,6 +273,80 @@ export default function AjustesImpresion() {
  </Button>
  </div>
 
+ {/* Cola en la nube: sin IP ni token por dispositivo */}
+ <div className="flex flex-col gap-3 pb-4 border-b border-border">
+ {cloudServer ? (
+ <div className="flex items-center justify-between gap-3">
+ <div className="flex items-center gap-3 min-w-0">
+ <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+ isCloudServerOnline(cloudServer) ? "bg-success-soft text-success-foreground" : "bg-destructive-soft text-destructive")}>
+ <LinkSimple size={20} weight="bold" />
+ </div>
+ <div className="flex flex-col min-w-0">
+ <span className="font-extrabold text-sm text-foreground truncate">
+ {cloudServer.hostname || 'Servidor de impresión'} · vinculado por la nube
+ </span>
+ <span className="text-xs text-muted-foreground">
+ {isCloudServerOnline(cloudServer)
+ ? 'Conectado'
+ : cloudServer.last_seen
+ ? `Sin señal desde ${new Date(cloudServer.last_seen).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`
+ : 'Nunca se ha conectado'}
+ {cloudServer.version ? ` · v${cloudServer.version}` : ''}
+ </span>
+ </div>
+ </div>
+ <Button variant="outline" className="shrink-0 text-destructive" onClick={handleUnpair}>
+ <LinkBreak size={16} weight="bold" /> Desvincular
+ </Button>
+ </div>
+ ) : pairing ? (
+ <div className="flex flex-col gap-3">
+ <span className="text-xs text-muted-foreground font-bold">Paquete de vinculación (vence {new Date(pairing.expiresAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })})</span>
+ {/* El paquete no se muestra en pantalla: solo se copia al portapapeles. */}
+ <div className="flex items-center gap-2">
+ <div className="flex-1 min-w-0 rounded-xl bg-muted px-4 h-11 flex items-center text-sm font-mono text-muted-foreground tracking-widest select-none" aria-label="Paquete oculto">
+ POS1.••••••••••••••••••••
+ </div>
+ <Button className="shrink-0 h-11" onClick={handleCopyPairing}><Copy size={18} weight="bold" /> Copiar paquete</Button>
+ </div>
+ <span className="text-[11px] text-muted-foreground select-text">
+ En la PC con las impresoras, ejecuta el servidor de impresión con: <span className="font-mono font-bold text-foreground">pos-print-server.exe --pair &lt;paquete&gt;</span>. Esta pantalla se actualizará sola al vincularse.
+ </span>
+ <div><Button variant="ghost" className="text-muted-foreground" onClick={() => setPairing(null)}>Cancelar</Button></div>
+ </div>
+ ) : (
+ <div className="flex items-center justify-between gap-3">
+ <div className="flex flex-col min-w-0">
+ <span className="font-extrabold text-sm text-foreground">Vincular con la nube</span>
+ <span className="text-xs text-muted-foreground">Imprime desde cualquier tablet o celular sin configurar IP ni token.</span>
+ </div>
+ <Button className="shrink-0" disabled={pairingBusy} onClick={handleCreatePairing}>
+ <LinkSimple size={16} weight="bold" /> Generar paquete
+ </Button>
+ </div>
+ )}
+ {cloudServer && (
+ <div className="flex flex-col gap-1.5 pt-3 border-t border-border">
+ <span className="text-xs text-muted-foreground font-bold">Token de red local (opcional)</span>
+ <div className="flex items-center gap-2">
+ <Input
+ type="password"autoComplete="off"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
+ placeholder="Ej: AB3K-9XQZ"value={tokenInput}
+ onChange={(e) => setTokenInput(e.target.value)}
+ className="flex-1 h-11 text-sm font-mono"/>
+ <Button className="h-11 shrink-0" onClick={() => { savePrintToken(tokenInput); showToast.success('Token guardado', 'Este dispositivo imprimirá por la red local cuando pueda.'); }}>
+ <FloppyDiskIcon size={18} weight="bold"/> Guardar
+ </Button>
+ </div>
+ <span className="text-[11px] text-muted-foreground">
+ La IP del servidor se descubre sola. Con el token, este dispositivo imprime directo por la red local (más rápido y sin internet); sin él, imprime por la nube.
+ </span>
+ </div>
+ )}
+ </div>
+
+ {!cloudServer && (<>
  <div className="flex flex-col gap-1.5">
  <span className="text-xs text-muted-foreground font-bold">URL del print server</span>
  <Input
@@ -225,7 +363,7 @@ export default function AjustesImpresion() {
  <span className="text-xs text-muted-foreground font-bold">Token de impresión</span>
  <div className="flex items-center gap-2">
  <Input
- type="text"inputMode="text"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
+ type="password"autoComplete="off"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
  placeholder="Ej: AB3K-9XQZ"value={tokenInput}
  onChange={(e) => setTokenInput(e.target.value)}
  className="flex-1 h-11 text-sm font-mono"/>
@@ -234,6 +372,7 @@ export default function AjustesImpresion() {
  </Button>
  </div>
  </div>
+ </>)}
  </div>
 
  {/* Impresoras Conectadas */}
@@ -250,7 +389,7 @@ export default function AjustesImpresion() {
  <div key={printer.id} className="bg-card p-5 rounded-2xl border border-border shadow-xs flex flex-col gap-3">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
- <Printer size={18} className="text-primary"/>
+ <Printer size={18} className="text-muted-foreground"/>
  <span className="font-extrabold text-sm text-foreground">{printer.name}</span>
  </div>
  <Switch

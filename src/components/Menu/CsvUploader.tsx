@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import Papa from 'papaparse';
 import { UploadSimple, Spinner, FileCsv, DownloadSimple } from '@phosphor-icons/react';
 import { showToast } from '@/lib/toast';
+import { Button } from '@/components/ui/button';
 import { initVerticalRxDb, createRxCategoria, createRxMenuItem } from '@/db/rxdb';
 import {
   Dialog,
@@ -125,18 +126,15 @@ export function CsvUploader() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          type="button"
-          className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer hover:opacity-80"
-        >
-          <FileCsv size={18} />
-          Importar CSV
-        </button>
+        <Button type="button" variant="secondary" className="h-10 gap-1.5 font-bold">
+          <FileCsv size={18} /> Importar CSV
+        </Button>
       </DialogTrigger>
       
       <DialogContent className="max-w-md">

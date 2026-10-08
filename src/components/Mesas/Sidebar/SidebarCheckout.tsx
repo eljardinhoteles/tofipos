@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo } from'react';
+import { ComandaTotales } from './ComandaTotales';
+import { folioLabel } from '../../../lib/folio';
 import { Printer, ArrowLeft, Door, Check } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
@@ -226,7 +228,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  tipo:'directa',
  cliente_id: activeComanda.cliente_id || undefined,
  cliente_nombre: activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${activeComanda.folio}`,
+ referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)}`,
  comanda_id: activeComanda.id,
  organization_id: orgId,
  }, saldoPendiente);
@@ -317,74 +319,60 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- {/* Header */}
+ {/* Header: mismo patrón que la página "Cobrar cuenta" */}
  <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
+ <div className="flex items-center gap-3 min-w-0">
+ <Button type="button" variant="ghost" size="icon-lg" aria-label="Volver" onClick={onBack}
+ className="rounded-xl bg-muted text-muted-foreground shrink-0">
  <ArrowLeft size={18} weight="bold"/>
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">Pago Total</h3>
- <span className="text-[10px] font-bold text-muted-foreground">
- {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{activeComanda?.folio}
+ </Button>
+ <div className="flex flex-col min-w-0">
+ <h3 className="font-extrabold text-base text-foreground leading-tight">Pago total</h3>
+ <span className="text-[10px] font-bold text-muted-foreground truncate">
+ {selectedMesa.nombre.replace('Mesa','Mesa #')} · COMANDA #{folioLabel(activeComanda)}
  </span>
  </div>
  </div>
 
- <button
- type="button"onClick={handleShowPrecuentaPreview}
- title="Previsualizar Precuenta"className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center cursor-pointer transition-colors">
- <Printer size={18} />
- </button>
+ <Button type="button" variant="secondary" size="icon-lg" aria-label="Previsualizar precuenta" title="Previsualizar precuenta"
+ onClick={handleShowPrecuentaPreview} className="rounded-xl shrink-0">
+ <Printer size={18} weight="bold" />
+ </Button>
  </header>
 
  {/* Main */}
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
- <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
- <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total a cobrar</span>
+ <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+ <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">Total a cobrar</span>
  <span className="text-4xl font-black text-foreground">${saldoPendiente.toFixed(2)}</span>
- <p className="text-xs text-muted-foreground max-w-[220px]">
+ <p className="text-xs text-muted-foreground max-w-[240px]">
  El método de pago (efectivo, tarjeta, transferencia) se asigna después en Centro de Ventas.
  </p>
  </div>
 
- {/* Resumen */}
- <div className="p-4 rounded-xl bg-foreground text-background flex flex-col gap-2 shadow-xs">
- <div className="flex items-center justify-between text-xs">
- <span className="text-background/60 font-bold uppercase">Total de la cuenta</span>
- <span className="font-black text-base text-background">${total.toFixed(2)}</span>
- </div>
- {totalPagado > 0 && (
- <div className="flex items-center justify-between text-xs text-emerald-400 font-bold">
- <span>Pagado previamente</span>
- <span>-${totalPagado.toFixed(2)}</span>
- </div>
- )}
- <div className="w-full h-[1px] bg-background/20 my-1"/>
- <div className="flex items-center justify-between text-sm font-black">
- <span>RESTANTE</span>
- <span className="text-primary">${saldoPendiente.toFixed(2)}</span>
- </div>
- </div>
+ {/* Resumen: el mismo bloque de totales de la comanda */}
+ <ComandaTotales
+ tarjeta
+ subtotal={totales.subtotalNeto}
+ iva={totales.ivaTotal}
+ ivaPorcentaje={ivaPorcentaje}
+ total={total}
+ etiquetaTotal="Total de la cuenta"
+ totalPagado={totalPagado}
+ saldoPendiente={saldoPendiente}
+ />
  </main>
 
- {/* Footer */}
- <footer className="p-4 border-t border-border bg-card flex flex-col gap-2 shrink-0">
- <Button
- type="button"disabled={!canFinalize || isProcessing}
- onClick={handleFinalize}
- className="w-full py-3.5 h-auto rounded-xl bg-emerald-600 text-white font-black text-sm shadow-xs">
- <Check size={20} weight="bold"/> Cobrar y Cerrar
+ {/* Footer con fondo sutil, como el de la comanda */}
+ <footer className="p-4 border-t border-border bg-muted/40 flex flex-col gap-2 shrink-0">
+ <Button type="button" disabled={!canFinalize || isProcessing} onClick={handleFinalize} className="w-full h-12 font-bold gap-2">
+ <Check size={20} weight="bold"/> Cobrar y cerrar
  </Button>
 
  {cuentasActivas > 0 && (
- <button
- type="button"onClick={() => setShowEnviarHabitacion(true)}
- className="w-full py-2.5 rounded-xl bg-primary/10 text-primary font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
- <Door size={18} weight="bold"/> Enviar a Habitación
- </button>
+ <Button type="button" variant="infoSoft" onClick={() => setShowEnviarHabitacion(true)} className="w-full h-11 font-bold gap-2">
+ <Door size={18} weight="bold"/> Enviar a habitación
+ </Button>
  )}
  </footer>
 

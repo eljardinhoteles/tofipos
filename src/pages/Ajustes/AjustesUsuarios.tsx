@@ -191,7 +191,7 @@ export default function AjustesUsuarios() {
  {usuarios.map((user) => (
  <div key={user.id} className="p-4 rounded-xl bg-muted border border-border flex items-center justify-between">
  <div className="flex items-center gap-3">
- <div className="w-9 h-9 rounded-full bg-primary/10 text-primary font-extrabold text-xs flex items-center justify-center">
+ <div className="w-9 h-9 rounded-full bg-muted text-muted-foreground font-extrabold text-xs flex items-center justify-center">
  {user.nombre.slice(0, 2).toUpperCase()}
  </div>
  <div className="flex flex-col">

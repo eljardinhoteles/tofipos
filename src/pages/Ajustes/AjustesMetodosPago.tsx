@@ -54,7 +54,7 @@ function ListaEditable({
   return (
     <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+        <div className="p-2.5 rounded-xl bg-muted text-muted-foreground">
           <Icon size={20} weight="bold" />
         </div>
         <div className="flex flex-col">

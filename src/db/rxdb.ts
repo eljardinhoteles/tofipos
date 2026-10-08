@@ -1,3 +1,4 @@
+import { calcularPartes, parseReparto, type RepartoOrigen, type RepartoParte } from '../lib/reparto'
 import { addRxPlugin, createRxDatabase, type RxCollection, type RxDatabase } from 'rxdb/plugins/core'
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update'
@@ -109,6 +110,8 @@ export interface RxComandaItem {
   anulado_motivo?: string | null
   anulado_at?: string | null
   anulado_por?: string | null
+  /** Marca de reparto del valor entre subcomandas (JSON, ver lib/reparto.ts). */
+  reparto?: string | null
   created_at?: string
   updated_at: string
   organization_id: string
@@ -258,6 +261,9 @@ export interface RxMenuItem {
   categoria_nombre?: string
   activo: boolean
   es_bebida?: boolean
+  // Precio variable: el precio del producto es solo una referencia; al añadirlo
+  // a una comanda (antes de confirmar) se puede cambiar el valor.
+  precio_variable?: boolean | null
   modificadores: Array<{
     id: string
     nombre: string
@@ -495,6 +501,9 @@ export interface RxAjusteIva {
   porcentaje: number
   activo: boolean
   precios_con_iva?: boolean
+  /** Vigencia opcional (YYYY-MM-DD) para tasas temporales, p. ej. 8% en feriados. Solo genera avisos. */
+  vigente_desde?: string | null
+  vigente_hasta?: string | null
   organization_id: string
   _deleted: boolean
   _modified: string
@@ -511,25 +520,6 @@ export interface RxUsuario {
   email?: string
   organization_id: string
   activo: boolean
-  _deleted: boolean
-  _modified: string
-}
-
-export interface RxAuditLog {
-  id: string
-  entity: string
-  entity_id?: string
-  action: 'create' | 'update' | 'delete' | 'status_change'
-  summary: string
-  before_state?: string
-  after_state?: string
-  actor_id?: string
-  actor_name?: string
-  actor_role?: string
-  actor_email?: string
-  source?: string
-  created_at: string
-  organization_id: string
   _deleted: boolean
   _modified: string
 }
@@ -593,7 +583,7 @@ const comandaSchema = {
 } as const
 
 const comandaItemSchema = {
-  version: 2,
+  version: 3,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -613,6 +603,7 @@ const comandaItemSchema = {
     anulado_motivo: { type: ['string', 'null'] },
     anulado_at: { type: ['string', 'null'] },
     anulado_por: { type: ['string', 'null'] },
+    reparto: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -719,7 +710,7 @@ const categoriaSchema = {
 } as const
 
 const menuItemSchema = {
-  version: 1,
+  version: 2,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -730,6 +721,7 @@ const menuItemSchema = {
     categoria_nombre: { type: 'string' },
     activo: { type: 'boolean' },
     es_bebida: { type: ['boolean', 'null'] },
+    precio_variable: { type: ['boolean', 'null'] },
     modificadores: {
       type: 'array',
       items: {
@@ -951,7 +943,7 @@ const ventaSchema = {
 } as const
 
 const ajusteIvaSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -959,6 +951,8 @@ const ajusteIvaSchema = {
     porcentaje: { type: 'number' },
     activo: { type: 'boolean' },
     precios_con_iva: { type: 'boolean' },
+    vigente_desde: { type: ['string', 'null'] },
+    vigente_hasta: { type: ['string', 'null'] },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' }
@@ -1057,135 +1051,6 @@ export function setSuspendHooks(val: boolean) {
   suspendHooks = val
 }
 
-type AuditAction = RxAuditLog['action']
-
-function safeJson(value: unknown) {
-  if (value === undefined) return null
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return JSON.stringify({ error: 'unserializable' })
-  }
-}
-
-async function getAuditActor() {
-  const actorId = localStorage.getItem('pos_current_mesero_id') || null
-  const actorEmail = localStorage.getItem('pos_admin_email') || null
-  const orgId = localStorage.getItem('pos_active_org_id') || ''
-  let actorName: string | null = null
-  let actorRole: string | null = null
-
-  if (actorId) {
-    try {
-      const db = await initVerticalRxDb()
-      const user = await db.usuarios.findOne(actorId).exec()
-      const json = user?.toJSON()
-      if (json) {
-        actorName = json.nombre || null
-        actorRole = json.rol || null
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  if (!actorName && actorEmail) {
-    actorName = actorEmail
-    actorRole = 'admin'
-  }
-
-  return { actorId, actorName, actorRole, actorEmail, orgId }
-}
-
-async function createAuditLog(params: {
-  entity: string
-  action: AuditAction
-  summary: string
-  entityId?: string
-  before?: unknown
-  after?: unknown
-  source?: string
-}) {
-  try {
-    const now = new Date().toISOString()
-    const { actorId, actorName, actorRole, actorEmail, orgId } = await getAuditActor()
-    const payload = {
-      id: crypto.randomUUID(),
-      entity: params.entity,
-      entity_id: params.entityId,
-      action: params.action,
-      summary: params.summary,
-      before_state: safeJson(params.before),
-      after_state: safeJson(params.after),
-      actor_id: actorId || '',
-      actor_name: actorName,
-      actor_role: actorRole,
-      actor_email: actorEmail,
-      source: params.source,
-      created_at: now,
-      organization_id: orgId,
-      _deleted: false,
-      _modified: now
-    } as RxAuditLog
-
-    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/audit-log`
-    const res = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    })
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      console.warn('[audit_logs] function HTTP error:', res.status, text)
-      return
-    }
-  } catch (error) {
-    console.warn('[audit_logs] audit logging skipped:', error)
-  }
-}
-
-function diffSummary(entity: string, patch: Record<string, unknown>) {
-  const keys = Object.keys(patch).filter(k => !['_modified', 'updated_at'].includes(k))
-  if (keys.length === 0) return `Actualización de ${entity}`
-  return `Actualizó ${entity}: ${keys.join(', ')}`
-}
-
-function itemChangeSummary(before: any, patch: Partial<RxComandaItem>) {
-  if (patch._deleted) return `Eliminó el ítem ${before?.nombre || before?.id || 'desconocido'}`
-
-  const changes: string[] = []
-  if (typeof patch.cantidad === 'number' && patch.cantidad !== before?.cantidad) {
-    changes.push(`cantidad ${before?.cantidad ?? 0} → ${patch.cantidad}`)
-  }
-  if (typeof patch.precio === 'number' && patch.precio !== before?.precio) {
-    changes.push(`precio $${Number(before?.precio ?? 0).toFixed(2)} → $${patch.precio.toFixed(2)}`)
-  }
-  if (Array.isArray(patch.modificadores)) {
-    const beforeMods = Array.isArray(before?.modificadores) ? before.modificadores.join(', ') : ''
-    const afterMods = patch.modificadores.join(', ')
-    if (beforeMods !== afterMods) {
-      changes.push(`modificadores: ${afterMods || 'sin modificadores'}`)
-    }
-  }
-  if (typeof patch.nota === 'string' && patch.nota !== (before?.nota ?? '')) {
-    changes.push(`nota actualizada`)
-  }
-  if (typeof patch.cortesia_cantidad === 'number' && patch.cortesia_cantidad !== (before?.cortesia_cantidad ?? 0)) {
-    changes.push(patch.cortesia_cantidad > 0
-      ? `cortesía: ${patch.cortesia_cantidad} unidad(es) — ${patch.cortesia_motivo || 'sin motivo'}`
-      : 'cortesía removida')
-  }
-  if (changes.length === 0) {
-    return `Actualizó el ítem ${before?.nombre || before?.id || 'desconocido'}`
-  }
-  return `Actualizó ${before?.nombre || before?.id || 'ítem'} (${changes.join('; ')})`
-}
-
 // Bump de nombre para cortar compatibilidad con el esquema anterior y arrancar limpio.
 export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
   const db = await withSuppressedDexieWarning(() => createRxDatabase({
@@ -1253,6 +1118,8 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
           anulado_at: oldDoc.anulado_at ?? null,
           anulado_por: oldDoc.anulado_por ?? null,
         }),
+        // v2 → v3: marca de reparto del valor entre subcomandas — passthrough.
+        3: (oldDoc: any) => ({ ...oldDoc, reparto: oldDoc.reparto ?? null }),
       }
     },
     pisos: { schema: pisoSchema },
@@ -1358,7 +1225,13 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         5: (oldDoc: any) => oldDoc,
       },
     },
-    ajustes_iva: { schema: ajusteIvaSchema },
+    ajustes_iva: {
+      schema: ajusteIvaSchema,
+      migrationStrategies: {
+        // v0 → v1: agrega vigencia opcional (vigente_desde/hasta) — passthrough.
+        1: (oldDoc: any) => oldDoc,
+      },
+    },
     usuarios: {
       schema: usuarioSchema,
       migrationStrategies: {
@@ -1375,7 +1248,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
       schema: menuItemSchema,
       migrationStrategies: {
         // v0 → v1: agrega es_bebida (nullable) a todos los items existentes
-        1: (oldDoc: any) => ({ ...oldDoc, es_bebida: null })
+        1: (oldDoc: any) => ({ ...oldDoc, es_bebida: null }),
+        // v1 → v2: precio variable (nullable)
+        2: (oldDoc: any) => ({ ...oldDoc, precio_variable: null })
       }
     },
   }
@@ -2114,6 +1989,20 @@ async function getIvaActivoSnapshot(db: Awaited<ReturnType<typeof initVerticalRx
   return { porcentaje: data.porcentaje, precios_con_iva: !!data.precios_con_iva }
 }
 
+/**
+ * Siguiente número de comanda de la organización: el mayor folio existente + 1
+ * (contando también las borradas, que ya salieron en tickets). Un solo punto
+ * para todos los orígenes (mesa, subcomanda, reserva): antes la reserva usaba
+ * "cantidad de comandas + 1", que se repite en cuanto hay una comanda borrada
+ * o de otra organización.
+ */
+export async function siguienteFolio(orgId?: string): Promise<number> {
+  const db = await initVerticalRxDb()
+  const org = orgId || getActiveOrgIdStrict()
+  const docs = await db.comandas.find({ selector: { organization_id: org } }).exec()
+  return docs.reduce((max: number, d: any) => Math.max(max, Number(d?.folio || 0)), 0) + 1
+}
+
 export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modified' | 'updated_at' | 'created_at' | 'total' | 'confirmada'> & {
   created_at?: string
   updated_at?: string
@@ -2141,14 +2030,6 @@ export async function createRxComanda(input: Omit<RxComanda, '_deleted' | '_modi
     _deleted: false,
     _modified: now
   } as RxComanda)
-  await createAuditLog({
-    entity: 'comanda',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó la comanda #${created.folio}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2170,7 +2051,6 @@ export async function updateRxComanda(id: string, patch: Partial<RxComanda>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.comandas.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
@@ -2178,20 +2058,6 @@ export async function updateRxComanda(id: string, patch: Partial<RxComanda>) {
       _modified: new Date().toISOString()
     }
   } as any)
-  const action: AuditAction = patch._deleted ? 'delete' : (patch.estado && ['anulada', 'cerrado', 'facturado'].includes(String(patch.estado)) ? 'status_change' : 'update')
-  await createAuditLog({
-    entity: 'comanda',
-    entityId: id,
-    action,
-    summary: patch._deleted
-      ? `Se eliminó la comanda #${before?.folio ?? id}`
-      : patch.estado === 'anulada'
-        ? `Se anuló la comanda #${before?.folio ?? id}`
-        : diffSummary('comanda', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2212,14 +2078,6 @@ export async function createRxComandaItem(input: Omit<RxComandaItem, '_deleted' 
     _deleted: false,
     _modified: now
   } as RxComandaItem)
-  await createAuditLog({
-    entity: 'comanda_item',
-    entityId: created.id,
-    action: 'create',
-    summary: `Agregó el ítem ${created.nombre} x${created.cantidad}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2227,7 +2085,6 @@ export async function updateRxComandaItem(id: string, patch: Partial<RxComandaIt
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.comanda_items.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
@@ -2235,15 +2092,6 @@ export async function updateRxComandaItem(id: string, patch: Partial<RxComandaIt
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'comanda_item',
-    entityId: id,
-    action: patch._deleted ? 'delete' : 'update',
-    summary: itemChangeSummary(before, patch),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2343,22 +2191,125 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
     await destDoc.update({ $set: { ...destPatch, updated_at: now, _modified: now } } as any)
   }
 
-  await createAuditLog({
-    entity: 'comanda_item',
-    entityId: item.id,
-    action: 'update',
-    summary: `Se movieron ${cant} × ${item.nombre} de la subcomanda ${src.subcomanda_nombre || src.cliente || src.folio} a ${dest.subcomanda_nombre || dest.cliente || dest.folio}`,
-    before: item,
-    after: { ...item, comanda_id: destComandaId, cantidad: cant },
-    source: 'rxdb'
-  })
+}
+
+// ── Reparto del valor de un plato entre subcomandas ─────────────────────────
+// El plato (o `cantidad` de sus unidades) queda en su cuenta a $0 —sigue siendo
+// real para cocina— y cada subcomanda destino recibe una línea "parte" con su
+// fracción del valor, en partes iguales a centavos. Las partes no van a cocina
+// y el reparto se puede deshacer mientras ninguna esté cobrada.
+const ESTADOS_CERRADOS = ['cerrado', 'facturado', 'anulada']
+
+export async function repartirItemEntreSubcomandas(itemId: string, destComandaIds: string[], cantidad?: number) {
+  const db = await initVerticalRxDb()
+  const orgId = getActiveOrgIdStrict()
+  const itemDoc = await db.comanda_items.findOne(itemId).exec(true)
+  const item = itemDoc.toJSON() as RxComandaItem
+  if (item.anulado) throw new Error('No se puede repartir un ítem anulado')
+  if ((item.pagado_cantidad || 0) > 0) throw new Error('No se puede repartir un ítem con unidades pagadas')
+  if ((item.cortesia_cantidad || 0) > 0) throw new Error('No se puede repartir un ítem con cortesía')
+  if (item.reparto) throw new Error('Este ítem ya forma parte de un reparto. Deshazlo primero.')
+
+  const srcDoc = await db.comandas.findOne(item.comanda_id).exec(true)
+  const src = srcDoc.toJSON() as any
+  const destinos = [...new Set(destComandaIds)].filter(id => id !== item.comanda_id)
+  if (destinos.length === 0) throw new Error('Elige al menos una cuenta destino')
+
+  const destDocs = await Promise.all(destinos.map(id => db.comandas.findOne(id).exec(true)))
+  for (const d of destDocs) {
+    const dest = d.toJSON() as any
+    if (dest.mesa_id !== src.mesa_id) throw new Error('Una de las cuentas destino es de otra mesa')
+    if (ESTADOS_CERRADOS.includes(dest.estado)) throw new Error(`La cuenta ${dest.subcomanda_nombre || dest.folio} ya está cerrada`)
+  }
+
+  const cant = Math.max(1, Math.min(cantidad ?? item.cantidad, item.cantidad))
+  const valor = item.precio * cant
+  const n = destinos.length
+  const montos = calcularPartes(valor, n)
+  const now = new Date().toISOString()
+
+  // Si solo se reparten algunas unidades, esas pasan a una línea propia.
+  const origenId = cant === item.cantidad ? item.id : await dividirItem(db, itemDoc, cant, {})
+
+  const partes: Array<{ id: string; comanda_id: string }> = []
+  for (let i = 0; i < n; i++) {
+    const id = crypto.randomUUID()
+    partes.push({ id, comanda_id: destinos[i] })
+    await db.comanda_items.insert({
+      id,
+      comanda_id: destinos[i],
+      item_id: item.item_id,
+      nombre: `${item.nombre} · parte ${i + 1}/${n}`,
+      precio: montos[i],
+      cantidad: 1,
+      modificadores: [],
+      nota: null,
+      es_bebida: item.es_bebida ?? null,
+      estado: item.estado,
+      pagado_cantidad: 0,
+      cortesia_cantidad: 0,
+      cortesia_motivo: null,
+      anulado: false,
+      reparto: JSON.stringify({ tipo: 'parte', origen: origenId, n, i: i + 1 } satisfies RepartoParte),
+      created_at: now,
+      updated_at: now,
+      organization_id: orgId,
+      _deleted: false,
+      _modified: now,
+    } as unknown as RxComandaItem)
+  }
+
+  const origenDoc = await db.comanda_items.findOne(origenId).exec(true)
+  await origenDoc.update({
+    $set: {
+      precio: 0,
+      reparto: JSON.stringify({ tipo: 'origen', precio: item.precio, cantidad: cant, partes } satisfies RepartoOrigen),
+      updated_at: now,
+      _modified: now,
+    },
+  } as any)
+
+  return { origenId, partes, montos }
+}
+
+/** Revierte un reparto desde el ítem origen o cualquiera de sus partes. */
+export async function deshacerRepartoItem(itemId: string) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.comanda_items.findOne(itemId).exec(true)
+  const item = doc.toJSON() as RxComandaItem
+  const meta = parseReparto(item)
+  if (!meta) throw new Error('Este ítem no es parte de un reparto')
+
+  const origenId = meta.tipo === 'origen' ? item.id : meta.origen
+  const origenDoc = await db.comanda_items.findOne(origenId).exec(true)
+  const origen = origenDoc.toJSON() as RxComandaItem
+  const origenMeta = parseReparto(origen)
+  if (origenMeta?.tipo !== 'origen') throw new Error('No se encontró el ítem original del reparto')
+
+  const partesDocs = await Promise.all(origenMeta.partes.map(p => db.comanda_items.findOne(p.id).exec()))
+  for (const pd of partesDocs) {
+    if (!pd) continue
+    const parte = pd.toJSON() as RxComandaItem
+    if ((parte.pagado_cantidad || 0) > 0) throw new Error('Una de las partes ya fue cobrada: no se puede deshacer')
+    const cd = await db.comandas.findOne(parte.comanda_id).exec()
+    if (cd && ESTADOS_CERRADOS.includes((cd.toJSON() as any).estado)) {
+      throw new Error('Una de las cuentas con parte del reparto ya está cerrada: no se puede deshacer')
+    }
+  }
+
+  const now = new Date().toISOString()
+  for (const pd of partesDocs) {
+    if (pd) await pd.update({ $set: { _deleted: true, updated_at: now, _modified: now } } as any)
+  }
+  await origenDoc.update({ $set: { precio: origenMeta.precio, reparto: null, updated_at: now, _modified: now } } as any)
+
 }
 
 // Anula un ítem puntual ya confirmado/enviado a cocina (se acabó el insumo,
 // error de cocina). Nunca se borra — se marca `anulado` con motivo
 // obligatorio, igual que anularVentaMovimiento. Función dedicada (no vía
-// updateRxComandaItem) para que el audit log quede como 'status_change'
-// inequívoco, no un 'update' genérico.
+// updateRxComandaItem).
 // Duplica un ítem como fila nueva de la misma comanda (para dividir unidades).
 async function dividirItem(db: any, doc: any, cantidadNueva: number, extra: Partial<RxComandaItem>) {
   const item = doc.toJSON() as any
@@ -2394,15 +2345,6 @@ export async function anularComandaItem(itemId: string, motivo: string, usuarioI
   } else {
     result = await doc.update({ $set: { ...anulacion, updated_at: now, _modified: now } } as any)
   }
-  await createAuditLog({
-    entity: 'comanda_item',
-    entityId: itemId,
-    action: 'status_change',
-    summary: `Anuló ${cant < before.cantidad ? `${cant} de ${before.cantidad} unidades de` : 'el ítem'} ${before?.nombre || itemId}: ${motivo}`,
-    before,
-    after: { ...before, ...anulacion, cantidad: cant },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2428,37 +2370,18 @@ export async function aplicarCortesiaItem(itemId: string, motivo: string, porcen
   } else {
     await doc.update({ $set: { ...patch, updated_at: now, _modified: now } } as any)
   }
-  await createAuditLog({
-    entity: 'comanda_item',
-    entityId: itemId,
-    action: 'update',
-    summary: `Cortesía ${pct}% en ${cant} × ${before.nombre}: ${motivo}`,
-    before,
-    after: { ...before, ...patch, cantidad: cant },
-    source: 'rxdb'
-  })
 }
 
 export async function updateRxMesa(id: string, patch: Partial<RxMesa>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.mesas.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'mesa',
-    entityId: id,
-    action: 'update',
-    summary: diffSummary('mesa', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2472,14 +2395,6 @@ export async function createRxPiso(input: Omit<RxPiso, '_deleted' | '_modified'>
     _deleted: false,
     _modified: now
   } as RxPiso)
-  await createAuditLog({
-    entity: 'piso',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó el piso ${created.nombre}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2498,14 +2413,6 @@ export async function createRxReserva(input: Omit<RxReserva, '_deleted' | '_modi
     _deleted: false,
     _modified: now
   } as RxReserva)
-  await createAuditLog({
-    entity: 'reserva',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó la reserva ${created.nombre}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2513,7 +2420,6 @@ export async function updateRxReserva(id: string, patch: Partial<RxReserva>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.reservas.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
@@ -2521,15 +2427,6 @@ export async function updateRxReserva(id: string, patch: Partial<RxReserva>) {
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'reserva',
-    entityId: id,
-    action: patch.estado === 'cancelada' ? 'status_change' : 'update',
-    summary: patch.estado === 'cancelada' ? `Se canceló la reserva ${before?.nombre || id}` : diffSummary('reserva', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2543,14 +2440,6 @@ export async function createRxAjusteIva(input: Omit<RxAjusteIva, '_deleted' | '_
     _deleted: false,
     _modified: now
   } as RxAjusteIva)
-  await createAuditLog({
-    entity: 'ajuste_iva',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó un ajuste de IVA`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2558,22 +2447,12 @@ export async function updateRxAjusteIva(id: string, patch: Partial<RxAjusteIva>)
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.ajustes_iva.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'ajuste_iva',
-    entityId: id,
-    action: 'update',
-    summary: diffSummary('ajuste de IVA', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2584,22 +2463,12 @@ export async function updateRxPiso(id: string, patch: Partial<RxPiso>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.pisos.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'piso',
-    entityId: id,
-    action: 'update',
-    summary: diffSummary('piso', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2618,14 +2487,6 @@ export async function createRxHabitacionCuenta(input: Omit<RxHabitacionCuenta, '
     _deleted: false,
     _modified: now
   } as RxHabitacionCuenta)
-  await createAuditLog({
-    entity: 'habitacion_cuenta',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se abrió la cuenta de habitación ${created.huesped}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2633,7 +2494,6 @@ export async function updateRxHabitacionCuenta(id: string, patch: Partial<RxHabi
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.habitacion_cuentas.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
@@ -2641,15 +2501,6 @@ export async function updateRxHabitacionCuenta(id: string, patch: Partial<RxHabi
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'habitacion_cuenta',
-    entityId: id,
-    action: patch.estado === 'cerrada' ? 'status_change' : 'update',
-    summary: patch.estado === 'cerrada' ? `Se cerró la cuenta de habitación ${before?.huesped || id}` : diffSummary('cuenta de habitación', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2673,14 +2524,6 @@ export async function createRxPago(input: Omit<RxPago, '_deleted' | '_modified'>
     _deleted: false,
     _modified: now
   } as RxPago)
-  await createAuditLog({
-    entity: 'pago',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se registró un pago de $${created.monto.toFixed(2)}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2688,22 +2531,12 @@ export async function updateRxPago(id: string, patch: Partial<RxPago>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.pagos.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'pago',
-    entityId: id,
-    action: 'update',
-    summary: diffSummary('pago', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2719,16 +2552,7 @@ export async function deleteRxPago(id: string) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.pagos.findOne(id).exec(true)
-  const before = doc?.toJSON()
   await doc.remove()
-  await createAuditLog({
-    entity: 'pago',
-    entityId: id,
-    action: 'delete',
-    summary: `[DEV] Se eliminó el pago ${id}`,
-    before,
-    source: 'rxdb'
-  })
 }
 
 // Crea una venta junto con su primer movimiento: un 'ajuste' por el monto
@@ -2762,14 +2586,6 @@ export async function createRxVenta(
     _modified: now
   } as RxVenta)
 
-  await createAuditLog({
-    entity: 'venta',
-    entityId: venta.id,
-    action: 'create',
-    summary: `Se registró una venta de $${montoInicial.toFixed(2)} (${venta.origen})`,
-    after: venta.toJSON(),
-    source: 'rxdb'
-  })
 
   return venta
 }
@@ -2783,22 +2599,12 @@ export async function updateRxVenta(id: string, patch: Partial<Pick<RxVenta, 'do
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.ventas.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: {
       ...patch,
       _modified: new Date().toISOString()
     }
   } as any)
-  await createAuditLog({
-    entity: 'venta',
-    entityId: id,
-    action: 'update',
-    summary: `Se actualizó la venta ${id}`,
-    before,
-    after: result.toJSON(),
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -2875,15 +2681,6 @@ export async function agregarVentaMovimiento(
     }
   } as any)
 
-  await createAuditLog({
-    entity: 'venta',
-    entityId: input.venta_id,
-    action: ['anclar', 'facturar', 'anular', 'marcar_credito'].includes(input.tipo) ? 'status_change' : 'update',
-    summary: `Movimiento '${input.tipo}' en venta ${input.venta_id}` + (input.monto != null ? ` por $${input.monto.toFixed(2)}` : ''),
-    before,
-    after: result.toJSON(),
-    source: 'rxdb'
-  })
 
   return result
 }
@@ -2912,15 +2709,6 @@ export async function anularVentaMovimiento(ventaId: string, movimientoId: strin
     }
   } as any)
 
-  await createAuditLog({
-    entity: 'venta',
-    entityId: ventaId,
-    action: 'status_change',
-    summary: `Se anuló el movimiento ${movimientoId} de la venta ${ventaId}: ${motivo}`,
-    before,
-    after: result.toJSON(),
-    source: 'rxdb'
-  })
 
   return result
 }
@@ -2951,17 +2739,6 @@ export async function adjuntarComprobanteMovimiento(ventaId: string, movimientoI
     }
   } as any)
 
-  await createAuditLog({
-    entity: 'venta',
-    entityId: ventaId,
-    action: 'update',
-    summary: comprobanteUrl
-      ? `Se adjuntó comprobante al movimiento ${movimientoId} de la venta ${ventaId}`
-      : `Se quitó el comprobante del movimiento ${movimientoId} de la venta ${ventaId}`,
-    before,
-    after: result.toJSON(),
-    source: 'rxdb'
-  })
 
   return result
 }
@@ -2977,14 +2754,6 @@ export async function createRxCategoria(input: Omit<RxCategoria, '_deleted' | '_
     _deleted: false,
     _modified: now
   } as RxCategoria)
-  await createAuditLog({
-    entity: 'categoria',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó la categoría ${created.nombre}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -2992,19 +2761,9 @@ export async function updateRxCategoria(id: string, patch: Partial<RxCategoria>)
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.categorias.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: { ...patch, _modified: new Date().toISOString() }
   } as any)
-  await createAuditLog({
-    entity: 'categoria',
-    entityId: id,
-    action: 'update',
-    summary: diffSummary('categoría', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 
@@ -3018,14 +2777,6 @@ export async function createRxMenuItem(input: Omit<RxMenuItem, '_deleted' | '_mo
     _deleted: false,
     _modified: now
   } as RxMenuItem)
-  await createAuditLog({
-    entity: 'menu_item',
-    entityId: created.id,
-    action: 'create',
-    summary: `Se creó el producto ${created.nombre}`,
-    after: created.toJSON(),
-    source: 'rxdb'
-  })
   return created
 }
 
@@ -3033,19 +2784,9 @@ export async function updateRxMenuItem(id: string, patch: Partial<RxMenuItem>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.menu_items.findOne(id).exec(true)
-  const before = doc?.toJSON()
   const result = await doc.update({
     $set: { ...patch, _modified: new Date().toISOString() }
   } as any)
-  await createAuditLog({
-    entity: 'menu_item',
-    entityId: id,
-    action: patch._deleted ? 'delete' : 'update',
-    summary: patch._deleted ? `Se eliminó el producto ${before?.nombre || id}` : diffSummary('producto', patch as Record<string, unknown>),
-    before,
-    after: { ...before, ...patch },
-    source: 'rxdb'
-  })
   return result
 }
 

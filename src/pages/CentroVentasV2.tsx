@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
-import { MagnifyingGlass, Plus, Receipt as ReceiptEmpty, CreditCard, ForkKnife, BedIcon, Table, Door, Calendar, FunnelSimple, CaretDown, ChatText, ArrowLeft, Check, X as XIcon } from '@phosphor-icons/react';
+import { Plus, Receipt as ReceiptEmpty, CreditCard, Calendar, FunnelSimple, CaretDown, ChatText, ArrowLeft, Check, X as XIcon } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,14 +10,9 @@ import { useVentasConMovimientos, type VentaConMovimientos } from '../hooks/useV
 import type { VentaOrigen, VentaTipo } from '../db/rxdb';
 import { VentaDetalleAcciones } from '../components/CentroVentas/VentaDetalleAcciones';
 import { RegistrarVentaPanel } from '../components/CentroVentas/RegistrarVentaPanel';
+import { OrigenBadge, ORIGEN_LABEL, ORIGEN_ICON } from '../components/Common/OrigenBadge';
+import { PageFrame, PageHeader, PageContent, HeaderSearch, headerPrimaryButtonClass } from '../components/Common/PageHeader';
 import { DashboardControlDia } from '../components/CentroVentas/DashboardControlDia';
-
-const ORIGEN_LABEL: Record<VentaOrigen, string> = {
-  mesa: 'Mesa',
-  reserva_restaurante: 'Reserva restaurante',
-  reserva_hotel: 'Reserva hotel',
-  habitacion: 'Checkout habitación',
-};
 
 // Nombres completos usados en el dropdown de filtro de origen (distinto de
 // ORIGEN_LABEL: "Mesa" pasa a "Mesa de restaurante" para diferenciarse de
@@ -28,23 +22,6 @@ const ORIGEN_FILTER_LABEL: Record<VentaOrigen, string> = {
   reserva_restaurante: 'Reserva restaurante',
   reserva_hotel: 'Reserva hotel',
   habitacion: 'Checkout habitación',
-};
-
-const ORIGEN_ICON: Record<VentaOrigen, typeof Table> = {
-  mesa: Table,
-  reserva_restaurante: ForkKnife,
-  reserva_hotel: BedIcon,
-  habitacion: Door,
-};
-
-// Rellenos (fondo sólido + texto blanco), a diferencia de ESTADO_PRINCIPAL_BADGE
-// que va en tono claro con borde — así un badge de origen nunca se confunde
-// visualmente con el de estado.
-const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
-  mesa: 'bg-blue-600 text-white border-blue-600',
-  reserva_restaurante: 'bg-orange-600 text-white border-orange-600',
-  reserva_hotel: 'bg-sky-600 text-white border-sky-600',
-  habitacion: 'bg-violet-600 text-white border-violet-600',
 };
 
 const ORIGEN_FILTERS: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'reserva_hotel', 'habitacion'];
@@ -85,9 +62,9 @@ const ESTADO_PRINCIPAL_LABEL: Record<EstadoPrincipal, string> = {
 };
 
 const ESTADO_PRINCIPAL_BADGE: Record<EstadoPrincipal, string> = {
-  facturado: 'border-purple-200 text-purple-700 bg-purple-50',
-  pagado: 'border-emerald-200 text-emerald-700 bg-emerald-50',
-  pendiente: 'border-red-200 text-red-700 bg-red-50',
+  facturado: 'border-special/30 text-special-foreground bg-special-soft',
+  pagado: 'border-success/25 text-success-foreground bg-success-soft',
+  pendiente: 'border-destructive/25 text-destructive bg-destructive/10',
   anulado: 'border-border text-muted-foreground bg-muted',
 };
 
@@ -130,6 +107,18 @@ export default function CentroVentasV2() {
   const [registrando, setRegistrando] = useState(false);
 
   const [displayLimit, setDisplayLimit] = useState(30);
+
+  // Llegada desde otra pantalla (p. ej. "Ver en Centro de Ventas" de una
+  // comanda cobrada): abre esa venta directamente.
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem('pos_venta_a_abrir');
+      if (id) {
+        sessionStorage.removeItem('pos_venta_a_abrir');
+        setSelectedVentaId(id);
+      }
+    } catch { /* sin storage */ }
+  }, []);
 
   // Buscador robusto: cliente, referencia, monto, fecha, factura, método —
   // cualquier dato recordado sirve de punto de entrada, sin pasar primero
@@ -196,7 +185,8 @@ export default function CentroVentasV2() {
   }, [visibleItems]);
 
   useEffect(() => {
-    if (selectedVentaId && !items.some(i => i.venta.id === selectedVentaId)) {
+    // Con la lista aún vacía (cargando) no se descarta: puede venir preseleccionada.
+    if (selectedVentaId && items.length > 0 && !items.some(i => i.venta.id === selectedVentaId)) {
       setSelectedVentaId(null);
     }
   }, [items, selectedVentaId]);
@@ -212,38 +202,49 @@ export default function CentroVentasV2() {
   );
 
   return (
-    <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
+    <PageFrame>
+      <PageHeader
+        title="Centro de Ventas"
+        subtitle={`${filteredItems.length} ${filteredItems.length === 1 ? 'venta' : 'ventas'}`}
+        search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar cliente, referencia, monto..." />}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => { setSelectedVentaId(null); setSelectedDate(null); setRegistrando(true); }}
+              title="Registrar venta"
+              aria-label="Registrar venta"
+              className={headerPrimaryButtonClass}
+            >
+              <Plus size={18} weight="bold" />
+              <span className="hidden 2xl:inline">Registrar venta</span>
+            </button>
+          </>
+        }
+      />
+
+      <PageContent className="md:flex-row">
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Panel 1: buscador + filtros + lista de ventas */}
         <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 min-w-0 bg-card", (selected || registrando || selectedDate) ? "hidden md:flex md:w-2/5" : "flex-1")}>
           <div className="p-3 border-b border-border shrink-0 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
-                <Input
-                  type="text" placeholder="Búsqueda" value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9 text-xs" />
-              </div>
-
-              {/* Icono/Filtro de fecha antes del botón de añadir */}
+            {/* Fila de filtros ordenados: Dropdown de Origen / Directo - Crédito / Dropdown de Estado */}
+            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-0.5">
+              {/* Fecha: junto al resto de filtros */}
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <button
-                    type="button"
-                    title="Filtrar por fecha"
-                    className={cn(
-                      "h-9 px-3 rounded-lg border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0",
-                      dateRange[0] ? "bg-foreground text-background border-foreground shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted"
-                    )}
+                    type="button" title="Filtrar por fecha"
+                    className={cn("px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer flex items-center gap-1 shrink-0",
+                      dateRange[0] ? "bg-foreground text-background border-foreground shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted")}
                   >
-                    <Calendar size={15} weight="bold" />
+                    <Calendar size={12} weight="bold" />
                     {dateRange[0]
                       ? `${dayjs(dateRange[0]).format('DD/MM')}${dateRange[1] ? ` - ${dayjs(dateRange[1]).format('DD/MM')}` : ''}`
                       : 'Fecha'}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
+                <PopoverContent className="w-auto p-0" align="start">
                   <CalendarPicker
                     mode="range"
                     selected={dateRange[0] ? { from: dateRange[0], to: dateRange[1] ?? undefined } : undefined}
@@ -264,23 +265,15 @@ export default function CentroVentasV2() {
                 </PopoverContent>
               </Popover>
 
-              <button
-                type="button" title="Registrar venta"
-                onClick={() => { setSelectedVentaId(null); setSelectedDate(null); setRegistrando(true); }}
-                className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs active:scale-95 transition-all cursor-pointer shrink-0">
-                <Plus size={16} weight="bold" />
-              </button>
-            </div>
+              <div className="w-[1px] h-4 bg-border shrink-0 mx-0.5" />
 
-            {/* Fila de filtros ordenados: Dropdown de Origen / Directo - Crédito / Dropdown de Estado */}
-            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-0.5">
               {/* Dropdown de Origen: nombres completos (Mesa de restaurante, Reserva restaurante, Reserva hotel, Checkout habitación) */}
               <Popover open={origenOpen} onOpenChange={setOrigenOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
                     className={cn("px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer flex items-center gap-1 shrink-0",
-                      origenFilters.size > 0 ? "bg-primary text-primary-foreground border-primary shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted")}
+                      origenFilters.size > 0 ? "bg-foreground text-background border-foreground shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted")}
                   >
                     <FunnelSimple size={12} weight="bold" />
                     Origen{origenFilters.size > 0 ? ` (${origenFilters.size})` : ''}
@@ -296,12 +289,12 @@ export default function CentroVentasV2() {
                         key={o}
                         type="button" onClick={() => toggleSet(origenFilters, o, setOrigenFilters)}
                         className={cn("w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center justify-between gap-2",
-                          active ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted")}
+                          active ? "bg-muted text-foreground" : "text-foreground hover:bg-muted")}
                       >
                         <span className="flex items-center gap-1.5">
                           <Icon size={12} weight="bold" /> {ORIGEN_FILTER_LABEL[o]}
                         </span>
-                        {active && <span className="text-primary">✓</span>}
+                        {active && <span className="text-foreground">✓</span>}
                       </button>
                     );
                   })}
@@ -329,7 +322,7 @@ export default function CentroVentasV2() {
               <button
                 type="button" onClick={() => setTipoFilter(t => t === 'credito' ? null : 'credito')}
                 className={cn("px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap border transition-all cursor-pointer flex items-center gap-1 shrink-0",
-                  tipoFilter === 'credito' ? "bg-rose-600 text-white border-rose-600 shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted")}
+                  tipoFilter === 'credito' ? "bg-destructive text-white border-destructive shadow-xs" : "bg-card text-muted-foreground border-border hover:bg-muted")}
               >
                 <CreditCard size={12} weight="bold" /> Crédito
               </button>
@@ -357,10 +350,10 @@ export default function CentroVentasV2() {
                         key={f.value}
                         type="button" onClick={() => toggleSet(estadoFilters, f.value, setEstadoFilters)}
                         className={cn("w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center justify-between",
-                          active ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted")}
+                          active ? "bg-muted text-foreground" : "text-foreground hover:bg-muted")}
                       >
                         {f.label}
-                        {active && <span className="text-primary">✓</span>}
+                        {active && <span className="text-foreground">✓</span>}
                       </button>
                     );
                   })}
@@ -389,13 +382,12 @@ export default function CentroVentasV2() {
                   <button
                     type="button"
                     onClick={() => { setRegistrando(false); setSelectedVentaId(null); setSelectedDate(group.label); }}
-                    className="text-[10px] font-extrabold text-muted-foreground hover:text-foreground uppercase tracking-wider px-4 py-2 bg-muted/60 sticky top-0 text-left transition-colors cursor-pointer w-full"
+                    className="text-[10px] font-extrabold uppercase tracking-wider px-4 py-2 bg-muted text-foreground hover:bg-secondary border-y border-border sticky top-0 z-10 text-left transition-colors cursor-pointer w-full"
                   >
                     {group.label}
                   </button>
                   {group.items.map(item => {
                     const active = item.venta.id === selectedVentaId;
-                    const OrigenIcon = ORIGEN_ICON[item.venta.origen];
                     const estado = estadoPrincipalDe(item);
                     // Una venta anulada se ve toda en tonos grises — ningún
                     // acento de color (origen, crédito, iconos) compite por
@@ -409,20 +401,17 @@ export default function CentroVentasV2() {
                         className={cn(
                           "w-full min-w-0 flex items-stretch gap-0 text-left border-b border-border/60 transition-colors cursor-pointer",
                           isAnulada && "opacity-70",
-                          active ? "bg-primary/10" : "hover:bg-muted"
+                          active ? "bg-muted shadow-[inset_3px_0_0_var(--foreground)]" : "hover:bg-muted/60"
                         )}
                       >
                         <div className="flex-1 min-w-0 flex flex-col gap-1.5 px-3.5 py-3">
                           {/* Fila 1: Badges (Origen / Crédito) -------------- Valor ($ Monto) */}
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                              <Badge variant="outline" className={cn("shrink-0 font-bold text-[10px] gap-1 px-1.5 py-0",
-                                isAnulada ? "border-border text-muted-foreground bg-muted" : ORIGEN_CLASSES[item.venta.origen])}>
-                                <OrigenIcon size={10} weight="bold" /> {ORIGEN_LABEL[item.venta.origen]}
-                              </Badge>
+                              <OrigenBadge origen={item.venta.origen} apagado={isAnulada} />
                               {item.venta.tipo === 'credito' && (
                                 <Badge variant="outline" className={cn("shrink-0 font-bold text-[10px] gap-1 px-1.5 py-0",
-                                  isAnulada ? "border-border text-muted-foreground bg-muted" : "border-rose-200 text-rose-700 bg-rose-50")}>
+                                  isAnulada ? "border-border text-muted-foreground bg-muted" : "border-destructive/25 text-destructive bg-destructive/10")}>
                                   <CreditCard size={10} weight="bold" /> Crédito
                                 </Badge>
                               )}
@@ -439,7 +428,7 @@ export default function CentroVentasV2() {
                             </span>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {item.saldo > 0.01 && (
-                                <span className={cn("text-[10px] font-extrabold", isAnulada ? "text-muted-foreground" : "text-amber-600")}>
+                                <span className={cn("text-[10px] font-extrabold", isAnulada ? "text-muted-foreground" : "text-warning-foreground")}>
                                   saldo ${item.saldo.toFixed(2)}
                                 </span>
                               )}
@@ -457,7 +446,7 @@ export default function CentroVentasV2() {
                             <div className="flex items-center gap-1 shrink-0">
                               {item.textoComentarios && (
                                 <>
-                                  <div title={`Comentario: ${item.textoComentarios}`} className={cn("text-muted-foreground", !isAnulada && "text-blue-600")}>
+                                  <div title={`Comentario: ${item.textoComentarios}`} className={cn("text-muted-foreground", !isAnulada && "text-info-foreground")}>
                                     <ChatText size={12} />
                                   </div>
                                   <div className="w-[1px] h-3 bg-border shrink-0 mx-0.5" />
@@ -475,7 +464,7 @@ export default function CentroVentasV2() {
                                     <TooltipTrigger asChild>
                                       <div
                                         className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
-                                          (isAnulada || !comprobanteOk) ? "bg-muted text-muted-foreground/50" : "bg-primary/15 text-primary")}
+                                          (isAnulada || !comprobanteOk) ? "bg-muted text-muted-foreground/50" : "bg-muted text-muted-foreground")}
                                       >
                                         {comprobanteOk ? <Check size={10} weight="bold" /> : <XIcon size={10} weight="bold" />}
                                       </div>
@@ -490,7 +479,7 @@ export default function CentroVentasV2() {
                                 <TooltipTrigger asChild>
                                   <div
                                     className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
-                                      (isAnulada || !item.facturado) ? "bg-muted text-muted-foreground/50" : "bg-purple-100 text-purple-700")}
+                                      (isAnulada || !item.facturado) ? "bg-muted text-muted-foreground/50" : "bg-special-soft text-special-foreground")}
                                   >
                                     {item.facturado ? <Check size={10} weight="bold" /> : <XIcon size={10} weight="bold" />}
                                   </div>
@@ -538,7 +527,7 @@ export default function CentroVentasV2() {
                 <span className="text-sm font-semibold">Volver a la lista</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0">
               <RegistrarVentaPanel
                 onCancel={() => setRegistrando(false)}
                 onSuccess={(ventaId) => { setRegistrando(false); setSelectedVentaId(ventaId); }}
@@ -586,6 +575,7 @@ export default function CentroVentasV2() {
           </main>
         )}
       </div>
-    </div>
+      </PageContent>
+    </PageFrame>
   );
 }

@@ -42,12 +42,12 @@ export function SidebarPagosModal({ opened, onClose, pagos, totalPagado }: Sideb
                     {new Date(pago.fecha).toLocaleString()}
                   </span>
                   {pago.factura_nro && (
-                    <span className="w-fit px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[9px] mt-1">
+                    <span className="w-fit px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-bold text-[9px] mt-1">
                       Factura: {pago.factura_nro}
                     </span>
                   )}
                 </div>
-                <span className="font-black text-sm text-emerald-600">${pago.monto.toFixed(2)}</span>
+                <span className="font-black text-sm text-foreground">${pago.monto.toFixed(2)}</span>
               </div>
             ))
           )}
@@ -55,7 +55,7 @@ export function SidebarPagosModal({ opened, onClose, pagos, totalPagado }: Sideb
 
         <div className="flex items-center justify-between pt-3 border-t border-border font-extrabold text-sm">
           <span className="text-foreground">Total Pagado</span>
-          <span className="text-emerald-600 text-base font-black">${totalPagado.toFixed(2)}</span>
+          <span className="text-foreground text-base font-black">${totalPagado.toFixed(2)}</span>
         </div>
       </DialogContent>
     </Dialog>

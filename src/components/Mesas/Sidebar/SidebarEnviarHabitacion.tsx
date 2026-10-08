@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from'react';
+import { folioLabel } from '../../../lib/folio';
 import { ArrowLeft, Door, Check } from'@phosphor-icons/react';
 import type { Comanda } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SubcuentaChips } from'./habitacion/SubcuentaChips';
+import { filtrarCuentasHabitacionVigentes } from'../../../lib/habitacionCuentas';
 import { initVerticalRxDb, updateRxComanda, liberarMesaSiSinOperativas } from'../../../db/rxdb';
 
 interface SidebarEnviarHabitacionProps {
@@ -29,8 +31,14 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  const rxDb = await initVerticalRxDb();
  if (!alive) return;
 
- const docsCuentas = await rxDb.habitacion_cuentas.find({ selector: { estado:'activa', _deleted: { $ne: true } } }).exec();
- if (alive) setCuentasActivas(docsCuentas.map((doc: any) => doc.toJSON()));
+ const [docsCuentas, docsMesas] = await Promise.all([
+ rxDb.habitacion_cuentas.find({ selector: { estado:'activa', _deleted: { $ne: true } } }).exec(),
+ rxDb.mesas.find({ selector: { _deleted: { $ne: true } } }).exec(),
+ ]);
+ if (alive) setCuentasActivas(filtrarCuentasHabitacionVigentes(
+ docsCuentas.map((doc: any) => doc.toJSON()),
+ docsMesas.map((doc: any) => doc.toJSON())
+ ));
 
  const docsItems = await rxDb.comanda_items.find({ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } } }).exec();
  if (alive) setComandaItems(docsItems.map((doc: any) => doc.toJSON()));
@@ -75,7 +83,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  </button>
  <div className="flex flex-col">
  <h3 className="font-extrabold text-base text-foreground leading-tight">Enviar a Habitación</h3>
- <span className="text-[10px] font-bold text-muted-foreground">Comanda #{activeComanda.folio}</span>
+ <span className="text-[10px] font-bold text-muted-foreground">Comanda #{folioLabel(activeComanda)}</span>
  </div>
  </div>
  </header>

@@ -1,0 +1,48 @@
+import { Check } from '@phosphor-icons/react';
+import { cn } from '@/lib/utils';
+
+// Opción de habitación activa: misma presentación al abrir una mesa vinculada
+// y al cargar una comanda a una habitación (etiqueta HAB + huésped + tipo).
+
+interface HabitacionOpcionProps {
+  /** Nombre de la mesa de la habitación, p. ej. "Hab. 3 (CABAÑA JACUZZI)". */
+  mesaNombre?: string | null;
+  huesped: string;
+  seleccionada: boolean;
+  onSelect: () => void;
+}
+
+export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect }: HabitacionOpcionProps) {
+  const nombre = mesaNombre || '';
+  const numero = nombre.match(/Hab\.\s*(\d+)/)?.[1] || nombre || '—';
+  const tipo = nombre.match(/\(([^)]+)\)/)?.[1] || '';
+
+  return (
+    <button
+      type="button"
+      aria-pressed={seleccionada}
+      onClick={onSelect}
+      className={cn(
+        'flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none',
+        seleccionada ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card'
+      )}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={cn('w-10 h-10 rounded-xl flex flex-col items-center justify-center font-black text-sm shrink-0 leading-none',
+          seleccionada ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
+          <span className="text-[9px] uppercase font-extrabold opacity-70">HAB</span>
+          <span>{numero}</span>
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="font-extrabold text-sm text-foreground truncate">{huesped}</span>
+          {tipo && <span className="text-xs font-semibold text-muted-foreground truncate">{tipo}</span>}
+        </div>
+      </div>
+      {seleccionada && (
+        <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-sm">
+          <Check size={14} weight="bold" />
+        </div>
+      )}
+    </button>
+  );
+}

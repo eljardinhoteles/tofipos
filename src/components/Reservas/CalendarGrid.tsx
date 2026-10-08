@@ -2,8 +2,13 @@ import { CalendarCheck, Users } from '@phosphor-icons/react';
 import { type Reserva, type Piso, type Mesa } from '../../db/database';
 import { isToday, isWeekend, toISO } from './reservaUtils';
 import { CalendarCell } from './CalendarCell';
+import { CalendarNav } from './CalendarToolbar';
 
 interface CalendarGridProps {
+  startDate: Date;
+  setStartDate: (d: Date) => void;
+  shiftDays: (n: number) => void;
+  goToday: () => void;
   visibleDates: Date[];
   reservas: Reserva[] | undefined;
   zonasRows: Piso[] | undefined;
@@ -17,6 +22,10 @@ interface CalendarGridProps {
 }
 
 export function CalendarGrid({
+  startDate,
+  setStartDate,
+  shiftDays,
+  goToday,
   visibleDates,
   reservas,
   zonasRows,
@@ -28,9 +37,10 @@ export function CalendarGrid({
   onAssign,
   onCancel
 }: CalendarGridProps) {
-  const DATE_COL_MIN = 200;
-  const gridColumns = `140px repeat(${visibleDates.length}, minmax(${DATE_COL_MIN}px, 1fr))`;
-  const gridMinWidth = 140 + (visibleDates.length * DATE_COL_MIN);
+  const ZONE_COL = 190;
+  const DATE_COL_MIN = 260;
+  const gridColumns = `${ZONE_COL}px repeat(${visibleDates.length}, minmax(${DATE_COL_MIN}px, 1fr))`;
+  const gridMinWidth = ZONE_COL + (visibleDates.length * DATE_COL_MIN);
 
   const codigoMap = (() => {
     const map: Record<string, string> = {};
@@ -47,15 +57,15 @@ export function CalendarGrid({
     return map;
   })();
 
+  const mesaPorId = new Map((mesas || []).map(m => [m.id, m.nombre]));
+
   return (
     <div className="flex-1 w-full overflow-hidden bg-muted relative">
       <div className="w-full h-full overflow-auto">
         <div style={{ display: 'grid', gridTemplateColumns: gridColumns, minWidth: `${gridMinWidth}px` }}>
           {/* Header — mes en curso, sobre la columna de zonas */}
-          <div className="h-12 px-3 bg-primary border-b border-r border-border flex items-center">
-            <span className="font-extrabold text-xs text-primary-foreground uppercase truncate">
-              {visibleDates[0]?.toLocaleDateString('es-ES', { month: 'long' })}
-            </span>
+          <div className="sticky top-0 left-0 z-30 h-12 px-2 bg-card border-b border-r border-border flex items-center shadow-[2px_0_0_0_var(--border)]">
+            <CalendarNav startDate={startDate} setStartDate={setStartDate} shiftDays={shiftDays} goToday={goToday} visibleDates={visibleDates} />
           </div>
           {visibleDates.map(date => {
             const ds = toISO(date);
@@ -70,7 +80,7 @@ export function CalendarGrid({
             return (
               <div
                 key={date.toISOString()}
-                className={`h-12 px-3 bg-background border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'bg-primary/10 text-primary' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
+                className={`sticky top-0 z-20 h-12 px-3 ${today ? 'bg-muted' : 'bg-card'} border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'text-muted-foreground' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
               >
                 <div className="flex items-baseline gap-1">
                   <span className="uppercase text-[10px] text-muted-foreground">
@@ -82,7 +92,7 @@ export function CalendarGrid({
                 {dayCount > 0 ? (
                   <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      <CalendarCheck size={13} className="text-primary" />
+                      <CalendarCheck size={13} className="text-muted-foreground" />
                       <span>{dayCount}</span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -100,7 +110,7 @@ export function CalendarGrid({
           {/* Grid Body */}
           {(!zonasRows ? Array.from({ length: 6 }, (_, i) => ({ id: `skel-${i}`, nombre: '', orden: i })) : zonasRows).map((zona) => (
             <div key={`row-group-${zona.id}`} className="contents">
-              <div key={`zona-${zona.id}`} className="p-3 bg-background border-b border-r border-border flex flex-col justify-center">
+              <div key={`zona-${zona.id}`} className="sticky left-0 z-10 p-3 bg-background border-b border-r border-border flex flex-col justify-center shadow-[2px_0_0_0_var(--border)]">
                 <span className="font-extrabold text-xs text-foreground truncate">{zona.nombre}</span>
                 {zona.id !== 'sin_zona' && mesas && (
                   <span className="text-[9px] font-bold uppercase text-muted-foreground mt-0.5">
@@ -131,6 +141,7 @@ export function CalendarGrid({
                     onCancel={onCancel}
                     isMonthEnd={monthEnd}
                     codigoMap={codigoMap}
+                    mesaPorId={mesaPorId}
                   />
                 );
               })}

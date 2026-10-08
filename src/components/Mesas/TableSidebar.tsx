@@ -252,10 +252,13 @@ export function TableSidebar({
   // de toda la mesa (ya cargada), así al cambiar de subcomanda no se ven, por
   // un instante, los ítems de la anterior mientras llega su propia consulta.
   const comandaItems = useMemo(
-    () => (esMultiple && activeComanda && mesaItems.length > 0
+    // Una comanda histórica (cerrada) no está en `mesaItems`, que solo trae las
+    // operativas: usa siempre su propia consulta, o salía vacía si la mesa
+    // tenía otras subcomandas abiertas.
+    () => (esMultiple && !viewingComandaId && activeComanda && mesaItems.length > 0
       ? mesaItems.filter(i => i.comanda_id === activeComanda.id)
       : liveComandaItems),
-    [esMultiple, activeComanda, mesaItems, liveComandaItems]
+    [esMultiple, viewingComandaId, activeComanda, mesaItems, liveComandaItems]
   );
 
   const [editingMesaId, setEditingMesaId] = useState<string | null>(null);
