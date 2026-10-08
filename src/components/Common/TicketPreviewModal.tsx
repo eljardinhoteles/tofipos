@@ -9,6 +9,7 @@ import {
  DialogDescription,
 } from'@/components/ui/dialog';
 import { Button } from'@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
 
 interface TicketPreviewModalProps {
  opened: boolean;
@@ -16,6 +17,9 @@ interface TicketPreviewModalProps {
  title: string;
  content?: string;
  onPrint?: () => void;
+ /** Si se pasa, el modal ofrece un segundo documento: el ticket de cocina. */
+ kitchenContent?: string;
+ onPrintKitchen?: () => void;
 }
 
 const COUNTDOWN_SECONDS = 3;
@@ -26,7 +30,12 @@ export function TicketPreviewModal({
  title,
  content,
  onPrint,
+ kitchenContent,
+ onPrintKitchen,
 }: TicketPreviewModalProps) {
+ const [documento, setDocumento] = useState<'cliente'|'cocina'>('cliente');
+ const tieneCocina = !!kitchenContent;
+ const esCocina = tieneCocina && documento === 'cocina';
  const ESC = String.fromCharCode(27);
  const GS = String.fromCharCode(29);
 
@@ -37,6 +46,9 @@ export function TicketPreviewModal({
  // una vez por cuenta regresiva, sin importar si el interval tuvo algún
  // tick de más antes de que clearInterval surtiera efecto.
  const firedRef = useRef(false);
+ // Documento activo al momento de imprimir (el interval no ve el state vigente).
+ const esCocinaRef = useRef(false);
+ esCocinaRef.current = esCocina;
  // Valor vigente de la cuenta regresiva: el interval lo lee de aquí en vez de
  // usar un updater de setState con efectos secundarios (toast, onPrint, onClose).
  const countdownRef = useRef<number | null>(null);
@@ -56,6 +68,7 @@ export function TicketPreviewModal({
  // silenciosamente: no queremos imprimir algo que el usuario ya no ve.
  useEffect(() => {
  if (!opened) {
+ setDocumento('cliente');
  clearTimer();
  updateCountdown(null);
  firedRef.current = false;
@@ -88,7 +101,7 @@ export function TicketPreviewModal({
  if (!firedRef.current) {
  firedRef.current = true;
  showToast.success('Enviado a Impresora','El documento se envió a la cola de impresión local (80mm).');
- if (onPrint) onPrint();
+ if (esCocinaRef.current) onPrintKitchen?.(); else onPrint?.();
  }
  onClose();
  }, 1000);
@@ -123,8 +136,17 @@ export function TicketPreviewModal({
  <DialogDescription className="sr-only">Vista previa del documento a imprimir</DialogDescription>
  </DialogHeader>
 
+ {tieneCocina && (
+ <Tabs value={documento} onValueChange={(v) => { if (!isCounting) setDocumento(v as 'cliente'|'cocina'); }}>
+ <TabsList aria-label="Documento a imprimir">
+ <TabsTrigger value="cliente">Precuenta cliente</TabsTrigger>
+ <TabsTrigger value="cocina">Comanda cocina</TabsTrigger>
+ </TabsList>
+ </Tabs>
+ )}
+
  <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4 bg-card border border-border rounded-xl">
- {renderFormattedContent(content)}
+ {renderFormattedContent(esCocina ? kitchenContent : content)}
  </div>
 
  {isCounting ? (
@@ -144,7 +166,7 @@ export function TicketPreviewModal({
  <Button
  type="button"onClick={startCountdown}
  className="h-12 bg-primary text-white font-extrabold text-sm gap-1.5">
- <Printer size={16} /> Imprimir
+ <Printer size={16} /> {esCocina ? 'Imprimir cocina' : 'Imprimir'}
  </Button>
  </div>
  )}

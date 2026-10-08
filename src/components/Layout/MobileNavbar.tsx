@@ -1,3 +1,5 @@
+import { AguacateEgg } from '../Common/AguacateEgg';
+import { useUI } from '../../context/UIContext';
 import { useEffect, useState } from'react';
 import { NavLink, useNavigate, useLocation } from'react-router-dom';
 import {
@@ -14,6 +16,7 @@ import { Button } from'@/components/ui/button';
 import { NAV_ACCENT } from'../../lib/navAccent';
 import { MENU_EN_CAPAS, toggleMenuMovil, setMenuMovilAbierto, useMenuMovilAbierto } from'../../lib/menuMovil';
 import {
+ Pulse,
  List,
  SquaresFour,
  Receipt,
@@ -203,7 +206,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  {/* Header: igual que la cabecera del sidebar de PC (icono de la app) + organización y estado de impresión */}
  <div className="shrink-0 flex items-center justify-between gap-3 px-5 pt-8 pb-4">
  <div className="flex items-center gap-3 min-w-0">
- <img src="/Icon-app.webp" alt="" aria-hidden="true" className="w-9 h-9 object-contain shrink-0" />
+ <AguacateEgg className="w-9 h-9" />
  <div className="flex flex-col min-w-0">
  <span className="font-extrabold text-base text-nav-foreground leading-tight truncate">{orgNombre}</span>
  <span className="flex items-center gap-1.5 text-xs font-semibold text-nav-foreground/70 leading-tight">
@@ -263,7 +266,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  {/* Usuario + cierre de sesión (en el sidebar de PC es el menú de la cuenta) */}
  <div className="shrink-0 border-t border-nav-foreground/10 p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3">
  <div className="flex items-center gap-3">
- <span aria-hidden="true" className="size-11 rounded-xl bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
+ <span aria-hidden="true" className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
  {initials(userName)}
  </span>
  <div className="flex flex-col min-w-0 flex-1">
@@ -298,6 +301,7 @@ export function MenuCapaMovil() {
   const { currentMesero, adminUser, logoutMesero, logoutAdmin } = useAuth();
   const [printServerOk, setPrintServerOk] = useState(false);
   const abierto = useMenuMovilAbierto();
+  const { setActividadOpen } = useUI();
   const orgNombre = localStorage.getItem('pos_org_name_cached') || 'Organización';
   const userName = currentMesero?.nombre || adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || 'Usuario';
   const userRole = currentMesero ? 'Mesero' : 'Administrador';
@@ -318,14 +322,20 @@ export function MenuCapaMovil() {
   return (
     <div aria-hidden={!abierto} className="absolute inset-0 z-0 bg-nav text-nav-foreground flex flex-col px-4 pt-5">
       <div className="flex items-center gap-3 pb-5 min-w-0">
-        <img src="/Icon-app.webp" alt="" aria-hidden="true" className="w-9 h-9 object-contain shrink-0" />
-        <div className="flex flex-col min-w-0">
+        <AguacateEgg className="w-9 h-9" />
+        <div className="flex flex-col min-w-0 flex-1">
           <span className="font-extrabold text-base text-nav-foreground leading-tight truncate">{orgNombre}</span>
           <span className="flex items-center gap-1.5 text-xs font-semibold text-nav-foreground/70 leading-tight">
             <span className={cn('w-2 h-2 rounded-full shrink-0', printServerOk ? 'bg-success' : 'bg-destructive')} />
             {printServerOk ? 'Impresión conectada' : 'Impresión sin conexión'}
           </span>
         </div>
+        <button type="button" title="Actividad del día" aria-label="Actividad del día" tabIndex={abierto ? 0 : -1}
+          // El panel entra primero y cubre la pantalla; el menú se cierra detrás, ya sin verse.
+          onClick={() => { setActividadOpen(true); setTimeout(cerrar, 350); }}
+          className="size-11 rounded-full text-nav-foreground flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-transform">
+          <Pulse size={22} weight="bold" />
+        </button>
       </div>
 
       <nav aria-label="Secciones" className="grid grid-cols-2 auto-rows-[4.5rem] gap-3">
@@ -356,7 +366,7 @@ export function MenuCapaMovil() {
 
       {/* Usuario y cierre de sesión, al final de las tarjetas */}
       <div className="flex items-center gap-3 pt-6 pb-6">
-        <span aria-hidden="true" className="size-11 rounded-xl bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
+        <span aria-hidden="true" className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
           {initials(userName)}
         </span>
         <div className="flex flex-col min-w-0 flex-1">

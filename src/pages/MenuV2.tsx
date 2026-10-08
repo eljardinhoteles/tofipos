@@ -1,6 +1,6 @@
 import { useMemo, useState } from'react';
 import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
-import { Trash, Plus, Check, List, SquaresFour, CaretUp, CaretDown, CaretRight, Gear } from'@phosphor-icons/react';
+import { Trash, Plus, List, SquaresFour, CaretUp, CaretDown, CaretRight, Gear } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxdb';
@@ -50,6 +50,11 @@ export default function MenuV2() {
  return map;
  }, [safeMenuItems]);
 
+ const iconoPorCategoria = useMemo(
+ () => new Map(safeDbCategorias.map(c => [c.nombre, getCategoryIcon(c.icono)])),
+ [safeDbCategorias]
+ );
+
  const products = useMemo(() => filteredItems.map(item => ({
  id: item.id,
  name: item.nombre,
@@ -58,6 +63,7 @@ export default function MenuV2() {
  categoria_nombre: item.categoria_nombre,
  modificadores: item.modificadores || [],
  activo: item.activo,
+ precio_variable: !!item.precio_variable,
  iva_modalidad: item.iva_modalidad ||'sistema',
  iva_porcentaje: item.iva_porcentaje
  })), [filteredItems]);
@@ -168,6 +174,7 @@ export default function MenuV2() {
  <MenuProductCardV2
  key={product.id}
  product={product}
+ CategoriaIcon={iconoPorCategoria.get(product.categoria_nombre) ?? null}
  isSelected={selectedMenuProductId === product.id}
  onEdit={() => handleEditClick(product)}
  onToggleActivo={async (activo: boolean) => {
@@ -361,50 +368,54 @@ export default function MenuV2() {
  );
 }
 
-function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo }: any) {
+function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, CategoriaIcon }: any) {
  const isInactivo = product.activo === false;
+ const Icono = CategoriaIcon ?? SquaresFour;
  return (
  <div
  onClick={onEdit}
- className={cn("bg-card rounded-2xl p-4 border transition-all cursor-pointer flex flex-col justify-between active:scale-98",
- isInactivo &&"opacity-50",
- isSelected ?"border-primary ring-2 ring-primary/20 shadow-md":"border-border")}
+ className={cn("group rounded-2xl p-4 border flex flex-col gap-3 min-h-36 cursor-pointer transition-shadow hover:shadow-md active:scale-98",
+ isInactivo ? "bg-muted/50 border-border" : "bg-card",
+ isSelected ? "border-primary ring-2 ring-primary/20 shadow-md" : !isInactivo && "border-border")}
  >
- <div className="flex flex-col gap-1">
  <div className="flex items-center justify-between gap-2">
- <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground truncate">
- {product.category}
+ <span className="flex items-center gap-1.5 min-w-0 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+ <Icono size={14} weight="bold" className="shrink-0" />
+ <span className="truncate">{product.category}</span>
  </span>
- </div>
- <h3 className="font-extrabold text-sm text-foreground line-clamp-2">
- {product.name}
- </h3>
+ {onToggleActivo && (
+ <Switch
+ checked={!isInactivo}
+ aria-label={isInactivo ? 'Activar producto' : 'Desactivar producto'}
+ title={isInactivo ? 'Activar producto' : 'Desactivar producto'}
+ onClick={(e) => e.stopPropagation()}
+ onCheckedChange={(v) => onToggleActivo(v)}
+ className="h-4 w-7 shrink-0 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+ />
+ )}
  </div>
 
- <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
- <span className="text-base font-black text-foreground">
+ <h3 className={cn("font-extrabold text-base leading-snug line-clamp-2 flex-1", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+ {product.name}
+ </h3>
+
+ <div className="flex items-end justify-between gap-2">
+ {product.precio_variable ? (
+ <span className="text-sm font-black text-foreground">Precio variable</span>
+ ) : (
+ <span className={cn("text-xl font-black tabular-nums leading-none", isInactivo ? "text-muted-foreground" : "text-foreground")}>
  ${product.price.toFixed(2)}
  </span>
- <div className="flex items-center gap-2 shrink-0">
+ )}
+ <span className="flex items-center gap-2 shrink-0 text-xs font-bold text-muted-foreground">
+ {isInactivo && <span className="px-1.5 py-0.5 rounded-md bg-muted">Inactivo</span>}
  {product.modificadores.length > 0 && (
- <div className="flex items-center gap-1 text-muted-foreground text-xs font-semibold">
- <List size={14} />
- <span>{product.modificadores.length}</span>
- </div>
+ <span className="flex items-center gap-1" title="Modificadores">
+ <List size={14} weight="bold" />
+ {product.modificadores.length}
+ </span>
  )}
- {onToggleActivo && (
- <button
- type="button"
- title={isInactivo ?'Activar producto':'Desactivar producto'}
- onClick={e => { e.stopPropagation(); onToggleActivo(isInactivo); }}
- className={cn("size-5 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0",
- isInactivo
- ?"bg-card border-border text-transparent hover:border-muted-foreground":"bg-primary border-primary text-primary-foreground")}
- >
- <Check size={12} weight="bold"/>
- </button>
- )}
- </div>
+ </span>
  </div>
  </div>
  );

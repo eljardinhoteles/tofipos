@@ -7,6 +7,8 @@ import { AsignarMesaModal } from'../components/Reservas/AsignarMesaModal';
 import { CalendarHeader } from'../components/Reservas/CalendarToolbar';
 import { PageFrame, PageContent } from'../components/Common/PageHeader';
 import { CalendarGrid } from'../components/Reservas/CalendarGrid';
+import { ReservasLista } from'../components/Reservas/ReservasLista';
+import { useIsMobile } from'../hooks/useIsMobile';
 import { ProductSelector } from'../components/Mesas/ProductSelector';
 import { updateRxReserva, initVerticalRxDb } from'../db/rxdb';
 import { useRxReservas } from'../hooks/useRxReservas';
@@ -27,6 +29,12 @@ export default function ReservasV2() {
  const [startDate, setStartDate] = useState(() => {
  const d = new Date(); d.setHours(0, 0, 0, 0); return d;
  });
+ const isMobile = useIsMobile();
+ // Por defecto: lista en celular y calendario en PC. El botón del header cambia
+ // la vista solo mientras se está en la pantalla; al volver vuelve a la de siempre.
+ const [vistaElegida, setVistaElegida] = useState<'calendario' | 'lista' | null>(null);
+ const vista = vistaElegida ?? (isMobile ? 'lista' : 'calendario');
+ const cambiarVista = () => setVistaElegida(vista === 'lista' ? 'calendario' : 'lista');
  const [search, setSearch] = useState('');
  const [searchOpen, setSearchOpen] = useState(false);
  const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -157,6 +165,8 @@ export default function ReservasV2() {
  reservas={reservas}
  onResultClick={handleResultClick}
  onNewReserva={() => { setSelectedReservaId(null); setNuevaReservaPreset(null); setReservaView('nueva'); }}
+ vista={vista}
+ onCambiarVista={cambiarVista}
  />
  )}
 
@@ -168,6 +178,14 @@ export default function ReservasV2() {
  <ReservaProductSelectorWrapper
  comandaId={reservaProductosComandaId}
  onBack={() => setReservaProductosComandaId(null)}
+ />
+ ) : vista === 'lista' ? (
+ <ReservasLista
+ reservas={reservas}
+ mesas={mesas}
+ search={search}
+ onCardClick={openDetail}
+ onAssign={handleOpenAssign}
  />
  ) : (
  <CalendarGrid

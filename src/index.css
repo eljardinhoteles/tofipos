@@ -308,8 +308,8 @@
 /* Grilla del catálogo de menú */
 .pos-menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
   width: 100%;
 }
 

@@ -520,7 +520,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     cuando el panel es ancho — según el ancho real del contenedor
                     (@container), no del viewport, porque este selector puede vivir
                     embebido en layouts más anchos que el propio panel. */}
-                <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,240px))] @md:gap-3">
+                <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] @md:gap-3">
                   {group.items.map(item => (
                     <ProductCardV2
                       key={item.id}
@@ -680,30 +680,36 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
     ? item.precio * (1 + ivaPorcentaje / 100)
     : item.precio;
 
+  const alternarFavorito = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rxDb = await initVerticalRxDb();
+    await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
+  };
+
+  const precio = `$${finalPrice.toFixed(2)}`;
+
   return (
     <div
       onClick={() => onAdd(item)}
       className={cn(
-        "border transition-all cursor-pointer select-none active:scale-98 transform-gpu",
+        "border cursor-pointer select-none active:scale-98 transform-gpu",
         "flex items-center gap-3 px-3 py-3 rounded-xl",
-        "@md:relative @md:flex-col @md:items-stretch @md:justify-between @md:gap-0 @md:p-4 @md:rounded-2xl @md:min-h-[104px]",
+        "@md:flex-col @md:items-stretch @md:gap-3 @md:p-4 @md:rounded-2xl @md:min-h-36",
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md"
           : isPlanItem
-            ? "bg-primary/10 border-primary/25 text-primary"
-            : "bg-card text-foreground border-border")}
+            ? "bg-primary/10 border-primary/25"
+            : "bg-card border-border")}
     >
+      {/* Panel angosto: círculo con cantidad / favorito / icono de la categoría */}
       <button
         type="button"
-        onClick={async (e) => {
-          e.stopPropagation();
-          const rxDb = await initVerticalRxDb();
-          await rxDb.menu_items.findOne(item.id).exec(true).then(doc => doc.update({ $set: { favorito: !item.favorito, _modified: new Date().toISOString() } } as any));
-        }}
-        className={cn("shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer @md:w-10 @md:h-10",
-          isSelected ? "bg-primary-foreground/20" : isPlanItem ? "bg-primary/15" : "bg-muted")}>
+        onClick={alternarFavorito}
+        aria-label={item.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
+        className={cn("shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer @md:hidden",
+          isSelected ? "bg-primary-foreground/20 text-primary-foreground" : isPlanItem ? "bg-primary/15" : "bg-muted")}>
         {isSelected ? (
-          <span className="font-black text-sm text-primary-foreground @md:text-base">{currentQty}</span>
+          <span className="font-black text-sm">{currentQty}</span>
         ) : item.favorito ? (
           <Star size={18} weight="fill" className="text-warning-foreground" />
         ) : (
@@ -711,17 +717,35 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         )}
       </button>
 
-      <span className={cn("flex-1 font-bold text-base line-clamp-2 @md:w-full @md:mt-3", isSelected ? "text-primary-foreground" : "text-foreground")}>
+      {/* Panel ancho: categoría a la izquierda, favorito a la derecha */}
+      <div className="hidden @md:flex items-center justify-between gap-2">
+        <span className={cn("flex items-center gap-1.5 min-w-0 text-[11px] font-bold uppercase tracking-wider", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+          {CategoryIcon && <CategoryIcon size={14} weight="bold" className="shrink-0" />}
+          <span className="truncate">{item.categoria_nombre || 'Sin categoría'}</span>
+        </span>
+        <button
+          type="button"
+          onClick={alternarFavorito}
+          aria-label={item.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
+          className={cn("shrink-0 -m-1 p-1 rounded-full cursor-pointer", isSelected ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground/50 hover:text-warning-foreground")}>
+          <Star size={16} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito && !isSelected ? 'text-warning-foreground' : undefined} />
+        </button>
+      </div>
+
+      <span className={cn("flex-1 font-extrabold text-base leading-snug line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
         {item.nombre}
       </span>
 
-      <span className={cn("shrink-0 font-black text-sm @md:hidden", isSelected ? "text-primary-foreground" : isPlanItem ? "text-primary" : "text-primary")}>
-        ${finalPrice.toFixed(2)}
-      </span>
+      <span className={cn("shrink-0 font-black text-sm tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
 
-      <span className={cn("hidden @md:block @md:absolute @md:top-4 @md:right-4 font-black text-base", isSelected ? "text-primary-foreground" : isPlanItem ? "text-primary" : "text-primary")}>
-        ${finalPrice.toFixed(2)}
-      </span>
+      <div className="hidden @md:flex items-end justify-between gap-2">
+        <span className={cn("text-xl font-black leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+        {isSelected && (
+          <span className="min-w-7 h-7 px-2 rounded-full bg-primary-foreground text-primary text-sm font-black flex items-center justify-center tabular-nums">
+            {currentQty}
+          </span>
+        )}
+      </div>
     </div>
   );
 });

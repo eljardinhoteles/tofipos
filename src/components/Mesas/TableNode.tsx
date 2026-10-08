@@ -35,9 +35,6 @@ export const TableNode = memo(function TableNode({
  ? (activeComanda?.estado ==='cuenta'?'cuenta':'ocupada')
  : mesa.estado;
 
- // Capacidad es opcional al crear la mesa; sin un mínimo visual las mesas
- // creadas sin ese campo se ven"sin sillas"(indistinguibles de una habitación).
- const capacidad = mesa.capacidad || 2;
  const roomNumber = isHabitacion ? (mesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || mesa.nombre) : mesa.nombre;
  const roomType = isHabitacion ? (mesa.nombre.match(/\(([^)]+)\)/)?.[1] ||'Sin nombre') :'';
 
@@ -96,18 +93,12 @@ export const TableNode = memo(function TableNode({
  isSelected
  ? effectiveState ==='cuenta'?"bg-warning-foreground": effectiveState ==='ocupada'?"bg-primary":"bg-primary/80": effectiveState ==='libre'?"bg-muted-foreground/30": effectiveState ==='cuenta'?"bg-warning/20":"bg-primary/40");
 
- // El gráfico se limita a un máximo de 4 sillas (2 arriba + 2 a los lados)
- // sin importar la capacidad real de la mesa: con 6-8 el card se saturaba
- // visualmente y el nodo tenía que montar más elementos de los necesarios
- // solo para representar un número, no un layout real de sillas.
- if (capacidad >= 2) {
+ // Siempre 4 sillas (2 arriba + 2 a los lados), sin importar la capacidad ni
+ // los comensales: el dibujo es decorativo y así todas las mesas se ven igual.
  chairs.push(<div key="c1"className={cn(chairClass,"top-0 left-1/2 -translate-x-1/2 -translate-y-full w-11 h-1.5")} />);
  chairs.push(<div key="c2"className={cn(chairClass,"bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-11 h-1.5")} />);
- }
- if (capacidad >= 4) {
  chairs.push(<div key="c3"className={cn(chairClass,"left-0 top-1/2 -translate-x-full -translate-y-1/2 w-1.5 h-11")} />);
  chairs.push(<div key="c4"className={cn(chairClass,"right-0 top-1/2 translate-x-full -translate-y-1/2 w-1.5 h-11")} />);
- }
  return chairs;
  };
 

@@ -167,6 +167,8 @@ export function generarComandaCocina(
   habitacionNombre?: string,
   forPrinter = false,
   itemsAnulados?: PrintableItem[],
+  /** Líneas extra bajo la fecha del encabezado (p. ej. datos de una reserva). */
+  infoExtra?: string,
 ): string {
   // Shorthand: only emit ESC/POS sequences when printing
   const p = (cmd: string) => forPrinter ? cmd : '';
@@ -193,6 +195,7 @@ export function generarComandaCocina(
   t += p(POS.ALIGN_LEFT);
   t += `COMANDA: #${folioLabel(comanda)}\n`;
   t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
+  if (infoExtra) t += infoExtra;
 
   if (esAdicional) {
     t += '\n';
@@ -583,68 +586,89 @@ export function generarTicketReserva(
   ivaPercent: number = 15,
   pagos: Pago[] = [],
   montoAbonado?: number,
+  numeroReserva?: string | number,
+  forPrinter = false,
 ): string {
+  // Mismo diseño que la precuenta: encabezado, datos, columnas, totales y pie.
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
+  const linea = `${'-'.repeat(W)}\n`;
   let t = '';
 
-  const orgName = getOrgCache().nombre || 'EL JARDIN';
-  t += `${orgName.toUpperCase()}\n`;
-  t += `---------------\n`;
-  t += `RESERVA CONFIRMADA\n\n`;
+  if (forPrinter) t += POS.INIT;
 
-  t += `Cliente: ${reserva.nombre || 'Sin nombre'}\n`;
+  // ── Encabezado ──────────────────────────────────────────────────
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
+  t += `${orgName.toUpperCase()}\n`;
+  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
+  t += p(POS.ALIGN_LEFT);
+  t += linea;
+
+  // ── Info de la reserva ──────────────────────────────────────────
+  t += justifyBetween(`RESERVA${numeroReserva ? ` #${numeroReserva}` : ''}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += p(POS.BOLD_ON) + (reserva.nombre || 'Sin nombre').toUpperCase() + p(POS.BOLD_OFF) + '\n';
   t += `Fecha: ${reserva.fecha}  Hora: ${reserva.hora}\n`;
   t += `Personas: ${reserva.personas}\n`;
-  if (zonaNombre) {
-    t += `Preferencia: ${zonaNombre}\n`;
-  }
-  if (reserva.telefono) {
-    t += `Telefono: ${reserva.telefono}\n`;
-  }
-  if (reserva.nota) {
-    t += `Notas: ${reserva.nota}\n`;
-  }
-  t += `---------------\n`;
+  if (zonaNombre) t += `Zona: ${zonaNombre}\n`;
+  if (reserva.telefono) t += `Telefono: ${reserva.telefono}\n`;
+  if (reserva.nota) t += `Notas: ${reserva.nota}\n`;
+  t += linea;
 
-  if (items.length > 0) {
-    t += `PEDIDO ANTICIPADO:\n`;
-    t += `Cant  -  Detalle  -  Total\n\n`;
+  const activos = items.filter(item => !item.anulado);
+  if (activos.length > 0) {
+    // ── Cabecera de columnas ──────────────────────────────────────
+    t += p(POS.BOLD_ON);
+    t += justifyBetween('CANT  DESCRIPCION', 'TOTAL', W) + '\n';
+    t += p(POS.BOLD_OFF);
+    t += linea;
 
+    // ── Items ─────────────────────────────────────────────────────
     let subtotal = 0;
-    items.filter(item => !item.anulado).forEach(item => {
+    activos.forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       subtotal += itemTotal;
-      t += `${item.cantidad} - ${item.nombre.toUpperCase()} - $${itemTotal.toFixed(2)}\n`;
-
+      t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
       if (item.modificadores && item.modificadores.length > 0) {
         item.modificadores.forEach((mod: string) => {
-          t += `   * ${mod.toUpperCase()}\n`;
+          t += `     * ${mod.toUpperCase()}\n`;
         });
       }
       if (item.nota) {
-        t += `   * NOTA: ${item.nota.toUpperCase()}\n`;
+        t += `     NOTA: ${item.nota.toUpperCase()}\n`;
       }
     });
+    t += linea;
 
-    t += `---------------\n`;
-
-    const ivaFactor = ivaPercent / 100;
-    const iva = subtotal * ivaFactor;
+    // ── Totales ───────────────────────────────────────────────────
+    const iva = subtotal * (ivaPercent / 100);
     const total = subtotal + iva;
+    t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+    t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
+    t += linea;
+    t += p(POS.BOLD_ON);
+    t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
+    t += p(POS.BOLD_OFF);
 
-    t += `Subtotal: - $${subtotal.toFixed(2)}\n`;
-    t += `IVA (${ivaPercent}%): - $${iva.toFixed(2)}\n`;
-    t += `Total Estimado: - $${total.toFixed(2)}\n`;
-
-    const totalPagado = montoAbonado ?? (pagos ? pagos.reduce((acc, p) => acc + p.monto, 0) : 0);
+    // ── Abonos ────────────────────────────────────────────────────
+    const totalPagado = montoAbonado ?? (pagos ? pagos.reduce((acc, pg) => acc + pg.monto, 0) : 0);
     if (totalPagado > 0) {
-      t += `Abono Previo: - $${totalPagado.toFixed(2)}\n`;
-      const saldoPendiente = Math.max(0, total - totalPagado);
-      t += `Saldo a Pagar: - $${saldoPendiente.toFixed(2)}\n`;
+      t += linea;
+      t += justifyBetween('Ya cobrado:', `$${totalPagado.toFixed(2)}`, W) + '\n';
+      const saldo = Math.max(0, total - totalPagado);
+      t += p(POS.BOLD_ON) + justifyBetween('Saldo pendiente:', `$${saldo.toFixed(2)}`, W) + p(POS.BOLD_OFF) + '\n';
     }
-    t += `---------------\n`;
+  } else {
+    t += p(POS.ALIGN_CENTER) + 'Sin pedido anticipado.\n' + p(POS.ALIGN_LEFT);
   }
 
-  t += '\n\n';
+  // ── Pie ─────────────────────────────────────────────────────────
+  t += `\n`;
+  t += p(POS.ALIGN_CENTER);
+  t += `Documento interno sin validez tributaria.\n`;
+  t += p(POS.ALIGN_LEFT);
+  t += '\n\n\n';
+
   return t;
 }
 

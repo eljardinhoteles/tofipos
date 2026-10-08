@@ -19,3 +19,12 @@ export const isWeekend = (d: Date) => {
   const day = d.getDay();
   return day === 0 || day === 6;
 };
+
+// Código corto estable de cada reserva ("R12"): orden de creación.
+export const codigosReserva = (reservas: Reserva[]) => {
+  const map: Record<string, string> = {};
+  [...reservas]
+    .sort((a, b) => (a.created_at !== b.created_at ? a.created_at.localeCompare(b.created_at) : a.id.localeCompare(b.id)))
+    .forEach((r, i) => { map[r.id] = `R${i + 1}`; });
+  return map;
+};

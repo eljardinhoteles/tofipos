@@ -13,6 +13,8 @@ interface ComandaTotalesProps {
   anticipo?: number;
   /** false = solo el total (p. ej. móvil mientras se toma el pedido). */
   detallado?: boolean;
+  /** false = oculta subtotal e IVA pero conserva cobrado/saldo (p. ej. detalle de reserva). */
+  desglose?: boolean;
   /** Si se pasa, la fila de IVA es editable. */
   onEditarIva?: () => void;
   /** Si se pasa, "Ya cobrado" abre el detalle de los cobros. */
@@ -31,11 +33,11 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 
 // Resumen de importes de una comanda: subtotal, IVA, total y, si ya hubo
 // cobros parciales, lo cobrado y el restante.
-export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, total, totalPagado = 0, saldoPendiente = 0, anticipo = 0, detallado = true, onEditarIva, onVerPagos, onVerAnticipo, etiquetaTotal = 'Total', tono = 'primary', tarjeta = false }: ComandaTotalesProps) {
+export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, total, totalPagado = 0, saldoPendiente = 0, anticipo = 0, detallado = true, desglose = true, onEditarIva, onVerPagos, onVerAnticipo, etiquetaTotal = 'Total', tono = 'primary', tarjeta = false }: ComandaTotalesProps) {
   return (
     <div className={cn('flex flex-col gap-1.5 text-sm font-semibold text-muted-foreground',
       tarjeta ? 'p-3.5 rounded-xl bg-muted/60' : 'px-2 py-1')}>
-      {detallado && (
+      {detallado && desglose && (
         <>
           <div className="flex items-center justify-between">
             <span>Subtotal</span>
@@ -63,7 +65,7 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
         </>
       )}
       <div className={cn('flex items-center justify-between',
-        detallado && (tarjeta ? 'pt-2 mt-1 border-t border-border' : 'pt-2 mt-1 border-t border-dashed border-border'))}>
+        detallado && desglose && (tarjeta ? 'pt-2 mt-1 border-t border-border' : 'pt-2 mt-1 border-t border-dashed border-border'))}>
         <span className="text-base font-black text-foreground">{etiquetaTotal}</span>
         <span className={cn('text-xl font-black', tono === 'success' ? 'text-foreground' : 'text-foreground')}>{money(total)}</span>
       </div>

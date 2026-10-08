@@ -10,6 +10,8 @@ import { ReservaHeader, reservaHeaderActionClass } from './ReservaHeader';
 import { SidebarReservaAbono } from './SidebarReservaAbono';
 import { ItemActionsPanel } from './ItemActionsPanel';
 import { ComandaTotales } from './ComandaTotales';
+import { useRxReservas } from '../../../hooks/useRxReservas';
+import { codigosReserva } from '../../Reservas/reservaUtils';
 import { STATUS_LABEL } from '../../Reservas/reservaUtils';
 import { ComandaItemRow } from'./ComandaItemRow';
 import { useUI } from'../../../context/UIContext';
@@ -28,8 +30,8 @@ import {
 import { Button } from'@/components/ui/button';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
-import { generarTicketReserva } from'../../../services/printTemplateEngine';
-import { queueReprintTicket } from'../../../lib/printServerClient';
+import { generarTicketReserva, generarComandaCocina } from'../../../services/printTemplateEngine';
+import { queueReprintTicket, queueKitchenPrint } from'../../../lib/printServerClient';
 import { downloadTicketReservaAsImage } from'../../../lib/ticketImage';
 import { getOrgCache } from'../../../lib/orgCache';
 import { subirComprobante } from'@/lib/comprobantes';
@@ -171,6 +173,12 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  .sort((a: any, b: any) => (a.created_at || '').localeCompare(b.created_at || ''));
  }, [venta]);
 
+ // Mismo número que el código R14 de las tarjetas: orden de creación.
+ const { reservas: todasReservas } = useRxReservas();
+ const numeroReserva = useMemo(
+ () => (reserva?.id ? codigosReserva(todasReservas)[reserva.id]?.slice(1) : undefined),
+ [todasReservas, reserva?.id]
+ );
  const zonaNombre = useMemo(
  () => zonas.find((z: any) => z.id === reserva?.zona_id)?.nombre || '',
  [zonas, reserva?.zona_id]
@@ -264,8 +272,22 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  zonaNombre,
  ivaPorcentaje,
  [],
- totalAbonado
+ totalAbonado,
+ numeroReserva
  );
+
+ // Ticket de cocina: el pedido anticipado en formato comanda, con los datos de
+ // la reserva (cuándo, quién y cuántos) para que cocina lo prepare a tiempo.
+ const itemsCocina = comandaItems.filter((it: any) => !it.anulado);
+ const nombreCocina = numeroReserva ? `Reserva #${numeroReserva}` : 'Reserva';
+ const infoCocina = `Cliente: ${reserva.nombre}\nReserva: ${reserva.fecha} ${reserva.hora}\nPersonas: ${reserva.personas}${zonaNombre ? `\nZona: ${zonaNombre}` : ''}\n`;
+ const kitchenContent = comanda && itemsCocina.length > 0
+ ? generarComandaCocina(comanda, itemsCocina as any, nombreCocina, false, undefined, false, undefined, infoCocina)
+ : undefined;
+ const handleConfirmPrintKitchen = () => {
+ queueKitchenPrint({ comanda, items: itemsCocina as any, mesaNombre: nombreCocina, infoExtra: infoCocina })
+ .catch(err => console.warn('print server offline', err));
+ };
 
  const handleDescargarImagen = async () => {
  setIsDownloadingImage(true);
@@ -276,6 +298,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  orgTelefono: org.telefono || undefined,
  orgDireccion: org.direccion || undefined,
  estado: reserva.estado,
+ numero: numeroReserva,
  cliente: reserva.nombre,
  fecha: reserva.fecha,
  hora: reserva.hora,
@@ -411,7 +434,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  <ReservaHeader
  badge={<CalendarCheck size={22} weight="bold" />}
  titulo={reserva.nombre}
- subtitulo={`Reserva · ${STATUS_LABEL[reserva.estado as keyof typeof STATUS_LABEL] ?? reserva.estado}`}
+ subtitulo={`${numeroReserva ? `Reserva #${numeroReserva}` : 'Reserva'} · ${STATUS_LABEL[reserva.estado as keyof typeof STATUS_LABEL] ?? reserva.estado}${zonaNombre ? ` · ${zonaNombre}` : ''}`}
  cerrada={isReadOnly}
  onClose={onCloseSidebar}
  acciones={!isReadOnly && (
@@ -503,13 +526,6 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  </div>
  ))}
  </div>
- {zonaNombre && (
- <div className="px-4 pb-3">
- <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-[11px] font-bold text-muted-foreground">
- <MapPin size={12} weight="bold" /> {zonaNombre}
- </span>
- </div>
- )}
  {reserva.nota && (
  <div className="mx-4 mb-3 p-3 rounded-xl bg-warning-soft text-xs text-warning-foreground font-medium">"{reserva.nota}"</div>
  )}
@@ -560,6 +576,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  ivaPorcentaje={ivaPorcentaje}
  total={total}
  etiquetaTotal="Total del pedido"
+ desglose={false}
  totalPagado={totalAbonado}
  saldoPendiente={saldoPendiente}
  onVerPagos={pagos.length > 0 ? () => setAbonoModalOpen(true) : undefined}
@@ -621,6 +638,8 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  title={previewTitle}
  content={previewContent}
  onPrint={handleConfirmPrint}
+ kitchenContent={kitchenContent}
+ onPrintKitchen={handleConfirmPrintKitchen}
  />
  </div>
  );

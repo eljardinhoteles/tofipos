@@ -151,7 +151,6 @@ export function useTableActions() {
 
         await updateRxMesa(mesa.id, {
           estado: 'ocupada',
-          capacidad: guestCount,
         });
 
         onComplete?.('productos');

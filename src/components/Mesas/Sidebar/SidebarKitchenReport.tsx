@@ -15,7 +15,9 @@ import {
  DrawerDescription,
  DrawerHandle,
 } from'@/components/ui/drawer';
-import { ClipboardText, FileText, X, Check, CalendarBlank } from'@phosphor-icons/react';
+import { ClipboardText, FileText, Check } from'@phosphor-icons/react';
+import { ReservaHeader } from'./ReservaHeader';
+import { Button } from'@/components/ui/button';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
@@ -78,7 +80,7 @@ export function SidebarKitchenReport({
  };
  const hoyStr = toISO(new Date());
  const reservasHoy = (reservas ?? [])
- .filter((r: any) => r.fecha === hoyStr && r.estado !=='cancelada')
+ .filter((r: any) => r.fecha === hoyStr && r.estado !== 'cancelada' && r.estado !== 'completada')
  .sort((a: any, b: any) => a.hora.localeCompare(b.hora));
 
  const toggleMesa = (id: string, checked: boolean) => {
@@ -165,116 +167,89 @@ export function SidebarKitchenReport({
 
  if (!opened) return null;
 
+ const totalSeleccionado = selectedReportMesas.size + selectedReservas.size;
+
  const header = (
- <div className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
- <div className="flex items-center gap-3">
- <div className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
- <ClipboardText size={20} weight="bold"/>
- </div>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">Reporte de Cocina</h3>
- <span className="text-[10px] font-bold text-muted-foreground">Consolidado de mesas activas</span>
- </div>
- </div>
- <button type="button"onClick={onClose} className="text-muted-foreground">
- <X size={18} />
+ <ReservaHeader
+ tono="primary"
+ badge={<ClipboardText size={22} weight="bold" />}
+ titulo="Reporte de Cocina"
+ subtitulo={totalSeleccionado > 0 ? `${totalSeleccionado} seleccionadas` : 'Consolidado de mesas activas'}
+ onClose={onClose}
+ />
+ );
+
+ // Fila de selección: lista plana con separador; la elegida se tiñe de azul de marca.
+ const fila = (key: string, checked: boolean, onToggle: () => void, titulo: string, detalle?: string) => (
+ <button
+ key={key}
+ type="button"
+ role="checkbox"
+ aria-checked={checked}
+ onClick={onToggle}
+ className={cn('w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors border-b border-border/60',
+ checked && 'bg-primary/10')}
+ >
+ <span className={cn('w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors',
+ checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent')}>
+ <Check size={14} weight="bold" />
+ </span>
+ <span className="flex flex-col min-w-0">
+ <span className="font-extrabold text-sm text-foreground truncate">{titulo}</span>
+ {detalle && <span className="text-xs font-semibold text-muted-foreground truncate">{detalle}</span>}
+ </span>
  </button>
+ );
+
+ const encabezadoSeccion = (titulo: string, extra?: React.ReactNode) => (
+ <div className="flex items-center justify-between px-4 py-2 border-y border-border bg-muted/40">
+ <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{titulo}</span>
+ {extra}
  </div>
  );
 
  const body = (
- <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
- <div className="flex items-center justify-between">
- <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-extrabold text-xs">
- {activeMesas.length} mesas activas
+ <div className="flex-1 overflow-y-auto">
+ {encabezadoSeccion(`Mesas activas · ${activeMesas.length}`, (
+ <span className="flex items-center gap-1">
+ <Button type="button" variant="ghost" size="sm" onClick={handleSelectAll} className="h-6 px-2 text-[11px] font-bold">Todas</Button>
+ <Button type="button" variant="ghost" size="sm" onClick={handleDeselectAll} className="h-6 px-2 text-[11px] font-bold text-muted-foreground">Ninguna</Button>
  </span>
- <div className="flex items-center gap-2 text-xs font-bold">
- <button type="button"onClick={handleSelectAll} className="text-primary">Todas</button>
- <span className="text-muted-foreground/60">·</span>
- <button type="button"onClick={handleDeselectAll} className="text-muted-foreground">Ninguna</button>
- </div>
- </div>
-
- <div className="flex flex-col gap-2">
+ ))}
  {activeMesas.length === 0 ? (
- <span className="text-xs text-muted-foreground font-semibold text-center py-6">No hay mesas activas.</span>
+ <span className="block text-xs text-muted-foreground font-semibold text-center py-8">No hay mesas activas.</span>
  ) : (
  activeMesas.map(mesa => {
- const isChecked = selectedReportMesas.has(mesa.id);
  const { habitacionNombre, clienteNombre } = mesaExtrasPorMesa(mesa.id);
- return (
- <div
- key={mesa.id}
- onClick={() => toggleMesa(mesa.id, !isChecked)}
- className={cn("p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
- isChecked ?"bg-primary/10 border-primary":"bg-muted border-border")}
- >
- <div className="flex items-center gap-3">
- <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0", isChecked ?"bg-primary":"bg-border")}>
- {isChecked && <Check size={14} weight="bold"/>}
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">{mesa.nombre}</span>
- {(habitacionNombre || clienteNombre) && (
- <span className="text-[10px] font-bold text-muted-foreground">
- {[
+ const detalle = [
  habitacionNombre && `Hab. ${habitacionNombre.match(/\d+/)?.[0] ?? habitacionNombre}`,
  clienteNombre,
- ].filter(Boolean).join(' · ')}
- </span>
- )}
- </div>
- </div>
- </div>
- );
+ ].filter(Boolean).join(' · ');
+ return fila(mesa.id, selectedReportMesas.has(mesa.id), () => toggleMesa(mesa.id, !selectedReportMesas.has(mesa.id)), mesa.nombre, detalle || undefined);
  })
  )}
- </div>
 
- <div className="flex items-center justify-between pt-2">
- <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground font-extrabold text-xs flex items-center gap-1.5">
- <CalendarBlank size={14} weight="bold"/> Reservas de hoy
- </span>
- </div>
-
- <div className="flex flex-col gap-2">
+ {encabezadoSeccion(`Reservas de hoy · ${reservasHoy.length}`)}
  {reservasHoy.length === 0 ? (
- <span className="text-xs text-muted-foreground font-semibold text-center py-6">No hay reservas para hoy.</span>
+ <span className="block text-xs text-muted-foreground font-semibold text-center py-8">No hay reservas pendientes para hoy.</span>
  ) : (
- reservasHoy.map((reserva: any) => {
- const isChecked = selectedReservas.has(reserva.id);
- return (
- <div
- key={reserva.id}
- onClick={() => toggleReserva(reserva.id, !isChecked)}
- className={cn("p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
- isChecked ?"bg-primary/10 border-primary":"bg-muted border-border")}
- >
- <div className="flex items-center gap-3">
- <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0", isChecked ?"bg-primary":"bg-border")}>
- {isChecked && <Check size={14} weight="bold"/>}
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">{reserva.nombre}</span>
- <span className="text-[10px] font-bold text-muted-foreground">{reserva.hora} · {reserva.personas} personas</span>
- </div>
- </div>
- </div>
- );
- })
+ reservasHoy.map((reserva: any) =>
+ fila(reserva.id, selectedReservas.has(reserva.id), () => toggleReserva(reserva.id, !selectedReservas.has(reserva.id)),
+ reserva.nombre, `${reserva.hora} · ${reserva.personas} personas`)
+ )
  )}
- </div>
  </div>
  );
 
  const footer = (
- <div className="p-4 border-t border-border bg-card shrink-0">
- <button
- type="button"disabled={loading || (selectedReportMesas.size === 0 && selectedReservas.size === 0)}
+ <div className="p-4 border-t border-border bg-muted/40 shrink-0">
+ <Button
+ type="button"
+ disabled={loading || totalSeleccionado === 0}
  onClick={() => handleGenerarReporte()}
- className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer">
- <FileText size={16} /> Hoja A4
- </button>
+ className="w-full h-12 font-bold gap-1.5">
+ <FileText size={18} weight="bold" /> {loading ? 'Generando…' : 'Hoja A4'}
+ </Button>
  </div>
  );
 
@@ -296,7 +271,7 @@ export function SidebarKitchenReport({
  </Drawer>
  ) : (
  <Sheet open={opened} onOpenChange={(v: boolean) => !v && onClose()}>
- <SheetContent side="right"className="w-full max-w-md p-0 flex flex-col gap-0"showCloseButton={false}>
+ <SheetContent side="right" showCloseButton={false} className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] p-0 flex flex-col gap-0 data-[side=right]:border-l-0">
  <SheetTitle className="sr-only">Reporte de Cocina</SheetTitle>
  <SheetDescription className="sr-only">Consolidado de mesas activas para reporte de cocina</SheetDescription>
  {header}

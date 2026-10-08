@@ -1,3 +1,4 @@
+import { AguacateEgg } from '../Common/AguacateEgg';
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -148,7 +149,7 @@ export function MainSidebarV2() {
     <aside className="w-[84px] h-full bg-nav text-nav-foreground flex flex-col items-center shrink-0 border-r border-transparent">
       {/* Misma altura que el header de las páginas (72px); sin línea, el marco es continuo. */}
       <div className="w-full h-[72px] shrink-0 flex items-center justify-center">
-        <img src="/Icon-app.webp" alt="POS Food" aria-hidden="true" className="w-8 h-8 object-contain" />
+        <AguacateEgg className="w-8 h-8" />
       </div>
 
       <nav aria-label="Principal" className="flex-1 min-h-0 w-full overflow-y-auto hide-scrollbar flex flex-col items-center pb-2">

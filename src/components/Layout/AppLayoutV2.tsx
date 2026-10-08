@@ -523,7 +523,7 @@ export function AppLayoutV2() {
 
       <GlobalModals />
       <AvisoCambioIvaModal />
-      {!isMobile && <ActividadDrawer />}
+      <ActividadDrawer />
     </div>
   );
 }

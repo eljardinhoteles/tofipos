@@ -27,6 +27,8 @@ export interface TicketImageData {
   orgTelefono?: string;
   orgDireccion?: string;
   estado: string;
+  /** Número de reserva (el de las tarjetas, sin la "R"). */
+  numero?: string;
   cliente: string;
   fecha: string;
   hora: string;
@@ -174,7 +176,7 @@ export function renderTicketReservaToPngBlob(data: TicketImageData): Promise<Blo
 
   ctx.fillStyle = COLOR.headerSub;
   ctx.font = '12px -apple-system, "Segoe UI", sans-serif';
-  ctx.fillText('COMPROBANTE DE RESERVA', PAD, 98);
+  ctx.fillText(data.numero ? `COMPROBANTE DE RESERVA #${data.numero}` : 'COMPROBANTE DE RESERVA', PAD, 98);
 
   ctx.fillStyle = COLOR.headerText;
   ctx.font = '700 26px -apple-system, "Segoe UI", sans-serif';
