@@ -2,6 +2,9 @@ name: Build Print Server
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'print-server/**'
 
 permissions:
   contents: write
