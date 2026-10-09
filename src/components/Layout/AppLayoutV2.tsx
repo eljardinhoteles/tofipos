@@ -393,7 +393,7 @@ export function AppLayoutV2() {
             "flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
             menuEnCapas && "z-10 bg-nav transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform",
             // Con el menú abierto la página SUBE y deja al descubierto, abajo y al alcance del pulgar, las tarjetas del menú.
-            menuEnCapas && menuAbierto && "-translate-y-[min(calc(29rem_+_env(safe-area-inset-bottom)),78dvh)] rounded-b-3xl"
+            menuEnCapas && menuAbierto && "-translate-y-[min(calc(29.5rem_+_env(safe-area-inset-bottom)),78dvh)] rounded-b-3xl"
           )}
           style={!isMobile && isSidebarVisible ? { paddingRight: 462 } : undefined}
         >

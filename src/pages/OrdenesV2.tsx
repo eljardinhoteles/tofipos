@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from'react';
 import { folioLabel } from '../lib/folio';
-import { MagnifyingGlass, FunnelSimple, Check, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Prohibit } from'@phosphor-icons/react';
+import { MagnifyingGlass, FunnelSimple, X, Check, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Prohibit } from'@phosphor-icons/react';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
 import { useAuth } from'../context/AuthContext';
 import { showToast } from'@/lib/toast';
-import { OrigenBadge } from '../components/Common/OrigenBadge';
+import { OrigenBadge, ORIGEN_LABEL, ORIGEN_ICON } from '../components/Common/OrigenBadge';
+import type { VentaOrigen } from '../db/rxdb';
 import dayjs from'dayjs';
 import { initVerticalRxDb, updateRxComanda } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
@@ -37,6 +38,32 @@ const FILTROS_ESTADO: Array<{ value: FiltroEstado; label: string }> = [
   { value: 'anuladas', label: 'Anuladas' },
 ];
 
+// Origenes que puede tener una orden (la reserva de hotel no genera comandas).
+const ORIGENES_FILTRO: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'habitacion'];
+
+type Periodo = 'hoy' | 'ayer' | 'semana' | 'mes' | 'todo' | 'personalizado';
+const PERIODOS: Array<{ value: Exclude<Periodo, 'personalizado'>; label: string; titulo: string }> = [
+  { value: 'hoy', label: 'Hoy', titulo: 'Órdenes de hoy' },
+  { value: 'ayer', label: 'Ayer', titulo: 'Órdenes de ayer' },
+  { value: 'semana', label: 'Esta semana', titulo: 'Órdenes de esta semana' },
+  { value: 'mes', label: 'Este mes', titulo: 'Órdenes de este mes' },
+  { value: 'todo', label: 'Todo', titulo: 'Todas las órdenes' },
+];
+
+// Rango de fechas de cada período (la semana empieza el lunes).
+function rangoDePeriodo(periodo: Periodo, personalizado: [Date | null, Date | null]): [Date | null, Date | null] {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  switch (periodo) {
+    case 'hoy': return [hoy, hoy];
+    case 'ayer': { const a = new Date(hoy); a.setDate(a.getDate() - 1); return [a, a]; }
+    case 'semana': { const i = new Date(hoy); i.setDate(i.getDate() - ((hoy.getDay() + 6) % 7)); return [i, hoy]; }
+    case 'mes': return [new Date(hoy.getFullYear(), hoy.getMonth(), 1), hoy];
+    case 'todo': return [null, null];
+    default: return personalizado;
+  }
+}
+
 // ¿La orden cumple alguno de los filtros elegidos? Sin filtros = todas.
 function cumpleEstado(estado: string, filtros: Set<FiltroEstado>) {
   if (filtros.size === 0) return true;
@@ -55,11 +82,18 @@ const ESTADO_TEXTO: Record<string, string> = {
 
 export default function OrdenesV2() {
  const [estadoFiltros, setEstadoFiltros] = useState<Set<FiltroEstado>>(new Set());
- const [estadoOpen, setEstadoOpen] = useState(false);
+ const [origenFiltros, setOrigenFiltros] = useState<Set<VentaOrigen>>(new Set());
+ const [filtrosOpen, setFiltrosOpen] = useState(false);
 
  const [searchQuery, setSearchQuery] = useState('');
- const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
- const [calendarOpen, setCalendarOpen] = useState(false);
+ // La pantalla abre en "Hoy": en el turno lo que importa son las órdenes del día.
+ const [periodo, setPeriodo] = useState<Periodo>('hoy');
+ const [rangoPersonalizado, setRangoPersonalizado] = useState<[Date | null, Date | null]>([null, null]);
+ const [verCalendario, setVerCalendario] = useState(false);
+ // toDateString como dependencia: si la app queda abierta pasada la medianoche, "Hoy" se actualiza.
+ const diaActual = new Date().toDateString();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ const dateRange = useMemo(() => rangoDePeriodo(periodo, rangoPersonalizado), [periodo, rangoPersonalizado, diaActual]);
  const {
  setSelectedMesaId,
  setViewingComandaId,
@@ -225,6 +259,8 @@ export default function OrdenesV2() {
     return out;
   }, [safeComandas, safeComandaItems, clientes, mesaById, safeHabitacionCuentas, reservaByComandaId]);
 
+ const cuentaPorId = useMemo(() => new Map(safeHabitacionCuentas.map(hc => [hc.id, hc])), [safeHabitacionCuentas]);
+
  const filteredComandas = useMemo(() => {
  const [start, end] = dateRange;
  // Cada palabra debe aparecer en algún dato de la orden ("juan mesa 3"); se ignora el "#".
@@ -242,9 +278,18 @@ export default function OrdenesV2() {
  if (!reservaVinculada?.mesa_id) return false;
  }
 
- if (!cumpleEstado(comanda.estado, estadoFiltros)) return false;
+ // Al buscar se ignoran el período y el estado: la búsqueda recorre todo el historial,
+ // para que nadie crea que una orden no existe solo porque no es de hoy.
+ if (terminos.length === 0 && !cumpleEstado(comanda.estado, estadoFiltros)) return false;
 
- if (start) {
+ if (terminos.length === 0 && origenFiltros.size > 0) {
+ const origen: VentaOrigen = comanda.habitacion_cuenta_id && cuentaPorId.has(comanda.habitacion_cuenta_id)
+ ? 'habitacion'
+ : reservaByComandaId.has(comanda.id) ? 'reserva_restaurante' : 'mesa';
+ if (!origenFiltros.has(origen)) return false;
+ }
+
+ if (start && terminos.length === 0) {
  const fecha = new Date(comanda.created_at);
  const startLimit = new Date(start);
  startLimit.setHours(0, 0, 0, 0);
@@ -277,12 +322,12 @@ export default function OrdenesV2() {
  if (pidiendoA !== pidiendoB) return pidiendoB - pidiendoA;
  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
  });
- }, [safeComandas, mesaById, safeHabitacionCuentas, estadoFiltros, searchQuery, dateRange, indiceBusqueda, reservaByComandaId]);
+ }, [safeComandas, mesaById, safeHabitacionCuentas, cuentaPorId, estadoFiltros, origenFiltros, searchQuery, dateRange, indiceBusqueda, reservaByComandaId]);
 
   const ITEMS_PER_PAGE = 30;
   const [page, setPage] = useState(1);
 
-  useEffect(() => { setPage(1); }, [estadoFiltros, searchQuery, dateRange]);
+  useEffect(() => { setPage(1); }, [estadoFiltros, origenFiltros, searchQuery, dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(filteredComandas.length / ITEMS_PER_PAGE));
 
@@ -318,71 +363,111 @@ export default function OrdenesV2() {
     return range;
   }, [page, totalPages]);
 
+  // Título según el período, y filtros distintos del estado por defecto (Hoy, todos los estados).
+  const fmtCorta = (d: Date) => dayjs(d).format('DD/MM');
+  const buscando = searchQuery.trim().length > 0;
+  const tituloPagina = buscando ? 'Resultados de la búsqueda' : periodo === 'personalizado'
+    ? (rangoPersonalizado[0]
+        ? `Órdenes · ${fmtCorta(rangoPersonalizado[0])}${rangoPersonalizado[1] && rangoPersonalizado[1].getTime() !== rangoPersonalizado[0].getTime() ? ` – ${fmtCorta(rangoPersonalizado[1])}` : ''}`
+        : 'Órdenes')
+    : PERIODOS.find(p => p.value === periodo)!.titulo;
+  const numFiltros = (periodo !== 'hoy' ? 1 : 0) + estadoFiltros.size + origenFiltros.size;
+  const restablecerFiltros = () => { setPeriodo('hoy'); setRangoPersonalizado([null, null]); setEstadoFiltros(new Set()); setOrigenFiltros(new Set()); setVerCalendario(false); };
+  const etiquetaPeriodo = periodo === 'personalizado' ? tituloPagina.replace('Órdenes · ', '') : PERIODOS.find(p => p.value === periodo)!.label;
+
   return (
   <PageFrame>
   <PageHeader
-    title="Órdenes"
-    subtitle={`${filteredComandas.length} ${filteredComandas.length === 1 ? 'Registrada' : 'Registradas'}${dateRange[0] ? ` · ${dayjs(dateRange[0]).format('DD/MM')}${dateRange[1] ? ` - ${dayjs(dateRange[1]).format('DD/MM')}` : ''}` : ''}`}
+    title={tituloPagina}
+    subtitle={`${filteredComandas.length} ${filteredComandas.length === 1 ? 'Registrada' : 'Registradas'}${buscando ? ' · en todo el historial' : (estadoFiltros.size + origenFiltros.size) > 0 ? ` · ${[...FILTROS_ESTADO.filter(f => estadoFiltros.has(f.value)).map(f => f.label), ...ORIGENES_FILTRO.filter(o => origenFiltros.has(o)).map(o => ORIGEN_LABEL[o])].join(', ')}` : ''}`}
     search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por n.º, cliente, mesa, producto..." />}
     actions={
-      <>
-      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+      <Popover open={filtrosOpen} onOpenChange={setFiltrosOpen}>
         <PopoverTrigger asChild>
-          <button type="button" title="Filtrar por fecha" className={cn(headerButtonClass, 'px-3')}>
-            <Calendar size={18} /> {dateRange[0] ? `${dayjs(dateRange[0]).format('DD/MM')}${dateRange[1] ? ` - ${dayjs(dateRange[1]).format('DD/MM')}` : ''}` : 'Fecha'}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
-          <CalendarPicker
-            mode="range"
-            selected={dateRange[0] ? { from: dateRange[0], to: dateRange[1] ?? undefined } : undefined}
-            onSelect={(range) => {
-              setDateRange([range?.from ?? null, range?.to ?? null]);
-              if (range?.from && range?.to) setCalendarOpen(false);
-            }}
-          />
-          {dateRange[0] && (
-            <div className="p-3 border-t border-border flex justify-end">
-              <button type="button" onClick={() => { setDateRange([null, null]); setCalendarOpen(false); }}
-                className="text-xs font-bold text-muted-foreground cursor-pointer">
-                Limpiar filtro
-              </button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-      <Popover open={estadoOpen} onOpenChange={setEstadoOpen}>
-        <PopoverTrigger asChild>
-          <button type="button" title="Filtrar por estado" className={cn(headerButtonClass, 'px-3')}>
-            <FunnelSimple size={18} /> Estado
-            {estadoFiltros.size > 0 && (
-              <span className="min-w-4.5 h-4.5 px-1 rounded-full bg-nav-foreground text-nav text-[10px] font-extrabold flex items-center justify-center">{estadoFiltros.size}</span>
+          <button type="button" title="Filtros" aria-label="Filtros" className={cn(headerButtonClass, 'px-3')}>
+            <FunnelSimple size={18} /> Filtros
+            {numFiltros > 0 && (
+              <span className="min-w-4.5 h-4.5 px-1 rounded-full bg-nav-foreground text-nav text-[10px] font-extrabold flex items-center justify-center">{numFiltros}</span>
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-52 p-1.5 flex flex-col gap-0.5" align="end">
-          {FILTROS_ESTADO.map(({ value, label }) => {
-            const on = estadoFiltros.has(value);
-            return (
-              <button key={value} type="button" aria-pressed={on}
-                onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); if (on) n.delete(value); else n.add(value); return n; })}
-                className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
-                <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
-                  {on && <Check size={11} weight="bold" />}
-                </span>
-                {label}
+        <PopoverContent className="w-72 p-3 flex flex-col gap-4" align="end">
+          <section className="flex flex-col gap-2">
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Período</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {PERIODOS.map(({ value, label }) => (
+                <button key={value} type="button" aria-pressed={periodo === value}
+                  onClick={() => { setPeriodo(value); setVerCalendario(false); }}
+                  className={cn('h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors',
+                    periodo === value ? 'bg-foreground text-background border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
+                  {label}
+                </button>
+              ))}
+              <button type="button" aria-pressed={periodo === 'personalizado'}
+                onClick={() => setVerCalendario(v => !v)}
+                className={cn('h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5',
+                  periodo === 'personalizado' ? 'bg-foreground text-background border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
+                <Calendar size={14} /> Personalizado
               </button>
-            );
-          })}
-          {estadoFiltros.size > 0 && (
-            <button type="button" onClick={() => setEstadoFiltros(new Set())}
-              className="mt-1 h-8 px-2.5 rounded-lg text-left text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer">
-              Mostrar todas
+            </div>
+            {(verCalendario || periodo === 'personalizado') && (
+              <div className="rounded-xl border border-border -mx-1">
+                <CalendarPicker
+                  mode="range"
+                  selected={rangoPersonalizado[0] ? { from: rangoPersonalizado[0], to: rangoPersonalizado[1] ?? undefined } : undefined}
+                  onSelect={(range) => {
+                    setRangoPersonalizado([range?.from ?? null, range?.to ?? null]);
+                    if (range?.from) setPeriodo('personalizado');
+                  }}
+                />
+              </div>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-1">
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Estado</h4>
+            {FILTROS_ESTADO.map(({ value, label }) => {
+              const on = estadoFiltros.has(value);
+              return (
+                <button key={value} type="button" aria-pressed={on}
+                  onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); if (on) n.delete(value); else n.add(value); return n; })}
+                  className="flex items-center gap-2.5 h-9 px-1.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
+                  <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
+                    {on && <Check size={11} weight="bold" />}
+                  </span>
+                  {label}
+                </button>
+              );
+            })}
+          </section>
+
+          <section className="flex flex-col gap-1">
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Origen</h4>
+            {ORIGENES_FILTRO.map(origen => {
+              const on = origenFiltros.has(origen);
+              const Icono = ORIGEN_ICON[origen];
+              return (
+                <button key={origen} type="button" aria-pressed={on}
+                  onClick={() => setOrigenFiltros(prev => { const n = new Set(prev); if (on) n.delete(origen); else n.add(origen); return n; })}
+                  className="flex items-center gap-2.5 h-9 px-1.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
+                  <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
+                    {on && <Check size={11} weight="bold" />}
+                  </span>
+                  <Icono size={15} weight="bold" className="text-muted-foreground shrink-0" />
+                  {ORIGEN_LABEL[origen]}
+                </button>
+              );
+            })}
+          </section>
+
+          {numFiltros > 0 && (
+            <button type="button" onClick={restablecerFiltros}
+              className="h-9 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer">
+              Restablecer filtros
             </button>
           )}
         </PopoverContent>
       </Popover>
-      </>
     }
   />
 
@@ -395,6 +480,36 @@ export default function OrdenesV2() {
     </div>
   </div>
 
+  {/* Filtros aplicados (distintos de Hoy + todos los estados): se quitan de uno en uno o todos a la vez */}
+  {numFiltros > 0 && !buscando && (
+    <div className="px-6 py-2 shrink-0 flex flex-wrap items-center gap-2 border-b border-border">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Filtros</span>
+      {periodo !== 'hoy' && (
+        <button type="button" onClick={() => { setPeriodo('hoy'); setRangoPersonalizado([null, null]); }}
+          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          {etiquetaPeriodo} <X size={12} weight="bold" />
+        </button>
+      )}
+      {FILTROS_ESTADO.filter(f => estadoFiltros.has(f.value)).map(f => (
+        <button key={f.value} type="button"
+          onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); n.delete(f.value); return n; })}
+          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          {f.label} <X size={12} weight="bold" />
+        </button>
+      ))}
+      {ORIGENES_FILTRO.filter(o => origenFiltros.has(o)).map(o => (
+        <button key={o} type="button"
+          onClick={() => setOrigenFiltros(prev => { const n = new Set(prev); n.delete(o); return n; })}
+          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          {ORIGEN_LABEL[o]} <X size={12} weight="bold" />
+        </button>
+      ))}
+      <button type="button" onClick={restablecerFiltros} className="text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer ml-1">
+        Restablecer
+      </button>
+    </div>
+  )}
+
  {/* Main Table */}
  <main className="flex-1 overflow-y-auto min-h-0 bg-card">
   {filteredComandas.length === 0 ? (
@@ -402,8 +517,11 @@ export default function OrdenesV2() {
   <div className="w-24 h-24 flex items-center justify-center">
   <img src="/ordenes.webp"alt=""aria-hidden="true"className="w-full h-full object-contain"/>
   </div>
-  <h2 className="text-foreground font-bold text-lg">No hay órdenes{estadoFiltros.size > 0 ? ' con este filtro' : ''}</h2>
-  <p className="text-muted-foreground text-xs">Cambia el filtro o registra una nueva comanda.</p>
+  <h2 className="text-foreground font-bold text-lg">{buscando ? 'Sin resultados' : numFiltros === 0 ? 'Aún no hay órdenes hoy' : 'No hay órdenes con estos filtros'}</h2>
+  <p className="text-muted-foreground text-xs">{buscando ? 'Prueba con otro n.º, cliente, mesa o producto.' : numFiltros === 0 ? 'Cuando abras una mesa aparecerá aquí.' : 'Cambia los filtros o amplía el período.'}</p>
+  {!buscando && periodo !== 'todo' && (
+  <Button type="button" variant="outline" onClick={() => { setPeriodo('todo'); setEstadoFiltros(new Set()); setOrigenFiltros(new Set()); }} className="mt-1 font-bold">Ver todo el historial</Button>
+  )}
   </div>
   ) : (
   <div className="flex flex-col">
