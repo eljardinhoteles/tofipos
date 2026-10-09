@@ -159,6 +159,8 @@ export function SidebarDetails({
  const [closePayerName, setClosePayerName] = useState('');
 
  const [showRoomChargeModal, setShowRoomChargeModal] = useState(false);
+ // Vincular la cuenta a una habitación sin cerrarla (p. ej. cada subcuenta de una mesa compartida).
+ const [showVincularHab, setShowVincularHab] = useState(false);
  const [clienteInfoOpen, setClienteInfoOpen] = useState(false);
  const [changeClienteModal, setChangeClienteModal] = useState(false);
  const [changeClienteName, setChangeClienteName] = useState('');
@@ -778,6 +780,59 @@ export function SidebarDetails({
  };
 
 
+ // Vincula la cuenta a una habitación SIN cerrarla: sigue abierta en la mesa (se le pueden
+ // agregar productos) pero ya cuenta como consumo de esa habitación; se envía al confirmarla.
+ const handleVincularHabitacion = async (cuentaId: string, subcuentaId: string | null) => {
+ if (!activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoHab(true);
+ try {
+ // La cuenta pasa a ser de ese huésped, igual que al abrir una mesa vinculada: cambia el
+ // cliente (texto, sin cliente_id: el huésped no es un cliente de la lista) y, en una
+ // subcuenta, también el nombre que muestra su tarjeta.
+ const huesped = (activeRoomAccounts.find((c: any) => c.id === cuentaId)?.huesped || '').trim();
+ await updateRxComanda(activeComanda.id, {
+ habitacion_cuenta_id: cuentaId,
+ habitacion_subcuenta_id: subcuentaId,
+ sincronizado: false,
+ ...(huesped ? {
+ cliente: huesped,
+ cliente_id: null as any,
+ ...(activeComanda.subcomanda_nombre ? { subcomanda_nombre: huesped } : {}),
+ } : {}),
+ });
+ setShowVincularHab(false);
+ showToast.success('Cuenta vinculada', 'Esta cuenta quedó asociada a la habitación.');
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error', 'No se pudo vincular la cuenta a la habitación.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoHab(false);
+ }
+ };
+
+ const handleQuitarHabitacion = async () => {
+ if (!activeComanda || enCursoRef.current) return;
+ enCursoRef.current = true;
+ setProcesandoHab(true);
+ try {
+ await updateRxComanda(activeComanda.id, {
+ habitacion_cuenta_id: null as any,
+ habitacion_subcuenta_id: null,
+ sincronizado: null as any,
+ });
+ setShowVincularHab(false);
+ showToast.success('Vínculo quitado', 'La cuenta vuelve a ser de mesa.');
+ } catch (error) {
+ console.error(error);
+ showToast.error('Error', 'No se pudo quitar el vínculo.');
+ } finally {
+ enCursoRef.current = false;
+ setProcesandoHab(false);
+ }
+ };
+
  // Cobro de la cuenta (página "Cobrar"). `imprimir` envía el recibo al cerrar.
  const handleConfirmarCobro = async (imprimir: boolean) => {
  if (!activeComanda || enCursoRef.current) return;
@@ -969,6 +1024,14 @@ export function SidebarDetails({
  linkedMesa={linkedMesa}
  puedeDividir={!!onActivarMultiple && !vistaTodas}
  dividiendo={activandoMultiple}
+ puedeVincularHabitacion={!vistaTodas && !!activeComanda && (activeRoomAccounts.length > 0 || !!activeComanda.habitacion_cuenta_id)}
+ onVincularHabitacion={() => {
+ if (activeRoomAccounts.length === 0 && !activeComanda?.habitacion_cuenta_id) {
+ showToast.error('Aviso','No hay habitaciones activas para vincular.');
+ return;
+ }
+ setShowVincularHab(true);
+ }}
  onCambiarMesa={() => setChangeMesaModal(true)}
  onDividir={() => setConfirmDividir(true)}
  onClose={onClose}
@@ -1173,6 +1236,18 @@ export function SidebarDetails({
  mesas={allMesas}
  procesando={procesandoHab}
  onConfirm={handleTransferirHabitacion}
+ />
+
+ <RoomChargeDialog
+ opened={showVincularHab}
+ onOpenChange={setShowVincularHab}
+ modo="vincular"
+ folio={folioLabel(activeComanda)}
+ cuentas={activeRoomAccounts}
+ mesas={allMesas}
+ procesando={procesandoHab}
+ onConfirm={handleVincularHabitacion}
+ onQuitar={activeComanda?.habitacion_cuenta_id ? handleQuitarHabitacion : undefined}
  />
 
  <DividirMesaDialog

@@ -13,6 +13,9 @@ interface ComandaHeaderProps {
   linkedMesa?: { nombre: string } | null;
   puedeDividir: boolean;
   dividiendo: boolean;
+  /** Cuenta abierta que puede vincularse (o cambiarse) a una habitación. */
+  puedeVincularHabitacion?: boolean;
+  onVincularHabitacion?: () => void;
   onCambiarMesa: () => void;
   onDividir: () => void;
   onClose: () => void;
@@ -22,7 +25,7 @@ interface ComandaHeaderProps {
 // de estado (verde / naranja en cuenta pedida); en móvil queda neutro y solo el
 // badge de mesa lleva el color, porque un header sólido se veía mal dentro del
 // bottom-sheet redondeado.
-export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
+export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, puedeVincularHabitacion, onVincularHabitacion, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
   return (
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
  enCuenta?"md:bg-warning-foreground md:text-white":"md:bg-primary md:text-primary-foreground")}>
@@ -55,6 +58,17 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  </div>
 
  <div className="flex items-center gap-3">
+ {puedeVincularHabitacion && (
+ <Button
+ variant="ghost"size="icon-lg"title={linkedMesa ?'Cambiar o quitar la habitación' :'Vincular esta cuenta a una habitación'}
+ aria-label={linkedMesa ?'Cambiar o quitar la habitación' :'Vincular esta cuenta a una habitación'}
+ onClick={onVincularHabitacion}
+ className={cn("rounded-xl text-muted-foreground",
+ enCuenta?"md:text-white":"md:text-primary-foreground")}
+ >
+ <Bed size={18} weight="bold"/>
+ </Button>
+ )}
  {puedeDividir && (
  <Button
  variant="ghost"size="icon-lg"title="Dividir la mesa en varias cuentas"aria-label="Dividir la mesa en varias cuentas"

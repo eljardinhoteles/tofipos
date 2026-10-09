@@ -20,6 +20,10 @@ interface RoomChargeDialogProps {
   mesas: any[];
   procesando: boolean;
   onConfirm: (cuentaId: string, subcuentaId: string | null) => void | Promise<void>;
+  /** 'vincular': solo asocia la cuenta a la habitación (sigue abierta en la mesa); 'cargar': la transfiere y cierra. */
+  modo?: 'cargar' | 'vincular';
+  /** Modo vincular, si ya tiene habitación: permite quitar el vínculo. */
+  onQuitar?: () => void | Promise<void>;
 }
 
 // Cargar la comanda a una habitación activa (y a una de sus subcuentas).
@@ -35,7 +39,8 @@ export function RoomChargeDialog({ opened, onOpenChange, procesando, ...resto }:
   );
 }
 
-function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onConfirm }: Omit<RoomChargeDialogProps, 'opened'>) {
+function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onConfirm, modo = 'cargar', onQuitar }: Omit<RoomChargeDialogProps, 'opened'>) {
+  const vincular = modo === 'vincular';
   const [cuentaId, setCuentaId] = useState<string | null>(null);
   const [subcuentaId, setSubcuentaId] = useState<string | null>(null);
   const cuentaSel = cuentas.find((c) => c.id === cuentaId);
@@ -45,10 +50,12 @@ function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onCon
     <>
         <DialogHeader className="border-b border-border pb-3 text-left">
           <DialogTitle className="font-extrabold text-base text-foreground">
-            Cargar a habitación abierta
+            {vincular ? 'Vincular a habitación' : 'Cargar a habitación abierta'}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Selecciona una habitación activa para transferir la comanda #{folio}.
+            {vincular
+              ? `Elige la habitación de esta cuenta (comanda #${folio}). Seguirá abierta en la mesa y se enviará a la habitación cuando la confirmes.`
+              : `Selecciona una habitación activa para transferir la comanda #${folio}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -77,8 +84,13 @@ function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onCon
             onClick={() => { if (cuentaId) onConfirm(cuentaId, subcuentaId); }}
             disabled={!cuentaId || procesando}
             className="w-full bg-primary text-primary-foreground font-bold h-11 text-sm shadow-md gap-1.5">
-            {procesando ? (<><CircleNotch size={18} className="animate-spin" /> Transfiriendo…</>) : 'Transferir a Habitación'}
+            {procesando ? (<><CircleNotch size={18} className="animate-spin" /> {vincular ? 'Vinculando…' : 'Transfiriendo…'}</>) : (vincular ? 'Vincular a la habitación' : 'Transferir a Habitación')}
           </Button>
+          {vincular && onQuitar && (
+            <Button type="button" variant="dangerGhost" disabled={procesando} onClick={() => onQuitar()} className="w-full font-semibold">
+              Quitar vínculo con la habitación
+            </Button>
+          )}
           <Button
             type="button" variant="ghost" disabled={procesando} onClick={() => onOpenChange(false)}
             className="w-full text-muted-foreground">
