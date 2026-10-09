@@ -169,7 +169,8 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <Button
  type="button" onClick={onOpenSync} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
  title="Estado de Sincronización" aria-label="Estado de sincronización"
- className={cn("relative size-14 rounded-full shrink-0 drop-shadow-lg active:scale-95 transition-opacity duration-300", syncPendiente && "animate-pulse", menuCapasAbierto && "opacity-0 pointer-events-none")}>
+ className={cn("relative size-14 rounded-full shrink-0 drop-shadow-lg active:scale-95 transition-transform duration-300 ease-out", syncPendiente && "animate-pulse", menuCapasAbierto && "-translate-x-[110vw] pointer-events-none")}
+ style={{ transitionDelay: menuCapasAbierto ? '0ms' : '90ms' }}>
  <ArrowsClockwise size={22} weight="bold" className={syncing ?'animate-spin':''} />
  <span className={cn("absolute top-3 right-3 size-2.5 rounded-full border-2 border-primary", syncPendiente ? "bg-destructive" : "bg-success")} />
  </Button>
@@ -177,7 +178,8 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <Button
  type="button" onClick={() => navigate('/v2/mesas')} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
  title="Mesas"
- className={cn("flex-1 h-14 rounded-full gap-2 text-sm font-bold drop-shadow-lg active:scale-[0.98] transition-opacity duration-300", menuCapasAbierto && "opacity-0 pointer-events-none")}
+ className={cn("flex-1 h-14 rounded-full gap-2 text-sm font-bold drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "-translate-x-[110vw] pointer-events-none")}
+ style={{ transitionDelay: menuCapasAbierto ? '90ms' : '0ms' }}
  >
  <SquaresFour size={20} weight={isMesasActive ?'fill':'regular'} />
  Mesas
@@ -187,7 +189,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  type="button" onClick={() => (MENU_EN_CAPAS ? toggleMenuMovil() : setMenuOpen(true))}
  title="Secciones" aria-label="Secciones"
  // Abierto: el botón cambia de tono (oscuro, del color del marco) para leerse como "cerrar".
- className={cn("size-14 rounded-full shrink-0 drop-shadow-lg active:scale-95", menuCapasAbierto && "bg-nav border-nav-foreground/20 text-nav-foreground hover:bg-nav hover:brightness-125")}>
+ className={cn("size-14 rounded-full shrink-0 drop-shadow-lg active:scale-95", menuCapasAbierto && "bg-nav-foreground border-transparent text-nav hover:bg-nav-foreground/90")}>
  {menuCapasAbierto ? <X size={22} weight="bold" /> : <List size={22} />}
  </Button>
  </div>
@@ -320,8 +322,8 @@ export function MenuCapaMovil() {
   const logout = () => { cerrar(); if (currentMesero) logoutMesero(); else logoutAdmin(); };
 
   return (
-    <div aria-hidden={!abierto} className="absolute inset-0 z-0 bg-nav text-nav-foreground flex flex-col px-4 pt-5">
-      <div className="flex items-center gap-3 pb-5 min-w-0">
+    <div aria-hidden={!abierto} className="absolute inset-0 z-0 bg-nav text-nav-foreground flex flex-col justify-end px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]">
+      <div className="flex items-center gap-3 pb-4 min-w-0">
         <AguacateEgg className="w-9 h-9" />
         <div className="flex flex-col min-w-0 flex-1">
           <span className="font-extrabold text-base text-nav-foreground leading-tight truncate">{orgNombre}</span>
@@ -338,7 +340,7 @@ export function MenuCapaMovil() {
         </button>
       </div>
 
-      <nav aria-label="Secciones" className="grid grid-cols-2 auto-rows-[4.5rem] gap-3">
+      <nav aria-label="Secciones" className="grid grid-cols-2 auto-rows-[4rem] gap-3">
         {navItemsMobile.map((item) => {
           const Icon = item.icon;
           if ('soloPc' in item && item.soloPc) {
@@ -364,18 +366,20 @@ export function MenuCapaMovil() {
         })}
       </nav>
 
-      {/* Usuario y cierre de sesión, al final de las tarjetas */}
-      <div className="flex items-center gap-3 pt-6 pb-6">
-        <span aria-hidden="true" className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
+      {/* Fila inferior, a la altura del botón de cerrar el menú (que vive en la barra fija):
+          usuario y cierre de sesión juntos, a la izquierda. */}
+      <div className="absolute left-4 right-[5.25rem] bottom-[calc(env(safe-area-inset-bottom)+20px)] h-14 flex items-center gap-3 pl-1.5">
+        <span aria-hidden="true"
+          className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
           {initials(userName)}
         </span>
         <div className="flex flex-col min-w-0 flex-1">
           <span className="font-extrabold text-sm text-nav-foreground leading-tight truncate">{userName}</span>
-          <span className="text-xs text-nav-foreground/70 font-semibold">{userRole}</span>
+          <span className="text-xs text-nav-foreground/70 font-semibold leading-tight truncate">{userRole}</span>
         </div>
-        <button type="button" onClick={logout} tabIndex={abierto ? 0 : -1}
-          className="h-11 px-3 rounded-xl text-red-300/80 hover:text-red-300 hover:bg-nav-foreground/10 font-semibold text-sm flex items-center gap-2 shrink-0 cursor-pointer">
-          <SignOut size={16} weight="bold" /> Cerrar sesión
+        <button type="button" onClick={logout} tabIndex={abierto ? 0 : -1} title="Cerrar sesión" aria-label="Cerrar sesión"
+          className="h-11 px-3 rounded-full text-red-300/90 hover:text-red-300 hover:bg-nav-foreground/10 font-semibold text-sm flex items-center gap-1.5 shrink-0 cursor-pointer">
+          <SignOut size={16} weight="bold" /> Salir
         </button>
       </div>
     </div>

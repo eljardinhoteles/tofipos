@@ -392,9 +392,8 @@ export function AppLayoutV2() {
           className={cn(
             "flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
             menuEnCapas && "z-10 bg-nav transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform",
-            menuEnCapas && "[&_header]:transition-[height,opacity] [&_header]:duration-300",
-            // Con el menú abierto el header de la página se colapsa (su título y botones repetirían la cabecera del menú) y no deja hueco.
-            menuEnCapas && menuAbierto && "translate-y-[31rem] rounded-t-3xl [&_header]:!h-0 [&_header]:overflow-hidden [&_header]:opacity-0 [&_header]:pointer-events-none"
+            // Con el menú abierto la página SUBE y deja al descubierto, abajo y al alcance del pulgar, las tarjetas del menú.
+            menuEnCapas && menuAbierto && "-translate-y-[min(calc(29rem_+_env(safe-area-inset-bottom)),78dvh)] rounded-b-3xl"
           )}
           style={!isMobile && isSidebarVisible ? { paddingRight: 462 } : undefined}
         >
