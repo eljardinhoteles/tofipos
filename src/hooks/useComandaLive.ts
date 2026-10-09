@@ -1,7 +1,8 @@
 import { filtrarCuentasHabitacionVigentes } from '../lib/habitacionCuentas';
 import { useEffect, useState } from 'react';
 import { initVerticalRxDb } from '../db/rxdb';
-import { isOperativeComanda } from '../db/comandaState';
+import { isOperativeComanda, esMesaMultiple } from '../db/comandaState';
+import type { ContextoAnticipo } from '../lib/anticipoMesa';
 
 // Datos en vivo de la comanda abierta en el sidebar: la propia comanda, sus
 // pagos y ventas (Centro de Ventas: trae abonos registrados antes de que la
@@ -19,6 +20,9 @@ export function useComandaLive(activeComandaProp: any) {
   const [allMesas, setAllMesas] = useState<any[]>([]);
   const [ventasMesa, setVentasMesa] = useState<any[]>([]);
   const [comandasOperativasMesa, setComandasOperativasMesa] = useState<string[]>([]);
+  // Anticipo: qué comandas candidatas siguen abiertas y a quién pertenece el saldo.
+  const [comandasOperativasAnticipo, setComandasOperativasAnticipo] = useState<string[]>([]);
+  const [anticipoCtx, setAnticipoCtx] = useState<{ clienteId: string | null; clienteNombre: string | null; grupo: string[] }>({ clienteId: null, clienteNombre: null, grupo: [] });
 
   useEffect(() => {
     let alive = true;
@@ -53,6 +57,32 @@ export function useComandaLive(activeComandaProp: any) {
           ? await rxDb.ventas.find({ selector: { comanda_id: { $in: comandasMesa.map((x: any) => x.id) }, _deleted: { $ne: true } } }).exec()
           : [];
         const roomMesa = hcJson ? await rxDb.mesas.findOne(hcJson.mesa_id).exec() : null;
+
+        // El anticipo es del cliente que lo dejó: las candidatas son las ventas de las
+        // comandas de esta mesa (más las del mismo cliente, abajo) y al calcular se
+        // filtran por cliente: otro cliente en la mesa no las ve.
+        const comandaJson = c ? c.toJSON() : activeComandaProp;
+        const clienteId: string | null = comandaJson?.cliente_id || null;
+        const clienteNombre: string | null = (comandaJson?.cliente || '').trim() || null;
+        const operativasMesa = comandasMesa.filter((x: any) => isOperativeComanda(x));
+        const grupo: string[] = esMesaMultiple(operativasMesa) ? operativasMesa.map((x: any) => x.id) : [comandaId];
+
+        // El anticipo sigue al cliente: si la comanda tiene cliente_id, también se traen
+        // sus ventas de otras mesas (cambió de mesa, o abrió una nueva). Sin cliente_id
+        // (solo un nombre escrito) NO se cruza de mesa: un nombre repetido no basta
+        // para entregar dinero a alguien.
+        let ventasExtra: any[] = [];
+        const idsOperativas = new Set<string>(operativasMesa.map((x: any) => x.id));
+        if (clienteId) {
+          const idsMesa = new Set((ventasDeMesa as any[]).map((d: any) => d.id));
+          const delCliente = (await rxDb.ventas.find({ selector: { cliente_id: clienteId, organization_id: orgId, _deleted: { $ne: true } } }).exec()).map((d: any) => d.toJSON());
+          ventasExtra = delCliente.filter((x: any) => !idsMesa.has(x.id));
+          const comandasExtra = [...new Set(ventasExtra.map((x: any) => x.comanda_id).filter((id: any) => id && !idsOperativas.has(id)))] as string[];
+          if (comandasExtra.length > 0) {
+            const docs = await rxDb.comandas.find({ selector: { id: { $in: comandasExtra }, _deleted: { $ne: true } } }).exec();
+            docs.map((d: any) => d.toJSON()).filter((x: any) => isOperativeComanda(x)).forEach((x: any) => idsOperativas.add(x.id));
+          }
+        }
         if (!alive) return;
         setLiveComanda(c ? c.toJSON() : activeComandaProp);
         setPagos(p.map((d: any) => d.toJSON()));
@@ -62,7 +92,9 @@ export function useComandaLive(activeComandaProp: any) {
         // Solo cuentas vigentes (habitación existente, una por habitación), en orden numérico.
         setActiveRoomAccounts(filtrarCuentasHabitacionVigentes(rac.map((d: any) => d.toJSON()), mesasJson, orgId));
         setAllMesas(mesasJson);
-        setVentasMesa((ventasDeMesa as any[]).map((d: any) => d.toJSON()));
+        setVentasMesa([...(ventasDeMesa as any[]).map((d: any) => d.toJSON()), ...ventasExtra]);
+        setComandasOperativasAnticipo([...idsOperativas]);
+        setAnticipoCtx({ clienteId, clienteNombre, grupo });
         setComandasOperativasMesa(comandasMesa.filter((x: any) => isOperativeComanda(x)).map((x: any) => x.id));
       };
       await refresh();
@@ -87,5 +119,6 @@ export function useComandaLive(activeComandaProp: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeComandaProp?.id, activeComandaProp?.habitacion_cuenta_id, activeComandaProp?.mesa_id]);
 
-  return { liveComanda, pagos, ventasComanda, linkedMesa, activeRoomAccounts, allMesas, ventasMesa, comandasOperativasMesa };
+  const anticipoContexto: ContextoAnticipo = { clienteId: anticipoCtx.clienteId, clienteNombre: anticipoCtx.clienteNombre, grupoComandaIds: new Set(anticipoCtx.grupo) };
+  return { liveComanda, pagos, ventasComanda, linkedMesa, activeRoomAccounts, allMesas, ventasMesa, comandasOperativasMesa, comandasOperativasAnticipo, anticipoContexto };
 }

@@ -153,22 +153,36 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  const payload = { ...form, organization_id: orgId };
  let clienteId: string;
 
+ // Nunca se pisa a otro cliente: un documento ya registrado, o un nombre repetido sin
+ // documento para distinguirlos, se rechazan antes de guardar. Dos personas con el
+ // mismo nombre sí pueden existir si tienen documentos distintos.
+ const rxDb = await initVerticalRxDb();
+ const existentes = (await rxDb.clientes.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).exec())
+ .map((d: any) => d.toJSON())
+ .filter((c: any) => c.id !== editingCliente?.id);
+ const norm = (t?: string | null) => (t ?? '').replace(/\s+/g, '').toLowerCase();
+ const docsNuevos = [norm(form.dni), norm(form.numero_doc)].filter(Boolean);
+ const duplicadoDoc = existentes.find((c: any) =>
+ docsNuevos.some(d => d === norm(c.dni) || d === norm(c.numero_doc)));
+ if (duplicadoDoc) {
+ showToast.error('Documento ya registrado', `Ese documento ya pertenece a ${duplicadoDoc.nombre}.`);
+ return;
+ }
+ const mismoNombre = existentes.find((c: any) => (c.nombre ?? '').trim().toLowerCase() === form.nombre.trim().toLowerCase());
+ const cambioNombre = !editingCliente || (editingCliente.nombre ?? '').trim().toLowerCase() !== form.nombre.trim().toLowerCase();
+ if (mismoNombre && docsNuevos.length === 0 && cambioNombre) {
+ showToast.error('Ya existe un cliente con ese nombre', 'Agrega su cédula o pasaporte para distinguirlos.');
+ return;
+ }
+
  if (editingCliente) {
  clienteId = editingCliente.id;
  await updateRxCliente(editingCliente.id, payload);
  showToast.success('Cliente actualizado');
  } else {
- const rxDb = await initVerticalRxDb();
- const exists = await rxDb.clientes.findOne({ selector: { nombre: form.nombre } }).exec();
- if (exists) {
- clienteId = (exists as { id: string }).id;
- await updateRxCliente(clienteId, payload);
- showToast.success('Cliente actualizado');
- } else {
  clienteId = crypto.randomUUID();
  await createRxCliente({ id: clienteId, ...payload, created_at: new Date().toISOString() });
  showToast.success('Cliente registrado');
- }
  }
 
  onClose();

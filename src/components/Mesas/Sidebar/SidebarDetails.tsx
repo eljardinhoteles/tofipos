@@ -36,6 +36,7 @@ import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
 import { SidebarCambiarCliente } from'./SidebarCambiarCliente';
+import { clienteCoincide, detalleCliente } from'../../../lib/documentoCliente';
 
 
 
@@ -161,13 +162,15 @@ export function SidebarDetails({
  const [clienteInfoOpen, setClienteInfoOpen] = useState(false);
  const [changeClienteModal, setChangeClienteModal] = useState(false);
  const [changeClienteName, setChangeClienteName] = useState('');
+ // Cliente elegido de la lista de sugerencias (null = nombre escrito a mano).
+ const [changeClienteId, setChangeClienteId] = useState<string | null>(null);
  const [changeMesaModal, setChangeMesaModal] = useState(false);
  const { clientes } = useRxClientes();
 
 
  const { mesaView, setMesaView } = useUI();
 
- const { liveComanda, pagos, ventasComanda, linkedMesa, activeRoomAccounts, allMesas, ventasMesa, comandasOperativasMesa } = useComandaLive(activeComandaProp);
+ const { liveComanda, pagos, ventasComanda, linkedMesa, activeRoomAccounts, allMesas, ventasMesa, comandasOperativasMesa, comandasOperativasAnticipo, anticipoContexto } = useComandaLive(activeComandaProp);
 
  useEffect(() => {
  if (closeCuentaModalOpen && activeComandaProp) {
@@ -299,27 +302,35 @@ export function SidebarDetails({
  });
 
  // Clientes únicos para autocompletar en el flujo de cambio de cliente
- const uniqueClientNames = useMemo(() => {
- const names = new Set<string>();
- for (const c of clientes) {
- if (c.nombre) names.add(c.nombre);
- }
- return Array.from(names);
- }, [clientes]);
- const filteredChangeClientes = uniqueClientNames
- .filter(nombre => nombre.toLowerCase().includes(changeClienteName.toLowerCase()) && nombre !== changeClienteName)
- .slice(0, 5);
+ // Clientes registrados que coinciden con lo escrito (por nombre o documento), con
+ // su documento visible para elegir al correcto entre homónimos.
+ const filteredChangeClientes = useMemo(() => {
+ const term = changeClienteName.trim();
+ if (!term) return [];
+ return clientes
+ .filter(c => clienteCoincide(c, term) && c.id !== changeClienteId)
+ .slice(0, 6)
+ .map(c => ({ id: c.id, nombre: c.nombre, detalle: detalleCliente(c) }));
+ }, [clientes, changeClienteName, changeClienteId]);
 
  const handleOpenChangeCliente = () => {
  setChangeClienteName(activeComanda?.cliente ||'');
+ setChangeClienteId(activeComanda?.cliente_id || null);
  setChangeClienteModal(true);
  };
 
  const handleConfirmChangeCliente = async () => {
  if (!activeComanda) return;
  const nuevoCliente = changeClienteName.trim();
+ // El anticipo sigue al cliente por su cliente_id: al cambiar de cliente hay que cambiar
+ // también el id (o quitarlo si es un nombre libre / Consumidor Final), para que no
+ // conserve el del cliente anterior ni su saldo a favor.
+ // Solo se vincula si se eligió de la lista: un nombre escrito a mano es texto libre y
+ // nunca se enlaza solo a un cliente registrado (ni siquiera si el nombre coincide).
+ const clienteElegido = changeClienteId ? clientes.find(c => c.id === changeClienteId) : undefined;
  await updateRxComanda(activeComanda.id, {
  cliente: nuevoCliente || undefined,
+ cliente_id: (clienteElegido?.id ?? null) as any,
  // Mesa Múltiple: la card de la subcomanda muestra este nombre.
  ...(activeComanda.subcomanda_nombre && nuevoCliente ? { subcomanda_nombre: nuevoCliente } : {}),
  });
@@ -437,8 +448,9 @@ export function SidebarDetails({
  // Anticipo de la mesa (a favor de la mesa, compartido por todas sus cuentas):
  // se ofrece al pedir cuenta y se decide al cobrar si se usa o se cobra aparte.
  const anticipo = useMemo(
- () => calcularAnticipoMesa(ventasMesa, new Set(comandasOperativasMesa)),
- [ventasMesa, comandasOperativasMesa]
+ () => calcularAnticipoMesa(ventasMesa, new Set(comandasOperativasAnticipo), anticipoContexto),
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ [ventasMesa, comandasOperativasAnticipo, anticipoContexto.clienteId, anticipoContexto.clienteNombre, anticipoContexto.grupoComandaIds.size]
  );
  // Cuánto del anticipo se aplica al cobrar: por defecto todo lo que cubra la
  // cuenta; el cajero puede bajarlo o ponerlo en 0 (cobro nuevo). Sin vuelto:
@@ -729,8 +741,9 @@ export function SidebarDetails({
  folio={folioLabel(activeComanda)}
  mesaNombre={selectedMesa.nombre}
  nombre={changeClienteName}
- onNombreChange={setChangeClienteName}
+ onNombreChange={(v) => { setChangeClienteName(v); setChangeClienteId(null); }}
  sugerencias={filteredChangeClientes}
+ onElegir={(c) => { setChangeClienteName(c.nombre); setChangeClienteId(c.id); }}
  onBack={() => setChangeClienteModal(false)}
  onGuardar={handleConfirmChangeCliente}
  />

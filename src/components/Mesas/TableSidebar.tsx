@@ -19,7 +19,6 @@ import { SubcomandasPanel } from './Sidebar/SubcomandasPanel';
 import { useTableActions } from '../../hooks/useTableActions';
 import { getMesaEstadoEfectivo, isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
-import { useRxClientes } from '../../hooks/useRxClientes';
 import { useRxMesas } from '../../hooks/useRxMesas';
 import { useRxPisos } from '../../hooks/useRxPisos';
 import { useRxComandas } from '../../hooks/useRxComandas';
@@ -46,12 +45,13 @@ export function TableSidebar({
   mesaEsDeHabitaciones = false,
 }: TableSidebarProps) {
   const [customerName, setCustomerName] = useState('');
+  // Cliente elegido de la lista al abrir la mesa (null = nombre escrito a mano, sin vincular).
+  const [clienteId, setClienteId] = useState<string | null>(null);
   const [guestCount, setGuestCount] = useState(1);
   const { checkoutView, setCheckoutView, viewingComandaId, setViewingComandaId, activeSubcomandaId, setActiveSubcomandaId, reservaView, setReservaView, selectedReservaId, setSelectedReservaId, menuView } = useUI();
   const [checkoutType, setCheckoutType] = useState<'directo' | 'dividido'>('directo');
   const [checkoutMode, setCheckoutMode] = useState<'cobro' | 'enviar_habitacion'>('cobro');
   const [openLinkMode, setOpenLinkMode] = useState<'manual' | 'habitacion'>('manual');
-  const [mesaMultiple, setMesaMultiple] = useState(false);
   const [vistaTodas, setVistaTodas] = useState(false);
   // Mientras se escribe el nombre de una subcomanda nueva se oculta el detalle
   // de la comanda: en móvil el teclado encoge el sheet y el footer quedaba
@@ -89,8 +89,6 @@ export function TableSidebar({
     }
     return ids;
   }, [allComandasRaw]);
-
-  const { clientes: allClientes } = useRxClientes();
 
   const [historicalComanda, setHistoricalComanda] = useState<any | null>(null);
   // Comandas operativas de la mesa: 1 en mesa normal, N (subcomandas) en Mesa Múltiple.
@@ -266,11 +264,11 @@ export function TableSidebar({
   useEffect(() => {
     if (selectedMesa) {
       setCustomerName('');
+      setClienteId(null);
       setGuestCount(selectedMesa.capacidad || 2);
       setCheckoutView(false);
       setSelectedHabitacionId(null);
       setOpenLinkMode('manual');
-      setMesaMultiple(false);
       setVistaTodas(false);
       setActiveSubcomandaId(null);
     }
@@ -632,25 +630,24 @@ export function TableSidebar({
             selectedMesa={selectedMesaEffective}
             customerName={customerName}
             setCustomerName={setCustomerName}
+            clienteId={clienteId}
+            setClienteId={setClienteId}
             guestCount={guestCount}
             setGuestCount={setGuestCount}
             openLinkMode={openLinkMode}
             setOpenLinkMode={setOpenLinkMode}
-            mesaMultiple={mesaMultiple}
-            setMesaMultiple={setMesaMultiple}
             selectedHabitacionId={selectedHabitacionId}
             setSelectedHabitacionId={setSelectedHabitacionId}
             onClose={onClose}
             onOpenTable={() => {
-              const matchedClient = allClientes.find(c => c.nombre.trim().toLowerCase() === customerName.trim().toLowerCase());
-              const resolvedId = matchedClient ? matchedClient.id : '';
+              // El cliente se vincula SOLO si se eligió de la lista: nunca por coincidencia de nombre.
+              const resolvedId = openLinkMode === 'manual' ? (clienteId ?? '') : '';
               const habitacionCuentaId = openLinkMode === 'habitacion' ? (selectedHabitacionId || '') : '';
               const payload = btoa(JSON.stringify({
                 customerName,
                 guestCount,
                 clientId: resolvedId,
                 habitacionCuentaId,
-                mesaMultiple: mesaMultiple && !habitacionCuentaId,
               }));
               onAction(selectedMesaEffective, `abrir:${payload}`);
             }}

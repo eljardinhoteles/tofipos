@@ -1,25 +1,25 @@
 import { HabitacionOpcion } from './habitacion/HabitacionOpcion';
 import { filtrarCuentasHabitacionVigentes } from '../../../lib/habitacionCuentas';
 import { useEffect, useState } from'react';
-import { X, Users, Minus, Plus } from'@phosphor-icons/react';
+import { X, Users, Minus, Plus, Check } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
 import { Input } from'@/components/ui/input';
 import { Button } from'@/components/ui/button';
-import { Switch } from'@/components/ui/switch';
 import { ClienteSelector } from'@/components/Common/ClienteSelector';
 
 interface SidebarOpenTableProps {
  selectedMesa: Mesa;
  customerName: string;
  setCustomerName: (val: string) => void;
+ /** Cliente elegido de la lista (su id). null = nombre escrito a mano, sin vincular. */
+ clienteId: string | null;
+ setClienteId: (id: string | null) => void;
  guestCount: number;
  setGuestCount: (val: number) => void;
  openLinkMode:'manual'|'habitacion';
  setOpenLinkMode: (mode:'manual'|'habitacion') => void;
- mesaMultiple: boolean;
- setMesaMultiple: (val: boolean) => void;
  selectedHabitacionId: string | null;
  setSelectedHabitacionId: (id: string | null) => void;
  onClose: () => void;
@@ -30,12 +30,12 @@ export function SidebarOpenTable({
  selectedMesa,
  customerName,
  setCustomerName,
+ clienteId,
+ setClienteId,
  guestCount,
  setGuestCount,
  openLinkMode,
  setOpenLinkMode,
- mesaMultiple,
- setMesaMultiple,
  selectedHabitacionId,
  setSelectedHabitacionId,
  onClose,
@@ -142,17 +142,6 @@ export function SidebarOpenTable({
  </div>
  </section>
 
- {/* Mesa Múltiple: varias subcomandas (persona/habitación) en la misma mesa */}
- {openLinkMode ==='manual'&& (
- <label htmlFor="mesa-multiple" className="flex items-center justify-between gap-4 p-3.5 rounded-2xl border border-border cursor-pointer">
- <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">Mesa múltiple</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">Separar la comanda por personas o habitaciones.</span>
- </div>
- <Switch id="mesa-multiple" checked={mesaMultiple} onCheckedChange={setMesaMultiple} />
- </label>
- )}
-
  {/* Cliente o Habitación: una sola acción a la vez */}
  <section className="flex flex-col gap-3">
  <h4 className={titulo}>Vincular a</h4>
@@ -174,15 +163,27 @@ export function SidebarOpenTable({
  </Tabs>
 
  {openLinkMode ==='manual'? (
+ <>
  <ClienteSelector
  id="customer-search"
  value={customerName}
  onChange={(nombre) => {
  setCustomerName(nombre);
+ setClienteId(null);
  setOpenLinkMode('manual');
  setSelectedHabitacionId(null);
  }}
+ onSelect={(c) => setClienteId(c.id)}
  />
+
+ {/* Cliente elegido de la lista */}
+ {clienteId && (
+ <span className="flex items-center gap-1.5 text-xs font-bold text-success-foreground">
+ <Check size={14} weight="bold" /> Cliente vinculado
+ </span>
+ )}
+
+ </>
  ) : (
  <div className="flex flex-col gap-2">
  {activeCuentas.map(cuenta => (

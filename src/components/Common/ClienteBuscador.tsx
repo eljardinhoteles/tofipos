@@ -4,6 +4,7 @@ import { useRxClientes } from '../../hooks/useRxClientes';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { detalleCliente, clienteCoincide } from '../../lib/documentoCliente';
 
 interface ClienteBuscadorProps {
   /** id del cliente seleccionado ('' = ninguno) */
@@ -40,7 +41,7 @@ export function ClienteBuscador({
     if (!termino) return [];
     const out: any[] = [];
     for (const c of clientes) {
-      if (c.nombre?.toLowerCase().includes(termino) || c.dni?.toLowerCase().includes(termino)) {
+      if (clienteCoincide(c, termino)) {
         out.push(c);
         if (out.length >= maxResults) break;
       }
@@ -53,8 +54,8 @@ export function ClienteBuscador({
       <div className="p-2.5 rounded-2xl border border-ring ring-3 ring-ring/30 bg-input/50 flex items-center justify-between gap-2">
         <div className="flex flex-col min-w-0">
           <span className="font-medium text-sm text-foreground truncate">{seleccionado.nombre}</span>
-          <span className="text-xs text-muted-foreground truncate">
-            {seleccionado.dni ? `ID: ${seleccionado.dni}` : 'Sin identificación'}
+          <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+            {detalleCliente(seleccionado)}
           </span>
         </div>
         <button
@@ -93,8 +94,8 @@ export function ClienteBuscador({
           className={cn('p-2.5 rounded-2xl border border-transparent bg-input/50 flex items-center justify-between gap-2 transition-all cursor-pointer text-left')}>
           <div className="flex flex-col min-w-0">
             <span className="font-medium text-sm text-foreground truncate">{c.nombre}</span>
-            <span className="text-xs text-muted-foreground truncate">
-              {c.dni ? `ID: ${c.dni}` : (c.telefono || c.email || 'Sin identificación')}
+            <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+              {detalleCliente(c)}
             </span>
           </div>
           <Check size={16} weight="bold" className="text-transparent shrink-0" />

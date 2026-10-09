@@ -8,8 +8,10 @@ interface SidebarCambiarClienteProps {
   mesaNombre: string;
   nombre: string;
   onNombreChange: (val: string) => void;
-  // Clientes registrados que coinciden con lo escrito.
-  sugerencias: string[];
+  // Clientes registrados que coinciden con lo escrito (con su documento, para elegir al correcto).
+  sugerencias: Array<{ id: string; nombre: string; detalle: string }>;
+  /** Cliente elegido de la lista (la comanda se vincula a su id). */
+  onElegir: (cliente: { id: string; nombre: string }) => void;
   onBack: () => void;
   onGuardar: () => void;
 }
@@ -23,6 +25,7 @@ export function SidebarCambiarCliente({
   nombre,
   onNombreChange,
   sugerencias,
+  onElegir,
   onBack,
   onGuardar,
 }: SidebarCambiarClienteProps) {
@@ -65,15 +68,18 @@ export function SidebarCambiarCliente({
 
         {sugerencias.length > 0 && (
           <div className="flex flex-col rounded-xl border border-border overflow-hidden">
-            {sugerencias.map((s, i) => (
+            {sugerencias.map((c, i) => (
               <button
-                key={s}
+                key={c.id}
                 type="button"
-                onClick={() => onNombreChange(s)}
-                className={`w-full h-12 px-3 flex items-center gap-2 text-left text-sm font-semibold cursor-pointer ${i % 2 === 1 ? 'bg-muted/70' : ''}`}
+                onClick={() => onElegir(c)}
+                className={`w-full min-h-14 px-3 py-2 flex items-center gap-2 text-left cursor-pointer ${i % 2 === 1 ? 'bg-muted/70' : ''}`}
               >
                 <User size={16} className="text-muted-foreground shrink-0" />
-                <span className="truncate">{s}</span>
+                <span className="flex flex-col min-w-0">
+                  <span className="truncate text-sm font-semibold text-foreground">{c.nombre}</span>
+                  <span className="truncate text-xs font-semibold text-muted-foreground tabular-nums">{c.detalle}</span>
+                </span>
               </button>
             ))}
           </div>

@@ -4,6 +4,7 @@ import type { RxCliente } from '../../db/rxdb';
 import { useRxClientes } from '../../hooks/useRxClientes';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { detalleCliente, clienteCoincide } from '../../lib/documentoCliente';
 
 /**
  * Selector de cliente estándar del sistema: input de búsqueda por nombre o
@@ -36,7 +37,7 @@ export function ClienteSelector({
     const term = value.trim().toLowerCase();
     if (!term) return [];
     return clientes
-      .filter(c => c.nombre?.toLowerCase().includes(term) || c.dni?.toLowerCase().includes(term))
+      .filter(c => clienteCoincide(c, term))
       .slice(0, maxResults);
   }, [value, clientes, maxResults]);
 
@@ -83,8 +84,8 @@ export function ClienteSelector({
               >
                 <div className="flex flex-col min-w-0">
                   <span className="font-medium text-sm text-foreground truncate">{c.nombre}</span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    {c.dni ? `DNI: ${c.dni}` : (c.telefono || c.email || 'Sin documento')}
+                  <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+                    {detalleCliente(c)}
                   </span>
                 </div>
                 {isSelected && (

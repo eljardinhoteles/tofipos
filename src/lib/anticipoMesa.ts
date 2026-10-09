@@ -10,7 +10,7 @@
 // disponible se calcula como pagos − reembolsos − aplicado.
 
 type Mov = { tipo: string; monto?: number; anulado?: boolean; motivo?: string }
-type VentaLike = { id: string; comanda_id?: string | null; referencia?: string | null; created_at?: string; movimientos?: Mov[] }
+type VentaLike = { id: string; comanda_id?: string | null; cliente_id?: string | null; cliente_nombre?: string | null; referencia?: string | null; created_at?: string; movimientos?: Mov[] }
 
 export const MARCA_APLICADO = 'Anticipo aplicado'
 
@@ -48,22 +48,50 @@ export interface AnticipoPool {
   ventas: Array<{ venta: VentaLike; disponible: number }>
 }
 
+/** Quién está pagando: el anticipo es de la PERSONA que lo dejó, no de la mesa. */
+export interface ContextoAnticipo {
+  clienteId?: string | null
+  clienteNombre?: string | null
+  /** Comandas que comparten cuenta con la actual: ella misma y, en Mesa Múltiple, sus subcomandas hermanas. */
+  grupoComandaIds: Set<string>
+}
+
+const NOMBRES_GENERICOS = new Set(['', 'consumidor final', 'publico general'])
+const normalizarNombre = (t?: string | null) =>
+  (t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+
 /**
- * Anticipo disponible de la mesa. `ventasMesa` son las ventas ligadas a
- * comandas de la mesa; solo cuentan las no anuladas, no divididas, cuya
- * comanda sigue abierta (`comandasOperativas`) o que ya tienen anticipo
- * aplicado de una cuenta anterior de la misma mesa. Así una venta vieja
- * cerrada antes de este esquema no reaparece como saldo a favor.
+ * ¿El saldo de esta venta es de quien está pagando? Sí si la venta cuelga de la
+ * propia cuenta (o de una subcomanda hermana de la misma Mesa Múltiple), o si
+ * pertenece al mismo cliente: mismo cliente_id o, sin él, el mismo nombre
+ * exacto. Un cliente sin identificar ("Consumidor Final") no hereda saldos.
  */
-export function calcularAnticipoMesa(ventasMesa: VentaLike[], comandasOperativas: Set<string>): AnticipoPool {
-  const ventas = ventasMesa
+export function ventaEsDelCliente(v: VentaLike, ctx: ContextoAnticipo) {
+  if (v.comanda_id && ctx.grupoComandaIds.has(v.comanda_id)) return true
+  if (ctx.clienteId && v.cliente_id) return v.cliente_id === ctx.clienteId
+  const nombre = normalizarNombre(ctx.clienteNombre)
+  if (NOMBRES_GENERICOS.has(nombre)) return false
+  return normalizarNombre(v.cliente_nombre) === nombre
+}
+
+/**
+ * Anticipo disponible para quien está pagando. `ventas` son las candidatas (las
+ * de las comandas de la mesa y las del mismo cliente en otras mesas); solo cuentan las no
+ * anuladas, no divididas, de ese cliente, cuya comanda sigue abierta
+ * (`comandasOperativas`) o que ya tienen anticipo aplicado de una cuenta
+ * anterior. Así una venta vieja cerrada antes de este esquema no reaparece, y
+ * el saldo que dejó un cliente nunca lo ve el siguiente en la misma mesa.
+ */
+export function calcularAnticipoMesa(ventas: VentaLike[], comandasOperativas: Set<string>, ctx: ContextoAnticipo): AnticipoPool {
+  const candidatas = ventas
     .filter(v => !(v.movimientos ?? []).some(m => m.tipo === 'anular' && !m.anulado))
     .filter(v => !esVentaDividida(v))
+    .filter(v => ventaEsDelCliente(v, ctx))
     .filter(v => (v.comanda_id && comandasOperativas.has(v.comanda_id)) || tieneAnticipoAplicado(v))
     .map(venta => ({ venta, disponible: disponibleVenta(venta) }))
     .filter(x => x.disponible > 0.001)
     .sort((a, b) => b.disponible - a.disponible)
-  return { disponible: ventas.reduce((acc, x) => acc + x.disponible, 0), ventas }
+  return { disponible: candidatas.reduce((acc, x) => acc + x.disponible, 0), ventas: candidatas }
 }
 
 /** Reparte `monto` entre las ventas del pool, de la de mayor saldo a la menor. */
