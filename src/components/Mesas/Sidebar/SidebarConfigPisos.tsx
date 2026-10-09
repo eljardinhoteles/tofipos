@@ -1,168 +1,119 @@
-import { ArrowLeft, Plus, PencilSimple, Trash, CaretUp, CaretDown, Bed } from'@phosphor-icons/react';
-import { useUI } from'../../../context/UIContext';
+import { Plus, Bed, CaretRight, CaretUp, CaretDown, MapTrifold } from'@phosphor-icons/react';
 import type { Mesa, Piso } from'../../../db/database';
 import { Input } from'@/components/ui/input';
+import { Button } from'@/components/ui/button';
+import { ReservaHeader } from'./ReservaHeader';
 
 interface SidebarConfigPisosProps {
  dbPisos: Piso[];
  allMesas: Mesa[];
- onBack: () => void;
+ onClose: () => void;
  onAddPiso: (name: string) => void;
- onUpdatePiso: (id: string, name: string) => void;
- onDeletePiso: (id: string, name: string) => void;
  onReorderPiso: (id: string, direction:'up'|'down') => void;
  onSelectPiso: (name: string) => void;
  newPisoName: string;
  setNewPisoName: (val: string) => void;
- editingPisoId: string | null;
- setEditingPisoId: (id: string | null) => void;
- editingPisoName: string;
- setEditingPisoName: (name: string) => void;
 }
+
+const encabezadoSeccion = (titulo: string) => (
+ <div className="px-4 py-2.5 border-y border-border bg-muted">
+ <span className="text-[11px] font-extrabold uppercase tracking-wider text-foreground/70">{titulo}</span>
+ </div>
+);
 
 export function SidebarConfigPisos({
  dbPisos,
  allMesas,
- onBack,
+ onClose,
  onAddPiso,
- onUpdatePiso,
- onDeletePiso,
  onReorderPiso,
  onSelectPiso,
  newPisoName,
  setNewPisoName,
- editingPisoId,
- setEditingPisoId,
- editingPisoName,
- setEditingPisoName,
 }: SidebarConfigPisosProps) {
- const { openConfirm } = useUI();
  const habitacionesPiso = dbPisos.find(p => p.nombre.toLowerCase() ==='habitaciones');
+ const habitacionesCount = habitacionesPiso ? allMesas.filter(m => m.piso === habitacionesPiso.nombre).length : 0;
+ const zonas = dbPisos.filter(p => p.nombre.toLowerCase() !=='habitaciones');
 
  return (
- <div className="h-full w-full bg-card flex flex-col p-6 overflow-hidden">
- {/* Header */}
- <div className="flex items-start justify-between border-b border-border pb-4 mb-4">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <ArrowLeft size={18} weight="bold"/>
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground">Zonas y Pisos</h3>
- <span className="text-[10px] font-bold text-muted-foreground">Gestiona las áreas del local</span>
- </div>
- </div>
+ <div className="h-full w-full bg-card flex flex-col overflow-hidden">
+ <ReservaHeader
+ tono="neutro"
+ badge={<MapTrifold size={22} weight="bold" />}
+ titulo="Zonas y Pisos"
+ subtitulo={`${zonas.length} ${zonas.length === 1 ?'zona':'zonas'} · Gestiona las áreas del local`}
+ onClose={onClose}
+ />
 
- <button
- type="button"title="Gestionar Habitaciones"onClick={() => {
- if (habitacionesPiso) {
- onSelectPiso(habitacionesPiso.nombre);
- } else {
- onAddPiso('Habitaciones');
- }
- }}
- className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center cursor-pointer transition-colors">
- <Bed size={18} weight="bold"/>
- </button>
- </div>
-
- {/* Nueva Zona */}
- <div className="flex flex-col gap-1.5 mb-5">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Nueva Zona</span>
- <div className="flex items-center gap-2">
+ <div className="flex-1 overflow-y-auto">
+ {/* Zonas */}
+ {encabezadoSeccion('Zonas del restaurante')}
+ {/* Nueva zona */}
+ <form
+ className="flex items-center gap-2 p-4 border-b border-border"
+ onSubmit={(e) => { e.preventDefault(); onAddPiso(newPisoName); }}
+ >
  <Input
- type="text"placeholder="Ej: Terraza, VIP..."value={newPisoName}
+ type="text"placeholder="Nueva zona: Terraza, VIP..."value={newPisoName}
  onChange={(e) => setNewPisoName(e.target.value)}
- className="flex-1"/>
- <button
- type="button"onClick={() => onAddPiso(newPisoName)}
- className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-xs transition-colors shrink-0">
+ className="flex-1 h-11 text-base md:text-sm font-semibold"/>
+ <Button type="submit" size="icon-lg" aria-label="Añadir zona" disabled={!newPisoName.trim()} className="h-11 w-11 shrink-0">
  <Plus size={18} weight="bold"/>
- </button>
- </div>
- </div>
+ </Button>
+ </form>
 
- {/* Lista de Pisos */}
- <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
- {dbPisos
- .filter(p => p.nombre.toLowerCase() !=='habitaciones')
- .map(piso => {
- const mesasCount = allMesas.filter(m => m.piso === piso.nombre).length;
-
- return (
- <div
- key={piso.id}
- className="p-3 rounded-xl bg-muted border border-border flex items-center justify-between gap-2">
- {editingPisoId === piso.id ? (
- <div className="flex items-center gap-2 w-full">
- <Input
- type="text"value={editingPisoName}
- onChange={(e) => setEditingPisoName(e.target.value)}
- className="flex-1 h-8"/>
- <button
- type="button"onClick={() => onUpdatePiso(piso.id, editingPisoName)}
- className="px-3 py-1 rounded-lg bg-primary text-primary-foreground font-bold text-xs">
- Ok
- </button>
- <button
- type="button"onClick={() => setEditingPisoId(null)}
- className="px-2 py-1 rounded-lg bg-border text-foreground font-bold text-xs">
- X
- </button>
- </div>
- ) : (
- <>
- <div className="flex items-center gap-2 flex-1 min-w-0">
- <div className="flex flex-col gap-0.5">
- <button
- type="button"onClick={(e) => { e.stopPropagation(); onReorderPiso(piso.id,'up'); }}
- className="text-muted-foreground cursor-pointer">
- <CaretUp size={12} weight="bold"/>
- </button>
- <button
- type="button"onClick={(e) => { e.stopPropagation(); onReorderPiso(piso.id,'down'); }}
- className="text-muted-foreground cursor-pointer">
- <CaretDown size={12} weight="bold"/>
- </button>
- </div>
-
- <div
- onClick={() => onSelectPiso(piso.nombre)}
- className="flex flex-col cursor-pointer flex-1 min-w-0">
- <span className="font-extrabold text-xs text-foreground truncate">{piso.nombre}</span>
- <span className="text-[10px] text-muted-foreground font-semibold">{mesasCount} mesas</span>
- </div>
- </div>
-
- <div className="flex items-center gap-1">
- <button
- type="button"onClick={() => {
- setEditingPisoId(piso.id);
- setEditingPisoName(piso.nombre);
- }}
- className="w-7 h-7 rounded-lg text-primary flex items-center justify-center cursor-pointer">
- <PencilSimple size={16} />
- </button>
-
- <button
- type="button"disabled={mesasCount > 0}
- onClick={(e) => {
- e.stopPropagation();
- openConfirm('Eliminar zona',`¿Seguro que deseas eliminar"${piso.nombre}"? Esta acción no se puede deshacer.`,
- () => onDeletePiso(piso.id, piso.nombre)
- );
- }}
- className="w-7 h-7 rounded-lg text-destructive disabled:opacity-30 flex items-center justify-center cursor-pointer">
- <Trash size={16} />
- </button>
- </div>
- </>
+ {zonas.length === 0 && (
+ <span className="block text-xs text-muted-foreground font-semibold text-center py-8">Aún no hay zonas. Crea la primera arriba.</span>
  )}
+ {zonas.map((piso, i) => {
+ const mesasCount = allMesas.filter(m => m.piso === piso.nombre).length;
+ return (
+ <div key={piso.id} className="flex items-center gap-1 pl-3 pr-4 border-b border-border">
+ <span className="flex flex-col shrink-0">
+ <button type="button" aria-label={`Subir ${piso.nombre}`} disabled={i === 0} onClick={() => onReorderPiso(piso.id,'up')}
+ className="p-1 text-foreground/70 disabled:opacity-25 cursor-pointer disabled:cursor-default">
+ <CaretUp size={14} weight="bold"/>
+ </button>
+ <button type="button" aria-label={`Bajar ${piso.nombre}`} disabled={i === zonas.length - 1} onClick={() => onReorderPiso(piso.id,'down')}
+ className="p-1 text-foreground/70 disabled:opacity-25 cursor-pointer disabled:cursor-default">
+ <CaretDown size={14} weight="bold"/>
+ </button>
+ </span>
+ <button
+ type="button"
+ onClick={() => onSelectPiso(piso.nombre)}
+ className="flex-1 min-w-0 flex items-center gap-3 pl-1 py-3 text-left cursor-pointer"
+ >
+ <span className="flex flex-col flex-1 min-w-0">
+ <span className="font-extrabold text-sm text-foreground truncate">{piso.nombre}</span>
+ <span className="text-xs text-muted-foreground font-semibold">{mesasCount} {mesasCount === 1 ?'mesa':'mesas'}</span>
+ </span>
+ <CaretRight size={16} weight="bold" className="text-foreground/50 shrink-0"/>
+ </button>
  </div>
  );
  })}
+ </div>
+
+ {/* Hotel: aparte de las zonas del restaurante */}
+ <div className="p-4 border-t border-border bg-muted/40 shrink-0">
+ <Button
+ type="button"
+ variant="outline"
+ onClick={() => {
+ if (habitacionesPiso) onSelectPiso(habitacionesPiso.nombre);
+ else onAddPiso('Habitaciones');
+ }}
+ className="w-full h-12 font-bold gap-2 justify-between"
+ >
+ <span className="flex items-center gap-2">
+ <Bed size={18} weight="bold"/> Hotel · Habitaciones
+ </span>
+ <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+ {habitacionesPiso ? habitacionesCount : 'Activar'}
+ <CaretRight size={14} weight="bold"/>
+ </span>
+ </Button>
  </div>
  </div>
  );

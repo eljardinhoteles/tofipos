@@ -19,6 +19,8 @@ import {
  SheetDescription,
 } from '@/components/ui/sheet';
 import { CATEGORY_ICONS, getCategoryIcon } from '@/lib/categoryIcons';
+import { SidebarMenuProduct } from '@/components/Menu/SidebarMenuProduct';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 export default function MenuV2() {
  const [searchQuery, setSearchQuery] = useState('');
@@ -27,8 +29,7 @@ export default function MenuV2() {
  const [newCategoryName, setNewCategoryName] = useState('');
  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
  const { openConfirm, menuView, setMenuView, setSelectedMenuProductId, selectedMenuProductId } = useUI();
- // Con el formulario de producto nuevo abierto en el sidebar, el botón de crear sobra.
- const creandoProducto = menuView === 'producto' && !selectedMenuProductId;
+ const isMobile = useIsMobile();
 
  const { menuItems: safeMenuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
 
@@ -38,7 +39,7 @@ export default function MenuV2() {
  (item.categoria_nombre ||'').toLowerCase().includes(searchQuery.toLowerCase());
  const matchesCategory = selectedCategory ==='all'? true : item.categoria_nombre === selectedCategory;
  return matchesSearch && matchesCategory;
- });
+ }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base', numeric: true }));
  }, [safeMenuItems, searchQuery, selectedCategory]);
 
  const conteoPorCategoria = useMemo(() => {
@@ -97,7 +98,7 @@ export default function MenuV2() {
  search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar productos..." />}
  actions={
  <>
- <button type="button" onClick={() => { setSelectedMenuProductId(null); setMenuView('producto'); }} title="Nuevo producto" aria-label="Nuevo producto" tabIndex={creandoProducto ? -1 : 0} className={cn(headerPrimaryButtonClass, creandoProducto ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-300 delay-300')}>
+ <button type="button" onClick={() => { setSelectedMenuProductId(null); setMenuView('producto'); }} title="Nuevo producto" aria-label="Nuevo producto" className={headerPrimaryButtonClass}>
  <Plus size={18} weight="bold" />
    <span className="hidden 2xl:inline">Nuevo producto</span>
  </button>
@@ -135,8 +136,8 @@ export default function MenuV2() {
  </div>
  <nav className="flex flex-col">
  {[
- { id: 'all', nombre: 'Todos', icono: null as string | null | undefined, count: safeMenuItems.length },
- ...safeDbCategorias.map(c => ({ id: c.nombre, nombre: c.nombre, icono: c.icono, count: conteoPorCategoria.get(c.nombre) ?? 0 })),
+ { id: 'all', nombre: 'Todos', icono: null as string | null | undefined, count: safeMenuItems.length, plan: false, primero: false },
+ ...safeDbCategorias.map(c => ({ id: c.nombre, nombre: c.nombre, icono: c.icono, count: conteoPorCategoria.get(c.nombre) ?? 0, plan: !!c.es_comida_incluida, primero: !!c.imprimir_primero })),
  ].map(c => {
  const Icon = c.id === 'all' ? List : getCategoryIcon(c.icono) ?? SquaresFour;
  const activa = selectedCategory === c.id;
@@ -147,10 +148,13 @@ export default function MenuV2() {
  aria-current={activa ? 'true' : undefined}
  onClick={() => setSelectedCategory(c.id)}
  className={cn("flex items-center gap-3 h-11 pl-3.5 pr-4 border-l-[3px] text-left transition-colors cursor-pointer",
- activa ? "border-primary bg-muted text-foreground" : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground")}
+ activa ? "border-primary bg-muted text-foreground"
+ : c.plan ? "border-transparent bg-info-soft text-info-foreground hover:bg-info/15"
+ : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground")}
  >
- <Icon size={18} weight={activa ? "fill" : "regular"} className={cn("shrink-0", activa && "text-primary")} />
+ <Icon size={18} weight={activa ? "fill" : "regular"} className={cn("shrink-0", activa && !c.plan && "text-primary", c.plan && "text-info-foreground")} />
  <span className={cn("flex-1 min-w-0 truncate text-sm", activa ? "font-extrabold" : "font-semibold")}>{c.nombre}</span>
+ {c.primero && <span title="Se imprime primero" aria-label="Se imprime primero" className="shrink-0 size-2 rounded-full bg-warning" />}
  <span className={cn("shrink-0 text-xs tabular-nums", activa ? "font-bold text-foreground" : "font-semibold text-muted-foreground/80")}>{c.count}</span>
  </button>
  );
@@ -159,7 +163,7 @@ export default function MenuV2() {
  </aside>
 
  {/* Grid de Productos */}
- <main className="flex-1 overflow-y-auto p-6">
+ <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
  {products.length === 0 ? (
  <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
  <div className="w-24 h-24 flex items-center justify-center">
@@ -193,6 +197,18 @@ export default function MenuV2() {
  </div>
 
  </PageContent>
+
+ {/* Editor de producto: panel flotante (no desplaza la pantalla). En celular lo muestra la hoja global. */}
+ {!isMobile && (
+ <Sheet open={menuView === 'producto'} onOpenChange={(o) => { if (!o) { setMenuView('none'); setSelectedMenuProductId(null); } }}>
+ <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
+ className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 border-0 data-[side=right]:border-l-0">
+ <SheetTitle className="sr-only">Producto</SheetTitle>
+ <SheetDescription className="sr-only">Crear o editar un producto del menú</SheetDescription>
+ <SidebarMenuProduct />
+ </SheetContent>
+ </Sheet>
+ )}
 
  {/* Drawer: Gestionar Categorías — pantalla 1: lista; pantalla 2: editar una categoría */}
  <Sheet open={isManageCategoriesOpen} onOpenChange={(o) => { setIsManageCategoriesOpen(o); if (!o) setEditingCategory(null); }}>
@@ -319,7 +335,7 @@ export default function MenuV2() {
  {safeDbCategorias.length === 0 ? (
  <div className="py-8 text-center text-sm text-muted-foreground">Sin categorías aún</div>
  ) : (
- <div className="flex flex-col divide-y divide-border">
+ <div className="flex flex-col divide-y divide-border -mx-4">
  {safeDbCategorias.map((cat, idx) => {
  const CategoryIcon = getCategoryIcon(cat.icono);
  const nProductos = conteoPorCategoria.get(cat.nombre) ?? 0;
@@ -328,7 +344,7 @@ export default function MenuV2() {
  es_comida_incluida: !!cat.es_comida_incluida, imprimir_primero: !!cat.imprimir_primero,
  });
  return (
- <div key={cat.id} className="flex items-center gap-1 pr-1 py-1.5">
+ <div key={cat.id} className="flex items-center gap-1 px-4 py-1.5 transition-colors hover:bg-muted/60">
  <div className="flex flex-col shrink-0">
  <button type="button" aria-label="Subir" onClick={() => handleMoveCategory(idx,'up')} disabled={idx === 0}
  className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:cursor-default cursor-pointer">
@@ -340,7 +356,7 @@ export default function MenuV2() {
  </button>
  </div>
  <button type="button" onClick={abrirEdicion}
- className="flex-1 min-w-0 flex items-center gap-3 rounded-xl px-2 py-1.5 text-left cursor-pointer hover:bg-muted/60 transition-colors">
+ className="flex-1 min-w-0 flex items-center gap-3 px-2 py-1.5 text-left cursor-pointer">
  <span className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
  {CategoryIcon ? <CategoryIcon size={18} weight="bold"/> : <SquaresFour size={18} />}
  </span>
@@ -374,7 +390,7 @@ function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, Catego
  return (
  <div
  onClick={onEdit}
- className={cn("group rounded-2xl p-4 border flex flex-col gap-3 min-h-36 cursor-pointer transition-shadow hover:shadow-md active:scale-98",
+ className={cn("group min-w-0 rounded-2xl p-3 md:p-4 border flex flex-col gap-3 min-h-36 cursor-pointer transition-shadow hover:shadow-md active:scale-98",
  isInactivo ? "bg-muted/50 border-border" : "bg-card",
  isSelected ? "border-primary ring-2 ring-primary/20 shadow-md" : !isInactivo && "border-border")}
  >
@@ -395,7 +411,7 @@ function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, Catego
  )}
  </div>
 
- <h3 className={cn("font-extrabold text-base leading-snug line-clamp-2 flex-1", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+ <h3 className={cn("font-extrabold text-base leading-snug line-clamp-2 break-words flex-1", isInactivo ? "text-muted-foreground" : "text-foreground")}>
  {product.name}
  </h3>
 

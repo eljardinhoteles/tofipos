@@ -1,3 +1,4 @@
+import { fechaLocal } from '../lib/fechaLocal';
 import { esParteRepartida, nombreBaseReparto } from '../lib/reparto';
 import { useCallback, useEffect, useMemo, useState } from'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, CartesianGrid } from'recharts';
@@ -406,12 +407,12 @@ comandaItems.forEach((item) => {
  const actual = new Map<string, number>();
  const previo = new Map<string, number>();
  for (let i = 0; i < days; i += 1) {
- actual.set(shiftDays(datesLimit.inicio, i).toISOString().split('T')[0], 0);
- previo.set(shiftDays(previousLimit.inicio, i).toISOString().split('T')[0], 0);
+ actual.set(fechaLocal(shiftDays(datesLimit.inicio, i)), 0);
+ previo.set(fechaLocal(shiftDays(previousLimit.inicio, i)), 0);
  }
  pagos.forEach((p) => {
  const d = fechaDe(p);
- const key = d.toISOString().split('T')[0];
+ const key = fechaLocal(d);
  if (enRango(d, datesLimit)) actual.set(key, (actual.get(key) || 0) + Number(p.monto || 0));
  else if (enRango(d, previousLimit)) previo.set(key, (previo.get(key) || 0) + Number(p.monto || 0));
  });
@@ -446,7 +447,7 @@ comandaItems.forEach((item) => {
  if (paymentDate < datesLimit.inicio || paymentDate > datesLimit.fin) return;
  const weekday = paymentDate.getDay(); // 0=Dom, 6=Sáb
  const bucket = map.get(weekday) || { total: 0, days: new Set<string>() };
- const key = paymentDate.toISOString().split('T')[0];
+ const key = fechaLocal(paymentDate);
  bucket.total += Number(p.monto || 0);
  bucket.days.add(key);
  map.set(weekday, bucket);

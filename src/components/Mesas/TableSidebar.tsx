@@ -60,8 +60,6 @@ export function TableSidebar({
   const { crearSubcomanda, activarMesaMultiple } = useTableActions();
 
   const [newPisoName, setNewPisoName] = useState('');
-  const [editingPisoId, setEditingPisoId] = useState<string | null>(null);
-  const [editingPisoName, setEditingPisoName] = useState('');
 
   // Mesas/pisos/comandas de la organización vienen de hooks compartidos (una
   // única suscripción real por colección, reutilizada por todas las páginas
@@ -305,7 +303,7 @@ export function TableSidebar({
         await updateRxMesa((mesa as any).id, { piso: name.trim() });
       }
     }
-    setEditingPisoId(null);
+    setSelectedConfigPiso(name.trim());
   };
 
   const handleDeletePiso = async (id: string, nombre: string) => {
@@ -314,17 +312,20 @@ export function TableSidebar({
       return;
     }
     await updateRxPiso(id, { _deleted: true });
+    setConfigView('pisos');
   };
 
   const handleReorderPiso = async (id: string, direction: 'up' | 'down') => {
-    const currentIndex = dbPisos.findIndex(p => p.id === id);
+    // Solo entre zonas: "Habitaciones" tiene su propio lugar y no cuenta en el orden visible.
+    const zonas = dbPisos.filter(p => p.nombre.toLowerCase() !== 'habitaciones');
+    const currentIndex = zonas.findIndex(p => p.id === id);
     if (currentIndex === -1) return;
 
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= dbPisos.length) return;
+    if (targetIndex < 0 || targetIndex >= zonas.length) return;
 
-    const currentPiso = dbPisos[currentIndex];
-    const targetPiso = dbPisos[targetIndex];
+    const currentPiso = zonas[currentIndex];
+    const targetPiso = zonas[targetIndex];
 
     await updateRxPiso(currentPiso.id, { orden: targetPiso.orden });
     await updateRxPiso(targetPiso.id, { orden: currentPiso.orden });
@@ -461,6 +462,10 @@ export function TableSidebar({
               isHabitacion={isHabitacionPiso}
               onBack={() => setConfigView('mesas')}
               onSubmit={handleAddTable}
+              onDelete={editingMesaId ? async () => {
+                await updateRxMesa(editingMesaId, { _deleted: true });
+                setConfigView('mesas');
+              } : undefined}
             />
           );
         }
@@ -475,9 +480,9 @@ export function TableSidebar({
               onBack={() => setConfigView('pisos')}
               onOpenAddTable={handleOpenAdd}
               onEditMesa={handleOpenEdit}
-              onDeleteMesa={async (id) => {
-                await updateRxMesa(id, { _deleted: true });
-              }}
+              piso={dbPisos.find(p => p.nombre === selectedConfigPiso)}
+              onUpdatePiso={handleUpdatePiso}
+              onDeletePiso={handleDeletePiso}
             />
           );
         }
@@ -487,18 +492,12 @@ export function TableSidebar({
             <SidebarConfigPisos 
               dbPisos={dbPisos}
               allMesas={allMesas}
-              onBack={() => setConfigView('none')}
+              onClose={() => setConfigView('none')}
               onAddPiso={handleAddPiso}
-              onUpdatePiso={handleUpdatePiso}
-              onDeletePiso={handleDeletePiso}
               onReorderPiso={handleReorderPiso}
               onSelectPiso={(name) => { setSelectedConfigPiso(name); setConfigView('mesas'); }}
               newPisoName={newPisoName}
               setNewPisoName={setNewPisoName}
-              editingPisoId={editingPisoId}
-              setEditingPisoId={setEditingPisoId}
-              editingPisoName={editingPisoName}
-              setEditingPisoName={setEditingPisoName}
             />
           );
         }

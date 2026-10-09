@@ -1,14 +1,18 @@
 import { useState, useEffect } from'react';
-import { ArrowLeft, FloppyDisk } from'@phosphor-icons/react';
+import { FloppyDisk, Bed, SquaresFour, Trash } from'@phosphor-icons/react';
+import { useUI } from'../../../context/UIContext';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
+import { ReservaHeader } from'./ReservaHeader';
 
 interface SidebarAddTableProps {
  editingMesaId: string | null;
  initialValues: { numero: number; nombre: string; capacidad: number };
  onBack: () => void;
  onSubmit: (values: any) => void;
+ /** Solo al editar: elimina la mesa o habitación. */
+ onDelete?: () => void;
  selectedConfigPiso: string;
  isHabitacion?: boolean;
 }
@@ -18,9 +22,11 @@ export function SidebarAddTable({
  initialValues,
  onBack,
  onSubmit,
+ onDelete,
  selectedConfigPiso,
  isHabitacion = false,
 }: SidebarAddTableProps) {
+ const { openConfirm } = useUI();
  const [form, setForm] = useState(initialValues);
 
  useEffect(() => {
@@ -33,74 +39,69 @@ export function SidebarAddTable({
  onSubmit(form);
  };
 
- return (
- <div className="h-full w-full bg-card flex flex-col p-6 justify-between">
- <div className="flex flex-col gap-6">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <ArrowLeft size={18} weight="bold"/>
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground">
- {editingMesaId
- ? (isHabitacion ?'Editar Habitación':'Editar Mesa')
- : (isHabitacion ?'Nueva Habitación':'Nueva Mesa')}
- </h3>
- <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
- {selectedConfigPiso}
- </span>
- </div>
- </div>
+ const etiqueta = 'text-xs font-bold';
+ const campo = 'h-11 text-base md:text-sm font-semibold';
 
- <form onSubmit={handleSubmit} className="flex flex-col gap-4">
- <div className="flex flex-col gap-1">
- <Label>
- {isHabitacion ?'Número de Habitación *':'Número de Mesa *'}
- </Label>
+ return (
+ <form onSubmit={handleSubmit} className="h-full w-full bg-card flex flex-col overflow-hidden">
+ <ReservaHeader
+ tono="neutro"
+ badge={isHabitacion ? <Bed size={22} weight="bold" /> : <SquaresFour size={22} weight="bold" />}
+ titulo={editingMesaId
+ ? (isHabitacion ?'Editar habitación' :'Editar mesa')
+ : (isHabitacion ?'Nueva habitación' :'Nueva mesa')}
+ subtitulo={selectedConfigPiso}
+ onBack={onBack}
+ acciones={onDelete && (
+ <Button type="button" variant="ghost" size="icon-lg"
+ aria-label={isHabitacion ?'Eliminar habitación' :'Eliminar mesa'}
+ title={isHabitacion ?'Eliminar habitación' :'Eliminar mesa'}
+ onClick={() => openConfirm(isHabitacion ?'Eliminar habitación' :'Eliminar mesa',`¿Seguro que deseas eliminar ${initialValues.nombre ||(isHabitacion ?'esta habitación' :'esta mesa')}?`, onDelete)}
+ className="rounded-xl bg-destructive-soft text-destructive hover:bg-destructive/20">
+ <Trash size={18} weight="bold"/>
+ </Button>
+ )}
+ />
+
+ <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="mesa-numero" className={etiqueta}>{isHabitacion ?'Número de habitación *' :'Número de mesa *'}</Label>
  <Input
- type="number"required
- min={1}
- placeholder={isHabitacion ?'Ej: 101':'Ej: 15'}
+ id="mesa-numero" type="number" inputMode="numeric" required min={1}
+ placeholder={isHabitacion ?'Ej: 101' :'Ej: 15'}
  value={form.numero ||''}
  onChange={(e) => setForm(prev => ({ ...prev, numero: parseInt(e.target.value) || 0 }))}
- className="font-bold"/>
+ className={campo}/>
  </div>
 
  {isHabitacion && (
- <div className="flex flex-col gap-1">
- <Label>Nombre / Tipo (Opcional)</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="mesa-tipo" className={etiqueta}>Nombre / Tipo (opcional)</Label>
  <Input
- type="text"placeholder="Ej: Suite, Doble, Junior..."value={form.nombre}
+ id="mesa-tipo" type="text" placeholder="Ej: Suite, Doble, Junior..." value={form.nombre}
  onChange={(e) => setForm(prev => ({ ...prev, nombre: e.target.value }))}
- />
+ className={campo}/>
  </div>
  )}
 
  {!isHabitacion && (
- <div className="flex flex-col gap-1">
- <Label>Capacidad (Opcional)</Label>
+ <div className="flex flex-col gap-1.5">
+ <Label htmlFor="mesa-capacidad" className={etiqueta}>Capacidad (opcional)</Label>
  <Input
- type="number"min={0}
- placeholder="Ej: 4"value={form.capacidad ||''}
+ id="mesa-capacidad" type="number" inputMode="numeric" min={0} placeholder="Ej: 4" value={form.capacidad ||''}
  onChange={(e) => setForm(prev => ({ ...prev, capacidad: parseInt(e.target.value) || 0 }))}
- />
+ className={campo}/>
  </div>
  )}
 
- <div className="flex flex-col gap-2 pt-4">
- <Button type="submit"className="gap-2">
+ </div>
+
+ <footer className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
+ <Button type="submit" className="h-12 flex-1 font-bold gap-2">
  <FloppyDisk size={18} weight="bold"/>
- {editingMesaId
- ?'Guardar Cambios': (isHabitacion ?'Crear Habitación':'Crear Mesa')}
+ {editingMesaId ?'Guardar cambios' : (isHabitacion ?'Crear habitación' :'Crear mesa')}
  </Button>
- <Button type="button"variant="secondary"onClick={onBack}>
- Cancelar
- </Button>
- </div>
+ </footer>
  </form>
- </div>
- </div>
  );
 }

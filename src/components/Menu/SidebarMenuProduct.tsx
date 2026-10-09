@@ -209,8 +209,8 @@ export function SidebarMenuProduct() {
  };
 
  return (
- <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
+ <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden">
+ <header className="h-16 md:h-[72px] px-4 border-b border-border flex items-center justify-between shrink-0">
  <div className="flex items-center gap-3">
  <button
  type="button"onClick={handleClose}

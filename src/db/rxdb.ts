@@ -1,3 +1,4 @@
+import { fechaLocal } from '../lib/fechaLocal'
 import { calcularPartes, parseReparto, type RepartoOrigen, type RepartoParte } from '../lib/reparto'
 import { addRxPlugin, createRxDatabase, type RxCollection, type RxDatabase } from 'rxdb/plugins/core'
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
@@ -230,7 +231,7 @@ async function reconciliarMesasDeHabitacion(db: any) {
     const propias = comandasHab.filter((c: any) => c.habitacion_cuenta_id === cuenta.id && c.estado !== 'anulada')
     if (propias.length === 0 || propias.some((c: any) => !['cerrado', 'facturado'].includes(c.estado))) continue
     const now = new Date().toISOString()
-    await cuenta.update({ $set: { estado: 'cerrada', check_out: cuenta.check_out || now.split('T')[0], updated_at: now, _modified: now } } as any)
+    await cuenta.update({ $set: { estado: 'cerrada', check_out: cuenta.check_out || fechaLocal(now), updated_at: now, _modified: now } } as any)
     const mesa = await db.mesas.findOne(cuenta.mesa_id).exec()
     if (mesa && mesa.toJSON().estado !== 'libre') {
       await mesa.update({ $set: { estado: 'libre', _modified: now } } as any)
@@ -1759,6 +1760,22 @@ async function initVerticalRxDbInner() {
       const handleOffline = () => emitSyncStatus({ online: false, supabaseOk: false })
       window.addEventListener('online', handleOnline)
       window.addEventListener('offline', handleOffline)
+
+      // Respaldo del tiempo real: si el WebSocket se cae sin que el dispositivo
+      // pierda internet (tablet dormida, red inestable), ningún evento dispara un
+      // resync y los cambios de otros dispositivos tardan en llegar. Se resincroniza
+      // al volver a la pestaña y cada 45 s mientras esté visible y con red. reSync
+      // es el mismo mecanismo que ya usa 'online'; con todo al día no trae nada.
+      let ultimoResync = 0
+      const resincronizarSiProcede = () => {
+        if (document.visibilityState !== 'visible' || !navigator.onLine || !verticalReplicationState) return
+        const ahora = Date.now()
+        if (ahora - ultimoResync < 15_000) return
+        ultimoResync = ahora
+        Object.values(verticalReplicationState).forEach((state: any) => state?.reSync?.())
+      }
+      document.addEventListener('visibilitychange', resincronizarSiProcede)
+      setInterval(resincronizarSiProcede, 45_000)
     }
   }
 

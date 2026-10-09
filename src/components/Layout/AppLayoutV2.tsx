@@ -277,8 +277,9 @@ export function AppLayoutV2() {
     isPinned ||
     selectedMesaId !== null ||
     configView !== 'none' ||
-    reservaView !== 'none' ||
-    menuView !== 'none'
+    reservaView !== 'none'
+    // El editor de producto no entra aquí: en escritorio es un panel flotante
+    // (Sheet en MenuV2) que no mueve el contenido de la pantalla.
   );
 
   const isMobileSheetOpen = useMemo(

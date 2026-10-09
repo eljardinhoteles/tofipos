@@ -1,3 +1,4 @@
+import { fechaLocal } from '../../../../lib/fechaLocal';
 import { useState, useMemo, useEffect } from'react';
 import { folioLabel } from '../../../../lib/folio';
 import { X, CaretRight, Receipt, CreditCard, Printer, Percent } from'@phosphor-icons/react';
@@ -335,7 +336,7 @@ export function HabitacionCheckoutView({
       // marcar, la habitación sigue activa con el resto del saldo.
       const quedanPendientes = comandas.some(c => !selectedIds.has(c.id));
       if (!quedanPendientes) {
-        await updateRxHabitacionCuenta(cuenta.id, { estado:'cerrada', check_out: now.split('T')[0] });
+        await updateRxHabitacionCuenta(cuenta.id, { estado:'cerrada', check_out: fechaLocal(now) });
         await updateRxMesa(selectedMesa.id, { estado:'libre'});
       }
 
