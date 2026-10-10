@@ -1,3 +1,4 @@
+import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise } from'@phosphor-icons/react';
@@ -107,9 +108,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  selector: { comanda_id: activeComanda.id }
  });
 
+ const estabilizar = crearEstabilizador<any>();
  sub = query.$.subscribe((docs: any[]) => {
  if (!alive) return;
- setRxComandaItems(docs.map((doc: any) => doc.toJSON()));
+ setRxComandaItems(estabilizar(docs.map((doc: any) => doc.toJSON())));
  });
  })().catch(err => console.warn('Error cargando items RxDB del selector:', err));
 

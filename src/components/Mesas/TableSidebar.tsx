@@ -9,6 +9,7 @@ import { SidebarConfigPisos } from './Sidebar/SidebarConfigPisos';
 import { useUI } from '../../context/UIContext';
 import { SidebarConfigMesas } from './Sidebar/SidebarConfigMesas';
 import { SidebarAddTable } from './Sidebar/SidebarAddTable';
+import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { SidebarCheckout } from './Sidebar/SidebarCheckout';
 import { SidebarSplit } from './Sidebar/SidebarSplit';
 import { SidebarReservaNew } from './Sidebar/SidebarReservaNew';
@@ -172,7 +173,8 @@ export function TableSidebar({
       const query = rxDb.comanda_items.find({
         selector: { comanda_id: { $in: operativasKey.split(',') }, _deleted: { $ne: true } }
       });
-      sub = query.$.subscribe((docs: any[]) => { if (alive) setMesaItems(docs.map((d: any) => d.toJSON())); });
+      const estabilizar = crearEstabilizador<any>();
+      sub = query.$.subscribe((docs: any[]) => { if (alive) setMesaItems(estabilizar(docs.map((d: any) => d.toJSON()))); });
     })().catch(() => {});
     return () => { alive = false; sub?.unsubscribe(); };
   }, [esMultiple, operativasKey]);
@@ -232,9 +234,10 @@ export function TableSidebar({
       const query = rxDb.comanda_items.find({
         selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
       });
+      const estabilizar = crearEstabilizador<any>();
       const sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return;
-        setLiveComandaItems(docs.map((doc: any) => doc.toJSON()));
+        setLiveComandaItems(estabilizar(docs.map((doc: any) => doc.toJSON())));
       });
       return () => sub.unsubscribe();
     })().catch(err => console.warn('Error cargando items RxDB del sidebar:', err));

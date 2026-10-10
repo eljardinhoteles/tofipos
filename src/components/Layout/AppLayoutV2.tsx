@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
 import { useFolioVersion } from '../../lib/folio';
+import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { MENU_EN_CAPAS, setMenuMovilAbierto, useMenuMovilAbierto } from '../../lib/menuMovil';
 import { setSheetMovilListo } from '../../lib/sheetMovil';
 import { useUI } from '../../context/UIContext';
@@ -230,11 +231,12 @@ export function AppLayoutV2() {
         return;
       }
       const rxDb = await initVerticalRxDb();
+      const estabilizar = crearEstabilizador<any>();
       sub = rxDb.comanda_items
         .find({ selector: { comanda_id: cartComanda.id, _deleted: { $ne: true } } })
         .$.subscribe((docs: any[]) => {
           if (!alive) return;
-          setCartItems(docs.map((d: any) => d.toJSON()));
+          setCartItems(estabilizar(docs.map((d: any) => d.toJSON())));
         });
     })().catch(() => { });
     return () => {
