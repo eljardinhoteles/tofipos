@@ -3,6 +3,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import { supabase, createVerificationClient } from '../lib/supabase';
 import type { UsuarioLocal } from '../db/database';
 import { initVerticalRxDb, resetLocalDatabase } from '../db/rxdb';
+import { borrarRespaldoSesion } from '../lib/persistenciaSesion';
 import { cacheCredential, verifyCachedCredential, hasCachedCredential, clearAuthCache } from '../lib/authCache';
 
 interface AuthContextType {
@@ -83,9 +84,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    // Al volver a la app (Android congela las pestañas en segundo plano) o recuperar la red,
+    // se reanuda el refresco del token y se renueva la sesión si ya venció.
+    const renovarSesion = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      supabase.auth.startAutoRefresh();
+      supabase.auth.getSession().catch(() => { });
+    };
+    document.addEventListener('visibilitychange', renovarSesion);
+    window.addEventListener('online', renovarSesion);
+
     return () => {
       alive = false;
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', renovarSesion);
+      window.removeEventListener('online', renovarSesion);
     };
   }, []);
 
@@ -184,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('pos_offline_auth');
     localStorage.removeItem('pos_org_name_cached');
     clearAuthCache();
+    void borrarRespaldoSesion();
     setActiveOrganizationId(null);
     setCurrentMesero(null);
 

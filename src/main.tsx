@@ -100,25 +100,42 @@ if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
     });
 }
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import { UIProvider } from './context/UIContext';
-import { AuthProvider } from './context/AuthContext';
 import './index.css';
-import { diagnoseSyncState } from './db/rxdb';
-import { registerSW } from 'virtual:pwa-register';
+import {
+  restaurarSesionSiHaceFalta, pedirAlmacenamientoPersistente, mantenerRespaldo,
+} from './lib/persistenciaSesion';
 
-registerSW({ immediate: true });
+// La app se importa DESPUÉS de restaurar el respaldo: el cliente de Supabase lee la
+// sesión del localStorage en cuanto se importa, así que tiene que estar ya restaurada.
+async function arrancar() {
+  void pedirAlmacenamientoPersistente();
+  // Si IndexedDB tarda o falla, se arranca igual (sin restaurar).
+  await Promise.race([restaurarSesionSiHaceFalta(), new Promise((r) => setTimeout(r, 2500))]);
 
-(window as any).__diagnosSync = diagnoseSyncState;
+  const [{ default: React }, { default: ReactDOM }, { default: App }, { UIProvider }, { AuthProvider }, rxdb, pwa] =
+    await Promise.all([
+      import('react'),
+      import('react-dom/client'),
+      import('./App'),
+      import('./context/UIContext'),
+      import('./context/AuthContext'),
+      import('./db/rxdb'),
+      import('virtual:pwa-register'),
+    ]);
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AuthProvider>
-      <UIProvider>
-        <App />
-      </UIProvider>
-    </AuthProvider>
-  </React.StrictMode>,
-);
+  pwa.registerSW({ immediate: true });
+  (window as any).__diagnosSync = rxdb.diagnoseSyncState;
+  mantenerRespaldo();
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <AuthProvider>
+        <UIProvider>
+          <App />
+        </UIProvider>
+      </AuthProvider>
+    </React.StrictMode>,
+  );
+}
+
+void arrancar();
