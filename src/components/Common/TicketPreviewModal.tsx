@@ -45,12 +45,10 @@ export function TicketPreviewModal({
  const firedRef = useRef(false);
  // Documento activo al momento de imprimir.
  const esCocinaRef = useRef(false);
- esCocinaRef.current = esCocina;
 
  // Cerrar sin haber enviado un ticket que debía salir (la comanda ya quedó marcada
  // como enviada a cocina): se avisa y se ofrece imprimir, para que no se pierda.
  const avisoRef = useRef<{ texto?: string; imprimir?: () => void }>({});
- avisoRef.current = { texto: avisoSinImprimir, imprimir: onPrint };
  const avisarSiNoSeImprimio = () => {
  const { texto, imprimir } = avisoRef.current;
  if (texto && imprimir && !firedRef.current) {
@@ -68,7 +66,13 @@ export function TicketPreviewModal({
  // Si el componente desaparece con la vista previa abierta (se cerró el sidebar), también avisa.
  useEffect(() => () => { if (openedRef.current) avisarSiNoSeImprimio(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
  const openedRef = useRef(opened);
+ // Las refs se sincronizan después de pintar (no durante el render), para que
+ // los handlers y la limpieza al desmontar lean siempre los valores vigentes.
+ useEffect(() => {
+ esCocinaRef.current = esCocina;
+ avisoRef.current = { texto: avisoSinImprimir, imprimir: onPrint };
  openedRef.current = opened;
+ });
 
  useEffect(() => {
  if (opened) firedRef.current = false;

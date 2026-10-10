@@ -16,21 +16,19 @@ import {
   Users,
   Bag,
   ChartBar,
+  Eye,
+  EyeSlash,
+  Buildings,
+  Check,
 } from '@phosphor-icons/react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 import { showToast } from '@/lib/toast';
 import { setOrgCache } from './lib/orgCache';
+import { appVersionLabel } from './lib/appVersion';
 
 const brandModules = [
   { label: 'Mesas', icon: SquaresFour },
@@ -41,6 +39,23 @@ const brandModules = [
   { label: 'Productos', icon: Bag },
   { label: 'Métricas', icon: ChartBar },
 ];
+
+// Columna del formulario de ingreso/vinculación. En móvil no hay panel de marca,
+// así que el logo va arriba; la versión del sistema va al pie en todas las pantallas.
+function LoginColumna({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex w-full md:w-1/2 lg:w-[55%] flex-col items-center overflow-y-auto p-6">
+      <div className="md:hidden self-start flex items-center gap-3">
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary">
+          <img src="/Icon-app.webp" alt="TofiPOS" className="size-7 object-contain" />
+        </div>
+        <span className="font-heading text-lg font-semibold tracking-tight text-foreground">TofiPOS</span>
+      </div>
+      <div className="my-auto w-full max-w-sm flex flex-col gap-6 py-8">{children}</div>
+      <p className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">{appVersionLabel()}</p>
+    </div>
+  );
+}
 
 export default function App() {
   const {
@@ -63,6 +78,7 @@ export default function App() {
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [verPassword, setVerPassword] = useState(false);
   const [isAdminSubmitting, setIsAdminSubmitting] = useState(false);
   const [isSyncingInitial, setIsSyncingInitial] = useState(false);
 
@@ -115,7 +131,8 @@ export default function App() {
         .then((list) => {
           const formatted = list.map((o) => ({ value: o.id, label: o.nombre }));
           setOrgs(formatted);
-          if (formatted.length > 0) setSelectedOrgId(formatted[0].value);
+          // Con varios establecimientos no se preselecciona ninguno: evita vincular el equivocado de pasada.
+          if (formatted.length === 1) setSelectedOrgId(formatted[0].value);
         })
         .catch((err) => console.error('Error cargando orgs:', err))
         .finally(() => setLoadingOrgs(false));
@@ -261,8 +278,7 @@ export default function App() {
       content = (
         <div className="flex h-screen w-screen bg-background">
           {brandPanel}
-          <div className="flex w-full md:w-1/2 lg:w-[55%] items-center justify-center p-6">
-            <div className="w-full max-w-sm flex flex-col gap-6">
+          <LoginColumna>
               <div className="flex flex-col gap-1.5">
                 <h2 className="font-heading text-xl font-medium text-foreground">Configuración POS</h2>
                 <p className="text-sm text-muted-foreground">
@@ -280,42 +296,53 @@ export default function App() {
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
                     autoComplete="username"
+                    className="h-12 text-base"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="admin-password">Contraseña</Label>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    autoComplete="current-password"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="admin-password"
+                      type={verPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      autoComplete="current-password"
+                      className="h-12 pr-12 text-base"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setVerPassword(v => !v)}
+                      aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      aria-pressed={verPassword}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 flex size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    >
+                      {verPassword ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
+                    </button>
+                  </div>
                 </div>
-                <Button type="submit" disabled={isAdminSubmitting} className="mt-2 w-full">
+                <Button type="submit" disabled={isAdminSubmitting} className="mt-2 h-12 w-full font-bold">
                   {isAdminSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
                 </Button>
               </form>
-            </div>
-          </div>
+          </LoginColumna>
         </div>
       );
     } else {
       content = (
         <div className="flex h-screen w-screen bg-background">
           {brandPanel}
-          <div className="flex w-full md:w-1/2 lg:w-[55%] items-center justify-center p-6">
-            <div className="w-full max-w-sm flex flex-col gap-6">
+          <LoginColumna>
               <div className="flex flex-col gap-1.5">
                 <h2 className="font-heading text-xl font-medium text-foreground">
-                  {isCreatingOrg || orgs.length === 0 ? 'Crear organización' : 'Seleccionar establecimiento'}
+                  {isCreatingOrg || orgs.length === 0 ? 'Crear establecimiento' : 'Establecimientos'}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {isCreatingOrg || orgs.length === 0
-                    ? 'Registra el establecimiento para vincular este dispositivo.'
-                    : 'Elige el establecimiento al que quieres vincular este dispositivo.'}
+                    ? 'Aún no hay ninguno: crea el primero para vincular este dispositivo.'
+                    : 'Elige a cuál se vinculará este dispositivo.'}
                 </p>
               </div>
               {loadingOrgs ? (
@@ -327,7 +354,7 @@ export default function App() {
                   {isCreatingOrg || orgs.length === 0 ? (
                     <>
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="org-nombre">Nombre del establecimiento</Label>
+                        <Label htmlFor="org-nombre">Nombre</Label>
                         <Input
                           id="org-nombre"
                           type="text"
@@ -335,39 +362,52 @@ export default function App() {
                           placeholder="Establecimiento Ejemplo"
                           value={newOrgNombre}
                           onChange={(e) => setNewOrgNombre(e.target.value)}
+                          className="h-12 text-base"
                         />
                       </div>
                       <Button
                         type="button"
                         onClick={handleCrearOrg}
                         disabled={isAdminSubmitting}
-                        className="w-full"
+                        className="h-12 w-full font-bold"
                       >
                         Crear y vincular
                       </Button>
                     </>
                   ) : (
                     <>
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Establecimiento</Label>
-                        <Select value={selectedOrgId || undefined} onValueChange={setSelectedOrgId}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecciona un establecimiento" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {orgs.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-2" role="radiogroup" aria-label="Establecimiento">
+                          {orgs.map((o) => {
+                            const elegido = selectedOrgId === o.value;
+                            return (
+                              <button
+                                key={o.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={elegido}
+                                onClick={() => setSelectedOrgId(o.value)}
+                                className={`flex items-center gap-3 rounded-2xl border-2 p-3 text-left cursor-pointer transition-colors ${elegido ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted/50'}`}
+                              >
+                                <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${elegido ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                  <Buildings size={20} weight="bold" />
+                                </div>
+                                <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-foreground">{o.label}</span>
+                                {elegido && (
+                                  <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                    <Check size={14} weight="bold" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                       <Button
                         type="button"
                         onClick={handleVincularOrg}
-                        disabled={isAdminSubmitting}
-                        className="w-full"
+                        disabled={isAdminSubmitting || !selectedOrgId}
+                        className="h-12 w-full font-bold"
                       >
                         Vincular dispositivo
                       </Button>
@@ -384,8 +424,7 @@ export default function App() {
                   </Button>
                 </div>
               )}
-            </div>
-          </div>
+          </LoginColumna>
         </div>
       );
     }

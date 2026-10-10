@@ -1199,7 +1199,7 @@ export function SidebarDetails({
  <div className="flex flex-col gap-3">
  <div className="flex items-center justify-between">
  <span className="font-extrabold text-xs text-destructive">Ítem Anulado</span>
- <Button variant="ghost"size="icon"className="h-6 w-6"onClick={() => setEditingItem(null)}>
+ <Button variant="ghost"size="icon"aria-label="Cerrar"className="h-6 w-6"onClick={() => setEditingItem(null)}>
  <X size={14} />
  </Button>
  </div>

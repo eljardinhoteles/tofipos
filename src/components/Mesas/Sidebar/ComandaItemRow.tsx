@@ -71,7 +71,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  {dinero(item.precio * item.cantidad)}
  </span>
  {isLocked && !isAnulado && !porConfirmar && <CheckCircle size={16} weight="fill"className="text-primary shrink-0"aria-label="Confirmado"/>}
- {porConfirmar && <Clock size={16} weight="fill"className="text-orange-500 animate-pulse shrink-0"aria-label="Por confirmar"/>}
+ {porConfirmar && <Clock size={16} weight="fill"className="text-orange-500 shrink-0"aria-label="Por confirmar"/>}
  </span>
  </div>
 

@@ -274,14 +274,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const now = new Date().toISOString();
  const doc = await rxDb.comanda_items.findOne(existing.id).exec(true);
  if (doc) {
- const currentCantidad = (doc as any).cantidad ?? existing.cantidad ?? 0;
- await doc.update({
- $set: {
- cantidad: currentCantidad + 1,
+ // Atómico: dos toques seguidos se encadenan en vez de leer el mismo valor
+ // y escribir ambos "+1" sobre él (se perdía una unidad).
+ await doc.incrementalModify((d: any) => ({
+ ...d,
+ cantidad: (d.cantidad ?? existing.cantidad ?? 0) + 1,
  updated_at: now,
- _modified: now
- }
- } as any);
+ _modified: now,
+ }));
  }
  } else {
  await rxDb.comanda_items.insert({

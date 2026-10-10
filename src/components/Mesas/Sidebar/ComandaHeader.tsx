@@ -81,7 +81,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  </Button>
  )}
  <Button
- variant="ghost"size="icon-lg"onClick={onClose}
+ variant="ghost"size="icon-lg"aria-label="Cerrar"onClick={onClose}
  className={cn("rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25",
  enCuenta?"md:text-white":"md:text-primary-foreground")}
  >

@@ -120,7 +120,7 @@ export function ImportarMenuCsvModal({ opened, onClose }: Props) {
  <UploadSimple size={20} className="text-muted-foreground"/>
  <h3 className="font-extrabold text-base text-foreground">Importar productos vía CSV</h3>
  </div>
- <Button variant="ghost"size="icon"className="h-7 w-7"onClick={onClose}>
+ <Button variant="ghost"size="icon"aria-label="Cerrar"className="h-7 w-7"onClick={onClose}>
  <X size={16} />
  </Button>
  </div>

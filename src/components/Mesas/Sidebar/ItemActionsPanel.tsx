@@ -110,7 +110,7 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
       {!ocultarEstado && (
       <span className={cn('absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 px-4 inline-flex items-center gap-1.5 rounded-full border text-xs font-bold whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.12)]',
         confirmado && !parcial ? 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary/30 text-primary' : 'bg-orange-50 border-orange-300 text-orange-600')}>
-        {confirmado && !parcial ? <CheckCircle size={15} weight="fill" /> : <Clock size={15} weight="fill" className="animate-pulse" />}
+        {confirmado && !parcial ? <CheckCircle size={15} weight="fill" /> : <Clock size={15} weight="fill" />}
         {confirmado && !parcial ? 'En cocina' : 'Pendiente'}
       </span>
       )}

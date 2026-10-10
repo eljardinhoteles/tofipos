@@ -77,7 +77,7 @@ export function ClienteExpandableHeader({
  className="flex-1"
  />
  <Button
- type="button"size="icon"disabled={!tempValue.trim()}
+ type="button"size="icon"aria-label="Guardar cliente"disabled={!tempValue.trim()}
  onClick={() => {
  if (tempValue.trim() && onChangeCliente) {
  const matched = clientes.find(c => c.nombre.trim().toLowerCase() === tempValue.trim().toLowerCase());
@@ -89,7 +89,7 @@ export function ClienteExpandableHeader({
  <Check size={16} weight="bold"/>
  </Button>
  <Button
- type="button"size="icon"variant="secondary"onClick={() => setIsChanging(false)}
+ type="button"size="icon"variant="secondary"aria-label="Cancelar cambio"onClick={() => setIsChanging(false)}
  className="w-9 h-9 rounded-lg shrink-0">
  <X size={16} weight="bold"/>
  </Button>

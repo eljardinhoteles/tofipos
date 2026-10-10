@@ -280,7 +280,7 @@ export function SidebarReceiptViewer({
  {esComandaEnHabitacionActiva ?'En Habitación': isFacturado ?'Conciliada': isAnulada ?'Anulada':'Cobrada'}
  </span>
  <Button
- variant="ghost"size="icon-lg"onClick={onClose}
+ variant="ghost"size="icon-lg"aria-label="Cerrar"onClick={onClose}
  className={cn("rounded-xl text-muted-foreground",
  esComandaEnHabitacionActiva || isAnulada ?"md:text-white":"md:text-primary-foreground")}
  >

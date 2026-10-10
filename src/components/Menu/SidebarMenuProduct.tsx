@@ -390,7 +390,7 @@ export function SidebarMenuProduct() {
  onChange={e => updateModifierGroup(group.id, { nombre: e.target.value })}
  className="h-8 text-xs font-semibold flex-1"/>
  <Button
- type="button"variant="ghost"size="icon"onClick={() => removeModifierGroup(group.id)}
+ type="button"variant="ghost"size="icon"aria-label="Eliminar grupo de opciones"onClick={() => removeModifierGroup(group.id)}
  className="h-8 w-8 shrink-0 text-destructive">
  <Trash size={14} />
  </Button>
@@ -422,7 +422,7 @@ export function SidebarMenuProduct() {
  onChange={e => updateOption(group.id, idx, e.target.value)}
  className="h-8 text-xs font-semibold flex-1 bg-card"/>
  <Button
- type="button"variant="ghost"size="icon"onClick={() => removeOption(group.id, idx)}
+ type="button"variant="ghost"size="icon"aria-label="Quitar opción"onClick={() => removeOption(group.id, idx)}
  className="h-8 w-8 shrink-0 text-muted-foreground">
  <X size={14} />
  </Button>
