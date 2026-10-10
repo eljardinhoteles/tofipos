@@ -283,7 +283,7 @@ export default function OrdenesV2() {
  if (terminos.length === 0 && !cumpleEstado(comanda.estado, estadoFiltros)) return false;
 
  if (terminos.length === 0 && origenFiltros.size > 0) {
- const origen: VentaOrigen = comanda.habitacion_cuenta_id && cuentaPorId.has(comanda.habitacion_cuenta_id)
+ const origen: VentaOrigen = comanda.habitacion_cuenta_id && comanda.sincronizado !== false && cuentaPorId.has(comanda.habitacion_cuenta_id)
  ? 'habitacion'
  : reservaByComandaId.has(comanda.id) ? 'reserva_restaurante' : 'mesa';
  if (!origenFiltros.has(origen)) return false;
@@ -545,8 +545,11 @@ export default function OrdenesV2() {
   const habitacionCuenta = comanda.habitacion_cuenta_id
   ? safeHabitacionCuentas.find(hc => hc.id === comanda.habitacion_cuenta_id)
   : null;
+  // Con sincronizado=false la comanda sigue abierta en su mesa: aún no se decide si se
+  // carga a la habitación o la paga el cliente, así que no es "Checkout habitación".
+  const cargadaAHabitacion = !!habitacionCuenta && comanda.sincronizado !== false;
   const habitacionMesa = habitacionCuenta ? mesaById.get(habitacionCuenta.mesa_id) : null;
-  const mesa = habitacionCuenta
+  const mesa = cargadaAHabitacion
   ? { nombre: habitacionMesa?.nombre || comanda.mesa_nombre || 'Habitación' }
   : mesaById.get(comanda.mesa_id);
   const clienteLabel = comanda.cliente || habitacionCuenta?.huesped;
@@ -566,7 +569,7 @@ export default function OrdenesV2() {
   <td className="pl-6 pr-2 py-3.5 whitespace-nowrap">
   <div className="font-black text-foreground tabular-nums">#{folioLabel(comanda)}</div>
   <div className="flex flex-col items-start gap-1 mt-1">
-  <OrigenBadge origen={habitacionCuenta ? 'habitacion' : esDeReserva ? 'reserva_restaurante' : 'mesa'} />
+  <OrigenBadge origen={cargadaAHabitacion ? 'habitacion' : esDeReserva ? 'reserva_restaurante' : 'mesa'} />
   </div>
   </td>
   <td className="px-6 py-3.5 hidden sm:table-cell">

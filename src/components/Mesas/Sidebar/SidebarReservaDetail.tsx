@@ -1,3 +1,4 @@
+import { imprimirConAviso } from '../../../lib/imprimir';
 import { useEffect, useState, useMemo } from'react';
 import {
  Plus, CreditCard, PencilSimple, Prohibit, CaretDown,
@@ -6,7 +7,8 @@ import {
 } from'@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ReservaHeader, reservaHeaderActionClass } from './ReservaHeader';
+import { ReservaHeader } from './ReservaHeader';
+import { reservaHeaderActionClass } from './reservaHeaderClases';
 import { SidebarReservaAbono } from './SidebarReservaAbono';
 import { ItemActionsPanel } from './ItemActionsPanel';
 import { ComandaTotales } from './ComandaTotales';
@@ -285,8 +287,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  ? generarComandaCocina(comanda, itemsCocina as any, nombreCocina, false, undefined, false, undefined, infoCocina)
  : undefined;
  const handleConfirmPrintKitchen = () => {
- queueKitchenPrint({ comanda, items: itemsCocina as any, mesaNombre: nombreCocina, infoExtra: infoCocina })
- .catch(err => console.warn('print server offline', err));
+ imprimirConAviso(() => queueKitchenPrint({ comanda, items: itemsCocina as any, mesaNombre: nombreCocina, infoExtra: infoCocina }), 'Comanda de cocina');
  };
 
  const handleDescargarImagen = async () => {
@@ -338,11 +339,11 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  };
 
  const handleConfirmPrint = () => {
- queueReprintTicket({
+ imprimirConAviso(() => queueReprintTicket({
  rawText: previewContent,
  mesaNombre: `Reserva - ${reserva.nombre}`,
  comanda,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Ticket');
  };
 
  const handleAbonar = async (data: {

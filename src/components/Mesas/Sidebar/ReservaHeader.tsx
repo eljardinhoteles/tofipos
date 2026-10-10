@@ -11,7 +11,7 @@ interface ReservaHeaderProps {
   /** Reserva ya atendida o cancelada: el header pasa a gris. */
   cerrada?: boolean;
   /** Color del header en escritorio: naranja de reserva (por defecto), el de marca, o 'neutro' (blanco, para pantallas de configuración). */
-  tono?: 'reserva' | 'primary' | 'neutro';
+  tono?: 'reserva' | 'primary' | 'info' | 'neutro';
   onBack?: () => void;
   /** Botones propios de la pantalla (editar, anular…), antes del de cerrar. */
   acciones?: ReactNode;
@@ -25,8 +25,8 @@ interface ReservaHeaderProps {
 // atendió o canceló); en móvil queda neutro y solo el badge lleva el color.
 export function ReservaHeader({ badge, titulo, subtitulo, cerrada = false, tono = 'reserva', onBack, acciones, onClose }: ReservaHeaderProps) {
   const neutro = tono === 'neutro' && !cerrada;
-  const bgHeader = neutro ? 'border-b border-border' : cerrada ? 'md:bg-muted-foreground' : tono === 'primary' ? 'md:bg-primary' : 'md:bg-warning-foreground';
-  const bgBadge = neutro ? 'bg-muted' : cerrada ? 'bg-muted-foreground' : tono === 'primary' ? 'bg-primary' : 'bg-warning-foreground';
+  const bgHeader = neutro ? 'border-b border-border' : cerrada ? 'md:bg-muted-foreground' : tono === 'primary' ? 'md:bg-primary' : tono === 'info' ? 'md:bg-info' : 'md:bg-warning-foreground';
+  const bgBadge = neutro ? 'bg-muted' : cerrada ? 'bg-muted-foreground' : tono === 'primary' ? 'bg-primary' : tono === 'info' ? 'bg-info' : 'bg-warning-foreground';
   // En escritorio el header de color lleva texto blanco; el neutro conserva los colores normales.
   const textoMd = neutro ? '' : 'md:text-white';
   const botonHeader = neutro ? 'bg-muted text-muted-foreground hover:bg-secondary' : 'bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white';
@@ -62,10 +62,4 @@ export function ReservaHeader({ badge, titulo, subtitulo, cerrada = false, tono 
       </div>
     </header>
   );
-}
-
-/** Botón de icono de las acciones del header de reserva (editar, anular…). */
-export function reservaHeaderActionClass(peligro = false) {
-  return cn('rounded-xl md:bg-white/15 md:hover:bg-white/25 md:text-white',
-    peligro ? 'bg-destructive-soft text-destructive' : 'bg-muted text-muted-foreground');
 }

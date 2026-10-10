@@ -1,5 +1,5 @@
 import { memo } from'react';
-import { CheckCircle } from'@phosphor-icons/react';
+import { CheckCircle, Clock } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 import { parseReparto } from'@/lib/reparto';
 
@@ -26,6 +26,9 @@ interface ComandaItemRowProps {
  // solo anulable. Calculado por el padre (esItemBloqueado), este componente
  // no conoce confirmada_at ni ninguna lógica de negocio.
  isLocked?: boolean;
+ // Tiene unidades que cocina aún no recibió (sin confirmar, o una unidad sumada a un
+ // ítem ya confirmado). Si no se indica, se deduce de isLocked.
+ pendiente?: boolean;
 }
 
 // Las filas fuera de pantalla no se pintan ni calculan layout hasta que se
@@ -36,7 +39,7 @@ const FILA_FUERA_DE_PANTALLA = { contentVisibility: 'auto', containIntrinsicSize
 // lo más caro de abrir la comanda. Formato manual equivalente (en-US, 2 decimales).
 const dinero = (n: number) => `$${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 
-export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSelected, isLocked }: ComandaItemRowProps) {
+export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSelected, isLocked, pendiente }: ComandaItemRowProps) {
  const pagado = item.pagado_cantidad || 0;
  const isFullyPaid = item.cantidad > 0 && pagado >= item.cantidad;
  const isAnulado = !!item.anulado;
@@ -45,6 +48,7 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  const isReadOnly = !onClick;
 
  const tachado = isAnulado || isFullyPaid;
+ const porConfirmar = !isAnulado && (pendiente ?? isLocked === false);
 
  // Lista legible: cantidad ("2") | nombre y detalle en texto plano | precio.
  // Sin fondos ni recuadros; la jerarquía la dan el peso y el color del texto.
@@ -66,7 +70,8 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  tachado ?"line-through text-muted-foreground":"text-foreground")}>
  {dinero(item.precio * item.cantidad)}
  </span>
- {isLocked && !isAnulado && <CheckCircle size={14} weight="fill"className="text-primary/70 shrink-0"aria-label="Confirmado"/>}
+ {isLocked && !isAnulado && !porConfirmar && <CheckCircle size={16} weight="fill"className="text-primary shrink-0"aria-label="Confirmado"/>}
+ {porConfirmar && <Clock size={16} weight="fill"className="text-orange-500 animate-pulse shrink-0"aria-label="Por confirmar"/>}
  </span>
  </div>
 

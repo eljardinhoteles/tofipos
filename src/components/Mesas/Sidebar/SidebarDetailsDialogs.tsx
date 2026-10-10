@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,97 +8,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { SubcuentaChips } from './habitacion/SubcuentaChips';
-import { HabitacionOpcion } from './habitacion/HabitacionOpcion';
-
-interface RoomChargeDialogProps {
-  opened: boolean;
-  onOpenChange: (open: boolean) => void;
-  folio?: number | string;
-  cuentas: any[];
-  mesas: any[];
-  procesando: boolean;
-  onConfirm: (cuentaId: string, subcuentaId: string | null) => void | Promise<void>;
-  /** 'vincular': solo asocia la cuenta a la habitación (sigue abierta en la mesa); 'cargar': la transfiere y cierra. */
-  modo?: 'cargar' | 'vincular';
-  /** Modo vincular, si ya tiene habitación: permite quitar el vínculo. */
-  onQuitar?: () => void | Promise<void>;
-}
-
-// Cargar la comanda a una habitación activa (y a una de sus subcuentas).
-// La selección vive en el cuerpo, que Radix desmonta al cerrar: cada apertura
-// empieza limpia sin necesidad de un efecto que la reinicie.
-export function RoomChargeDialog({ opened, onOpenChange, procesando, ...resto }: RoomChargeDialogProps) {
-  return (
-    <Dialog open={opened} onOpenChange={(open) => { if (!procesando) onOpenChange(open); }}>
-      <DialogContent className="max-w-md p-6 gap-4 border border-border shadow-2xl">
-        <RoomChargeBody onOpenChange={onOpenChange} procesando={procesando} {...resto} />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function RoomChargeBody({ onOpenChange, folio, cuentas, mesas, procesando, onConfirm, modo = 'cargar', onQuitar }: Omit<RoomChargeDialogProps, 'opened'>) {
-  const vincular = modo === 'vincular';
-  const [cuentaId, setCuentaId] = useState<string | null>(null);
-  const [subcuentaId, setSubcuentaId] = useState<string | null>(null);
-  const cuentaSel = cuentas.find((c) => c.id === cuentaId);
-  const subs = cuentaSel?.subcuentas ?? [];
-
-  return (
-    <>
-        <DialogHeader className="border-b border-border pb-3 text-left">
-          <DialogTitle className="font-extrabold text-base text-foreground">
-            {vincular ? 'Vincular a habitación' : 'Cargar a habitación abierta'}
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            {vincular
-              ? `Elige la habitación de esta cuenta (comanda #${folio}). Seguirá abierta en la mesa y se enviará a la habitación cuando la confirmes.`
-              : `Selecciona una habitación activa para transferir la comanda #${folio}.`}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
-          {cuentas.map((cuenta) => (
-            <HabitacionOpcion
-              key={cuenta.id}
-              mesaNombre={mesas.find((m) => m.id === cuenta.mesa_id)?.nombre}
-              huesped={cuenta.huesped}
-              seleccionada={cuentaId === cuenta.id}
-              onSelect={() => { setCuentaId(cuenta.id); setSubcuentaId(null); }}
-            />
-          ))}
-        </div>
-
-        {subs.length > 0 && (
-          <div className="flex flex-col gap-2 pt-3 border-t border-border">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cargar a la subcuenta</span>
-            <SubcuentaChips subcuentas={subs} value={subcuentaId} onChange={setSubcuentaId} nombrePrincipal={cuentaSel?.principal_nombre || 'Principal'} />
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 pt-3 border-t border-border">
-          <Button
-            type="button"
-            onClick={() => { if (cuentaId) onConfirm(cuentaId, subcuentaId); }}
-            disabled={!cuentaId || procesando}
-            className="w-full bg-primary text-primary-foreground font-bold h-11 text-sm shadow-md gap-1.5">
-            {procesando ? (<><CircleNotch size={18} className="animate-spin" /> {vincular ? 'Vinculando…' : 'Transfiriendo…'}</>) : (vincular ? 'Vincular a la habitación' : 'Transferir a Habitación')}
-          </Button>
-          {vincular && onQuitar && (
-            <Button type="button" variant="dangerGhost" disabled={procesando} onClick={() => onQuitar()} className="w-full font-semibold">
-              Quitar vínculo con la habitación
-            </Button>
-          )}
-          <Button
-            type="button" variant="ghost" disabled={procesando} onClick={() => onOpenChange(false)}
-            className="w-full text-muted-foreground">
-            Cancelar
-          </Button>
-        </div>
-    </>
-  );
-}
 
 interface DividirMesaDialogProps {
   opened: boolean;

@@ -214,6 +214,13 @@ async function sendViaLan(base: string, job: NewPrintJob): Promise<'ok' | 'unrea
   }
   if (res.status === 401) return 'unauthorized';
   if (!res.ok) throw new Error((await res.text().catch(() => '')) || `print server error ${res.status}`);
+  // 202 = el servidor recibió el trabajo pero NO pudo imprimirlo (impresora apagada, sin
+  // papel, sin impresora con ese rol…). Antes contaba como éxito y el fallo pasaba en silencio.
+  // No se reintenta por la nube: el mismo servidor y la misma impresora volverían a fallar.
+  if (res.status === 202) {
+    const body = await res.json().catch(() => ({} as { warning?: string }));
+    throw new Error(`La impresora no imprimió${body?.warning ? `: ${body.warning}` : ''}.`);
+  }
   return 'ok';
 }
 
@@ -225,11 +232,15 @@ async function sendViaLan(base: string, job: NewPrintJob): Promise<'ok' | 'unrea
  *   3. API local directa, solo si la app corre en la misma PC del servidor.
  */
 async function enqueueJob(job: NewPrintJob) {
-  const localJob = () =>
-    requestJson('/jobs', {
+  const localJob = async () => {
+    const res = await requestJson<{ ok?: boolean; queued?: boolean; warning?: string }>('/jobs', {
       method: 'POST',
       body: JSON.stringify({ ...job, payload: job.payload ?? {}, printer_id: job.printer_id }),
     });
+    // Mismo caso que en la red local: recibido pero sin imprimir.
+    if (res?.queued && res.warning) throw new Error(`La impresora no imprimió: ${res.warning}.`);
+    return res;
+  };
 
   const cloud = getCachedCloudPrintServer();
   if (!cloud) return localJob();
@@ -414,6 +425,11 @@ export async function queueReprintTicket(params: { rawText: string; mesaNombre: 
       payload: { comanda, mesaNombre },
       raw_text: rawText,
     });
+}
+
+/** Recibo ya formateado (p. ej. precuenta de habitación) al rol 'receipt', sin comanda puntual. */
+export async function queueRawReceiptPrint(rawText: string, title: string) {
+  return enqueueJob({ kind: 'receipt', title, payload: {}, raw_text: rawText });
 }
 
 /** Envía la solicitud de datos de facturación (ticket rápido, sin comanda) al rol 'receipt'. */

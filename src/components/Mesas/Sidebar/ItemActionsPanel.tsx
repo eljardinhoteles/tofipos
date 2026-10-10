@@ -21,6 +21,8 @@ interface ItemActionsPanelProps {
   item: ItemActionsData;
   /** true = ya enviado a cocina (confirmado); false = aún sin enviar. */
   confirmado: boolean;
+  /** Unidades que cocina ya recibió. Menos que item.cantidad = se sumó una unidad a un ítem confirmado. */
+  cantidadEnviada?: number;
   /** Otras subcomandas de la mesa (vacío = mesa normal, sin "Mover"). */
   destinos: Array<{ id: string; nombre: string }>;
   /** Subcomandas entre las que se puede repartir el valor del plato (vacío = sin "Repartir"). */
@@ -47,12 +49,12 @@ type Vista = 'menu' | 'mover' | 'anular' | 'cortesia' | 'repartir';
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function Stepper({ value, max, onChange, label }: { value: number; max: number; onChange: (n: number) => void; label?: string }) {
+function Stepper({ value, max, onChange, label, min = 1 }: { value: number; max: number; onChange: (n: number) => void; label?: string; min?: number }) {
   return (
     <div className="flex flex-col gap-1.5">
       {label && <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-center">{label}</span>}
       <div className="flex items-center h-14 rounded-full border border-border bg-transparent overflow-hidden">
-        <button type="button" aria-label="Menos" disabled={value <= 1} onClick={() => onChange(Math.max(1, value - 1))}
+        <button type="button" aria-label="Menos" disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}
           className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
           <Minus size={20} weight="bold" />
         </button>
@@ -72,7 +74,7 @@ function Stepper({ value, max, onChange, label }: { value: number; max: number; 
 // pidió la cuenta: sin confirmar (cantidad, mover, eliminar) y confirmado
 // (cortesía, anular). Cada acción con parámetros abre su propia pantalla; la
 // X de la cabecera cierra el panel.
-export function ItemActionsPanel({ item, confirmado, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onAnular, onCortesia, onRepartir, onDeshacerReparto }: ItemActionsPanelProps) {
+export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onAnular, onCortesia, onRepartir, onDeshacerReparto }: ItemActionsPanelProps) {
   const [vista, setVista] = useState<Vista>('menu');
   const [cantidad, setCantidad] = useState(item.cantidad);
   const [precio, setPrecio] = useState(item.precio);
@@ -82,11 +84,14 @@ export function ItemActionsPanel({ item, confirmado, destinos, destinosRepartir 
   const [ocupado, setOcupado] = useState(false);
   const [seleccion, setSeleccion] = useState<string[]>([]);
 
+  const enviada = confirmado ? Math.min(cantidadEnviada ?? item.cantidad, item.cantidad) : 0;
+  // Confirmado, pero con unidades sumadas después que cocina aún no recibió.
+  const parcial = confirmado && enviada < item.cantidad;
   const pagado = (item.pagado_cantidad || 0) > 0;
   const conCortesia = (item.cortesia_cantidad || 0) > 0 || !!item.cortesia_motivo;
   const meta = parseReparto(item);
-  const puedeMover = destinos.length > 0 && !pagado && !conCortesia && !meta;
-  const puedeRepartir = !!onRepartir && destinosRepartir.length > 0 && !pagado && !conCortesia && !meta;
+  const puedeMover = cuentaPedida && destinos.length > 0 && !pagado && !conCortesia && !meta;
+  const puedeRepartir = cuentaPedida && !!onRepartir && destinosRepartir.length > 0 && !pagado && !conCortesia && !meta;
 
   const ejecutar = async (fn: () => void | Promise<void>) => {
     if (ocupado) return;
@@ -104,9 +109,9 @@ export function ItemActionsPanel({ item, confirmado, destinos, destinosRepartir 
           lenguaje que el botón "Añadir" (el footer es `relative`). */}
       {!ocultarEstado && (
       <span className={cn('absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 px-4 inline-flex items-center gap-1.5 rounded-full border text-xs font-bold whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.12)]',
-        confirmado ? 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary/30 text-primary' : 'bg-warning-soft border-warning/40 text-warning-foreground')}>
-        {confirmado ? <CheckCircle size={15} weight="fill" /> : <Clock size={15} weight="fill" />}
-        {confirmado ? 'En cocina' : 'Pendiente'}
+        confirmado && !parcial ? 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary/30 text-primary' : 'bg-orange-50 border-orange-300 text-orange-600')}>
+        {confirmado && !parcial ? <CheckCircle size={15} weight="fill" /> : <Clock size={15} weight="fill" className="animate-pulse" />}
+        {confirmado && !parcial ? 'En cocina' : 'Pendiente'}
       </span>
       )}
 
@@ -157,6 +162,15 @@ export function ItemActionsPanel({ item, confirmado, destinos, destinosRepartir 
 
       {vista === 'menu' && confirmado && (
         <>
+          {/* Se sumaron unidades a un ítem ya enviado: solo esas se pueden quitar. */}
+          {parcial && !pagado && !meta && (
+            <>
+              <Stepper value={cantidad} min={enviada} max={9999} onChange={setCantidad} label={`${enviada} ya en cocina`} />
+              <Button className="h-11 font-bold" disabled={ocupado || cantidad === item.cantidad} onClick={() => ejecutar(() => onGuardar(cantidad))}>
+                Guardar
+              </Button>
+            </>
+          )}
           {conCortesia && (
             <div className="p-3 rounded-xl bg-muted border border-border flex flex-col gap-0.5">
               <span className="text-xs font-bold text-foreground">Cortesía aplicada</span>
@@ -180,17 +194,21 @@ export function ItemActionsPanel({ item, confirmado, destinos, destinosRepartir 
               )}
             </div>
           )}
-          {puedeRepartir && (
-            <Button variant="outline" className="w-full h-12 font-bold justify-center px-4 border-border bg-card hover:bg-card/80" onClick={() => abrir('repartir')}>
-              <UsersThree size={18} className="mr-2" /> Repartir entre cuentas
-            </Button>
-          )}
-          {/* Solo ítems ya enviados a cocina se mueven; uno sin enviar se elimina y se
-              vuelve a cargar en la otra cuenta, y sigue el flujo normal. */}
-          {puedeMover && (
-            <Button variant="outline" className="w-full h-12 font-bold justify-center px-4 border-border bg-card hover:bg-card/80" onClick={() => abrir('mover')}>
-              <ArrowsLeftRight size={18} className="mr-2" /> Mover a otra cuenta
-            </Button>
+          {/* Cuenta pedida: repartir la cuenta (mover / repartir) y luego cortesía. Con la
+              cuenta aún en servicio solo se anula; mover y repartir son pasos de cobro. */}
+          {(puedeMover || puedeRepartir) && (
+            <div className={cn('grid gap-2', puedeMover && puedeRepartir ? 'grid-cols-2' : 'grid-cols-1')}>
+              {puedeMover && (
+                <Button variant="outline" title="Mover a otra cuenta" className="h-12 font-bold justify-center px-3 border-border bg-card hover:bg-card/80" onClick={() => abrir('mover')}>
+                  <ArrowsLeftRight size={18} className="mr-2" /> Mover
+                </Button>
+              )}
+              {puedeRepartir && (
+                <Button variant="outline" title="Repartir entre cuentas" className="h-12 font-bold justify-center px-3 border-border bg-card hover:bg-card/80" onClick={() => abrir('repartir')}>
+                  <UsersThree size={18} className="mr-2" /> Repartir
+                </Button>
+              )}
+            </div>
           )}
           {cuentaPedida && !conCortesia && !pagado && !meta && (
             <Button className="w-full h-12 font-extrabold justify-center px-4 bg-primary hover:bg-primary/90 text-white" onClick={() => abrir('cortesia')}>

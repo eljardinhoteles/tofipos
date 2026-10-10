@@ -1,6 +1,8 @@
+import { imprimirConAviso } from '../../../../lib/imprimir';
+import { queueRawReceiptPrint } from '../../../../lib/printServerClient';
 import { useState, useMemo, useEffect } from 'react';
 import { folioLabel } from '../../../../lib/folio';
-import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets } from '@phosphor-icons/react';
+import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets, WarningCircle } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { useHorizontalWheel } from '../../../../hooks/useHorizontalWheel';
 import { type Mesa, type HabitacionCuenta } from '../../../../db/database';
@@ -31,7 +33,11 @@ export function CuentaView({
   const wheelRef = useHorizontalWheel();
   const roomType = selectedMesa.nombre.match(/\(([^)]+)\)/)?.[1] || selectedMesa.piso || 'Sin tipo';
   const roomNum = selectedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || selectedMesa.nombre.replace(/\D/g, '') || selectedMesa.nombre;
-  const [comandas, setComandas] = useState<any[]>([]);
+  // Todas las comandas vinculadas a la habitación. Las abiertas desde una mesa y aún sin
+  // cargar (sincronizado=false) se listan en gris: no suman ni se abren hasta cargarlas,
+  // porque pueden terminar cargadas a otra habitación o pagadas por el cliente.
+  const [comandasTodas, setComandasTodas] = useState<any[]>([]);
+  const comandas = useMemo(() => comandasTodas.filter(c => c.sincronizado !== false), [comandasTodas]);
   const [previewTicketText, setPreviewTicketText] = useState<string | null>(null);
   const [anulando, setAnulando] = useState(false);
   // Filtro de subcuenta de la lista: 'todas', null (principal) o id de subcuenta.
@@ -41,6 +47,9 @@ export function CuentaView({
   // Id de la subcuenta que se está renombrando (reusa el mismo editor que "agregar").
   const [renombrandoId, setRenombrandoId] = useState<string | null>(null);
   const subcuentas = useMemo(() => cuenta.subcuentas ?? [], [cuenta.subcuentas]);
+  // Comandas abiertas desde esta habitación que aún no se cargan: el checkout se bloquea
+  // para que no queden huérfanas (hay que cargarlas a una habitación o cobrarlas antes).
+  const sinCargarCount = useMemo(() => comandasTodas.filter(c => c.sincronizado === false).length, [comandasTodas]);
   const nombrePrincipal = cuenta.principal_nombre?.trim() || 'Principal';
   const nombreSub = (id?: string | null) => subcuentas.find(s => s.id === id)?.nombre ?? (id ? undefined : nombrePrincipal);
 
@@ -50,7 +59,9 @@ export function CuentaView({
       const rxDb = await initVerticalRxDb();
       const docs = await rxDb.comandas.find({ selector: { habitacion_cuenta_id: cuenta.id, _deleted: { $ne: true } } }).exec();
       if (!alive) return;
-      setComandas(docs.map((d: any) => d.toJSON()).filter((c: any) => c.estado !== 'anulada'));
+      // Una mesa abierta desde la habitación y cobrada directo por el cliente ya no es de la cuenta.
+      setComandasTodas(docs.map((d: any) => d.toJSON()).filter((c: any) =>
+        c.estado !== 'anulada' && !(c.sincronizado === false && ['cerrado', 'facturado'].includes(c.estado))));
     })();
     return () => { alive = false; };
   }, [cuenta.id]);
@@ -62,12 +73,12 @@ export function CuentaView({
   ], [comandas, subcuentas, nombrePrincipal]);
 
   const comandasVisibles = useMemo(
-    () => filtroSub === 'todas' ? comandas : comandas.filter(c => (c.habitacion_subcuenta_id ?? null) === filtroSub),
-    [comandas, filtroSub]
+    () => filtroSub === 'todas' ? comandasTodas : comandasTodas.filter(c => (c.habitacion_subcuenta_id ?? null) === filtroSub),
+    [comandasTodas, filtroSub]
   );
 
   const totalConIva = useMemo(() => {
-    return comandasVisibles.reduce((acc, c) => acc + (c.total || 0), 0);
+    return comandasVisibles.filter(c => c.sincronizado !== false).reduce((acc, c) => acc + (c.total || 0), 0);
   }, [comandasVisibles]);
 
   const cerrarEditorSub = () => { setAgregandoSub(false); setRenombrandoId(null); setNuevaSub(''); };
@@ -106,7 +117,7 @@ export function CuentaView({
   // consumos apuntando a una subcuenta inexistente.
   const handleEliminarSub = async () => {
     if (!renombrandoId || renombrandoId === PRINCIPAL_ID) return;
-    if (comandas.some(c => c.habitacion_subcuenta_id === renombrandoId)) {
+    if (comandasTodas.some(c => c.habitacion_subcuenta_id === renombrandoId)) {
       showToast.error('No se puede eliminar', 'Esta subcuenta ya tiene comandas cargadas.');
       return;
     }
@@ -123,7 +134,7 @@ export function CuentaView({
   // Solo se permite anular una cuenta sin consumos cargados — con comandas
   // ya asociadas, el flujo correcto es el checkout normal (cobrar o marcar
   // a crédito), no una anulación silenciosa que dejaría consumos huérfanos.
-  const puedeAnular = comandas.length === 0;
+  const puedeAnular = comandasTodas.length === 0;
 
   const handleAnular = () => {
     if (!puedeAnular) {
@@ -197,7 +208,7 @@ export function CuentaView({
             <Button size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={handleGuardarSub} disabled={!nuevaSub.trim()} aria-label={renombrandoId ? 'Guardar nombre' : 'Crear subcuenta'}>
               <Check size={20} weight="bold" />
             </Button>
-            {renombrandoId && renombrandoId !== PRINCIPAL_ID && !comandas.some(c => c.habitacion_subcuenta_id === renombrandoId) && (
+            {renombrandoId && renombrandoId !== PRINCIPAL_ID && !comandasTodas.some(c => c.habitacion_subcuenta_id === renombrandoId) && (
               <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0 rounded-xl text-destructive" onClick={handleEliminarSub} aria-label="Eliminar subcuenta">
                 <Trash size={20} weight="bold" />
               </Button>
@@ -274,16 +285,18 @@ export function CuentaView({
           <div className="flex flex-col">
             {comandasVisibles.map((c, index) => {
               const isOdd = index % 2 === 1;
+              const sinCargar = c.sincronizado === false;
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => onOpenComanda?.(c.id)}
-                  disabled={!onOpenComanda}
+                  disabled={!onOpenComanda || sinCargar}
+                  title={sinCargar ? 'Mesa abierta desde esta habitación; aparecerá cuando se cargue' : undefined}
                   className={cn("w-full text-left flex items-center gap-3 px-4 py-3 focus:outline-none focus-visible:bg-primary/10 border-l-4 border-l-transparent",
                     // Sin transition-colors: con el sombreado intercalado, al cambiar
                     // el filtro el índice de la fila cambia y el fondo se animaba (flash).
-                    isOdd && "bg-muted/70", onOpenComanda && "enabled:cursor-pointer enabled:hover:border-l-primary")}
+                    isOdd && "bg-muted/70", sinCargar && "opacity-50 grayscale cursor-default", onOpenComanda && !sinCargar && "enabled:cursor-pointer enabled:hover:border-l-primary")}
                 >
                   <div className="w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
                     <Receipt size={14} weight="bold" />
@@ -299,11 +312,11 @@ export function CuentaView({
                         )}
                       </span>
                       <span className="font-black text-sm text-foreground shrink-0">
-                        ${c.total?.toFixed(2) || '0.00'}
+                        {sinCargar ? 'Sin cargar' : `$${c.total?.toFixed(2) || '0.00'}`}
                       </span>
                     </div>
                     <span className="text-[10px] text-muted-foreground font-semibold">
-                      {new Date(c.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })} · {new Date(c.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                      {sinCargar && `${c.mesa_nombre || 'Mesa'} · `}{new Date(c.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })} · {new Date(c.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </button>
@@ -342,9 +355,20 @@ export function CuentaView({
           )}
         </div>
 
+        {sinCargarCount > 0 && (
+          <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-warning-foreground">
+            <WarningCircle size={18} weight="fill" className="shrink-0 mt-px" />
+            <p className="text-xs font-semibold leading-snug">
+              {sinCargarCount === 1 ? 'Hay 1 comanda' : `Hay ${sinCargarCount} comandas`} sin cargar. Cárgala{sinCargarCount === 1 ? '' : 's'} a una habitación o cóbrala{sinCargarCount === 1 ? '' : 's'} en su mesa para hacer el checkout.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant="warning" className="w-full h-10 font-bold"
+            disabled={sinCargarCount > 0}
+            title={sinCargarCount > 0 ? `Hay ${sinCargarCount} ${sinCargarCount === 1 ? 'comanda abierta' : 'comandas abiertas'} desde esta habitación sin cargar` : undefined}
             onClick={() => onCheckout({ extras: [], incluidos: [], subcuentaId: filtroSub === 'todas' ? undefined : filtroSub })}
           >
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Checkout
@@ -365,6 +389,10 @@ export function CuentaView({
         onClose={() => setPreviewTicketText(null)}
         title="Precuenta de Habitación"
         content={previewTicketText || ''}
+        onPrint={() => {
+          const texto = previewTicketText || '';
+          void imprimirConAviso(() => queueRawReceiptPrint(texto, 'Precuenta de Habitación'), 'Pre-cuenta de habitación');
+        }}
       />
     </div>
   );

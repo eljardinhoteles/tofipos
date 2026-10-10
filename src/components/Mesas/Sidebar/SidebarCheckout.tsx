@@ -1,3 +1,4 @@
+import { imprimirConAviso } from '../../../lib/imprimir';
 import { useEffect, useState, useMemo } from'react';
 import { ComandaTotales } from './ComandaTotales';
 import { folioLabel } from '../../../lib/folio';
@@ -258,11 +259,11 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  setPreviewContent(content);
  setPreviewTitle(`Recibo de Pago - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
- queueReprintTicket({
+ imprimirConAviso(() => queueReprintTicket({
  rawText: content,
  mesaNombre: selectedMesa.nombre,
  comanda: activeComanda,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Ticket');
  });
  setOnCloseCallback(() => () => onSuccess());
  setPreviewOpened(true);
@@ -288,14 +289,14 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  setPreviewContent(content);
  setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
- queueReceiptPrint({
+ imprimirConAviso(() => queueReceiptPrint({
  comanda: activeComanda,
  items: comandaItems,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
  pagos: todosPagos,
  habitacionNombre,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Pre-cuenta');
  });
  setOnCloseCallback(null);
  setPreviewOpened(true);

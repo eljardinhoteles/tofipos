@@ -34,13 +34,13 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
     return (
       <div className="grid grid-cols-2 gap-2">
         <Button
-          variant={!p.hayConfirmadaCocina ? 'default' : 'secondary'}
+          variant={!p.hayConfirmadaCocina || p.hayNuevosCocina ? 'default' : 'secondary'}
           className="w-full h-10 font-bold"
           onClick={p.onConfirmarCocina}
           disabled={p.sinItemsCocina}
         >
-          {!p.hayConfirmadaCocina ? <Check size={18} weight="bold" className="mr-1.5" /> : <Printer size={18} weight="bold" className="mr-1.5" />}
-          {!p.hayConfirmadaCocina ? 'Confirmar' : p.hayNuevosCocina ? `Adicional (${p.nuevosCocinaCount})` : 'Reimprimir'}
+          {!p.hayConfirmadaCocina || p.hayNuevosCocina ? <Check size={18} weight="bold" className="mr-1.5" /> : <Printer size={18} weight="bold" className="mr-1.5" />}
+          {!p.hayConfirmadaCocina ? 'Confirmar' : p.hayNuevosCocina ? `Confirmar (${p.nuevosCocinaCount})` : 'Reimprimir'}
         </Button>
         <Button
           variant="primarySoft" className="w-full h-10 font-bold" onClick={p.onPedirCuenta}

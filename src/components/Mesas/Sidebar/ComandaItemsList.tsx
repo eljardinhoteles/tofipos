@@ -3,6 +3,7 @@ import { Basket } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ComandaItemRow } from './ComandaItemRow';
 import { esParteRepartida } from '@/lib/reparto';
+import { cantidadEnviada, parseSnapshot } from '@/lib/itemPendiente';
 
 type Item = any;
 
@@ -11,14 +12,15 @@ interface FilaProps {
   index: number;
   selected: boolean;
   locked: boolean;
+  pendiente: boolean;
   onSelect: (item: Item) => void;
 }
 
 // Un ítem sin cambios no se vuelve a renderizar al abrir diálogos, escribir un
 // motivo, etc.: el onClick se estabiliza aquí en vez de crearse en cada render.
-const Fila = memo(function Fila({ item, index, selected, locked, onSelect }: FilaProps) {
+const Fila = memo(function Fila({ item, index, selected, locked, pendiente, onSelect }: FilaProps) {
   const handleClick = useCallback(() => onSelect(item), [onSelect, item]);
-  return <ComandaItemRow item={item} index={index} isSelected={selected} isLocked={locked} onClick={handleClick} />;
+  return <ComandaItemRow item={item} index={index} isSelected={selected} isLocked={locked} pendiente={pendiente} onClick={handleClick} />;
 });
 
 interface ComandaItemsListProps {
@@ -27,6 +29,8 @@ interface ComandaItemsListProps {
   /** Comanda ya confirmada a cocina y su fecha: define qué ítems están bloqueados. */
   confirmada?: boolean;
   confirmadaAt?: string | null;
+  /** { item_id: cantidad } de la última confirmación: distingue unidades ya enviadas de las nuevas. */
+  snapshot?: Record<string, number>;
   /** Espacio al final para que el pill "Añadir" flotante no tape el último ítem. */
   padBottom?: boolean;
   onSelect: (item: Item) => void;
@@ -38,11 +42,16 @@ const estaBloqueado = (item: Item, confirmada?: boolean, confirmadaAt?: string |
   (esParteRepartida(item) && !item?.anulado) ||
   !!confirmada && !!confirmadaAt && !!item?.created_at && item.created_at <= confirmadaAt && !item?.anulado;
 
+// Unidades que cocina aún no recibió (ítem nuevo, o una unidad sumada a uno confirmado).
+const EMPTY_SNAPSHOT: Record<string, number> = {};
+const tienePendiente = (item: Item, confirmadaAt?: string | null, snapshot: Record<string, number> = EMPTY_SNAPSHOT) =>
+  !item?.anulado && !esParteRepartida(item) && cantidadEnviada(item, confirmadaAt, snapshot) < item.cantidad;
+
 // Comandas largas: se pintan primero las filas visibles y el resto entra en un
 // segundo paso de baja prioridad, para que el sidebar abra sin esperar a todas.
 const FILAS_INICIALES = 30;
 
-export const ComandaItemsList = memo(function ComandaItemsList({ items, selectedId, confirmada, confirmadaAt, padBottom, onSelect }: ComandaItemsListProps) {
+export const ComandaItemsList = memo(function ComandaItemsList({ items, selectedId, confirmada, confirmadaAt, snapshot, padBottom, onSelect }: ComandaItemsListProps) {
   const [completa, setCompleta] = useState(items.length <= FILAS_INICIALES);
   useEffect(() => {
     if (completa) return;
@@ -68,6 +77,7 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items, selected
           index={index}
           selected={selectedId === item.id}
           locked={estaBloqueado(item, confirmada, confirmadaAt)}
+          pendiente={tienePendiente(item, confirmada ? confirmadaAt : null, snapshot)}
           onSelect={onSelect}
         />
       ))}
@@ -118,6 +128,7 @@ const TodasFila = memo(function TodasFila({ item, index, comanda, onSelectSubcom
       item={item}
       index={index}
       isLocked={estaBloqueado(item, true, comanda.confirmada_at)}
+      pendiente={tienePendiente(item, comanda.confirmada_at, parseSnapshot(comanda.cantidades_snapshot))}
       onClick={handleClick}
     />
   );

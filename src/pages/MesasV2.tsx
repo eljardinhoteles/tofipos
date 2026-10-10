@@ -1,3 +1,4 @@
+import { imprimirConAviso } from '../lib/imprimir';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { type Comanda, type Piso, type HabitacionCuenta } from '../db/database';
 import { isOperativeComanda, pickComandaActiva } from '../db/comandaState';
@@ -118,7 +119,7 @@ export default function MesasV2() {
     // cola de impresión sin modal de preview/confirmación.
     const handleImprimirSolicitudFacturacion = useCallback(() => {
         const texto = generarSolicitudDatosFacturacion(true);
-        queueSolicitudFacturacionPrint(texto).catch(err => console.warn('print server offline', err));
+        imprimirConAviso(() => queueSolicitudFacturacionPrint(texto), 'Solicitud de facturación');
         showToast.success('Enviado a Impresora', 'Solicitud de datos de facturación enviada.');
     }, []);
 

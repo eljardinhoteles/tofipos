@@ -1,3 +1,4 @@
+import { imprimirConAviso } from '../../../../lib/imprimir';
 import { fechaLocal } from '../../../../lib/fechaLocal';
 import { useState, useMemo, useEffect } from'react';
 import { folioLabel } from '../../../../lib/folio';
@@ -94,7 +95,9 @@ export function HabitacionCheckoutView({
       // seleccionarse (doble venta) ni contar como "pendientes" al decidir si
       // se cierra la cuenta y se libera la mesa.
       const list = docs.map((d: any) => d.toJSON())
-        .filter((c: any) => !['cerrado', 'facturado', 'anulada'].includes(c.estado));
+        .filter((c: any) => !['cerrado', 'facturado', 'anulada'].includes(c.estado))
+        // Una mesa abierta desde la habitación sin cargar aún (sincronizado=false) no es consumo de la cuenta.
+        .filter((c: any) => c.sincronizado !== false);
       setComandas(list);
       // Por defecto se seleccionan todas las precuentas, como antes; el
       // usuario puede desmarcar las que no quiere pagar en este cobro.
@@ -552,11 +555,11 @@ export function HabitacionCheckoutView({
         title={`Precuenta Consolidada - ${selectedMesa.nombre}`}
         content={previewContent}
         onPrint={() => {
-          queueReprintTicket({
+          imprimirConAviso(() => queueReprintTicket({
             rawText: previewContent,
             mesaNombre: selectedMesa.nombre,
             comanda: comandasSeleccionadas[0],
-          }).catch(err => console.warn('print server offline', err));
+          }), 'Ticket');
         }}
       />
     </div>

@@ -10,9 +10,12 @@ interface HabitacionOpcionProps {
   huesped: string;
   seleccionada: boolean;
   onSelect: () => void;
+  /** Color de la opción elegida: el de marca (por defecto) o azul de habitaciones. */
+  tono?: 'primary' | 'info';
 }
 
-export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect }: HabitacionOpcionProps) {
+export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect, tono = 'primary' }: HabitacionOpcionProps) {
+  const azul = tono === 'info';
   const nombre = mesaNombre || '';
   const numero = nombre.match(/Hab\.\s*(\d+)/)?.[1] || nombre || '—';
   const tipo = nombre.match(/\(([^)]+)\)/)?.[1] || '';
@@ -24,12 +27,12 @@ export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect }
       onClick={onSelect}
       className={cn(
         'flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none',
-        seleccionada ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card'
+        seleccionada ? (azul ? 'border-info bg-info-soft shadow-sm' : 'border-primary bg-primary/10 shadow-sm') : 'border-border bg-card'
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
         <div className={cn('w-10 h-10 rounded-xl flex flex-col items-center justify-center font-black text-sm shrink-0 leading-none',
-          seleccionada ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
+          seleccionada ? (azul ? 'bg-info text-white' : 'bg-primary text-primary-foreground') : 'bg-muted text-muted-foreground')}>
           <span className="text-[9px] uppercase font-extrabold opacity-70">HAB</span>
           <span>{numero}</span>
         </div>
@@ -39,7 +42,7 @@ export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect }
         </div>
       </div>
       {seleccionada && (
-        <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-sm">
+        <div className={cn('w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm', azul ? 'bg-info text-white' : 'bg-primary text-primary-foreground')}>
           <Check size={14} weight="bold" />
         </div>
       )}

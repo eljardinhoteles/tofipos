@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import {
   ForkKnife, ChefHat, Receipt, CurrencyDollar, Bed, XCircle, Gift, ArrowUUpLeft,
-  SignIn, SignOut, FileText, UsersThree, Pulse, ArrowsClockwise, X,
+  SignIn, SignOut, FileText, UsersThree, Pulse, ArrowsClockwise, X, CaretRight,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import { useUI } from '../../context/UIContext';
 import { useActividadDia } from '../../hooks/useActividadDia';
+import { useAbrirActividad } from '../../hooks/useAbrirActividad';
 import { ActividadFiltros, type FiltroActividad } from './ActividadFiltros';
-import type { ActividadEvento, ActividadTipo, ActividadTono } from '../../lib/actividadDia';
+import type { ActividadDestino, ActividadEvento, ActividadTipo, ActividadTono } from '../../lib/actividadDia';
 
 // Drawer lateral con la actividad del día (mesas abiertas, cargos a habitación,
 // cobros, anulaciones…), para revisar si algo se escapó. Se arma con los datos
@@ -44,19 +45,33 @@ const ES_COBRO = new Set<ActividadTipo>(['cobrada', 'cobro', 'reembolso']);
 const hora = (ts: string) =>
   ts.length === 10 ? '' : new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 
-function Fila({ e }: { e: ActividadEvento }) {
+function Fila({ e, onAbrir }: { e: ActividadEvento; onAbrir: (d: ActividadDestino) => void }) {
   const Icono = ICONOS[e.tipo];
-  return (
-    <li className="flex items-start gap-3 px-5 py-3">
+  const contenido = (
+    <>
       <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', TONOS[e.tono])}>
         <Icono size={20} weight="bold" />
       </div>
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5 text-left">
         <span className="text-sm font-extrabold text-foreground leading-tight">{e.titulo}</span>
         {e.detalle && <span className="text-xs font-medium text-muted-foreground leading-snug break-words">{e.detalle}</span>}
         {e.actor && <span className="text-[11px] font-semibold text-muted-foreground/80">{e.actor}</span>}
       </div>
       <span className="shrink-0 text-xs font-bold text-muted-foreground tabular-nums pt-0.5">{hora(e.ts)}</span>
+      {e.destino && <CaretRight size={14} weight="bold" className="shrink-0 mt-1 text-muted-foreground/60" aria-hidden="true" />}
+    </>
+  );
+  const destino = e.destino;
+  return (
+    <li>
+      {destino ? (
+        <button type="button" onClick={() => onAbrir(destino)}
+          className="w-full flex items-start gap-3 px-5 py-3 cursor-pointer hover:bg-muted/60 active:bg-muted transition-colors">
+          {contenido}
+        </button>
+      ) : (
+        <div className="flex items-start gap-3 px-5 py-3">{contenido}</div>
+      )}
     </li>
   );
 }
@@ -65,6 +80,7 @@ export function ActividadDrawer() {
   const { actividadOpen, setActividadOpen } = useUI();
   const { eventos, cargando, refrescar, refrescando, actualizadoA } = useActividadDia(actividadOpen);
   const [filtro, setFiltro] = useState<FiltroActividad>('todo');
+  const abrir = useAbrirActividad();
 
   const alertas = useMemo(() => eventos.filter(e => e.alerta), [eventos]);
   const cobros = useMemo(() => eventos.filter(e => ES_COBRO.has(e.tipo)), [eventos]);
@@ -128,7 +144,7 @@ export function ActividadDrawer() {
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
-              {visibles.map(e => <Fila key={e.id} e={e} />)}
+              {visibles.map(e => <Fila key={e.id} e={e} onAbrir={abrir} />)}
             </ul>
           )}
         </div>

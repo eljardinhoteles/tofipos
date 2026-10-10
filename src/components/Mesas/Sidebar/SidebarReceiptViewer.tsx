@@ -1,6 +1,8 @@
+import { imprimirConAviso } from '../../../lib/imprimir';
 import { ComandaTotales } from'./ComandaTotales';
 import { folioLabel } from '../../../lib/folio';
 import { ComandaLiquidacion } from'./ComandaLiquidacion';
+import { ComandaDividida, type ParteDividida } from'./ComandaDividida';
 import { liquidacionComanda } from'../../../lib/anticipoMesa';
 import { useEffect, useState, useMemo } from'react';
 import { X, Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
@@ -170,6 +172,21 @@ export function SidebarReceiptViewer({
  return () => { alive = false; sub?.unsubscribe(); };
  }, [activeComanda?.mesa_id, activeComanda?.id]);
 
+ // Partes cobradas con "Dividir cuenta": ventas "Dividido - Nombre" de esta comanda.
+ const partesDivididas = useMemo<ParteDividida[]>(() => ventasMesa
+ .filter((v: any) => v.comanda_id === activeComanda?.id && typeof v.referencia === 'string' && v.referencia.includes('Dividido - '))
+ .map((v: any) => ({
+ id: v.id,
+ nombre: v.referencia.split('Dividido - ').pop()?.trim() || 'Parte',
+ monto: (v.movimientos ?? []).reduce((acc: number, m: any) => {
+ if (m.anulado) return acc;
+ if (m.tipo === 'pago' || m.tipo === 'ajuste') return acc + (m.monto ?? 0);
+ if (m.tipo === 'reembolso') return acc - (m.monto ?? 0);
+ return acc;
+ }, 0),
+ }))
+ .filter((p: ParteDividida) => p.monto > 0.004), [ventasMesa, activeComanda?.id]);
+
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
  const { menuItems } = useRxMenuCatalog();
 
@@ -313,9 +330,8 @@ export function SidebarReceiptViewer({
  </main>
 
  {/* Totales y Acciones — mismo resumen que SidebarDetails (ComandaTotales) */}
- <footer className="p-4 border-t border-border bg-card flex flex-col gap-3 shrink-0">
+ <footer className="p-4 border-t border-border bg-muted/40 flex flex-col gap-3 shrink-0">
  <ComandaTotales
- tarjeta
  subtotal={subtotal}
  iva={ivaCalculado}
  ivaPorcentaje={ivaPorcentaje}
@@ -324,10 +340,11 @@ export function SidebarReceiptViewer({
  tono="success"
  />
  {liquidacion && <ComandaLiquidacion liquidacion={liquidacion} />}
+ <ComandaDividida partes={partesDivididas} />
 
  <div className={cn("grid gap-2", esComandaEnHabitacionActiva ?"grid-cols-1":"grid-cols-2")}>
  <Button
- variant="secondary"className="w-full font-bold text-primary bg-primary/10"
+ variant={esComandaEnHabitacionActiva ?"warningSoft":"primarySoft"}className="w-full h-10 font-bold"
  onClick={() => {
  const content = esComandaEnHabitacionActiva
  ? generarPrecuenta(activeComanda, comandaItems, selectedMesa.nombre, ivaPorcentaje, todosPagos, habitacionMesa?.nombre)
@@ -344,19 +361,19 @@ export function SidebarReceiptViewer({
  setPreviewTitle(esComandaEnHabitacionActiva ?`Imprimir Precuenta - ${selectedMesa.nombre}`:`Reimprimir Recibo - ${selectedMesa.nombre}`);
  setPreviewOnPrint(() => () => {
  if (esComandaEnHabitacionActiva) {
- queueReceiptPrint({
+ imprimirConAviso(() => queueReceiptPrint({
  comanda: activeComanda,
  items: comandaItems,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
  habitacionNombre: habitacionMesa?.nombre,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Pre-cuenta');
  } else {
- queueReprintTicket({
+ imprimirConAviso(() => queueReprintTicket({
  rawText: content,
  mesaNombre: selectedMesa.nombre,
  comanda: activeComanda,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Ticket');
  }
  });
  setPreviewOpened(true);
@@ -367,7 +384,7 @@ export function SidebarReceiptViewer({
 
  {!esComandaEnHabitacionActiva && (
  <Button
- variant="secondary"className="w-full font-bold"
+ variant="secondary"className="w-full h-10 font-bold"
  disabled={!ventaIdCentro}
  title={ventaIdCentro ? undefined : 'Esta comanda no tiene una venta en Centro de Ventas'}
  onClick={() => {
@@ -382,7 +399,7 @@ export function SidebarReceiptViewer({
  {isAnulada && esAdmin && (
     <Button
       variant="destructive"
-      className="w-full font-bold"
+      className="w-full h-10 font-bold"
       onClick={handleDeleteVenta}
     >
       Borrar permanentemente

@@ -1,3 +1,4 @@
+import { imprimirConAviso } from '../../../lib/imprimir';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
 import { folioLabel } from '../../../lib/folio';
 import { X, Plus, Printer, Check, CaretDown } from'@phosphor-icons/react';
@@ -27,15 +28,17 @@ import { useComandaLive } from'../../../hooks/useComandaLive';
 import { ComandaHeader } from'./ComandaHeader';
 import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
 import { ComandaAcciones } from'./ComandaAcciones';
-import { RoomChargeDialog, DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
+import { DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
 import { queueKitchenPrint, queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { esParteRepartida } from'../../../lib/reparto';
+import { cantidadEnviada } from'../../../lib/itemPendiente';
 import { repartirItemEntreSubcomandas, deshacerRepartoItem } from'../../../db/rxdb';
 import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
 import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
 import { SidebarCambiarCliente } from'./SidebarCambiarCliente';
+import { SidebarHabitacionDestino } from'./SidebarHabitacionDestino';
 import { clienteCoincide, detalleCliente } from'../../../lib/documentoCliente';
 
 
@@ -100,6 +103,8 @@ export function SidebarDetails({
  }, [comandaItems]);
  const [previewOpened, setPreviewOpened] = useState(false);
  const [previewTitle, setPreviewTitle] = useState('');
+ // Ticket de cocina recién confirmado: si se cierra la vista previa sin imprimir, se avisa.
+ const [previewAviso, setPreviewAviso] = useState<string | undefined>(undefined);
  const [previewContent, setPreviewContent] = useState('');
  // Acción real de impresión, disparada por el modal recién tras la cuenta
  // regresiva (no al abrir el preview) — evita imprimir antes de que el
@@ -204,9 +209,17 @@ export function SidebarDetails({
  item.created_at <= activeComanda.confirmada_at &&
  !item?.anulado;
 
+ // Unidades de un ítem que cocina ya recibió.
+ const enviadaDe = (item: any) =>
+ esParteRepartida(item) ? item.cantidad
+ : activeComanda?.confirmada ? cantidadEnviada(item, activeComanda?.confirmada_at, cantidadesSnapshot) : 0;
+
  const handleUpdateItem = async (cantidad: number, precio?: number) => {
  if (!editingItem) return;
- if (esItemBloqueado(editingItem)) {
+ // Con unidades ya enviadas solo se pueden quitar las que se sumaron después.
+ const enviadaEdit = enviadaDe(editingItem);
+ const soloNuevas = esItemBloqueado(editingItem) && enviadaEdit < editingItem.cantidad && cantidad >= enviadaEdit && cantidad < editingItem.cantidad;
+ if (esItemBloqueado(editingItem) && !soloNuevas) {
  showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
  setEditingItem(null);
  return;
@@ -596,15 +609,16 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`${esAdicional ?'Adicional Cocina':'Comanda de Cocina'} - ${selectedMesa.nombre}`);
+ setPreviewAviso(reimprimir ? undefined : 'La comanda de cocina');
  setPreviewOnPrint(() => () => {
- queueKitchenPrint({
+ imprimirConAviso(() => queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(itemsTicket),
  mesaNombre: selectedMesa.nombre,
  esAdicional,
  habitacionNombre: linkedMesa?.nombre,
  itemsAnulados: withBebida(anulados),
- }).catch(err => console.warn('print server offline', err));
+ }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
  if (!reimprimir) showToast.success(esAdicional ?'Adicional enviado':'Orden Confirmada','Un solo ticket de cocina para toda la mesa.');
@@ -621,15 +635,16 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Pre-cuenta - ${selectedMesa.nombre}`);
+ setPreviewAviso(undefined);
  setPreviewOnPrint(() => () => {
- queueReceiptPrint({
+ imprimirConAviso(() => queueReceiptPrint({
  comanda: activeComanda,
  items: itemsCocina,
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
  pagos: [...pagos, ...pagosDeVentas],
  habitacionNombre: linkedMesa?.nombre,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Pre-cuenta');
  });
  setPreviewOpened(true);
  };
@@ -655,14 +670,15 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Comanda de Cocina - ${selectedMesa.nombre}`);
+ setPreviewAviso('La comanda de cocina');
  setPreviewOnPrint(() => () => {
- queueKitchenPrint({
+ imprimirConAviso(() => queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(itemsCocina),
  mesaNombre: selectedMesa.nombre,
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
  showToast.success('Orden Confirmada','La comanda fue enviada a cocina.');
@@ -678,6 +694,7 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Adicional Cocina - ${selectedMesa.nombre}`);
+ setPreviewAviso('El adicional de cocina');
  const nuevoSnapshot = Object.fromEntries(
  itemsCocina.map(item => [item.id, item.cantidad])
  );
@@ -686,14 +703,14 @@ export function SidebarDetails({
  cantidades_snapshot: JSON.stringify(nuevoSnapshot)
  });
  setPreviewOnPrint(() => () => {
- queueKitchenPrint({
+ imprimirConAviso(() => queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(itemsNuevos),
  mesaNombre: selectedMesa.nombre,
  esAdicional: true,
  habitacionNombre: linkedMesa?.nombre,
  itemsAnulados: withBebida(itemsAnuladosDesdeUltimaConfirmacion),
- }).catch(err => console.warn('print server offline', err));
+ }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
  } else {
@@ -708,15 +725,16 @@ export function SidebarDetails({
  );
  setPreviewContent(content);
  setPreviewTitle(`Comanda de Cocina - ${selectedMesa.nombre}`);
+ setPreviewAviso(undefined);
  setPreviewOnPrint(() => () => {
- queueKitchenPrint({
+ imprimirConAviso(() => queueKitchenPrint({
  comanda: activeComanda,
  items: withBebida(itemsCocina),
  mesaNombre: selectedMesa.nombre,
  esAdicional: false,
  habitacionNombre: linkedMesa?.nombre,
  itemsAnulados: withBebida(itemsAnuladosDesdeUltimaConfirmacion),
- }).catch(err => console.warn('print server offline', err));
+ }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
  }
@@ -987,6 +1005,24 @@ export function SidebarDetails({
  setProcesandoCierre(false);
  }
  };
+ // Cargar o vincular a una habitación: página dentro del mismo sheet.
+ if (showRoomChargeModal || showVincularHab) {
+ const vincular = showVincularHab;
+ return (
+ <SidebarHabitacionDestino
+ modo={vincular ?'vincular':'cargar'}
+ folio={folioLabel(activeComanda)}
+ cuentas={activeRoomAccounts}
+ mesas={allMesas}
+ procesando={procesandoHab}
+ onConfirm={vincular ? handleVincularHabitacion : handleTransferirHabitacion}
+ cuentaInicialId={activeComanda?.habitacion_cuenta_id}
+ subcuentaInicialId={activeComanda?.habitacion_subcuenta_id}
+ onQuitar={vincular && activeComanda?.habitacion_cuenta_id ? handleQuitarHabitacion : undefined}
+ onBack={() => { setShowRoomChargeModal(false); setShowVincularHab(false); }}
+ />
+ );
+ }
  if (closeCuentaModalOpen) {
  return (
  <SidebarCobrarCuenta
@@ -1059,6 +1095,7 @@ export function SidebarDetails({
  selectedId={editingItem?.id}
  confirmada={!!activeComanda?.confirmada}
  confirmadaAt={activeComanda?.confirmada_at}
+ snapshot={cantidadesSnapshot}
  padBottom={!editingItem && activeComanda?.estado !=='cuenta'}
  onSelect={setEditingItem}
  />
@@ -1073,13 +1110,13 @@ export function SidebarDetails({
  <span className="text-xl font-black text-primary">${totalTodas.toFixed(2)}</span>
  </div>
  <Button
- variant={!hayConfirmadaCocina ?"default":"secondary"}
- className={cn("w-full h-10 font-bold", !hayConfirmadaCocina ?"":"bg-muted text-foreground")}
+ variant={!hayConfirmadaCocina || hayNuevosCocina ?"default":"secondary"}
+ className={cn("w-full h-10 font-bold", !hayConfirmadaCocina || hayNuevosCocina ?"":"bg-muted text-foreground")}
  onClick={handleConfirmOrder}
  disabled={sinItemsCocina}
  >
- {!hayConfirmadaCocina ? <Check size={18} weight="bold"className="mr-1.5"/> : <Printer size={18} weight="bold"className="mr-1.5"/>}
- {!hayConfirmadaCocina ?'Confirmar': hayNuevosCocina ?`Adicional (${nuevosCocina.length})`:'Reimprimir'}
+ {!hayConfirmadaCocina || hayNuevosCocina ? <Check size={18} weight="bold"className="mr-1.5"/> : <Printer size={18} weight="bold"className="mr-1.5"/>}
+ {!hayConfirmadaCocina ?'Confirmar': hayNuevosCocina ?`Confirmar (${nuevosCocina.length})`:'Reimprimir'}
  </Button>
  <span className="text-[11px] text-center text-muted-foreground">Elige una subcomanda para añadir, cobrar o cargar a habitación.</span>
  </footer>
@@ -1186,7 +1223,8 @@ export function SidebarDetails({
  key={editingItem.id}
  item={editingItem}
  confirmado={esItemBloqueado(editingItem)}
- destinos={activeComanda?.estado ==='cuenta'? [] : destinosMover.map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
+ cantidadEnviada={esItemBloqueado(editingItem) ? enviadaDe(editingItem) : 0}
+ destinos={destinosMover.filter((c: any) => c.estado !== 'cuenta').map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
  destinosRepartir={destinosMover.filter((c: any) => c.estado !== 'cuenta').map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
  ocultarEstado={activeComanda?.estado ==='cuenta'}
  cuentaPedida={activeComanda?.estado ==='cuenta'}
@@ -1228,28 +1266,6 @@ export function SidebarDetails({
  />
 
 
- <RoomChargeDialog
- opened={showRoomChargeModal}
- onOpenChange={setShowRoomChargeModal}
- folio={folioLabel(activeComanda)}
- cuentas={activeRoomAccounts}
- mesas={allMesas}
- procesando={procesandoHab}
- onConfirm={handleTransferirHabitacion}
- />
-
- <RoomChargeDialog
- opened={showVincularHab}
- onOpenChange={setShowVincularHab}
- modo="vincular"
- folio={folioLabel(activeComanda)}
- cuentas={activeRoomAccounts}
- mesas={allMesas}
- procesando={procesandoHab}
- onConfirm={handleVincularHabitacion}
- onQuitar={activeComanda?.habitacion_cuenta_id ? handleQuitarHabitacion : undefined}
- />
-
  <DividirMesaDialog
  opened={confirmDividir}
  onOpenChange={setConfirmDividir}
@@ -1287,6 +1303,7 @@ export function SidebarDetails({
  title={previewTitle}
  content={previewContent}
  onPrint={previewOnPrint ?? undefined}
+ avisoSinImprimir={previewAviso}
  />
 
  <ProductModifiersModal

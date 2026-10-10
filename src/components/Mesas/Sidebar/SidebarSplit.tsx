@@ -1,8 +1,8 @@
+import { imprimirConAviso } from '../../../lib/imprimir';
 import { useEffect, useState, useMemo } from'react';
 import { folioLabel } from '../../../lib/folio';
 import {
- ArrowLeft, Users, CurrencyCircleDollar, Check,
- Printer
+ Users, CurrencyCircleDollar, Check, Printer, Scissors, Minus, Plus, CaretRight
 } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
@@ -20,7 +20,9 @@ import {
 } from'../../../db/rxdb';
 import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
-import { Label } from'@/components/ui/label';
+import { Button } from'@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from'@/components/ui/dialog';
+import { ReservaHeader } from'./ReservaHeader';
 
 interface SidebarSplitProps {
  selectedMesa: Mesa;
@@ -191,11 +193,11 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  );
  setPreviewTicketText(ticketText);
  setPreviewOnPrint(() => () => {
- queueReprintTicket({
+ imprimirConAviso(() => queueReprintTicket({
  rawText: ticketText,
  mesaNombre: selectedMesa.nombre,
  comanda: activeComanda,
- }).catch(err => console.warn('print server offline', err));
+ }), 'Ticket');
  });
 
  if (onSuccessCallback) onSuccessCallback();
@@ -247,254 +249,221 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  }
  };
 
- return (
- <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={splitMethod ? () => setSplitMethod(null) : onBack}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <ArrowLeft size={18} weight="bold"/>
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">Dividir Cuenta</h3>
- <span className="text-[10px] font-bold text-muted-foreground">
- {selectedMesa.nombre.replace('Mesa','Mesa #')} - Cuenta #{folioLabel(activeComanda)}
- </span>
- </div>
- </div>
- </header>
+  const titulo = 'text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground';
+  const nombreMesa = selectedMesa.nombre.toLowerCase().startsWith('mesa') ? selectedMesa.nombre : `Mesa ${selectedMesa.nombre}`;
+  const montoInvalido = !montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente;
+  const sinNombre = !payerName.trim();
 
- <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
- {splitMethod && (
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold text-foreground/80">Nombre de quien paga</Label>
- <Input
- type="text"placeholder="Ej: Juan Pérez"value={payerName}
- onChange={(e) => setPayerName(e.target.value)}
- />
- </div>
- )}
+  const verPrecuenta = (label: string, monto: number) => {
+    const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, monto, ivaPorcentaje);
+    setPreviewTicketText(text);
+    setPreviewOnPrint(() => () => {
+      imprimirConAviso(() => queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }), 'Ticket');
+    });
+  };
 
- {!splitMethod ? (
- saldoPendiente <= 0.001 ? (
- <div className="flex flex-col items-center gap-2 py-10 text-center">
- <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
- <Check size={24} weight="bold"/>
- </div>
- <span className="font-extrabold text-sm text-foreground">Cuenta ya pagada</span>
- <span className="text-xs text-muted-foreground max-w-[220px]">
- Esta cuenta ya fue cubierta en su totalidad, no hay saldo para dividir.
- </span>
- </div>
- ) : (
- <div className="flex flex-col gap-4">
- <div className="p-6 rounded-2xl bg-primary/10 border border-primary/20 flex flex-col items-center gap-1 text-center">
- <span className="text-[10px] font-black uppercase tracking-wider text-primary">Total a Dividir</span>
- <span className="text-3xl font-black text-primary">${saldoPendiente.toFixed(2)}</span>
- </div>
+  return (
+    <div className="h-full w-full bg-card flex flex-col overflow-hidden shadow-xl">
+      <ReservaHeader
+        tono="primary"
+        badge={<Scissors size={22} weight="bold" />}
+        titulo="Dividir cuenta"
+        subtitulo={`${nombreMesa} · Cuenta #${folioLabel(activeComanda)}`}
+        onBack={splitMethod ? () => setSplitMethod(null) : onBack}
+      />
 
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Métodos de división</span>
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-6">
+        {!splitMethod ? (
+          saldoPendiente <= 0.001 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-success-soft text-success-foreground flex items-center justify-center">
+                <Check size={24} weight="bold" />
+              </div>
+              <span className="font-extrabold text-sm text-foreground">Cuenta ya pagada</span>
+              <span className="text-xs text-muted-foreground max-w-[220px]">
+                Esta cuenta ya fue cubierta en su totalidad, no hay saldo para dividir.
+              </span>
+            </div>
+          ) : (
+            <>
+              <section className="rounded-2xl border border-border px-5 py-4 flex flex-col items-center gap-0.5 text-center">
+                <span className={titulo}>Total a dividir</span>
+                <span className="text-3xl font-black text-foreground tabular-nums">${saldoPendiente.toFixed(2)}</span>
+              </section>
 
- <button
- type="button"onClick={() => selectSplitMethod('iguales')}
- className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
- <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
- <Users size={20} />
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-sm text-foreground">Partes iguales</span>
- <span className="text-xs text-muted-foreground">Divide el saldo entre N personas por igual.</span>
- </div>
- </button>
+              <section className="flex flex-col gap-3">
+                <h4 className={titulo}>Método de división</h4>
+                <button type="button" onClick={() => selectSplitMethod('iguales')}
+                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-muted text-foreground flex items-center justify-center shrink-0">
+                    <Users size={20} weight="bold" />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="font-extrabold text-sm text-foreground">Partes iguales</span>
+                    <span className="text-xs text-muted-foreground">Divide el saldo entre N personas por igual.</span>
+                  </div>
+                  <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
+                </button>
+                <button type="button" onClick={() => selectSplitMethod('monto')}
+                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-muted text-foreground flex items-center justify-center shrink-0">
+                    <CurrencyCircleDollar size={20} weight="bold" />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="font-extrabold text-sm text-foreground">Monto fijo</span>
+                    <span className="text-xs text-muted-foreground">Registra un pago rápido por una cantidad específica.</span>
+                  </div>
+                  <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
+                </button>
+              </section>
+            </>
+          )
+        ) : (
+          <>
+            <section className="flex flex-col gap-3">
+              <h4 className={titulo}>Nombre de quien paga</h4>
+              <Input type="text" placeholder="Ej: Juan Pérez" value={payerName} onChange={(e) => setPayerName(e.target.value)} className="h-12 text-base" />
+            </section>
 
- <button
- type="button"onClick={() => selectSplitMethod('monto')}
- className="p-4 rounded-2xl bg-card border border-border shadow-xs flex items-center gap-3 text-left transition-colors cursor-pointer">
- <div className="w-10 h-10 rounded-xl bg-special-soft text-special-foreground flex items-center justify-center shrink-0">
- <CurrencyCircleDollar size={20} />
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-sm text-foreground">Monto fijo</span>
- <span className="text-xs text-muted-foreground">Registra un pago rápido por una cantidad específica.</span>
- </div>
- </button>
- </div>
- )
- ) : (
- <>
- {splitMethod ==='iguales'&& (
- <div className="flex flex-col gap-4">
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold text-foreground/80 text-center">¿Entre cuántas personas?</Label>
- <div className="grid grid-cols-6 gap-1.5">
- {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
- <button
- key={num}
- type="button"onClick={() => { setPersonas(num); setSelectedPersonaIdx(null); setPaidPersonaIndexes([]); }}
- className={cn("h-10 rounded-xl font-black text-sm transition-colors cursor-pointer",
- personas === num ?"bg-primary text-primary-foreground":"bg-muted text-foreground/80")}
- >
- {num}
- </button>
- ))}
- </div>
- </div>
+            {splitMethod === 'iguales' && (
+              <>
+                <section className="flex flex-col gap-3">
+                  <h4 className={titulo}>¿Entre cuántas personas?</h4>
+                  <div className="flex items-center h-14 rounded-full border border-border overflow-hidden">
+                    <button type="button" aria-label="Menos" disabled={personas <= 2}
+                      onClick={() => { setPersonas(Math.max(2, personas - 1)); setSelectedPersonaIdx(null); setPaidPersonaIndexes([]); }}
+                      className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
+                      <Minus size={20} weight="bold" />
+                    </button>
+                    <span className="flex-1 text-center text-2xl font-black tabular-nums">{personas}</span>
+                    <button type="button" aria-label="Más" disabled={personas >= 20}
+                      onClick={() => { setPersonas(Math.min(20, personas + 1)); setSelectedPersonaIdx(null); setPaidPersonaIndexes([]); }}
+                      className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
+                      <Plus size={20} weight="bold" />
+                    </button>
+                  </div>
+                </section>
 
- <div className="flex flex-col gap-2">
- {Array.from({ length: personas }).map((_, idx) => {
- const isPaid = paidPersonaIndexes.includes(idx);
- const isSelected = selectedPersonaIdx === idx;
- return (
- <div
- key={idx}
- onClick={() => !isPaid && setSelectedPersonaIdx(isSelected ? null : idx)}
- className={cn("p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
- isPaid ?"bg-primary/10 border-primary/40": isSelected ?"bg-primary/10 border-primary":"bg-card border-border")}
- >
- <div className="flex items-center gap-3">
- <div className={cn("w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs", isPaid ?"bg-primary text-white":"bg-muted text-foreground/80")}>
- {isPaid ? <Check size={16} /> : idx + 1}
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">Persona {idx + 1}</span>
- <span className="font-bold text-xs text-foreground">${montoPorPersona.toFixed(2)}</span>
- </div>
- </div>
- </div>
- );
- })}
- </div>
- </div>
- )}
+                <section className="flex flex-col gap-3">
+                  <h4 className={titulo}>Elige quién paga ahora</h4>
+                  <div className="flex flex-col gap-2">
+                    {Array.from({ length: personas }).map((_, idx) => {
+                      const isPaid = paidPersonaIndexes.includes(idx);
+                      const isSelected = selectedPersonaIdx === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          disabled={isPaid}
+                          onClick={() => setSelectedPersonaIdx(isSelected ? null : idx)}
+                          className={cn('p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-left transition-colors',
+                            isPaid ? 'bg-muted/60 border-border opacity-60 cursor-default'
+                              : isSelected ? 'bg-primary border-primary text-primary-foreground cursor-pointer'
+                                : 'bg-card border-border cursor-pointer hover:bg-muted/50')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn('w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs',
+                              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : isPaid ? 'bg-success text-white' : 'bg-muted text-foreground')}>
+                              {isPaid ? <Check size={16} weight="bold" /> : idx + 1}
+                            </div>
+                            <span className="font-extrabold text-sm">{isPaid ? `Persona ${idx + 1} · pagada` : `Persona ${idx + 1}`}</span>
+                          </div>
+                          <span className="font-black text-sm tabular-nums">${montoPorPersona.toFixed(2)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              </>
+            )}
 
- {splitMethod ==='monto'&& (
- <div className="flex flex-col gap-3">
- <div className="flex items-center justify-between">
- <Label className="text-xs font-bold text-foreground/80">Monto a Pagar</Label>
- <span className="text-[10px] font-bold text-muted-foreground">
- Pendiente: ${saldoPendiente.toFixed(2)}
- </span>
- </div>
- <Input
- type="number"step="0.01"min={0}max={saldoPendiente}placeholder="0.00"value={montoCustom}
- onChange={(e) => setMontoCustom(parseFloat(e.target.value) ||'')}
- className={cn("h-12 px-4 text-lg font-black", Number(montoCustom) > saldoPendiente &&"border-destructive text-destructive")}/>
- {Number(montoCustom) > saldoPendiente && (
- <span className="text-[10px] font-bold text-destructive">
- El monto no puede superar el pendiente (${saldoPendiente.toFixed(2)}).
- </span>
- )}
- </div>
- )}
+            {splitMethod === 'monto' && (
+              <section className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h4 className={titulo}>Monto a pagar</h4>
+                  <span className="text-xs font-bold text-muted-foreground tabular-nums">Pendiente: ${saldoPendiente.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl border border-border px-4 h-14">
+                  <span className="text-lg font-black text-muted-foreground">$</span>
+                  <Input
+                    type="number" inputMode="decimal" step="0.01" min={0} max={saldoPendiente} placeholder="0.00" value={montoCustom}
+                    onChange={(e) => setMontoCustom(parseFloat(e.target.value) || '')}
+                    className={cn('h-10 flex-1 border-0 shadow-none focus-visible:ring-0 px-1 text-lg font-black', Number(montoCustom) > saldoPendiente && 'text-destructive')} />
+                </div>
+                {Number(montoCustom) > saldoPendiente && (
+                  <span className="text-xs font-bold text-destructive">
+                    El monto no puede superar el pendiente (${saldoPendiente.toFixed(2)}).
+                  </span>
+                )}
+              </section>
+            )}
+          </>
+        )}
+      </main>
 
- </>
- )}
- </main>
+      {splitMethod && (
+        <footer className="p-4 border-t border-border bg-muted/40 grid grid-cols-2 gap-2 shrink-0">
+          <Button
+            type="button" variant="warningSoft" className="h-12 font-bold gap-1.5"
+            disabled={splitMethod === 'monto' ? montoInvalido : selectedPersonaIdx === null}
+            onClick={() => {
+              if (splitMethod === 'monto') verPrecuenta(payerName.trim() || 'Pago Parcial', Number(montoCustom));
+              else if (selectedPersonaIdx !== null) verPrecuenta(payerName.trim() || `Persona ${selectedPersonaIdx + 1}`, montoPorPersona);
+            }}>
+            <Printer size={18} weight="bold" /> Pre-cuenta
+          </Button>
+          <Button
+            type="button" className="h-12 font-bold"
+            disabled={splitMethod === 'monto' ? montoInvalido || sinNombre : selectedPersonaIdx === null || sinNombre}
+            title={sinNombre ? 'Ingresa el nombre de quien paga para poder cobrar' : undefined}
+            onClick={() => {
+              if (splitMethod === 'monto') {
+                setCobrarModalState({ monto: Number(montoCustom), label: 'Pago Parcial' });
+              } else if (selectedPersonaIdx !== null) {
+                const idx = selectedPersonaIdx;
+                setCobrarModalState({
+                  monto: montoPorPersona,
+                  label: `Persona ${idx + 1}`,
+                  onSuccessCallback: () => {
+                    setPaidPersonaIndexes(prev => [...prev, idx]);
+                    setSelectedPersonaIdx(null);
+                  },
+                });
+              }
+            }}>
+            {splitMethod === 'monto' ? 'Cobrar monto' : 'Cobrar parte'}
+          </Button>
+        </footer>
+      )}
 
- {/* Footers Fijos */}
- {splitMethod ==='monto'&& (
- <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
- <button
- type="button"disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente}
- onClick={() => {
- const montoVal = Number(montoCustom);
- if (montoVal > 0) {
- const label = payerName.trim() ||"Pago Parcial";
- const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoVal, ivaPorcentaje);
- setPreviewTicketText(text);
- setPreviewOnPrint(() => () => {
- queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
- });
- }
- }}
- className="py-3 rounded-xl bg-warning-soft text-warning-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
- <Printer size={16} /> Pre-cuenta
- </button>
- <button
- type="button"
- disabled={!montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente || !payerName.trim()}
- title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
- onClick={() => setCobrarModalState({ monto: Number(montoCustom), label:'Pago Parcial'})}
- className="py-3 rounded-xl bg-primary text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
- Cobrar Monto
- </button>
- </footer>
- )}
+      <Dialog open={!!cobrarModalState} onOpenChange={(open) => { if (!open) setCobrarModalState(null); }}>
+        <DialogContent className="max-w-sm p-6 gap-4">
+          <DialogHeader className="text-left">
+            <DialogTitle className="font-extrabold text-base">Cobrar e imprimir</DialogTitle>
+            <DialogDescription className="text-sm">Se registra el cobro de {payerName.trim() || 'esta parte'} y se imprime su ticket.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl border border-border py-4 text-center flex flex-col gap-0.5">
+            <span className={titulo}>Monto</span>
+            <span className="font-black text-3xl text-foreground tabular-nums">${(cobrarModalState?.monto ?? 0).toFixed(2)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" className="h-11 font-bold" onClick={() => setCobrarModalState(null)}>Cancelar</Button>
+            <Button
+              type="button" className="h-11 font-bold" disabled={sinNombre}
+              onClick={() => cobrarModalState && procesarPagoSimple(cobrarModalState.monto, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}>
+              Cobrar e imprimir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
- {splitMethod ==='iguales'&& (
- <footer className="p-4 border-t border-border bg-card grid grid-cols-2 gap-2 shrink-0">
- <button
- type="button"disabled={selectedPersonaIdx === null}
- onClick={() => {
- if (selectedPersonaIdx !== null) {
- const label = payerName.trim() ||`Persona ${selectedPersonaIdx + 1}`;
- const text = generarPrecuentaDividida(activeComanda, [], selectedMesa.nombre, label, montoPorPersona, ivaPorcentaje);
- setPreviewTicketText(text);
- setPreviewOnPrint(() => () => {
- queueReprintTicket({ rawText: text, mesaNombre: selectedMesa.nombre, comanda: activeComanda }).catch(err => console.warn('print server offline', err));
- });
- }
- }}
- className="py-3 rounded-xl bg-warning-soft text-warning-foreground font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40">
- <Printer size={16} /> Pre-cuenta
- </button>
- <button
- type="button"
- disabled={selectedPersonaIdx === null || !payerName.trim()}
- title={!payerName.trim() ?'Ingresa el nombre de quien paga para poder cobrar': undefined}
- onClick={() => {
- if (selectedPersonaIdx !== null) {
- const idx = selectedPersonaIdx;
- setCobrarModalState({
- monto: montoPorPersona,
- label:`Persona ${idx + 1}`,
- onSuccessCallback: () => {
- setPaidPersonaIndexes(prev => [...prev, idx]);
- setSelectedPersonaIdx(null);
- }
- });
- }
- }}
- className="py-3 rounded-xl bg-primary text-white font-extrabold text-xs cursor-pointer disabled:opacity-40 shadow-xs">
- Cobrar parte
- </button>
- </footer>
- )}
-
- {/* Modal de cobro */}
- {cobrarModalState && (
- <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
- <div className="bg-card rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col gap-4">
- <h3 className="font-extrabold text-base text-foreground">Cobrar e Imprimir</h3>
- <div className="p-4 rounded-xl bg-muted border border-border text-center flex flex-col gap-0.5">
- <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Monto</span>
- <span className="font-black text-2xl text-foreground">${cobrarModalState.monto.toFixed(2)}</span>
- </div>
- <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
- <button
- type="button"onClick={() => setCobrarModalState(null)}
- className="px-4 py-2 rounded-lg bg-muted text-foreground/80 font-bold text-xs cursor-pointer">
- Cancelar
- </button>
- <button
- type="button"
- disabled={!payerName.trim()}
- onClick={() => procesarPagoSimple(cobrarModalState.monto, cobrarModalState.label, cobrarModalState.onSuccessCallback, payerName)}
- className="px-4 py-2 rounded-lg bg-primary text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed">
- Cobrar e Imprimir
- </button>
- </div>
- </div>
- </div>
- )}
-
- <TicketPreviewModal
- opened={previewTicketText !== null}
- onClose={() => setPreviewTicketText(null)}
- title="Precuenta Dividida"content={previewTicketText ||''}
- onPrint={previewOnPrint ?? undefined}
- />
- </div>
- );
+      <TicketPreviewModal
+        opened={previewTicketText !== null}
+        onClose={() => setPreviewTicketText(null)}
+        title="Precuenta Dividida"
+        content={previewTicketText || ''}
+        onPrint={previewOnPrint ?? undefined}
+      />
+    </div>
+  );
 }

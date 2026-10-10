@@ -14,6 +14,12 @@ export type ActividadTipo =
   | 'mesa_abierta' | 'cocina' | 'cuenta' | 'cobrada' | 'habitacion' | 'cobro'
   | 'anulacion' | 'cortesia' | 'reembolso' | 'checkin' | 'checkout' | 'venta' | 'reparto';
 
+/** A dónde lleva tocar el evento. */
+export type ActividadDestino =
+  | { tipo: 'comanda'; comandaId: string }
+  | { tipo: 'habitacion'; mesaId: string }
+  | { tipo: 'venta'; ventaId: string };
+
 export interface ActividadEvento {
   id: string;
   /** ISO de cuándo ocurrió. */
@@ -25,6 +31,7 @@ export interface ActividadEvento {
   actor?: string;
   /** Eventos que conviene revisar (anulaciones, cortesías, reembolsos). */
   alerta: boolean;
+  destino?: ActividadDestino;
 }
 
 interface Datos {
@@ -78,32 +85,32 @@ export function construirActividad(d: Datos): ActividadEvento[] {
 
     if (esHoy(c.created_at)) {
       const extra = [c.personas ? `${c.personas} pers.` : '', c.cliente || ''].filter(Boolean).join(' · ');
-      push({ id: `ab-${c.id}`, ts: c.created_at, tipo: 'mesa_abierta', tono: 'primary', titulo: 'Mesa abierta',
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `ab-${c.id}`, ts: c.created_at, tipo: 'mesa_abierta', tono: 'primary', titulo: 'Mesa abierta',
         detalle: [etiqueta, folio, extra].filter(Boolean).join(' · '), actor: c.mesero });
     }
     if (esHoy(c.confirmada_at)) {
-      push({ id: `co-${c.id}`, ts: c.confirmada_at, tipo: 'cocina', tono: 'neutral', titulo: 'Enviada a cocina',
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `co-${c.id}`, ts: c.confirmada_at, tipo: 'cocina', tono: 'neutral', titulo: 'Enviada a cocina',
         detalle: [etiqueta, folio].filter(Boolean).join(' · '), actor: c.mesero });
     }
     if (!esHoy(c.updated_at)) continue;
 
     if (c.estado === 'anulada') {
-      push({ id: `an-${c.id}`, ts: c.updated_at, tipo: 'anulacion', tono: 'danger', titulo: 'Comanda anulada', alerta: true,
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `an-${c.id}`, ts: c.updated_at, tipo: 'anulacion', tono: 'danger', titulo: 'Comanda anulada', alerta: true,
         detalle: [etiqueta, folio, c.motivo_anulacion].filter(Boolean).join(' · '), actor: c.mesero });
     } else if (CERRADAS.includes(c.estado)) {
       cerradasHoy.add(c.id);
       const hab = c.habitacion_cuenta_id ? habPorId.get(c.habitacion_cuenta_id) : null;
-      push({ id: `ce-${c.id}`, ts: c.updated_at, tipo: 'cobrada', tono: 'success',
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `ce-${c.id}`, ts: c.updated_at, tipo: 'cobrada', tono: 'success',
         titulo: hab ? 'Cobrada en checkout de habitación' : 'Mesa cobrada',
         detalle: [etiqueta, folio, money(c.total), hab ? `Hab. ${habitacionNumero(hab)}` : ''].filter(Boolean).join(' · '),
         actor: c.mesero });
     } else if (c.habitacion_cuenta_id && c.sincronizado !== false) {
       const hab = habPorId.get(c.habitacion_cuenta_id);
-      push({ id: `ha-${c.id}`, ts: c.updated_at, tipo: 'habitacion', tono: 'info',
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `ha-${c.id}`, ts: c.updated_at, tipo: 'habitacion', tono: 'info',
         titulo: `Cargada a habitación ${hab ? habitacionNumero(hab) : ''}`.trim(),
         detalle: [etiqueta, folio, money(c.total), hab?.huesped].filter(Boolean).join(' · '), actor: c.mesero });
     } else if (c.estado === 'cuenta') {
-      push({ id: `cu-${c.id}`, ts: c.updated_at, tipo: 'cuenta', tono: 'warning', titulo: 'Cuenta pedida',
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `cu-${c.id}`, ts: c.updated_at, tipo: 'cuenta', tono: 'warning', titulo: 'Cuenta pedida',
         detalle: [etiqueta, folio, money(c.total)].filter(Boolean).join(' · '), actor: c.mesero });
     }
   }
@@ -113,7 +120,7 @@ export function construirActividad(d: Datos): ActividadEvento[] {
   for (const p of d.pagos) {
     if (p.anulado || !esHoy(p.fecha) || cerradasHoy.has(p.comanda_id)) continue;
     const c = comandaPorId.get(p.comanda_id);
-    push({ id: `pa-${p.id}`, ts: p.fecha, tipo: 'cobro', tono: 'success', titulo: 'Cobro registrado',
+    push({ destino: { tipo: 'comanda', comandaId: p.comanda_id }, id: `pa-${p.id}`, ts: p.fecha, tipo: 'cobro', tono: 'success', titulo: 'Cobro registrado',
       detalle: [c ? etiquetaComanda(c) : '', money(p.monto), p.metodo_pago || ''].filter(Boolean).join(' · '),
       actor: actor(p.usuario_id) });
   }
@@ -125,16 +132,16 @@ export function construirActividad(d: Datos): ActividadEvento[] {
       const ref = v.referencia || v.cliente_nombre || '';
       const quien = actor(m.usuario_id);
       if (m.tipo === 'reembolso') {
-        push({ id: `vm-${m.id}`, ts: m.fecha, tipo: 'reembolso', tono: 'warning', titulo: 'Reembolso', alerta: true,
+        push({ destino: v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'reembolso', tono: 'warning', titulo: 'Reembolso', alerta: true,
           detalle: [ref, money(m.monto ?? 0), m.motivo].filter(Boolean).join(' · '), actor: quien });
       } else if (m.tipo === 'anular') {
-        push({ id: `vm-${m.id}`, ts: m.fecha, tipo: 'anulacion', tono: 'danger', titulo: 'Venta anulada', alerta: true,
+        push({ destino: v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'anulacion', tono: 'danger', titulo: 'Venta anulada', alerta: true,
           detalle: [ref, m.motivo].filter(Boolean).join(' · '), actor: quien });
       } else if (m.tipo === 'facturar') {
-        push({ id: `vm-${m.id}`, ts: m.fecha, tipo: 'venta', tono: 'neutral', titulo: 'Venta facturada',
+        push({ destino: v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'venta', tono: 'neutral', titulo: 'Venta facturada',
           detalle: [ref, m.numero_factura].filter(Boolean).join(' · '), actor: quien });
       } else if (m.tipo === 'pago' && v.origen !== 'mesa') {
-        push({ id: `vm-${m.id}`, ts: m.fecha, tipo: 'cobro', tono: 'success', titulo: 'Pago registrado',
+        push({ destino: v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'cobro', tono: 'success', titulo: 'Pago registrado',
           detalle: [ref, money(m.monto ?? 0), m.metodo_pago].filter(Boolean).join(' · '), actor: quien });
       }
     }
@@ -146,13 +153,13 @@ export function construirActividad(d: Datos): ActividadEvento[] {
     const etiqueta = c ? etiquetaComanda(c) : '';
     const meta = parseReparto(it);
     if (it.anulado && esHoy(it.anulado_at)) {
-      push({ id: `ia-${it.id}`, ts: it.anulado_at, tipo: 'anulacion', tono: 'danger', titulo: 'Ítem anulado', alerta: true,
+      push({ destino: { tipo: 'comanda', comandaId: it.comanda_id }, id: `ia-${it.id}`, ts: it.anulado_at, tipo: 'anulacion', tono: 'danger', titulo: 'Ítem anulado', alerta: true,
         detalle: [`${it.cantidad}× ${it.nombre}`, etiqueta, it.anulado_motivo].filter(Boolean).join(' · '), actor: actor(it.anulado_por) });
     } else if ((it.cortesia_cantidad || 0) > 0 && esHoy(it.updated_at) && !meta) {
-      push({ id: `ic-${it.id}`, ts: it.updated_at, tipo: 'cortesia', tono: 'warning', titulo: 'Cortesía', alerta: true,
+      push({ destino: { tipo: 'comanda', comandaId: it.comanda_id }, id: `ic-${it.id}`, ts: it.updated_at, tipo: 'cortesia', tono: 'warning', titulo: 'Cortesía', alerta: true,
         detalle: [`${it.cortesia_cantidad}× ${it.nombre}`, etiqueta, it.cortesia_motivo].filter(Boolean).join(' · ') });
     } else if (meta?.tipo === 'origen' && esHoy(it.updated_at)) {
-      push({ id: `ir-${it.id}`, ts: it.updated_at, tipo: 'reparto', tono: 'neutral', titulo: 'Plato repartido',
+      push({ destino: { tipo: 'comanda', comandaId: it.comanda_id }, id: `ir-${it.id}`, ts: it.updated_at, tipo: 'reparto', tono: 'neutral', titulo: 'Plato repartido',
         detalle: [it.nombre, etiqueta, `entre ${meta.partes.length} cuentas`].filter(Boolean).join(' · ') });
     }
   }
@@ -161,10 +168,10 @@ export function construirActividad(d: Datos): ActividadEvento[] {
   for (const h of d.habitaciones) {
     const num = habitacionNumero(h);
     if (esHoy(h.created_at)) {
-      push({ id: `ci-${h.id}`, ts: h.created_at, tipo: 'checkin', tono: 'info', titulo: `Check-in habitación ${num}`, detalle: h.huesped });
+      push({ destino: h.mesa_id ? { tipo: 'habitacion', mesaId: h.mesa_id } : undefined, id: `ci-${h.id}`, ts: h.created_at, tipo: 'checkin', tono: 'info', titulo: `Check-in habitación ${num}`, detalle: h.huesped });
     }
     if (h.estado === 'cerrada' && esHoy(h.updated_at)) {
-      push({ id: `co2-${h.id}`, ts: h.updated_at, tipo: 'checkout', tono: 'info', titulo: `Check-out habitación ${num}`, detalle: h.huesped });
+      push({ destino: h.mesa_id ? { tipo: 'habitacion', mesaId: h.mesa_id } : undefined, id: `co2-${h.id}`, ts: h.updated_at, tipo: 'checkout', tono: 'info', titulo: `Check-out habitación ${num}`, detalle: h.huesped });
     }
   }
 

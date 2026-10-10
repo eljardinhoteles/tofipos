@@ -270,7 +270,9 @@ export function TableSidebar({
       setSelectedHabitacionId(null);
       setOpenLinkMode('manual');
       setVistaTodas(false);
-      setActiveSubcomandaId(null);
+      // La subcuenta activa no se reinicia aquí: este efecto corre también al volver
+      // del panel de productos (móvil) y mandaba a la primera. Si el id ya no es de
+      // esta mesa, el efecto de arriba y pickComandaActiva caen en la primera.
     }
   }, [selectedMesa]);
 

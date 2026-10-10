@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from'react';
-import { Printer, FileText, X } from'@phosphor-icons/react';
-import { showToast } from'@/lib/toast';
+import { Printer, FileText } from'@phosphor-icons/react';
+import { avisarSinImprimir } from'@/lib/imprimir';
 import {
  Dialog,
  DialogContent,
@@ -20,9 +20,10 @@ interface TicketPreviewModalProps {
  /** Si se pasa, el modal ofrece un segundo documento: el ticket de cocina. */
  kitchenContent?: string;
  onPrintKitchen?: () => void;
+ /** Si se cierra sin imprimir, avisa con este nombre (p. ej. "La comanda de cocina") y ofrece imprimir. */
+ avisoSinImprimir?: string;
 }
 
-const COUNTDOWN_SECONDS = 3;
 
 export function TicketPreviewModal({
  opened,
@@ -32,6 +33,7 @@ export function TicketPreviewModal({
  onPrint,
  kitchenContent,
  onPrintKitchen,
+ avisoSinImprimir,
 }: TicketPreviewModalProps) {
  const [documento, setDocumento] = useState<'cliente'|'cocina'>('cliente');
  const tieneCocina = !!kitchenContent;
@@ -39,41 +41,38 @@ export function TicketPreviewModal({
  const ESC = String.fromCharCode(27);
  const GS = String.fromCharCode(29);
 
- // null = sin cuenta regresiva activa; number = segundos restantes.
- const [countdown, setCountdown] = useState<number | null>(null);
- const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
- // Cerrojo aparte del timer: garantiza que onPrint() se dispare como máximo
- // una vez por cuenta regresiva, sin importar si el interval tuvo algún
- // tick de más antes de que clearInterval surtiera efecto.
+ // Cerrojo: onPrint() se dispara como máximo una vez por apertura (doble tap).
  const firedRef = useRef(false);
- // Documento activo al momento de imprimir (el interval no ve el state vigente).
+ // Documento activo al momento de imprimir.
  const esCocinaRef = useRef(false);
  esCocinaRef.current = esCocina;
- // Valor vigente de la cuenta regresiva: el interval lo lee de aquí en vez de
- // usar un updater de setState con efectos secundarios (toast, onPrint, onClose).
- const countdownRef = useRef<number | null>(null);
- const updateCountdown = (value: number | null) => {
- countdownRef.current = value;
- setCountdown(value);
- };
 
- const clearTimer = () => {
- if (timerRef.current) {
- clearInterval(timerRef.current);
- timerRef.current = null;
+ // Cerrar sin haber enviado un ticket que debía salir (la comanda ya quedó marcada
+ // como enviada a cocina): se avisa y se ofrece imprimir, para que no se pierda.
+ const avisoRef = useRef<{ texto?: string; imprimir?: () => void }>({});
+ avisoRef.current = { texto: avisoSinImprimir, imprimir: onPrint };
+ const avisarSiNoSeImprimio = () => {
+ const { texto, imprimir } = avisoRef.current;
+ if (texto && imprimir && !firedRef.current) {
+ avisarSinImprimir(texto, imprimir);
  }
+ };
+ const cerrar = () => {
+ avisarSiNoSeImprimio();
+ firedRef.current = true; // evita un segundo aviso al desmontar
+ onClose();
  };
 
  // Si el modal se cierra o cambia de documento mientras cuenta, cancelamos
  // silenciosamente: no queremos imprimir algo que el usuario ya no ve.
+ // Si el componente desaparece con la vista previa abierta (se cerró el sidebar), también avisa.
+ useEffect(() => () => { if (openedRef.current) avisarSiNoSeImprimio(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+ const openedRef = useRef(opened);
+ openedRef.current = opened;
+
  useEffect(() => {
- if (!opened) {
- setDocumento('cliente');
- clearTimer();
- updateCountdown(null);
- firedRef.current = false;
- }
- return clearTimer;
+ if (opened) firedRef.current = false;
+ else setDocumento('cliente');
  }, [opened]);
 
  const stripEscPos = (text: string) =>
@@ -82,34 +81,11 @@ export function TicketPreviewModal({
  .replace(new RegExp(`${GS}[Vv][ABab]\\x05?`,'g'),'')
  .replace(new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`,'g'),'');
 
- const startCountdown = () => {
- // Guardia contra doble-click/doble-tap: si ya hay una cuenta regresiva
- // corriendo, un segundo click no debe arrancar un setInterval extra —
- // eso duplicaría el envío a imprimir cuando ambos lleguen a 0.
- if (timerRef.current) return;
- firedRef.current = false;
- updateCountdown(COUNTDOWN_SECONDS);
- timerRef.current = setInterval(() => {
- const prev = countdownRef.current;
- if (prev === null) return;
- if (prev > 1) {
- updateCountdown(prev - 1);
- return;
- }
- clearTimer();
- updateCountdown(null);
- if (!firedRef.current) {
+ const imprimirAhora = () => {
+ if (firedRef.current) return;
  firedRef.current = true;
- showToast.success('Enviado a Impresora','El documento se envió a la cola de impresión local (80mm).');
  if (esCocinaRef.current) onPrintKitchen?.(); else onPrint?.();
- }
  onClose();
- }, 1000);
- };
-
- const cancelCountdown = () => {
- clearTimer();
- updateCountdown(null);
  };
 
  const renderFormattedContent = (text?: string) => {
@@ -124,10 +100,8 @@ export function TicketPreviewModal({
  );
  };
 
- const isCounting = countdown !== null;
-
  return (
- <Dialog open={opened} onOpenChange={(open) => !open && onClose()}>
+ <Dialog open={opened} onOpenChange={(open) => !open && cerrar()}>
  <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 max-w-md max-h-[90dvh] max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-screen max-sm:h-dvh max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
  <DialogHeader>
  <DialogTitle className="flex items-center gap-2 text-base">
@@ -137,7 +111,7 @@ export function TicketPreviewModal({
  </DialogHeader>
 
  {tieneCocina && (
- <Tabs value={documento} onValueChange={(v) => { if (!isCounting) setDocumento(v as 'cliente'|'cocina'); }}>
+ <Tabs value={documento} onValueChange={(v) => { setDocumento(v as 'cliente'|'cocina'); }}>
  <TabsList aria-label="Documento a imprimir">
  <TabsTrigger value="cliente">Precuenta cliente</TabsTrigger>
  <TabsTrigger value="cocina">Comanda cocina</TabsTrigger>
@@ -149,27 +123,16 @@ export function TicketPreviewModal({
  {renderFormattedContent(esCocina ? kitchenContent : content)}
  </div>
 
- {isCounting ? (
- <div className="grid grid-cols-2 items-center gap-2 pt-1 shrink-0">
- <Button type="button"variant="outline"onClick={cancelCountdown} className="h-12 font-bold text-sm gap-1.5">
- <X size={16} /> Cancelar
- </Button>
- <span className="text-center font-black text-sm text-primary tabular-nums">
- Imprimiendo en {countdown}…
- </span>
- </div>
- ) : (
  <div className="grid grid-cols-2 gap-2 pt-1 shrink-0">
- <Button type="button"variant="outline"onClick={onClose} className="h-12 font-bold text-sm">
+ <Button type="button"variant="outline"onClick={cerrar} className="h-12 font-bold text-sm">
  Cerrar
  </Button>
  <Button
- type="button"onClick={startCountdown}
+ type="button"onClick={imprimirAhora}
  className="h-12 bg-primary text-white font-extrabold text-sm gap-1.5">
  <Printer size={16} /> {esCocina ? 'Imprimir cocina' : 'Imprimir'}
  </Button>
  </div>
- )}
  </DialogContent>
  </Dialog>
  );
