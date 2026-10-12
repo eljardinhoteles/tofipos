@@ -80,28 +80,28 @@ export function CalendarGrid({
             return (
               <div
                 key={date.toISOString()}
-                className={`sticky top-0 z-20 h-12 px-3 ${today ? 'bg-muted' : 'bg-card'} border-b border-r border-border flex items-center justify-between font-bold text-xs ${today ? 'text-muted-foreground' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
+                className={`sticky top-0 z-20 h-12 px-3 ${today ? 'bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))]' : 'bg-card'} border-b border-r border-border flex items-center justify-between ${today ? 'text-primary' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
               >
                 <div className="flex items-baseline gap-1">
-                  <span className="uppercase text-[10px] text-muted-foreground">
+                  <span className="t-etiqueta text-muted-foreground">
                     {date.toLocaleDateString('es-ES', { weekday: 'short' })}
                   </span>
-                  <span className="text-base font-black leading-none">{date.getDate()}</span>
+                  <span className="t-titulo leading-none">{date.getDate()}</span>
                 </div>
 
                 {dayCount > 0 ? (
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
+                  <div className="flex items-center gap-2 t-meta text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      <CalendarCheck size={13} className="text-muted-foreground" />
+                      <CalendarCheck size={14} className="text-muted-foreground" />
                       <span>{dayCount}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Users size={13} className="text-muted-foreground" />
+                      <Users size={14} className="text-muted-foreground" />
                       <span>{peopleCount}</span>
                     </div>
                   </div>
                 ) : (
-                  <span className="text-[9px] font-bold uppercase text-muted-foreground/60">LIBRE</span>
+                  <span className="t-etiqueta text-muted-foreground">LIBRE</span>
                 )}
               </div>
             );
@@ -111,9 +111,9 @@ export function CalendarGrid({
           {(!zonasRows ? Array.from({ length: 6 }, (_, i) => ({ id: `skel-${i}`, nombre: '', orden: i })) : zonasRows).map((zona) => (
             <div key={`row-group-${zona.id}`} className="contents">
               <div key={`zona-${zona.id}`} className="sticky left-0 z-10 p-3 bg-background border-b border-r border-border flex flex-col justify-center shadow-[2px_0_0_0_var(--border)]">
-                <span className="font-extrabold text-xs text-foreground truncate">{zona.nombre}</span>
+                <span className="t-cuerpo-fuerte text-foreground truncate">{zona.nombre}</span>
                 {zona.id !== 'sin_zona' && mesas && (
-                  <span className="text-[9px] font-bold uppercase text-muted-foreground mt-0.5">
+                  <span className="t-meta text-muted-foreground">
                     {mesas.filter(m => m.piso === zona.nombre).length} mesas
                   </span>
                 )}

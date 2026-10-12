@@ -31,6 +31,9 @@ import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { GlobalModals } from '../Common/GlobalModals';
 import { AvisoCambioIvaModal } from '../Common/AvisoCambioIvaModal';
 import { ActividadDrawer } from '../Common/ActividadDrawer';
+import { AvisoServidorImpresion } from '../Common/AvisoServidorImpresion';
+import { SidebarPlanificacion } from '../Planificacion/SidebarSeleccionProductos';
+import { useDestinoPlan, abrirDestino } from '../../lib/planificacion';
 import MesasV2 from '../../pages/MesasV2';
 
 // Mesas es la pantalla de arranque y se carga con la app. El resto va en trozos
@@ -43,6 +46,7 @@ const importClientes = () => import('../../pages/ClientesV2');
 const importAjustes = () => import('../../pages/AjustesV2');
 const importMetricas = () => import('../../pages/MetricasV2');
 const importCentroVentas = () => import('../../pages/CentroVentasV2');
+const importPlanificacion = () => import('../../pages/PlanificacionV2');
 const OrdenesV2 = lazy(importOrdenes);
 const MenuV2 = lazy(importMenu);
 const ReservasV2 = lazy(importReservas);
@@ -50,6 +54,7 @@ const ClientesV2 = lazy(importClientes);
 const AjustesV2 = lazy(importAjustes);
 const MetricasV2 = lazy(importMetricas);
 const CentroVentasV2 = lazy(importCentroVentas);
+const PlanificacionV2 = lazy(importPlanificacion);
 
 // Con la app ya lista y el celular libre, calienta los trozos restantes para que
 // cambiar de pantalla sea instantáneo (salen del precaché, sin red).
@@ -261,7 +266,7 @@ export function AppLayoutV2() {
 
   // Centro de Ventas es solo de PC: si se llega por URL en el celular, vuelve a Mesas.
   useEffect(() => {
-    if (isMobile && currentPath.includes('/centro-ventas')) navigate('/v2/mesas', { replace: true });
+    if (isMobile && (currentPath.includes('/centro-ventas') || currentPath.includes('/planificacion'))) navigate('/v2/mesas', { replace: true });
   }, [isMobile, currentPath, navigate]);
 
   // Precarga de pantallas cuando el celular ya está libre (no compite con el arranque).
@@ -275,7 +280,12 @@ export function AppLayoutV2() {
     return () => clearTimeout(t);
   }, []);
 
+  // Planificación: la celda abierta usa este mismo sidebar derecho.
+  const destinoPlan = useDestinoPlan();
+  const planAbierto = !isMobile && !!destinoPlan && currentPath.includes('/planificacion');
+
   const isSidebarVisible = !isMobile && (
+    planAbierto ||
     isPinned ||
     selectedMesaId !== null ||
     configView !== 'none' ||
@@ -395,7 +405,7 @@ export function AppLayoutV2() {
             "flex-1 min-w-0 overflow-hidden relative transition-[padding] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
             menuEnCapas && "z-10 bg-nav transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform",
             // Con el menú abierto la página SUBE y deja al descubierto, abajo y al alcance del pulgar, las tarjetas del menú.
-            menuEnCapas && menuAbierto && "-translate-y-[min(calc(29.5rem_+_env(safe-area-inset-bottom)),78dvh)] rounded-b-3xl"
+            menuEnCapas && menuAbierto && "-translate-y-[min(calc(29.5rem_+_env(safe-area-inset-bottom)),78dvh)] rounded-b-marco"
           )}
           style={!isMobile && isSidebarVisible ? { paddingRight: 462 } : undefined}
         >
@@ -405,6 +415,7 @@ export function AppLayoutV2() {
               className="absolute inset-0 z-30 cursor-pointer" />
           )}
           <div className="h-full w-full min-w-0 overflow-hidden relative">
+            <AvisoServidorImpresion />
             <Suspense fallback={<PantallaCargando />}>
               {(currentPath === '/ordenes' || currentPath.includes('/ordenes')) && <div className="h-full"><OrdenesV2 /></div>}
               {(currentPath === '/mesas' || currentPath.includes('/mesas')) && <div className="h-full"><MesasV2 /></div>}
@@ -413,6 +424,7 @@ export function AppLayoutV2() {
               {(currentPath === '/clientes' || currentPath.includes('/clientes')) && <div className="h-full"><ClientesV2 /></div>}
               {(currentPath === '/ajustes' || currentPath.includes('/ajustes')) && <div className="h-full"><AjustesV2 /></div>}
               {(currentPath === '/metricas' || currentPath.includes('/metricas')) && <div className="h-full"><MetricasV2 /></div>}
+              {!isMobile && currentPath.includes('/planificacion') && <div className="h-full"><PlanificacionV2 /></div>}
               {!isMobile && (currentPath === '/centro-ventas' || currentPath.includes('/centro-ventas')) && <div className="h-full overflow-y-auto"><CentroVentasV2 /></div>}
             </Suspense>
           </div>
@@ -445,6 +457,7 @@ export function AppLayoutV2() {
           direction="right"
           onOpenChange={(open) => {
             if (!open) {
+              if (planAbierto) { abrirDestino(null); return; }
               setSelectedMesaId(null);
               setViewingComandaId(null);
               setReservaView('none');
@@ -459,7 +472,7 @@ export function AppLayoutV2() {
               <DrawerDescription className="sr-only">
                 Acciones y detalles de la mesa seleccionada
               </DrawerDescription>
-              <TableSidebar
+              {planAbierto ? <SidebarPlanificacion /> : <TableSidebar
                 selectedMesa={selectedMesa}
                 onClose={() => {
                   setSelectedMesaId(null);
@@ -481,7 +494,7 @@ export function AppLayoutV2() {
                 selectedConfigPiso={selectedConfigPiso}
                 setSelectedConfigPiso={setSelectedConfigPiso}
                 mesaEsDeHabitaciones={selectedMesaEsHabitacion}
-              />
+              />}
             </DrawerContent>
           </DrawerPortal>
         </Drawer>
@@ -503,7 +516,7 @@ export function AppLayoutV2() {
         >
           <DrawerPortal>
             <DrawerOverlay />
-            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[99dvh] max-h-[99dvh] pt-[env(safe-area-inset-top)] bg-card rounded-t-3xl shadow-[0_-4px_12px_rgba(0,0,0,0.18)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+            <DrawerContent className="fixed bottom-0 left-0 right-0 h-[99dvh] max-h-[99dvh] pt-[env(safe-area-inset-top)] bg-card rounded-t-marco shadow-[0_-4px_12px_rgba(0,0,0,0.18)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
               <DrawerTitle className="sr-only">Panel de mesa</DrawerTitle>
               <DrawerDescription className="sr-only">
                 Acciones y detalles de la mesa seleccionada

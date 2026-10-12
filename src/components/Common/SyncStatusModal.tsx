@@ -77,7 +77,7 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
 
   const filaEstado = (ok: boolean | null, okLabel: string, badLabel: string) => (
     <span className={cn(
-      "px-2.5 py-1 rounded-full text-[11px] font-bold",
+      "px-2.5 py-1 rounded-full t-dato",
       ok === null ? "bg-muted text-muted-foreground" : ok ? "bg-muted text-muted-foreground" : "bg-destructive/15 text-destructive"
     )}>
       {ok === null ? 'Verificando' : ok ? okLabel : badLabel}
@@ -103,8 +103,8 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
             : <WarningCircle size={20} weight="bold" />}
         </span>
         <div className="flex flex-col min-w-0">
-          <span className="font-extrabold text-sm leading-tight">{titulo}</span>
-          <span className="text-[11px] opacity-75 leading-snug">{subtitulo}</span>
+          <span className="t-cuerpo-fuerte leading-tight">{titulo}</span>
+          <span className="t-meta opacity-75 leading-snug">{subtitulo}</span>
         </div>
       </div>
     </>
@@ -114,29 +114,29 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
     <>
       {/* Conexión */}
       <div className="flex flex-col gap-1.5">
-        <span className="px-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Conexión</span>
+        <span className="t-etiqueta px-1 text-muted-foreground">Conexión</span>
         <div className="rounded-2xl bg-muted/50 divide-y divide-border/60">
           <div className="flex items-center justify-between px-3.5 py-3">
-            <div className="flex items-center gap-2.5 text-sm font-semibold">
+            <div className="flex items-center gap-2.5 t-cuerpo">
               {status.online ? <WifiHigh size={18} className="text-muted-foreground" /> : <WifiSlash size={18} className="text-muted-foreground" />}
               Red
             </div>
             {filaEstado(status.online, 'Online', 'Offline')}
           </div>
           <div className="flex items-center justify-between px-3.5 py-3">
-            <div className="flex items-center gap-2.5 text-sm font-semibold">
+            <div className="flex items-center gap-2.5 t-cuerpo">
               <Database size={18} className="text-muted-foreground" />
               Supabase
             </div>
             {filaEstado(status.supabaseOk, 'OK', 'Error')}
           </div>
           <div className="flex items-center justify-between px-3.5 py-3">
-            <div className="flex items-center gap-2.5 text-sm font-semibold">
+            <div className="flex items-center gap-2.5 t-cuerpo">
               <ArrowsClockwise size={18} className="text-muted-foreground" />
               Pendientes de envío
             </div>
             <span className={cn(
-              "px-2.5 py-1 rounded-full text-[11px] font-bold tabular-nums",
+              "px-2.5 py-1 rounded-full t-dato tabular-nums",
               pendientes > 0 ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"
             )}>
               {pendientes}
@@ -148,7 +148,7 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
       {/* Colecciones */}
       {collectionEntries.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <span className="px-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Colecciones</span>
+          <span className="t-etiqueta px-1 text-muted-foreground">Colecciones</span>
           <div className="rounded-2xl bg-muted/50 grid grid-cols-1 sm:grid-cols-2 sm:gap-x-px">
             {collectionEntries.map(([key, col]) => (
               <div key={key} className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/60">
@@ -157,10 +157,10 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
                     "w-2 h-2 rounded-full shrink-0",
                     col.error ? "bg-destructive" : col.stopped ? "bg-warning-foreground" : col.active ? "bg-primary" : "bg-muted-foreground/40"
                   )} />
-                  <span className="text-sm font-semibold text-foreground truncate">{COLLECTION_LABELS[key] || key}</span>
+                  <span className="t-cuerpo text-foreground truncate">{COLLECTION_LABELS[key] || key}</span>
                 </div>
                 <span className={cn(
-                  "text-[11px] font-bold",
+                  "t-dato",
                   col.error ? "text-destructive" : col.stopped ? "text-warning-foreground" : col.active ? "text-primary" : "text-muted-foreground"
                 )}>
                   {col.error ? 'Error' : col.stopped ? 'Detenido' : col.active ? 'Activo' : 'En espera'}
@@ -174,10 +174,10 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
       {/* Versión del sistema: comparar entre dispositivos para saber que todos
           tienen la última actualización. */}
       <div className="flex flex-col items-center gap-0.5 pt-1 text-center">
-        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+        <span className="t-etiqueta text-muted-foreground">
           Versión {appVersionLabel()}
         </span>
-        <span className="text-[10px] text-muted-foreground">Compilado: {appBuildDateLabel()}</span>
+        <span className="t-meta text-muted-foreground">Compilado: {appBuildDateLabel()}</span>
       </div>
     </>
   );
@@ -205,7 +205,7 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
       <Drawer open={opened} onOpenChange={(open) => { if (!open) onClose(); }} dismissible handleOnly>
         <DrawerPortal>
           <DrawerOverlay />
-          <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95dvh] max-h-[95dvh] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+          <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95dvh] max-h-[95dvh] bg-card rounded-t-marco shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
             <DrawerHandle />
             <DrawerTitle className="sr-only">Estado de Sincronización</DrawerTitle>
             <DrawerDescription className="sr-only">

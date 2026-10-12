@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from'react';
 import { folioLabel } from '../lib/folio';
-import { MagnifyingGlass, FunnelSimple, X, Check, Clock, ForkKnife, Calendar, CheckCircle, XCircle, Receipt, Prohibit } from'@phosphor-icons/react';
+import { MagnifyingGlass, FunnelSimple, X, Calendar } from'@phosphor-icons/react';
 import { type Comanda, type Mesa, type ComandaItem, type HabitacionCuenta, type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
-import { useAuth } from'../context/AuthContext';
 import { showToast } from'@/lib/toast';
+import { Paginacion } from '../components/Common/Paginacion';
+import { EstadoBadge } from '../components/Common/EstadoBadge';
+import { FiltroLimpiarTodo, FiltroOpcion } from '../components/Common/FiltroChip';
 import { OrigenBadge, ORIGEN_LABEL, ORIGEN_ICON } from '../components/Common/OrigenBadge';
 import type { VentaOrigen } from '../db/rxdb';
 import dayjs from'dayjs';
@@ -22,14 +24,6 @@ import { useRxComandas } from'../hooks/useRxComandas';
 import { calcularTotalesComanda } from'../lib/taxUtils';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
-import {
- Dialog,
- DialogContent,
- DialogHeader,
- DialogTitle,
- DialogDescription,
- DialogFooter,
-} from'@/components/ui/dialog';
 
 type FiltroEstado = 'anuladas' | 'pendientes' | 'cerradas';
 const FILTROS_ESTADO: Array<{ value: FiltroEstado; label: string }> = [
@@ -96,6 +90,7 @@ export default function OrdenesV2() {
  const dateRange = useMemo(() => rangoDePeriodo(periodo, rangoPersonalizado), [periodo, rangoPersonalizado, diaActual]);
  const {
  setSelectedMesaId,
+ viewingComandaId,
  setViewingComandaId,
  setCheckoutView,
  setConfigView,
@@ -105,29 +100,6 @@ export default function OrdenesV2() {
 
  const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
  const { menuItems } = useRxMenuCatalog();
- const { currentMesero, adminUser } = useAuth();
- const esAdmin = !!adminUser || currentMesero?.rol ==='admin';
- const [comandaToAnular, setComandaToAnular] = useState<Comanda | null>(null);
- const [anulandoHistorica, setAnulandoHistorica] = useState(false);
-
- // Temporal mientras el sistema está en pruebas: permite a un admin anular
- // una comanda ya cerrada/facturada directamente desde el histórico (por
- // errores de prueba, datos de testing, etc.) sin borrar nada — igual que
- // cualquier otra anulación, queda registrada y visible en "Anuladas".
- const handleAnularHistorica = async () => {
- if (!comandaToAnular) return;
- setAnulandoHistorica(true);
- try {
- await updateRxComanda(comandaToAnular.id, { estado:'anulada'});
- showToast.success('Comanda anulada','La cuenta histórica fue marcada como anulada.');
- setComandaToAnular(null);
- } catch (error) {
- console.error('Error al anular comanda histórica:', error);
- showToast.error('Error','No se pudo anular la comanda.');
- } finally {
- setAnulandoHistorica(false);
- }
- };
 
  const dbEpoch = useDbEpoch();
  // Mesas y comandas vienen de los hooks compartidos: una única suscripción
@@ -346,23 +318,6 @@ export default function OrdenesV2() {
     return map;
   }, [paginatedComandas, safeComandaItems, menuItems, ivaPorcentaje, preciosConIva]);
 
-  // Ventana de números de página alrededor de la página activa (máx 5 + extremos),
-  // con '…' cuando hay hueco, para no listar cientos de botones en históricos largos.
-  const pageNumbers = useMemo(() => {
-    const delta = 1;
-    const range: (number | 'ellipsis')[] = [];
-    const left = Math.max(2, page - delta);
-    const right = Math.min(totalPages - 1, page + delta);
-
-    range.push(1);
-    if (left > 2) range.push('ellipsis');
-    for (let i = left; i <= right; i++) range.push(i);
-    if (right < totalPages - 1) range.push('ellipsis');
-    if (totalPages > 1) range.push(totalPages);
-
-    return range;
-  }, [page, totalPages]);
-
   // Título según el período, y filtros distintos del estado por defecto (Hoy, todos los estados).
   const fmtCorta = (d: Date) => dayjs(d).format('DD/MM');
   const buscando = searchQuery.trim().length > 0;
@@ -387,31 +342,31 @@ export default function OrdenesV2() {
           <button type="button" title="Filtros" aria-label="Filtros" className={cn(headerButtonClass, 'px-3')}>
             <FunnelSimple size={18} /> Filtros
             {numFiltros > 0 && (
-              <span className="min-w-4.5 h-4.5 px-1 rounded-full bg-nav-foreground text-nav text-[10px] font-extrabold flex items-center justify-center">{numFiltros}</span>
+              <span className="min-w-5 h-5 px-1 rounded-full bg-nav-foreground text-nav t-dato flex items-center justify-center">{numFiltros}</span>
             )}
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-72 p-3 flex flex-col gap-4" align="end">
           <section className="flex flex-col gap-2">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Período</h4>
+            <h4 className="t-etiqueta text-muted-foreground">Período</h4>
             <div className="flex flex-wrap gap-1.5">
               {PERIODOS.map(({ value, label }) => (
                 <button key={value} type="button" aria-pressed={periodo === value}
                   onClick={() => { setPeriodo(value); setVerCalendario(false); }}
-                  className={cn('h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors',
+                  className={cn('h-9 pointer-coarse:h-11 px-3 rounded-2xl border t-dato cursor-pointer transition-colors',
                     periodo === value ? 'bg-foreground text-background border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
                   {label}
                 </button>
               ))}
               <button type="button" aria-pressed={periodo === 'personalizado'}
                 onClick={() => setVerCalendario(v => !v)}
-                className={cn('h-8 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors flex items-center gap-1.5',
+                className={cn('h-9 pointer-coarse:h-11 px-3 rounded-2xl border t-dato cursor-pointer transition-colors flex items-center gap-1.5',
                   periodo === 'personalizado' ? 'bg-foreground text-background border-foreground' : 'bg-card text-foreground border-border hover:bg-muted')}>
                 <Calendar size={14} /> Personalizado
               </button>
             </div>
             {(verCalendario || periodo === 'personalizado') && (
-              <div className="rounded-xl border border-border -mx-1">
+              <div className="rounded-2xl border border-border -mx-1">
                 <CalendarPicker
                   mode="range"
                   selected={rangoPersonalizado[0] ? { from: rangoPersonalizado[0], to: rangoPersonalizado[1] ?? undefined } : undefined}
@@ -425,45 +380,37 @@ export default function OrdenesV2() {
           </section>
 
           <section className="flex flex-col gap-1">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Estado</h4>
+            <h4 className="t-etiqueta text-muted-foreground">Estado</h4>
             {FILTROS_ESTADO.map(({ value, label }) => {
               const on = estadoFiltros.has(value);
               return (
-                <button key={value} type="button" aria-pressed={on}
-                  onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); if (on) n.delete(value); else n.add(value); return n; })}
-                  className="flex items-center gap-2.5 h-9 px-1.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
-                  <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
-                    {on && <Check size={11} weight="bold" />}
-                  </span>
+                <FiltroOpcion key={value} activo={on}
+                  onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); if (on) n.delete(value); else n.add(value); return n; })}>
                   {label}
-                </button>
+                </FiltroOpcion>
               );
             })}
           </section>
 
           <section className="flex flex-col gap-1">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Origen</h4>
+            <h4 className="t-etiqueta text-muted-foreground">Origen</h4>
             {ORIGENES_FILTRO.map(origen => {
               const on = origenFiltros.has(origen);
               const Icono = ORIGEN_ICON[origen];
               return (
-                <button key={origen} type="button" aria-pressed={on}
-                  onClick={() => setOrigenFiltros(prev => { const n = new Set(prev); if (on) n.delete(origen); else n.add(origen); return n; })}
-                  className="flex items-center gap-2.5 h-9 px-1.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
-                  <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
-                    {on && <Check size={11} weight="bold" />}
-                  </span>
-                  <Icono size={15} weight="bold" className="text-muted-foreground shrink-0" />
+                <FiltroOpcion key={origen} activo={on}
+                  onClick={() => setOrigenFiltros(prev => { const n = new Set(prev); if (on) n.delete(origen); else n.add(origen); return n; })}>
+                  <Icono size={16} weight="bold" className="text-muted-foreground shrink-0" />
                   {ORIGEN_LABEL[origen]}
-                </button>
+                </FiltroOpcion>
               );
             })}
           </section>
 
           {numFiltros > 0 && (
             <button type="button" onClick={restablecerFiltros}
-              className="h-9 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer">
-              Restablecer filtros
+              className="h-9 pointer-coarse:h-11 rounded-2xl border border-border t-dato text-muted-foreground hover:bg-muted cursor-pointer">
+              Limpiar todo
             </button>
           )}
         </PopoverContent>
@@ -473,40 +420,38 @@ export default function OrdenesV2() {
 
   <PageContent>
   {/* En móvil el buscador no cabe en el header: va en una fila propia */}
-  <div className="md:hidden px-6 py-2 shrink-0">
+  <div className="md:hidden px-4 py-2 shrink-0">
     <div className="relative">
-      <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-      <Input type="text" placeholder="Buscar por n.º, cliente, mesa, producto..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-9 text-xs" />
+      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+      <Input type="text" placeholder="Buscar por n.º, cliente, mesa, producto..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-11 text-base" />
     </div>
   </div>
 
   {/* Filtros aplicados (distintos de Hoy + todos los estados): se quitan de uno en uno o todos a la vez */}
   {numFiltros > 0 && !buscando && (
-    <div className="px-6 py-2 shrink-0 flex flex-wrap items-center gap-2 border-b border-border">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Filtros</span>
+    <div className="px-4 sm:px-6 py-2 shrink-0 flex flex-wrap items-center gap-2 border-b border-border">
+      <span className="t-etiqueta text-muted-foreground">Filtros</span>
       {periodo !== 'hoy' && (
         <button type="button" onClick={() => { setPeriodo('hoy'); setRangoPersonalizado([null, null]); }}
-          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          className="h-8 pointer-coarse:h-11 pl-3 pr-2 rounded-full bg-muted t-dato text-foreground flex items-center gap-1.5 cursor-pointer hover:bg-secondary">
           {etiquetaPeriodo} <X size={12} weight="bold" />
         </button>
       )}
       {FILTROS_ESTADO.filter(f => estadoFiltros.has(f.value)).map(f => (
         <button key={f.value} type="button"
           onClick={() => setEstadoFiltros(prev => { const n = new Set(prev); n.delete(f.value); return n; })}
-          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          className="h-8 pointer-coarse:h-11 pl-3 pr-2 rounded-full bg-muted t-dato text-foreground flex items-center gap-1.5 cursor-pointer hover:bg-secondary">
           {f.label} <X size={12} weight="bold" />
         </button>
       ))}
       {ORIGENES_FILTRO.filter(o => origenFiltros.has(o)).map(o => (
         <button key={o} type="button"
           onClick={() => setOrigenFiltros(prev => { const n = new Set(prev); n.delete(o); return n; })}
-          className="h-7 pl-2.5 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground flex items-center gap-1 cursor-pointer hover:bg-secondary">
+          className="h-8 pointer-coarse:h-11 pl-3 pr-2 rounded-full bg-muted t-dato text-foreground flex items-center gap-1.5 cursor-pointer hover:bg-secondary">
           {ORIGEN_LABEL[o]} <X size={12} weight="bold" />
         </button>
       ))}
-      <button type="button" onClick={restablecerFiltros} className="text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer ml-1">
-        Restablecer
-      </button>
+      <FiltroLimpiarTodo onClick={restablecerFiltros} />
     </div>
   )}
 
@@ -517,24 +462,24 @@ export default function OrdenesV2() {
   <div className="w-24 h-24 flex items-center justify-center">
   <img src="/ordenes.webp"alt=""aria-hidden="true"className="w-full h-full object-contain"/>
   </div>
-  <h2 className="text-foreground font-bold text-lg">{buscando ? 'Sin resultados' : numFiltros === 0 ? 'Aún no hay órdenes hoy' : 'No hay órdenes con estos filtros'}</h2>
-  <p className="text-muted-foreground text-xs">{buscando ? 'Prueba con otro n.º, cliente, mesa o producto.' : numFiltros === 0 ? 'Cuando abras una mesa aparecerá aquí.' : 'Cambia los filtros o amplía el período.'}</p>
+  <h2 className="t-titulo text-foreground">{buscando ? 'Sin resultados' : numFiltros === 0 ? 'Aún no hay órdenes hoy' : 'No hay órdenes con estos filtros'}</h2>
+  <p className="t-meta text-muted-foreground">{buscando ? 'Prueba con otro n.º, cliente, mesa o producto.' : numFiltros === 0 ? 'Cuando abras una mesa aparecerá aquí.' : 'Cambia los filtros o amplía el período.'}</p>
   {!buscando && periodo !== 'todo' && (
   <Button type="button" variant="outline" onClick={() => { setPeriodo('todo'); setEstadoFiltros(new Set()); setOrigenFiltros(new Set()); }} className="mt-1 font-bold">Ver todo el historial</Button>
   )}
   </div>
   ) : (
   <div className="flex flex-col">
-  <table className="w-full text-left text-xs">
-  <thead className="sticky top-0 z-10 bg-muted shadow-[0_1px_0_var(--border)] text-muted-foreground font-bold uppercase tracking-wider">
+  <table className="w-full text-left">
+  <thead className="t-etiqueta sticky top-0 z-10 bg-muted shadow-[0_1px_0_var(--border)] text-muted-foreground">
   <tr>
-  <th className="pl-6 pr-2 py-3.5">N.º</th>
-  <th className="px-6 py-3.5 hidden sm:table-cell">Fecha</th>
-  <th className="px-6 py-3.5">Mesa</th>
-  <th className="px-6 py-3.5 hidden md:table-cell">Items</th>
-  <th className="px-6 py-3.5">Total</th>
-  <th className="px-6 py-3.5">Estado</th>
-  {esAdmin && <th className="px-6 py-3.5">Acciones</th>}
+  <th className="w-px whitespace-nowrap pl-4 sm:pl-6 pr-4 sm:pr-6 py-3.5">N.º</th>
+  <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 hidden sm:table-cell">Origen</th>
+  <th className="px-3 sm:px-6 py-3.5">Mesa</th>
+  <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 hidden sm:table-cell">Hora</th>
+  <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 hidden md:table-cell text-right">Items</th>
+  <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 text-right">Total</th>
+  <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5">Estado</th>
   </tr>
   </thead>
   <tbody className="divide-y divide-border">
@@ -546,7 +491,7 @@ export default function OrdenesV2() {
   ? safeHabitacionCuentas.find(hc => hc.id === comanda.habitacion_cuenta_id)
   : null;
   // Con sincronizado=false la comanda sigue abierta en su mesa: aún no se decide si se
-  // carga a la habitación o la paga el cliente, así que no es "Checkout habitación".
+  // carga a la habitación o la paga el cliente, así que no es "Consumo habitación".
   const cargadaAHabitacion = !!habitacionCuenta && comanda.sincronizado !== false;
   const habitacionMesa = habitacionCuenta ? mesaById.get(habitacionCuenta.mesa_id) : null;
   const mesa = cargadaAHabitacion
@@ -561,81 +506,52 @@ export default function OrdenesV2() {
   return (
   <tr key={comanda.id}
   onClick={() => openReadOnlyComanda(comanda)}
-  className={cn("hover:bg-muted/50 cursor-pointer transition-colors",
+  className={cn("hover:bg-muted/60 cursor-pointer transition-colors",
   // Anulada: toda la fila en grises (sin colores de origen ni de estado) para
   // que no compita con las órdenes que sí se operaron.
-  comanda.estado === 'anulada' && "bg-muted/40 opacity-60 grayscale")}
+  comanda.estado === 'anulada' && "bg-muted/40 [&>td]:opacity-60 [&>td]:grayscale [&>td:last-child]:opacity-100 [&>td:last-child]:grayscale-0")}
   >
-  <td className="pl-6 pr-2 py-3.5 whitespace-nowrap">
-  <div className="font-black text-foreground tabular-nums">#{folioLabel(comanda)}</div>
-  <div className="flex flex-col items-start gap-1 mt-1">
-  <OrigenBadge origen={cargadaAHabitacion ? 'habitacion' : esDeReserva ? 'reserva_restaurante' : 'mesa'} />
-  </div>
+  <td className="w-px whitespace-nowrap pl-4 sm:pl-6 pr-4 sm:pr-6 py-3">
+  <span className="t-fila text-foreground tabular-nums">#{folioLabel(comanda)}</span>
   </td>
-  <td className="px-6 py-3.5 hidden sm:table-cell">
-  <div className="font-semibold text-foreground">
-  {dayjs(comanda.created_at).format('HH:mm')}
-  </div>
-  <div className="text-muted-foreground text-[11px]">
-  {dayjs(comanda.created_at).format('DD MMM')}
-  </div>
+  <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3 hidden sm:table-cell">
+  <OrigenBadge origen={cargadaAHabitacion ? 'habitacion' : esDeReserva ? 'reserva_restaurante' : 'mesa'} activo={viewingComandaId === comanda.id} apagado={comanda.estado === 'anulada'} />
   </td>
-  <td className="px-6 py-3.5">
+  <td className="px-3 sm:px-6 py-3">
   <div className="flex items-center gap-1.5">
-  <span className="font-bold text-foreground truncate max-w-[150px]">
+  <span className="t-cuerpo-fuerte text-foreground truncate max-w-[260px]">
   {mesa?.nombre || 'Mesa Eliminada'}
   </span>
   </div>
-  <div className="text-muted-foreground text-[11px] truncate max-w-[150px]">
+  <div className="t-meta text-muted-foreground truncate max-w-[260px]">
   {clienteLabel || 'Sin cliente'}
   </div>
   </td>
-  <td className="px-6 py-3.5 hidden md:table-cell">
+  <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3 hidden sm:table-cell">
+  <div className="t-cuerpo text-foreground tabular-nums">{dayjs(comanda.created_at).format('HH:mm')}</div>
+  <div className="t-meta text-muted-foreground">{dayjs(comanda.created_at).format('DD MMM')}</div>
+  </td>
+  <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3 hidden md:table-cell text-right tabular-nums t-cuerpo">
   <span className="font-semibold">{itemCount}</span> <span className="text-muted-foreground">items</span>
   </td>
-  <td className={cn("px-6 py-3.5 font-bold text-foreground", comanda.estado === 'anulada' && "line-through text-muted-foreground")}>
+  <td className={cn("w-px whitespace-nowrap px-3 sm:px-6 py-3 text-right t-cuerpo-fuerte tabular-nums text-foreground", comanda.estado === 'anulada' && "line-through text-muted-foreground")}>
   ${total.toFixed(2)}
   </td>
-  <td className="px-6 py-3.5">
+  <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3">
   {comanda.estado ==='cerrado'|| comanda.estado ==='facturado'? (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 text-primary dark:text-primary text-[11px] font-bold">
-  <CheckCircle size={13} weight="bold" /> {comanda.estado ==='facturado'?'Facturada':'Cerrada'}
-  </span>
+  <EstadoBadge tono={comanda.estado ==='facturado' ? 'special' : 'success'}>{comanda.estado ==='facturado'?'Facturada':'Cerrada'}</EstadoBadge>
   ) : comanda.estado ==='anulada'? (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-destructive/10 text-destructive dark:text-destructive text-[11px] font-bold">
-  <XCircle size={13} weight="bold" /> Anulada
-  </span>
+  <EstadoBadge tono="destructive">Anulada</EstadoBadge>
   ) : comanda.estado ==='cuenta'? (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-warning-foreground/10 text-warning-foreground dark:text-warning-foreground text-[11px] font-bold">
-  <Receipt size={13} weight="bold" /> Cuenta
-  </span>
+  <EstadoBadge tono="warning">Cuenta</EstadoBadge>
   ) : comanda.estado ==='en_cocina'? (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-warning-foreground/10 text-warning-foreground dark:text-warning-foreground text-[11px] font-bold">
-  <ForkKnife size={13} weight="bold" /> En cocina
-  </span>
+  <EstadoBadge tono="info">En cocina</EstadoBadge>
   ) : comanda.estado ==='listo'? (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-info/10 text-info-foreground dark:text-info-foreground text-[11px] font-bold">
-  <CheckCircle size={13} weight="bold" /> Listo
-  </span>
+  <EstadoBadge tono="info">Listo</EstadoBadge>
   ) : (
-  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted text-muted-foreground text-[11px] font-bold">
-  <Clock size={13} weight="bold" /> Pendiente
-  </span>
+  <EstadoBadge tono="warning">Pendiente</EstadoBadge>
   )}
   </td>
-  {esAdmin && (
-  <td className="px-6 py-3.5">
-  {(comanda.estado ==='cerrado'|| comanda.estado ==='facturado') && (
-  <button
-  type="button"
-  onClick={(e) => { e.stopPropagation(); setComandaToAnular(comanda); }}
-  title="Anular esta cuenta histórica (temporal, modo pruebas)"
-  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[11px] font-bold cursor-pointer hover:bg-destructive/20 transition-colors">
-  <Prohibit size={13} weight="bold" /> Anular
-  </button>
-  )}
-  </td>
-  )}
   </tr>
   );
   })}
@@ -643,72 +559,14 @@ export default function OrdenesV2() {
   </table>
   </div>
   )}
-  </main>
+<div className="md:hidden pb-[calc(env(safe-area-inset-bottom)+96px)]">
+ <Paginacion page={page} totalPages={totalPages} total={filteredComandas.length} pageSize={ITEMS_PER_PAGE} onPageChange={setPage} />
+ </div>
+   </main>
 
-  {/* Paginación (sticky, fuera del scroll de la tabla) */}
-  {filteredComandas.length > 0 && (
-  <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-card shrink-0">
-  <span className="text-xs font-semibold text-muted-foreground">
-  Mostrando {Math.min((page - 1) * ITEMS_PER_PAGE + 1, filteredComandas.length)}-
-  {Math.min(page * ITEMS_PER_PAGE, filteredComandas.length)} de {filteredComandas.length}
-  </span>
-
-  <div className="flex items-center gap-1">
-  <button
-  type="button"disabled={page === 1}
-  onClick={() => setPage(p => Math.max(1, p - 1))}
-  className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer">
-  Anterior
-  </button>
-
-  {pageNumbers.map((n, idx) =>
-  n ==='ellipsis'? (
-  <span key={`ellipsis-${idx}`} className="px-2 text-xs text-muted-foreground select-none">…</span>
-  ) : (
-  <button
-  key={n}
-  type="button"
-  onClick={() => setPage(n)}
-  aria-current={page === n ?'page': undefined}
-  className={cn(
- "min-w-[28px] h-7 px-2 rounded-full text-xs font-bold transition-colors cursor-pointer",
-  page === n
- ?"bg-primary text-primary-foreground shadow-xs":"bg-card border border-border text-muted-foreground hover:bg-muted"
-  )}>
-  {n}
-  </button>
-  )
-  )}
-
-  <button
-  type="button"disabled={page === totalPages}
-  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-  className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer">
-  Siguiente
-  </button>
-  </div>
-  </div>
-  )}
+  <Paginacion className="hidden md:block" page={page} totalPages={totalPages} total={filteredComandas.length} pageSize={ITEMS_PER_PAGE} onPageChange={setPage} />
 
   </PageContent>
-
-  {/* Anular cuenta histórica (temporal, modo pruebas) — solo admin */}
-  <Dialog open={!!comandaToAnular} onOpenChange={(open) => { if (!open) setComandaToAnular(null); }}>
-  <DialogContent className="sm:max-w-sm">
-  <DialogHeader>
-  <DialogTitle>Anular cuenta histórica</DialogTitle>
-  <DialogDescription>
-  ¿Anular la comanda {comandaToAnular ?`#${folioLabel(comandaToAnular)}` :''} de {comandaToAnular?.mesa_nombre ||'esta mesa'}? Quedará marcada como anulada y visible en la pestaña "Anuladas". Esta acción es temporal para el modo de pruebas.
-  </DialogDescription>
-  </DialogHeader>
-  <DialogFooter>
-  <Button type="button"variant="outline"onClick={() => setComandaToAnular(null)}>Cancelar</Button>
-  <Button type="button"variant="destructive"disabled={anulandoHistorica}onClick={handleAnularHistorica}>
-  {anulandoHistorica ?'Anulando...':'Anular cuenta'}
-  </Button>
-  </DialogFooter>
-  </DialogContent>
-  </Dialog>
  </PageFrame>
  );
 }

@@ -9,7 +9,6 @@ import { initVerticalRxDb, createRxCliente, updateRxCliente } from'../../db/rxdb
 import { ReservaHeader } from'../Mesas/Sidebar/ReservaHeader';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from'@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from'@/components/ui/select';
 import { Input } from'@/components/ui/input';
 import { Textarea } from'@/components/ui/textarea';
 import { Button } from'@/components/ui/button';
@@ -101,6 +100,10 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  }
  }, [opened, editingCliente, initialNombre]);
 
+ // Empresa y agencia se identifican con RUC; el extranjero con pasaporte; la persona con cédula.
+ const tipoDocDe = (t: string) => (t === 'juridico' || t === 'agencia') ? 'ruc' : t === 'extranjero' ? 'pasaporte' : 'cedula';
+ const etiquetaDocumento = form.tipo_cliente === 'juridico' || form.tipo_cliente === 'agencia' ? 'RUC' : form.tipo_cliente === 'extranjero' ? 'Pasaporte' : 'Cédula';
+
  const copiarDatosCliente = () => {
  setForm(prev => ({
  ...prev,
@@ -108,7 +111,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  numero_doc: prev.dni,
  direccion_fiscal: prev.direccion,
  email_factura: prev.email,
- tipo_doc: prev.tipo_cliente ==='juridico'?'ruc':'cedula',
+ tipo_doc: tipoDocDe(prev.tipo_cliente),
  }));
  };
 
@@ -197,10 +200,10 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  };
 
  const campoIcono = 'absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground';
- const etiqueta = 'text-xs font-bold';
- const campo = 'pl-9 h-11 text-base md:h-10 md:text-sm font-semibold';
+ const etiqueta = 't-etiqueta! text-muted-foreground';
+ const campo = 'pl-9 h-12 text-base';
  const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
- const error = (k: string) => errors[k] && <span className="text-[11px] font-semibold text-destructive">{errors[k]}</span>;
+ const error = (k: string) => errors[k] && <span className="t-meta text-destructive">{errors[k]}</span>;
 
  const cabecera = (
  <ReservaHeader tono="primary" badge={editingCliente ? <User size={22} weight="bold" /> : <UserPlus size={22} weight="bold" />}
@@ -225,7 +228,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  {activeTab ==='datos'? (
  <>
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cliente</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Cliente</h4>
  <Tabs value={form.tipo_cliente} onValueChange={(v) => set('tipo_cliente', v)}>
  <TabsList aria-label="Tipo de cliente">
  <TabsTrigger value="persona_natural">Persona</TabsTrigger>
@@ -247,7 +250,6 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  </section>
 
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Contacto</h4>
  <div className="grid grid-cols-2 gap-3">
  <div className="flex flex-col gap-1.5">
  <Label htmlFor="cli-tel" className={etiqueta}>Teléfono</Label>
@@ -259,7 +261,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  {error('telefono')}
  </div>
  <div className="flex flex-col gap-1.5">
- <Label htmlFor="cli-dni" className={etiqueta}>{form.tipo_cliente ==='extranjero'?'Pasaporte':'Cédula'}</Label>
+ <Label htmlFor="cli-dni" className={etiqueta}>{etiquetaDocumento}</Label>
  <div className="relative">
  <IdentificationCard size={16} className={campoIcono} />
  <Input id="cli-dni" type="text" placeholder="Documento" value={form.dni}
@@ -287,23 +289,22 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  </section>
 
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Notas</h4>
  <div className="flex flex-col gap-1.5">
  <div className="flex items-center justify-between">
  <Label htmlFor="cli-notas" className={etiqueta}>Notas internas</Label>
- <span className="text-[10px] text-muted-foreground">{form.notas.length}/{NOTAS_MAX}</span>
+ <span className="t-meta text-muted-foreground">{form.notas.length}/{NOTAS_MAX}</span>
  </div>
  <Textarea id="cli-notas" rows={3} maxLength={NOTAS_MAX}
  placeholder="Preferencias, alergias, observaciones..." value={form.notas}
- onChange={(e) => set('notas', e.target.value)} className="min-h-24 text-base md:text-sm font-medium resize-none" />
+ onChange={(e) => set('notas', e.target.value)} className="min-h-24 text-base resize-none" />
  </div>
  </section>
  </>
  ) : (
  <section className="flex flex-col gap-3">
  <div className="flex items-center justify-between">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Datos de factura</h4>
- <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={copiarDatosCliente} className="gap-1 text-xs">
+ <h4 className="t-etiqueta text-muted-foreground">Datos de factura</h4>
+ <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={copiarDatosCliente} className="gap-1 t-dato">
  <CopySimple size={14} /> Copiar del cliente
  </Button>
  </div>
@@ -315,19 +316,15 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  onChange={(e) => set('nombre_factura', e.target.value)} className={campo} />
  </div>
  </div>
- <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1.5">
+ <div className="flex flex-col gap-2">
  <Label className={etiqueta}>Tipo de documento</Label>
- <Select value={form.tipo_doc} onValueChange={(v) => set('tipo_doc', v)}>
- <SelectTrigger className="h-11 md:h-10 w-full px-3 text-base md:text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
- <SelectValue />
- </SelectTrigger>
- <SelectContent>
+ <Tabs value={form.tipo_doc} onValueChange={(v) => set('tipo_doc', v)}>
+ <TabsList aria-label="Tipo de documento">
  {TIPO_DOC_OPTIONS.map(opt => (
- <SelectItem key={opt.value} value={opt.value} className="text-sm">{opt.label}</SelectItem>
+ <TabsTrigger key={opt.value} value={opt.value}>{opt.label}</TabsTrigger>
  ))}
- </SelectContent>
- </Select>
+ </TabsList>
+ </Tabs>
  </div>
  <div className="flex flex-col gap-1.5">
  <Label htmlFor="cli-nd" className={etiqueta}>Número</Label>
@@ -335,7 +332,6 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  <IdentificationCard size={16} className={campoIcono} />
  <Input id="cli-nd" type="text" placeholder="Número" value={form.numero_doc}
  onChange={(e) => set('numero_doc', e.target.value)} className={campo} />
- </div>
  </div>
  </div>
  <div className="flex flex-col gap-1.5">
@@ -359,7 +355,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  )}
  </div>
 
- <footer className="p-4 border-t border-border bg-card flex items-center gap-2 shrink-0">
+ <footer className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
  <Button type="button" variant="outline" onClick={onClose} disabled={saving} className="h-12 px-5 font-bold">
  Cancelar
  </Button>

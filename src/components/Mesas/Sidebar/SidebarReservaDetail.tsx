@@ -436,7 +436,8 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  badge={<CalendarCheck size={22} weight="bold" />}
  titulo={reserva.nombre}
  subtitulo={`${numeroReserva ? `Reserva #${numeroReserva}` : 'Reserva'} · ${STATUS_LABEL[reserva.estado as keyof typeof STATUS_LABEL] ?? reserva.estado}${zonaNombre ? ` · ${zonaNombre}` : ''}`}
- cerrada={isReadOnly}
+ cerrada={reserva.estado === 'completada'}
+ tono={reserva.estado === 'confirmada' ? 'success' : reserva.estado === 'cancelada' ? 'destructive' : 'reserva'}
  onClose={onCloseSidebar}
  acciones={!isReadOnly && (
  <>
@@ -452,15 +453,15 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
 
  {/* Datos del cliente, colapsable (mismo bloque que el sidebar de mesa) */}
  {hayContacto && (
- <Collapsible open={showContacto} onOpenChange={setShowContacto} className="shrink-0 border-b border-border bg-muted/50">
+ <Collapsible open={showContacto} onOpenChange={setShowContacto} className="shrink-0 border-b border-border bg-muted/40">
  <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer">
- <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+ <span className="t-etiqueta flex items-center gap-2 text-muted-foreground">
  <IdentificationCard size={14} /> Datos del cliente
  </span>
  <CaretDown size={14} className={cn('text-muted-foreground transition-transform', showContacto && 'rotate-180')} />
  </CollapsibleTrigger>
  <CollapsibleContent>
- <div className="flex flex-col gap-3 px-4 pb-4 text-xs">
+ <div className="flex flex-col gap-3 px-4 pb-4 t-meta">
  {clienteVinculado?.tipo_cliente && (
  <div className="flex items-center gap-2 text-foreground">
  <User size={14} className="text-muted-foreground shrink-0"/>
@@ -474,11 +475,11 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  <span className="font-bold select-text cursor-text truncate">{telefono}</span>
  </div>
  <div className="flex items-center gap-1.5 shrink-0">
- <a href={`tel:${telefono}`} title="Llamar" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
+ <a href={`tel:${telefono}`} title="Llamar" className="size-8 pointer-coarse:size-11 rounded-2xl bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
  <Phone size={14} weight="bold"/>
  </a>
  {getWhatsAppLink(telefono) && (
- <a href={getWhatsAppLink(telefono)!} target="_blank" rel="noreferrer" title="Enviar WhatsApp" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
+ <a href={getWhatsAppLink(telefono)!} target="_blank" rel="noreferrer" title="Enviar WhatsApp" className="size-8 pointer-coarse:size-11 rounded-2xl bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors">
  <WhatsappLogo size={16} weight="fill"/>
  </a>
  )}
@@ -491,7 +492,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  <EnvelopeSimple size={14} className="text-muted-foreground shrink-0"/>
  <span className="font-bold select-text cursor-text truncate">{email}</span>
  </div>
- <a href={`mailto:${email}`} title="Enviar correo" className="w-8 h-8 rounded-lg bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors shrink-0">
+ <a href={`mailto:${email}`} title="Enviar correo" className="size-8 pointer-coarse:size-11 rounded-2xl bg-card border border-border text-foreground flex items-center justify-center hover:bg-muted transition-colors shrink-0">
  <EnvelopeSimple size={14} weight="bold"/>
  </a>
  </div>
@@ -521,24 +522,24 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  { icon: Clock, etiqueta: 'Hora', valor: reserva.hora },
  { icon: Users, etiqueta: 'Comensales', valor: `${reserva.personas}` },
  ].map(({ icon: Icon, etiqueta, valor }) => (
- <div key={etiqueta} className="rounded-xl bg-muted/60 px-3 py-2.5 flex flex-col gap-0.5 min-w-0">
- <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"><Icon size={12} weight="bold" /> {etiqueta}</span>
- <span className="text-sm font-black text-foreground truncate tabular-nums">{valor}</span>
+ <div key={etiqueta} className="rounded-2xl bg-muted/40 px-3 py-2.5 flex flex-col gap-0.5 min-w-0">
+ <span className="t-etiqueta flex items-center gap-1 text-muted-foreground"><Icon size={12} weight="bold" /> {etiqueta}</span>
+ <span className="t-cuerpo-fuerte text-foreground truncate tabular-nums">{valor}</span>
  </div>
  ))}
  </div>
  {reserva.nota && (
- <div className="mx-4 mb-3 p-3 rounded-xl bg-warning-soft text-xs text-warning-foreground font-medium">"{reserva.nota}"</div>
+ <div className="mx-4 mb-3 p-3 rounded-2xl bg-warning-soft t-meta text-warning-foreground">"{reserva.nota}"</div>
  )}
 
  <div className="flex items-center justify-between px-4 py-2 border-y border-border bg-muted/40">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Productos pedidos</span>
- <span className="text-[11px] font-bold text-muted-foreground">{itemsActivos.length}</span>
+ <span className="t-etiqueta text-muted-foreground">Productos pedidos</span>
+ <span className="t-meta text-muted-foreground">{itemsActivos.length}</span>
  </div>
  {itemsActivos.length === 0 ? (
  <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
- <span className="text-sm font-bold text-foreground">Aún no hay productos</span>
- <span className="text-xs text-muted-foreground">Añade lo que el cliente pidió para calcular el total y el abono.</span>
+ <span className="t-cuerpo-fuerte text-foreground">Aún no hay productos</span>
+ <span className="t-meta text-muted-foreground">Añade lo que el cliente pidió para calcular el total y el abono.</span>
  {!isReadOnly && (
  <Button type="button" variant="outline" disabled={isCreatingComanda} onClick={handleAddProductos} className="gap-1.5 font-bold">
  <Plus size={16} weight="bold" /> Añadir productos
@@ -559,12 +560,12 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  )}
  </main>
 
- <footer className={cn('relative p-4 flex flex-col gap-3 shrink-0 border-t border-border', editingItem ? 'bg-muted/70' : 'bg-muted/40', !editingItem && !isReadOnly && itemsActivos.length > 0 && 'pt-6')}>
+ <footer className={cn('relative p-4 flex flex-col gap-3 shrink-0 border-t border-border', editingItem ? 'bg-muted/40' : 'bg-muted/40', !editingItem && !isReadOnly && itemsActivos.length > 0 && 'pt-6')}>
  {!editingItem ? (
  <>
  {!isReadOnly && itemsActivos.length > 0 && (
  <Button
- className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"
  disabled={isCreatingComanda}
  onClick={handleAddProductos}
  >
@@ -606,7 +607,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  </Button>
  </div>
  {!isReadOnly && !esHoy && (
- <p className="text-[11px] font-medium text-muted-foreground text-center -mt-1">
+ <p className="t-meta text-muted-foreground text-center -mt-1">
  La mesa se asigna el día del servicio ({reserva.fecha}).
  </p>
  )}

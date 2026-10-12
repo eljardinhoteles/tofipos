@@ -1,4 +1,5 @@
 import { imprimirConAviso } from '../../../lib/imprimir';
+import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
 import { folioLabel } from '../../../lib/folio';
 import { X, Plus, Printer, Check, CaretDown } from'@phosphor-icons/react';
@@ -949,7 +950,7 @@ export function SidebarDetails({
  tipo:'directa',
  cliente_id: activeComanda.cliente_id || undefined,
  cliente_nombre: closePayerName?.trim() || activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)}`,
+ referencia: `${nombreMesaCompleto(activeComanda.mesa_nombre || selectedMesa.nombre)} · #${folioLabel(activeComanda)}`,
  comanda_id: activeComanda.id,
  organization_id: activeComanda.organization_id || orgIdLocal,
  }, saldoPendiente);
@@ -1105,9 +1106,9 @@ export function SidebarDetails({
  {/* Footer y Acciones */}
  {vistaTodas ? (
  <footer className="p-4 bg-muted/40 border-t border-border flex flex-col gap-3 shrink-0">
- <div className="flex items-center justify-between p-3.5 rounded-xl bg-muted/60">
- <span className="text-base font-black text-foreground">Total mesa</span>
- <span className="text-xl font-black text-primary">${totalTodas.toFixed(2)}</span>
+ <div className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40">
+ <span className="t-titulo text-foreground">Total mesa</span>
+ <span className="t-valor text-primary">${totalTodas.toFixed(2)}</span>
  </div>
  <Button
  variant={!hayConfirmadaCocina || hayNuevosCocina ?"default":"secondary"}
@@ -1118,11 +1119,11 @@ export function SidebarDetails({
  {!hayConfirmadaCocina || hayNuevosCocina ? <Check size={18} weight="bold"className="mr-1.5"/> : <Printer size={18} weight="bold"className="mr-1.5"/>}
  {!hayConfirmadaCocina ?'Confirmar': hayNuevosCocina ?`Confirmar (${nuevosCocina.length})`:'Reimprimir'}
  </Button>
- <span className="text-[11px] text-center text-muted-foreground">Elige una subcomanda para añadir, cobrar o cargar a habitación.</span>
+ <span className="t-meta text-center text-muted-foreground">Elige una subcomanda para añadir, cobrar o cargar a habitación.</span>
  </footer>
  ) : (
  <footer className={cn("relative p-4 flex flex-col gap-3 shrink-0",
- editingItem ?"bg-muted/70": "bg-muted/40",
+ editingItem ?"bg-muted/40": "bg-muted/40",
  "border-t border-border",
  // Con el pill "Añadir" flotando sobre el borde, deja espacio para que no tape los totales.
  !editingItem && activeComanda?.estado !=='cuenta'&&"pt-6")}>
@@ -1131,7 +1132,7 @@ export function SidebarDetails({
  aria-hidden="true"
  size={18}
  weight="bold"
- className="absolute -top-10 left-1/2 -translate-x-1/2 text-muted-foreground/70 animate-bounce pointer-events-none"
+ className="absolute -top-10 left-1/2 -translate-x-1/2 text-muted-foreground/60 animate-bounce pointer-events-none"
  />
  )}
  {!editingItem ? (
@@ -1140,7 +1141,7 @@ export function SidebarDetails({
  <Button
  // Pill flotante: sale del flujo del footer y queda centrada sobre su borde
  // superior, así no ocupa una fila propia ni va a todo el ancho.
- className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 font-semibold text-xs whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
  <Plus size={15} weight="bold"className="mr-1.5"/>
  Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}
@@ -1198,18 +1199,18 @@ export function SidebarDetails({
  // solo se muestra el motivo/fecha de la anulación.
  <div className="flex flex-col gap-3">
  <div className="flex items-center justify-between">
- <span className="font-extrabold text-xs text-destructive">Ítem Anulado</span>
+ <span className="t-dato text-destructive">Ítem Anulado</span>
  <Button variant="ghost"size="icon"aria-label="Cerrar"className="h-6 w-6"onClick={() => setEditingItem(null)}>
  <X size={14} />
  </Button>
  </div>
- <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex flex-col gap-1">
- <span className="text-sm font-bold text-foreground line-through">{editingItem.nombre}</span>
+ <div className="p-3 rounded-2xl bg-destructive/10 border border-destructive/20 flex flex-col gap-1">
+ <span className="t-cuerpo-fuerte text-foreground line-through">{editingItem.nombre}</span>
  {editingItem.anulado_motivo && (
- <span className="text-xs text-muted-foreground">Motivo: {editingItem.anulado_motivo}</span>
+ <span className="t-meta text-muted-foreground">Motivo: {editingItem.anulado_motivo}</span>
  )}
  {editingItem.anulado_at && (
- <span className="text-[10px] text-muted-foreground">
+ <span className="t-meta text-muted-foreground">
  {new Date(editingItem.anulado_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(editingItem.anulado_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
  </span>
  )}

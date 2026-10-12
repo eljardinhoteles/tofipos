@@ -7,18 +7,22 @@
 import { folioLabel } from './folio'
 
 import { parseReparto } from './reparto';
+import { ORIGEN_CIERRE_TITULO, type CierreTurno } from './cierreTurno';
 
 export type ActividadTono = 'primary' | 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export type ActividadTipo =
   | 'mesa_abierta' | 'cocina' | 'cuenta' | 'cobrada' | 'habitacion' | 'cobro'
-  | 'anulacion' | 'cortesia' | 'reembolso' | 'checkin' | 'checkout' | 'venta' | 'reparto';
+  | 'anulacion' | 'cortesia' | 'reembolso' | 'checkin' | 'checkout' | 'venta' | 'reparto'
+  | 'cierre' | 'credito' | 'ajuste' | 'comentario';
 
 /** A dónde lleva tocar el evento. */
 export type ActividadDestino =
   | { tipo: 'comanda'; comandaId: string }
   | { tipo: 'habitacion'; mesaId: string }
-  | { tipo: 'venta'; ventaId: string };
+  | { tipo: 'venta'; ventaId: string }
+  /** Cierre de turno de hoy: abre su historial en Centro de Ventas. */
+  | { tipo: 'cierre' };
 
 export interface ActividadEvento {
   id: string;
@@ -44,6 +48,8 @@ interface Datos {
   usuarios: any[];
   /** ISO del inicio del día (medianoche local). */
   inicio: string;
+  /** Cierres de turno guardados hoy (viven en Supabase, no en la base local). */
+  cierres?: CierreTurno[];
 }
 
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -101,7 +107,7 @@ export function construirActividad(d: Datos): ActividadEvento[] {
       cerradasHoy.add(c.id);
       const hab = c.habitacion_cuenta_id ? habPorId.get(c.habitacion_cuenta_id) : null;
       push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `ce-${c.id}`, ts: c.updated_at, tipo: 'cobrada', tono: 'success',
-        titulo: hab ? 'Cobrada en checkout de habitación' : 'Mesa cobrada',
+        titulo: hab ? 'Cobrada en consumo de habitación' : 'Mesa cobrada',
         detalle: [etiqueta, folio, money(c.total), hab ? `Hab. ${habitacionNumero(hab)}` : ''].filter(Boolean).join(' · '),
         actor: c.mesero });
     } else if (c.habitacion_cuenta_id && c.sincronizado !== false) {
@@ -125,13 +131,45 @@ export function construirActividad(d: Datos): ActividadEvento[] {
       actor: actor(p.usuario_id) });
   }
 
+  // Cierres de turno de hoy.
+  for (const c of d.cierres ?? []) {
+    push({ destino: { tipo: 'cierre' }, id: `cierre-${c.id}`, ts: c.fecha_cierre, tipo: 'cierre', tono: 'primary', titulo: 'Turno cerrado',
+      detalle: [c.origenes.map(o => ORIGEN_CIERRE_TITULO[o] ?? o).join(', '), money(c.total_cobrado)].filter(Boolean).join(' · '),
+      actor: c.usuario_nombre });
+  }
+
   // Movimientos de ventas: lo que toca dinero fuera del cobro normal de mesas.
   for (const v of d.ventas) {
+    const ref0 = v.referencia || v.cliente_nombre || '';
+    const dest0: ActividadDestino = v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id };
+    // Venta a crédito creada hoy: queda constancia del crédito.
+    if (v.tipo === 'credito' && esHoy(v.created_at)) {
+      const inicial = (v.movimientos ?? []).find((m: any) => m.tipo === 'ajuste' && !m.anulado);
+      push({ destino: { tipo: 'venta', ventaId: v.id }, id: `vc-${v.id}`, ts: v.created_at, tipo: 'credito', tono: 'danger', titulo: 'Venta a crédito', alerta: true,
+        detalle: [ref0, inicial ? money(inicial.monto ?? 0) : ''].filter(Boolean).join(' · '), actor: actor(v.usuario_id) });
+    }
     for (const m of v.movimientos ?? []) {
-      if (m.anulado || !esHoy(m.fecha)) continue;
+      // Un movimiento anulado a mano hoy se avisa aparte: es lo que más conviene revisar.
+      if (m.anulado) {
+        if (esHoy(m.anulado_at) && m.tipo !== 'anular') {
+          push({ destino: dest0, id: `vx-${m.id}`, ts: m.anulado_at, tipo: 'anulacion', tono: 'danger', titulo: 'Movimiento anulado', alerta: true,
+            detalle: [ref0, m.tipo, m.monto != null ? money(m.monto) : '', m.anulado_motivo].filter(Boolean).join(' · '), actor: actor(m.anulado_por) });
+        }
+        continue;
+      }
+      if (!esHoy(m.fecha)) continue;
       const ref = v.referencia || v.cliente_nombre || '';
       const quien = actor(m.usuario_id);
-      if (m.tipo === 'reembolso') {
+      if (m.tipo === 'marcar_credito') {
+        push({ destino: { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'credito', tono: 'danger', titulo: 'Venta marcada como crédito', alerta: true,
+          detalle: [ref, m.motivo].filter(Boolean).join(' · '), actor: quien });
+      } else if (m.tipo === 'ajuste' && (m.monto ?? 0) < 0) {
+        push({ destino: dest0, id: `vm-${m.id}`, ts: m.fecha, tipo: 'ajuste', tono: 'warning', titulo: 'Ajuste a la baja', alerta: true,
+          detalle: [ref, money(m.monto ?? 0), m.motivo].filter(Boolean).join(' · '), actor: quien });
+      } else if (m.tipo === 'comentario' && m.motivo && !m.comprobante_url) {
+        push({ destino: dest0, id: `vm-${m.id}`, ts: m.fecha, tipo: 'comentario', tono: 'neutral', titulo: 'Comentario en venta',
+          detalle: [ref, m.motivo].filter(Boolean).join(' · '), actor: quien });
+      } else if (m.tipo === 'reembolso') {
         push({ destino: v.comanda_id ? { tipo: 'comanda', comandaId: v.comanda_id } : { tipo: 'venta', ventaId: v.id }, id: `vm-${m.id}`, ts: m.fecha, tipo: 'reembolso', tono: 'warning', titulo: 'Reembolso', alerta: true,
           detalle: [ref, money(m.monto ?? 0), m.motivo].filter(Boolean).join(' · '), actor: quien });
       } else if (m.tipo === 'anular') {

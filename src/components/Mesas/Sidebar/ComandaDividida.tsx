@@ -9,14 +9,14 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 export function ComandaDividida({ partes }: { partes: ParteDividida[] }) {
   if (partes.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-special-soft text-special-foreground">
-      <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider">
+    <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-special-soft text-special-foreground">
+      <div className="t-etiqueta flex items-center gap-2">
         <Scissors size={14} weight="bold" />
         Cuenta dividida · {partes.length} {partes.length === 1 ? 'pago' : 'pagos'}
       </div>
       <ul className="flex flex-col gap-0.5">
         {partes.map(p => (
-          <li key={p.id} className="flex items-center justify-between gap-3 text-sm font-semibold">
+          <li key={p.id} className="flex items-center justify-between gap-3 t-cuerpo">
             <span className="truncate">{p.nombre}</span>
             <span className="font-bold tabular-nums shrink-0">{money(p.monto)}</span>
           </li>

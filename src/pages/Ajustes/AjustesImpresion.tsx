@@ -1,9 +1,13 @@
-import { useEffect, useState } from'react';
-import { Printer, ArrowsClockwise, ForkKnife, Receipt, Trash, FloppyDiskIcon, Copy, LinkSimple, LinkBreak } from'@phosphor-icons/react';
+import { useEffect, useRef, useState } from'react';
+import { Printer, ArrowsClockwise, ForkKnife, Receipt, Trash, FloppyDiskIcon, Copy, LinkSimple, LinkBreak, ArrowSquareOut, Warning } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { Input } from'@/components/ui/input';
 import { Button } from'@/components/ui/button';
-import { Switch } from'@/components/ui/switch';
+import { CheckRedondo } from '../../components/Common/CheckRedondo';
+import { Casilla } from '../../components/Common/Casilla';
+import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
+import { EstadoBadge } from '../../components/Common/EstadoBadge';
+import { Campo, Fila, Grupo, Seccion, TITULO_SECCION, Vacio } from'../../components/Ajustes/AjustesUI';
 import {
  getPrintServerStatus,
  testPrintServerPrinter,
@@ -47,6 +51,11 @@ export default function AjustesImpresion() {
  const [cloudServer, setCloudServer] = useState<CloudPrintServer | null>(() => getCachedCloudPrintServer());
  const [pairing, setPairing] = useState<{ package: string; code: string; expiresAt: string } | null>(null);
  const [pairingBusy, setPairingBusy] = useState(false);
+ // Servidor visto en la última lectura: permite avisar si desapareció o lo reemplazó otro equipo.
+ const lastServerRef = useRef<CloudPrintServer | null>(getCachedCloudPrintServer());
+ const [aviso, setAviso] = useState<string | null>(null);
+ // Sin servidor vinculado: qué opción de conexión se muestra.
+ const [modoConexion, setModoConexion] = useState<'nube' | 'local'>(() => (localStorage.getItem('pos_print_server_url') ? 'local' : 'nube'));
 
  useEffect(() => {
  const storedUrl = localStorage.getItem('pos_print_server_url') ||'http://127.0.0.1:18181';
@@ -103,6 +112,15 @@ export default function AjustesImpresion() {
  const refresh = async () => {
  const server = await fetchCloudPrintServer();
  if (!alive) return;
+ const previo = lastServerRef.current;
+ if (previo && !server) {
+ setAviso('El servidor de impresión fue desvinculado. Los tickets no saldrán por la nube hasta vincular de nuevo.');
+ } else if (previo && server && previo.id !== server.id) {
+ setAviso(`El servidor de impresión fue reemplazado${server.hostname ? ` por ${server.hostname}` :''}. Solo se permite un servidor por organización.`);
+ } else if (server) {
+ setAviso(null);
+ }
+ lastServerRef.current = server;
  setCloudServer(server);
  if (server && pairing) {
  // El servidor acaba de vincularse: cierra el paso a paso y recarga impresoras.
@@ -144,6 +162,8 @@ export default function AjustesImpresion() {
  if (!cloudServer) return;
  try {
  await unpairPrintServer(cloudServer.id);
+ lastServerRef.current = null;
+ setAviso(null);
  setCloudServer(null);
  setConfiguredPrinters([]);
  showToast.success('Servidor desvinculado', 'Las impresiones vuelven a usar la conexión local.');
@@ -241,228 +261,198 @@ export default function AjustesImpresion() {
 
  const unconfiguredSystemPrinters = systemPrinters.filter(name => !configuredNames.has(name));
 
- return (
- <div className="flex flex-col gap-6 py-6">
- <div className="flex items-center gap-3 min-w-0">
- <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
- <Printer size={22} weight="fill"/>
- </div>
- <div className="flex flex-col min-w-0">
- <h3 className="font-extrabold text-base text-foreground">Gestión de Impresoras</h3>
- <p className="text-xs text-muted-foreground truncate">Conecta las impresoras que ya tienes instaladas en esta PC y asígnales un rol.</p>
- </div>
- </div>
+  // Estado visible del servidor: punto + frase + detalle. Con la nube vinculada, el detalle suma la última señal.
+  const estado = serverOk === null
+    ? { punto: 'bg-muted-foreground/50', texto: 'Sin verificar' }
+    : serverOk
+      ? { punto: 'bg-success', texto: 'Servidor en línea' }
+      : { punto: 'bg-destructive', texto: 'Servidor sin conexión' };
+  const detalleEstado = [
+    `Cola pendiente: ${serverQueue === null ? '-' : serverQueue}`,
+    cloudServer?.last_seen && !isCloudServerOnline(cloudServer)
+      ? `Sin señal desde ${new Date(cloudServer.last_seen).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`
+      : null,
+    cloudServer?.version ? `v${cloudServer.version}` : null,
+  ].filter(Boolean).join(' · ');
+  // Si no hay servidor vinculado se ofrece elegir cómo conectar: nube (recomendado) o red local.
+  const modoActivo = cloudServer || pairing ? 'nube' : modoConexion;
 
- <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
- <div className="flex items-center justify-between gap-3">
- <div className="grid grid-cols-2 gap-4 text-xs font-semibold flex-1">
- <div className="flex flex-col">
- <span className="text-muted-foreground">Servidor</span>
- <span className={cn(serverOk ?"text-foreground":"text-destructive","font-extrabold")}>
- {serverOk === null ?'Sin verificar': serverOk ?'Online':'Offline'}
- </span>
- </div>
- <div className="flex flex-col">
- <span className="text-muted-foreground">Cola pendiente</span>
- <span className="font-extrabold text-foreground">{serverQueue === null ?'-': serverQueue}</span>
- </div>
- </div>
+  return (
+    <div className="flex flex-col gap-6">
+      {aviso && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl bg-destructive-soft text-destructive px-4 py-3 t-cuerpo-fuerte">
+          <Warning size={20} weight="bold" className="shrink-0 mt-0.5" />
+          <span className="flex-1">{aviso} Abre el panel del servidor en la PC de impresión para volver a vincularlo.</span>
+          <button type="button" className="underline shrink-0" onClick={() => setAviso(null)}>Cerrar</button>
+        </div>
+      )}
 
- <Button variant="secondary"size="icon"className="shrink-0"disabled={loadingCatalog} title="Actualizar"onClick={async () => { await loadCatalog(); await refreshStatus(); showToast.success('Estado actualizado'); }}>
- <ArrowsClockwise size={18} className={loadingCatalog ?'animate-spin':''} />
- </Button>
- </div>
+      {/* 1 · Estado */}
+      <Seccion titulo="Estado del servidor" descripcion="El servidor de impresión es el programa que corre en la PC del local y manda los tickets a las impresoras.">
+        <Fila
+          icono={<span aria-hidden="true" className={cn('size-3 rounded-full shrink-0', estado.punto)} />}
+          titulo={estado.texto}
+          ayuda={detalleEstado}
+        >
+          <Button variant="outline" className="gap-2" asChild>
+            <a href="http://localhost:18181/" target="_blank" rel="noreferrer">
+              <ArrowSquareOut size={18} /> Panel del servidor
+            </a>
+          </Button>
+          <Button variant="outline" className="gap-2" disabled={loadingCatalog}
+            onClick={async () => { await loadCatalog(); await refreshStatus(); showToast.success('Estado actualizado'); }}>
+            <ArrowsClockwise size={18} className={loadingCatalog ? 'animate-spin' : ''} /> Actualizar
+          </Button>
+        </Fila>
+      </Seccion>
 
- {/* Cola en la nube: sin IP ni token por dispositivo */}
- <div className="flex flex-col gap-3 pb-4 border-b border-border">
- {cloudServer ? (
- <div className="flex items-center justify-between gap-3">
- <div className="flex items-center gap-3 min-w-0">
- <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
- isCloudServerOnline(cloudServer) ? "bg-success-soft text-success-foreground" : "bg-destructive-soft text-destructive")}>
- <LinkSimple size={20} weight="bold" />
- </div>
- <div className="flex flex-col min-w-0">
- <span className="font-extrabold text-sm text-foreground truncate">
- {cloudServer.hostname || 'Servidor de impresión'} · vinculado por la nube
- </span>
- <span className="text-xs text-muted-foreground">
- {isCloudServerOnline(cloudServer)
- ? 'Conectado'
- : cloudServer.last_seen
- ? `Sin señal desde ${new Date(cloudServer.last_seen).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`
- : 'Nunca se ha conectado'}
- {cloudServer.version ? ` · v${cloudServer.version}` : ''}
- </span>
- </div>
- </div>
- <Button variant="outline" className="shrink-0 text-destructive" onClick={handleUnpair}>
- <LinkBreak size={16} weight="bold" /> Desvincular
- </Button>
- </div>
- ) : pairing ? (
- <div className="flex flex-col gap-3">
- <span className="text-xs text-muted-foreground font-bold">Paquete de vinculación (vence {new Date(pairing.expiresAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })})</span>
- {/* El paquete no se muestra en pantalla: solo se copia al portapapeles. */}
- <div className="flex items-center gap-2">
- <div className="flex-1 min-w-0 rounded-xl bg-muted px-4 h-11 flex items-center text-sm font-mono text-muted-foreground tracking-widest select-none" aria-label="Paquete oculto">
- POS1.••••••••••••••••••••
- </div>
- <Button className="shrink-0 h-11" onClick={handleCopyPairing}><Copy size={18} weight="bold" /> Copiar paquete</Button>
- </div>
- <span className="text-[11px] text-muted-foreground select-text">
- En la PC con las impresoras, ejecuta el servidor de impresión con: <span className="font-mono font-bold text-foreground">pos-print-server.exe --pair &lt;paquete&gt;</span>. Esta pantalla se actualizará sola al vincularse.
- </span>
- <div><Button variant="ghost" className="text-muted-foreground" onClick={() => setPairing(null)}>Cancelar</Button></div>
- </div>
- ) : (
- <div className="flex items-center justify-between gap-3">
- <div className="flex flex-col min-w-0">
- <span className="font-extrabold text-sm text-foreground">Vincular con la nube</span>
- <span className="text-xs text-muted-foreground">Imprime desde cualquier tablet o celular sin configurar IP ni token.</span>
- </div>
- <Button className="shrink-0" disabled={pairingBusy} onClick={handleCreatePairing}>
- <LinkSimple size={16} weight="bold" /> Generar paquete
- </Button>
- </div>
- )}
- {cloudServer && (
- <div className="flex flex-col gap-1.5 pt-3 border-t border-border">
- <span className="text-xs text-muted-foreground font-bold">Token de red local (opcional)</span>
- <div className="flex items-center gap-2">
- <Input
- type="password"autoComplete="off"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
- placeholder="Ej: AB3K-9XQZ"value={tokenInput}
- onChange={(e) => setTokenInput(e.target.value)}
- className="flex-1 h-11 text-sm font-mono"/>
- <Button className="h-11 shrink-0" onClick={() => { savePrintToken(tokenInput); showToast.success('Token guardado', 'Este dispositivo imprimirá por la red local cuando pueda.'); }}>
- <FloppyDiskIcon size={18} weight="bold"/> Guardar
- </Button>
- </div>
- <span className="text-[11px] text-muted-foreground">
- La IP del servidor se descubre sola. Con el token, este dispositivo imprime directo por la red local (más rápido y sin internet); sin él, imprime por la nube.
- </span>
- </div>
- )}
- </div>
+      {/* 2 · Conexión */}
+      <Seccion titulo="Conexión" descripcion="Cómo se comunica este dispositivo con el servidor de impresión.">
+        {!cloudServer && !pairing && (
+          <Tabs value={modoConexion} onValueChange={(v) => setModoConexion(v as 'nube' | 'local')}>
+            <TabsList aria-label="Tipo de conexión">
+              <TabsTrigger value="nube">Nube (recomendado)</TabsTrigger>
+              <TabsTrigger value="local">Red local</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
 
- {!cloudServer && (<>
- <div className="flex flex-col gap-1.5">
- <span className="text-xs text-muted-foreground font-bold">URL del print server</span>
- <Input
- type="url"inputMode="url"autoCapitalize="off"autoCorrect="off"spellCheck={false}
- placeholder="http://192.168.0.137:18181"value={serverUrlInput}
- onChange={(e) => setServerUrlInput(e.target.value)}
- className="h-11 text-sm font-mono"/>
- <span className="text-[11px] text-muted-foreground">
- En este dispositivo usa 127.0.0.1. En celulares/tablets de la misma red, usa la IP local de la PC con el print server (ej: 192.168.0.137).
- </span>
- </div>
+        {modoActivo === 'nube' && (
+          <>
+            {cloudServer ? (
+              <Grupo>
+                <Fila
+                  icono={
+                    <span className={cn('size-10 rounded-xl flex items-center justify-center shrink-0',
+                      isCloudServerOnline(cloudServer) ? 'bg-success-soft text-success-foreground' : 'bg-destructive-soft text-destructive')}>
+                      <LinkSimple size={20} weight="bold" />
+                    </span>
+                  }
+                  titulo={cloudServer.hostname || 'Servidor de impresión'}
+                  ayuda={isCloudServerOnline(cloudServer) ? 'Vinculado por la nube · conectado' : 'Vinculado por la nube · sin señal'}
+                >
+                  <Button variant="outline" className="gap-2 text-destructive" onClick={handleUnpair}>
+                    <LinkBreak size={16} weight="bold" /> Desvincular
+                  </Button>
+                </Fila>
+              </Grupo>
+            ) : pairing ? (
+              <div className="flex flex-col gap-4">
+                <ol className="flex flex-col gap-3 t-cuerpo text-muted-foreground">
+                  <li><span className="t-cuerpo-fuerte text-foreground">1.</span> Copia el paquete de vinculación (vence {new Date(pairing.expiresAt).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}).</li>
+                  <li><span className="t-cuerpo-fuerte text-foreground">2.</span> En la PC con las impresoras ejecuta: <span className="font-mono t-cuerpo-fuerte text-foreground select-text">pos-print-server.exe --pair &lt;paquete&gt;</span></li>
+                  <li><span className="t-cuerpo-fuerte text-foreground">3.</span> Esta pantalla se actualizará sola al vincularse.</li>
+                </ol>
+                {/* El paquete no se muestra en pantalla: solo se copia al portapapeles. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex-1 basis-48 min-w-0 rounded-2xl bg-muted px-4 h-12 flex items-center t-cuerpo font-mono text-muted-foreground tracking-widest select-none" aria-label="Paquete oculto">
+                    POS1.••••••••••••••••••••
+                  </div>
+                  <Button className="h-12 shrink-0 gap-2 px-5" onClick={handleCopyPairing}><Copy size={18} weight="bold" /> Copiar paquete</Button>
+                </div>
+                <div><Button variant="ghost" className="text-muted-foreground" onClick={() => setPairing(null)}>Cancelar</Button></div>
+              </div>
+            ) : (
+              <Grupo>
+                <Fila titulo="Vincular con la nube" ayuda="Imprime desde cualquier tablet o celular sin configurar IP ni token.">
+                  <Button className="gap-2" disabled={pairingBusy} onClick={handleCreatePairing}>
+                    <LinkSimple size={16} weight="bold" /> Generar paquete
+                  </Button>
+                </Fila>
+              </Grupo>
+            )}
 
- <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
- <span className="text-xs text-muted-foreground font-bold">Token de impresión</span>
- <div className="flex items-center gap-2">
- <Input
- type="password"autoComplete="off"autoCapitalize="characters"autoCorrect="off"spellCheck={false}
- placeholder="Ej: AB3K-9XQZ"value={tokenInput}
- onChange={(e) => setTokenInput(e.target.value)}
- className="flex-1 h-11 text-sm font-mono"/>
- <Button className="h-11 shrink-0"onClick={handleSaveConnection}>
- <FloppyDiskIcon size={18} weight="bold"/> Guardar
- </Button>
- </div>
- </div>
- </>)}
- </div>
+            {cloudServer && (
+              <Campo etiqueta="Token de red local (opcional)" htmlFor="print-token"
+                ayuda="La IP del servidor se descubre sola. Con el token, este dispositivo imprime directo por la red local (más rápido y sin internet); sin él, imprime por la nube.">
+                <div className="flex items-center gap-2">
+                  <Input id="print-token" type="password" autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+                    placeholder="Ej: AB3K-9XQZ" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} className="flex-1 min-w-0 h-12 text-base font-mono" />
+                  <Button className="h-12 shrink-0 gap-2 px-5"
+                    onClick={() => { savePrintToken(tokenInput); showToast.success('Token guardado', 'Este dispositivo imprimirá por la red local cuando pueda.'); }}>
+                    <FloppyDiskIcon size={18} weight="bold" /> Guardar
+                  </Button>
+                </div>
+              </Campo>
+            )}
+          </>
+        )}
 
- {/* Impresoras Conectadas */}
- <div className="flex flex-col gap-3">
- <h4 className="font-extrabold text-sm text-foreground">Impresoras conectadas</h4>
- {configuredPrinters.length === 0 ? (
- <div className="bg-card p-8 rounded-2xl border border-border text-center flex flex-col items-center gap-2">
- <Printer size={36} className="text-muted-foreground"/>
- <span className="font-bold text-xs text-foreground">No hay impresoras conectadas todavía</span>
- </div>
- ) : (
- <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
- {configuredPrinters.map((printer) => (
- <div key={printer.id} className="bg-card p-5 rounded-2xl border border-border shadow-xs flex flex-col gap-3">
- <div className="flex items-center justify-between">
- <div className="flex items-center gap-2">
- <Printer size={18} className="text-muted-foreground"/>
- <span className="font-extrabold text-sm text-foreground">{printer.name}</span>
- </div>
- <Switch
- checked={printer.active}
- onCheckedChange={(checked) => handleToggleActive(printer, checked)}
- />
- </div>
+        {modoActivo === 'local' && (
+          <div className="flex flex-col gap-5">
+            <Campo etiqueta="URL del servidor" htmlFor="print-url"
+              ayuda="En este dispositivo usa 127.0.0.1. En celulares o tablets de la misma red, usa la IP local de la PC con el servidor (ej: 192.168.0.137).">
+              <Input id="print-url" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                placeholder="http://192.168.0.137:18181" value={serverUrlInput} onChange={(e) => setServerUrlInput(e.target.value)} className="h-12 text-base font-mono" />
+            </Campo>
+            <Campo etiqueta="Token de impresión" htmlFor="print-token-local">
+              <div className="flex items-center gap-2">
+                <Input id="print-token-local" type="password" autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+                  placeholder="Ej: AB3K-9XQZ" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} className="flex-1 min-w-0 h-12 text-base font-mono" />
+                <Button className="h-12 shrink-0 gap-2 px-5" onClick={handleSaveConnection}>
+                  <FloppyDiskIcon size={18} weight="bold" /> Guardar
+                </Button>
+              </div>
+            </Campo>
+          </div>
+        )}
+      </Seccion>
 
- <div className="flex flex-col gap-1.5">
- <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Recibe tickets de:</span>
- <div className="flex items-center gap-2">
- {(Object.keys(ROLE_LABELS) as PrinterRole[]).map((role) => {
- const { label } = ROLE_LABELS[role];
- const active = printer.roles.includes(role);
- return (
- <button
- key={role}
- type="button"onClick={() => handleToggleRole(printer, role)}
- className={cn("px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border",
- active ?"bg-primary text-primary-foreground border-primary":"bg-card text-muted-foreground border-border")}
- >
- {label}
- </button>
- );
- })}
- </div>
- </div>
+      {/* 3 · Impresoras */}
+      <Seccion titulo="Impresoras" descripcion="Activa cada impresora y elige qué tickets recibe.">
+        {configuredPrinters.length === 0 ? (
+          <Grupo><Vacio>No hay impresoras conectadas todavía.</Vacio></Grupo>
+        ) : (
+          <Grupo>
+            {configuredPrinters.map((printer) => (
+              <div key={printer.id} className="flex flex-col gap-3 px-1 py-4 border-b border-border/60 last:border-b-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Printer size={22} className={cn('shrink-0', printer.active ? 'text-foreground' : 'text-muted-foreground opacity-50')} />
+                    <span className={cn('t-fila truncate', !printer.active && 'text-muted-foreground')}>{printer.name}</span>
+                    {!printer.active && <EstadoBadge tono="neutral">Inactiva</EstadoBadge>}
+                  </div>
+                  <CheckRedondo checked={printer.active} aria-label={`Activar ${printer.name}`} onCheckedChange={(checked) => handleToggleActive(printer, checked)} />
+                </div>
 
- <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
- <button
- type="button"disabled={testingId === printer.id}
- onClick={() => handleTestPrinter(printer)}
- className="px-3 py-1.5 rounded-lg bg-muted text-foreground font-bold text-xs cursor-pointer">
- Probar
- </button>
- <button
- type="button"onClick={() => handleDisconnect(printer)}
- className="p-1.5 rounded-lg text-destructive cursor-pointer">
- <Trash size={16} />
- </button>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-9">
+                  <span className={TITULO_SECCION}>Recibe tickets de</span>
+                  {(Object.keys(ROLE_LABELS) as PrinterRole[]).map((role) => (
+                    <Casilla key={role} checked={printer.roles.includes(role)} onChange={() => handleToggleRole(printer, role)}>
+                      {ROLE_LABELS[role].label}
+                    </Casilla>
+                  ))}
+                </div>
 
- {/* Impresoras Disponibles en Windows */}
- <div className="flex flex-col gap-3">
- <h4 className="font-extrabold text-sm text-foreground">Impresoras disponibles en esta PC</h4>
- {unconfiguredSystemPrinters.length === 0 ? (
- <div className="bg-card p-6 rounded-2xl border border-border text-center text-xs text-muted-foreground font-semibold">
- Todas las impresoras detectadas ya están conectadas o no hay impresoras en Windows.
- </div>
- ) : (
- <div className="flex flex-col gap-2">
- {unconfiguredSystemPrinters.map((name) => (
- <div key={name} className="bg-card p-4 rounded-xl border border-border flex items-center justify-between">
- <div className="flex items-center gap-2">
- <Printer size={16} className="text-muted-foreground"/>
- <span className="font-bold text-xs text-foreground">{name}</span>
- </div>
- <button
- type="button"disabled={connectingName === name}
- onClick={() => handleConnect(name)}
- className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold text-xs cursor-pointer transition-colors">
- Conectar
- </button>
- </div>
- ))}
- </div>
- )}
- </div>
- </div>
- );
+                <div className="flex items-center gap-2 pl-9">
+                  <Button variant="outline" className="h-11" disabled={testingId === printer.id} onClick={() => handleTestPrinter(printer)}>
+                    {testingId === printer.id ? 'Enviando…' : 'Imprimir prueba'}
+                  </Button>
+                  <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-destructive" onClick={() => handleDisconnect(printer)}>
+                    <Trash size={16} /> Desconectar
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </Grupo>
+        )}
+
+        {/* Impresoras de Windows que aún no están conectadas: solo se muestran si hay alguna. */}
+        {unconfiguredSystemPrinters.length > 0 && (
+          <div className="flex flex-col gap-2 pt-2">
+            <h4 className={TITULO_SECCION}>Disponibles en esta PC</h4>
+            <Grupo className="border-t border-border/60">
+              {unconfiguredSystemPrinters.map((name) => (
+                <Fila key={name} icono={<Printer size={20} className="text-muted-foreground shrink-0" />} titulo={name}>
+                  <Button className="h-11" disabled={connectingName === name} onClick={() => handleConnect(name)}>
+                    {connectingName === name ? 'Conectando…' : 'Conectar'}
+                  </Button>
+                </Fila>
+              ))}
+            </Grupo>
+          </div>
+        )}
+      </Seccion>
+    </div>
+  );
 }

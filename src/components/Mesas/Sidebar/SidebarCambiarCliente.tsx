@@ -1,5 +1,6 @@
-import { ArrowLeft, Check, User } from '@phosphor-icons/react';
+import { Check, User } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
+import { ReservaHeader } from './ReservaHeader';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -31,22 +32,7 @@ export function SidebarCambiarCliente({
 }: SidebarCambiarClienteProps) {
   return (
     <div className="h-full w-full bg-card flex flex-col overflow-hidden shadow-xl">
-      <header className="p-4 border-b border-border flex items-center gap-3 shrink-0 shadow-xs">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Volver"
-          className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 cursor-pointer"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex flex-col min-w-0">
-          <h3 className="font-extrabold text-base text-foreground leading-tight">Cambiar Cliente</h3>
-          <span className="text-[10px] font-bold text-muted-foreground truncate">
-            COMANDA #{folio} · {mesaNombre}
-          </span>
-        </div>
-      </header>
+      <ReservaHeader tono="neutro" titulo="Cambiar cliente" subtitulo={`Comanda #${folio} · ${mesaNombre}`} onBack={onBack} />
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
@@ -61,24 +47,24 @@ export function SidebarCambiarCliente({
             onKeyDown={(e) => { if (e.key === 'Enter') onGuardar(); }}
             className="h-12 text-base"
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="t-meta text-muted-foreground">
             Elige un cliente registrado o escribe uno nuevo.
           </p>
         </div>
 
         {sugerencias.length > 0 && (
-          <div className="flex flex-col rounded-xl border border-border overflow-hidden">
+          <div className="flex flex-col rounded-2xl border border-border overflow-hidden">
             {sugerencias.map((c, i) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => onElegir(c)}
-                className={`w-full min-h-14 px-3 py-2 flex items-center gap-2 text-left cursor-pointer ${i % 2 === 1 ? 'bg-muted/70' : ''}`}
+                className={`w-full min-h-14 px-3 py-2 flex items-center gap-2 text-left cursor-pointer ${i % 2 === 1 ? 'bg-muted/40' : ''}`}
               >
                 <User size={16} className="text-muted-foreground shrink-0" />
                 <span className="flex flex-col min-w-0">
-                  <span className="truncate text-sm font-semibold text-foreground">{c.nombre}</span>
-                  <span className="truncate text-xs font-semibold text-muted-foreground tabular-nums">{c.detalle}</span>
+                  <span className="truncate t-cuerpo text-foreground">{c.nombre}</span>
+                  <span className="truncate t-meta text-muted-foreground tabular-nums">{c.detalle}</span>
                 </span>
               </button>
             ))}

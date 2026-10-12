@@ -507,7 +507,7 @@ export function TableSidebar({
 
         if (viewingComandaId && activeComanda === undefined) {
           return (
-            <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs font-semibold">
+            <div className="h-full w-full flex items-center justify-center text-muted-foreground t-meta">
               Cargando comanda...
             </div>
           );
@@ -564,7 +564,7 @@ export function TableSidebar({
 
         if (activeComanda === undefined) {
           return (
-            <div className="h-full w-full flex items-center justify-center text-muted-foreground text-xs font-semibold">
+            <div className="h-full w-full flex items-center justify-center text-muted-foreground t-meta">
               Cargando estado...
             </div>
           );

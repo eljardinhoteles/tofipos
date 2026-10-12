@@ -459,6 +459,8 @@ export interface RxVentaMovimiento {
   anulado_motivo?: string
   anulado_at?: string
   anulado_por?: string
+  // Cierre de turno que incluyó este cobro (pago o reembolso). Un movimiento con cierre_id ya no entra al cierre siguiente.
+  cierre_id?: string
 }
 
 // Venta: unidad de negocio (Centro de Ventas v2). Reemplaza el enfoque de
@@ -906,13 +908,14 @@ const ventaMovimientoSubSchema = {
     anulado: { type: ['boolean', 'null'] },
     anulado_motivo: { type: ['string', 'null'] },
     anulado_at: { type: ['string', 'null'] },
-    anulado_por: { type: ['string', 'null'] }
+    anulado_por: { type: ['string', 'null'] },
+    cierre_id: { type: ['string', 'null'] }
   },
   required: ['id', 'tipo', 'fecha']
 } as const
 
 const ventaSchema = {
-  version: 5,
+  version: 6,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -1224,6 +1227,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v4 → v5: agrega 'habitacion' al enum de origen — passthrough,
         // ningún documento existente usa ese valor todavía.
         5: (oldDoc: any) => oldDoc,
+        // v5 → v6: cierre_id opcional en cada movimiento (cierre de turno) — passthrough,
+        // ningún movimiento existente pertenece a un cierre todavía.
+        6: (oldDoc: any) => oldDoc,
       },
     },
     ajustes_iva: {
@@ -2706,6 +2712,25 @@ export async function agregarVentaMovimiento(
 // borrarlo — única excepción al "nunca se edita, solo se agrega" del resto
 // del modelo. El movimiento queda visible con su motivo de anulación, mismo
 // espíritu que anular una venta completa: el registro nunca desaparece.
+// Marca cobros (pagos y reembolsos) como incluidos en un cierre de turno. Reescribe el array de movimientos
+// de cada venta con el `cierre_id`; el resto de cada movimiento queda intacto.
+export async function marcarMovimientosCerrados(marcas: Array<{ ventaId: string; movimientoIds: string[] }>, cierreId: string) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const now = new Date().toISOString()
+  for (const { ventaId, movimientoIds } of marcas) {
+    const doc = await db.ventas.findOne(ventaId).exec()
+    if (!doc) continue
+    const ids = new Set(movimientoIds)
+    const movimientos = (doc.toJSON().movimientos ?? []).map((m: any) => (ids.has(m.id) ? { ...m, cierre_id: cierreId } : m))
+    await doc.update({ $set: { movimientos, _modified: now } } as any)
+    // Comprueba que la marca quedó guardada: si no, el cierre siguiente volvería a contar estos cobros.
+    const guardado = await db.ventas.findOne(ventaId).exec()
+    const faltan = (guardado?.toJSON().movimientos ?? []).filter((m: any) => ids.has(m.id) && m.cierre_id !== cierreId)
+    if (faltan.length > 0) throw new Error(`No se pudo marcar ${faltan.length} cobro(s) de la venta ${ventaId} como cerrados`)
+  }
+}
+
 export async function anularVentaMovimiento(ventaId: string, movimientoId: string, motivo: string, usuarioId?: string) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()

@@ -35,7 +35,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         unstyled: true,
         classNames: {
           toast: isMobile
-            ? "w-full flex items-center gap-2.5 rounded-full px-4 py-2.5 text-[13px] shadow-md"
+            ? "w-full flex items-center gap-2.5 rounded-full px-4 py-2.5 t-cuerpo shadow-md"
             : "w-[356px] max-w-[calc(100vw-24px)] flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-lg",
           // sonner aplica `default` a TODOS los toast además de la clase de su tipo:
           // los tipos van con `!` para que siempre ganen sobre fondo/texto base.
@@ -47,15 +47,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
           info: "bg-info-soft! text-info-foreground!",
           icon: "shrink-0 flex items-center",
           content: "flex flex-col gap-0.5 min-w-0 flex-1",
-          title: isMobile ? "text-[13px] font-bold leading-tight" : "text-sm font-bold leading-tight",
+          title: isMobile ? "t-cuerpo-fuerte leading-tight" : "t-cuerpo-fuerte leading-tight",
           // La descripción es la info relevante (p. ej. qué mesa); en móvil se
           // recorta a una línea para no alargar el toast. Va en neutro para que
           // se lea bien sobre cualquier fondo suave.
           description: isMobile
-            ? "text-xs font-medium text-foreground/70 leading-snug line-clamp-1"
-            : "text-xs font-medium text-foreground/70 leading-snug",
-          actionButton: "shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground",
-          cancelButton: "shrink-0 rounded-lg bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground",
+            ? "t-meta text-foreground/70 leading-snug line-clamp-1"
+            : "t-meta text-foreground/70 leading-snug",
+          actionButton: "shrink-0 rounded-2xl bg-primary px-3 py-1.5 t-dato text-primary-foreground",
+          cancelButton: "shrink-0 rounded-2xl bg-muted px-3 py-1.5 t-dato text-muted-foreground",
         },
       }}
       {...mobileProps}

@@ -55,7 +55,7 @@ export function SidebarConfigMesas({
  title={total > 0 ?'Quita primero sus mesas para eliminar la zona' :'Eliminar zona'}
  onClick={() => openConfirm('Eliminar zona',`¿Seguro que deseas eliminar"${piso.nombre}"? Esta acción no se puede deshacer.`,
  () => onDeletePiso?.(piso.id, piso.nombre))}
- className="rounded-xl bg-destructive-soft text-destructive hover:bg-destructive/20 disabled:opacity-40">
+ className="rounded-2xl bg-destructive-soft text-destructive hover:bg-destructive/20 disabled:opacity-40">
  <Trash size={18} weight="bold"/>
  </Button>
  )}
@@ -69,7 +69,7 @@ export function SidebarConfigMesas({
  onSubmit={(e) => { e.preventDefault(); if (nombreCambiado) onUpdatePiso?.(piso.id, nombreZona); }}
  >
  <div className="flex flex-col gap-1.5">
- <Label htmlFor="zona-nombre" className="text-xs font-bold">Nombre de la zona</Label>
+ <Label htmlFor="zona-nombre" className="t-dato!">Nombre de la zona</Label>
  <div className="flex items-center gap-2">
  <Input id="zona-nombre" type="text" value={nombreZona} onChange={(e) => setNombreZona(e.target.value)}
  className="flex-1 h-11 text-base md:text-sm font-semibold"/>
@@ -78,12 +78,12 @@ export function SidebarConfigMesas({
  </div>
  </form>
  <div className="px-4 py-2 border-y border-border bg-muted/40">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{`Mesas · ${total}`}</span>
+ <span className="t-etiqueta text-muted-foreground">{`Mesas · ${total}`}</span>
  </div>
  </>
  )}
  {total === 0 && (
- <span className="block text-xs text-muted-foreground font-semibold text-center py-10">
+ <span className="block t-meta text-muted-foreground text-center py-10">
  {isHabitacion ?'Aún no hay habitaciones.' :'Esta zona aún no tiene mesas.'}
  </span>
  )}
@@ -105,15 +105,15 @@ export function SidebarConfigMesas({
  onClick={() => onEditMesa(mesa)}
  className={cn("w-full flex items-center gap-3 px-4 py-3 text-left border-b border-border/60", isActive ?"opacity-70 cursor-not-allowed":"cursor-pointer")}
  >
- <span className="w-10 h-10 rounded-xl bg-muted text-foreground font-extrabold text-sm flex items-center justify-center shrink-0 truncate">
+ <span className="w-10 h-10 rounded-xl bg-muted text-foreground t-cuerpo-fuerte flex items-center justify-center shrink-0 truncate">
  {isHabitacion ? <Bed size={18} /> : badgeLabel}
  </span>
  <span className="flex flex-col flex-1 min-w-0">
- <span className="font-extrabold text-sm text-foreground truncate">{displayName}</span>
+ <span className="t-cuerpo-fuerte text-foreground truncate">{displayName}</span>
  {isActive ? (
- <span className="text-xs font-semibold text-warning-foreground">En uso: no se puede editar</span>
+ <span className="t-dato text-warning-foreground">En uso: no se puede editar</span>
  ) : !isHabitacion && (
- <span className="flex items-center gap-1 text-xs text-muted-foreground font-semibold">
+ <span className="flex items-center gap-1 t-meta text-muted-foreground">
  <Users size={12} /> {mesa.capacidad || 2} personas
  </span>
  )}

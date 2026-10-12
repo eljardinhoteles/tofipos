@@ -84,10 +84,10 @@ export function SidebarComandaIvaModal({ opened, onClose, currentPorcentaje, esO
             type="button"
             onClick={() => setSelected(null)}
             className={cn(
-              "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors cursor-pointer",
+              "flex items-center justify-between min-h-11 px-3.5 py-2.5 rounded-2xl border t-cuerpo transition-colors cursor-pointer",
               selected === null
                 ? "bg-primary text-primary-foreground border-primary"
-                : "bg-muted/60 text-foreground border-border hover:bg-muted"
+                : "bg-muted/40 text-foreground border-border hover:bg-muted"
             )}
           >
             <span>Usar IVA global ({porcentajeGlobal}%)</span>
@@ -100,10 +100,10 @@ export function SidebarComandaIvaModal({ opened, onClose, currentPorcentaje, esO
               type="button"
               onClick={() => setSelected(o.porcentaje)}
               className={cn(
-                "flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-sm font-semibold transition-colors cursor-pointer",
+                "flex items-center justify-between min-h-11 px-3.5 py-2.5 rounded-2xl border t-cuerpo transition-colors cursor-pointer",
                 selected === o.porcentaje
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted/60 text-foreground border-border hover:bg-muted"
+                  : "bg-muted/40 text-foreground border-border hover:bg-muted"
               )}
             >
               <span>{o.porcentaje === 0 ? '0% (Exento)' : `${o.porcentaje}%`}</span>

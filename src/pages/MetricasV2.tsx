@@ -1,13 +1,14 @@
 import { fechaLocal } from '../lib/fechaLocal';
 import { esParteRepartida, nombreBaseReparto } from '../lib/reparto';
 import { useCallback, useEffect, useMemo, useState } from'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, CartesianGrid } from'recharts';
-import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, Check, X } from'@phosphor-icons/react';
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, CartesianGrid } from'recharts';
+import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, X } from'@phosphor-icons/react';
 import dayjs from'dayjs';
 import { initVerticalRxDb, forceSyncAll, pingSyncStatus } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
 import { useRxClientes } from'../hooks/useRxClientes';
 import { Card, CardContent, CardHeader } from'@/components/ui/card';
+import { FiltroLimpiarTodo, FiltroOpcion } from'../components/Common/FiltroChip';
 import { Badge } from'@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar as CalendarPicker } from'@/components/ui/calendar';
@@ -36,7 +37,7 @@ const CHIP_TARJETA = 'bg-muted text-muted-foreground';
 // Posición en un ranking: el primero va en oscuro, el resto en neutro.
 function RankBadge({ n }: { n: number }) {
   return (
-    <span className={cn("shrink-0 h-6 min-w-8 px-2 rounded-full inline-flex items-center justify-center text-[11px] font-extrabold tabular-nums",
+    <span className={cn("shrink-0 h-6 min-w-8 px-2 rounded-full inline-flex items-center justify-center t-dato tabular-nums",
       n === 1 ? "bg-foreground text-background" : "bg-muted text-muted-foreground")}>
       #{n}
     </span>
@@ -533,7 +534,7 @@ comandaItems.forEach((item) => {
  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
  <PopoverTrigger asChild>
  <button type="button" title="Cambiar rango de fechas"
- className="h-8 px-3 rounded-full bg-muted text-foreground text-xs font-bold border border-border inline-flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap">
+ className="h-8 pointer-coarse:h-11 px-3 rounded-full bg-muted text-foreground t-dato border border-border inline-flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap">
  <CalendarBlank size={14} />
  {customRange[0] ? `${dayjs(customRange[0]).format('DD/MM')}${customRange[1] ? ` - ${dayjs(customRange[1]).format('DD/MM')}` : ''}` : 'Elegir fechas'}
  </button>
@@ -557,7 +558,7 @@ comandaItems.forEach((item) => {
  <Popover open={catOpen} onOpenChange={setCatOpen}>
  <PopoverTrigger asChild>
  <button type="button"
- className="h-8 px-3 rounded-full border border-dashed border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:border-foreground/40 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap">
+ className="h-8 pointer-coarse:h-11 px-3 rounded-full border border-dashed border-border t-dato text-muted-foreground hover:text-foreground hover:border-foreground/40 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap">
  <Plus size={13} weight="bold" /> Categoría
  </button>
  </PopoverTrigger>
@@ -565,14 +566,10 @@ comandaItems.forEach((item) => {
  {categorias.map((cat: any) => {
  const on = catFiltro.includes(cat.id);
  return (
- <button key={cat.id} type="button" aria-pressed={on}
- onClick={() => setCatFiltro(prev => on ? prev.filter(x => x !== cat.id) : [...prev, cat.id])}
- className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-left text-sm font-semibold hover:bg-muted cursor-pointer">
- <span className={cn("w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0", on ? "bg-foreground border-foreground text-background" : "border-border")}>
- {on && <Check size={11} weight="bold" />}
- </span>
+ <FiltroOpcion key={cat.id} activo={on}
+ onClick={() => setCatFiltro(prev => on ? prev.filter(x => x !== cat.id) : [...prev, cat.id])}>
  <span className="truncate">{cat.nombre}</span>
- </button>
+ </FiltroOpcion>
  );
  })}
  </PopoverContent>
@@ -581,17 +578,17 @@ comandaItems.forEach((item) => {
  const cat = categorias.find((c: any) => c.id === id);
  if (!cat) return null;
  return (
- <span key={id} className="h-8 pl-3 pr-1.5 rounded-full bg-muted text-xs font-bold text-foreground inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+ <span key={id} className="h-8 pointer-coarse:h-11 pl-3 pr-1.5 rounded-full bg-muted t-dato text-foreground inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
  {cat.nombre}
  <button type="button" aria-label={`Quitar ${cat.nombre}`} onClick={() => setCatFiltro(prev => prev.filter(x => x !== id))}
- className="w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background cursor-pointer">
+ className="size-6 pointer-coarse:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background cursor-pointer">
  <X size={11} weight="bold" />
  </button>
  </span>
  );
  })}
  {filtrando && (
- <button type="button" onClick={() => setCatFiltro([])} className="h-8 px-2 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer shrink-0 whitespace-nowrap">Quitar todo</button>
+ <FiltroLimpiarTodo onClick={() => setCatFiltro([])} />
  )}
  </>
  )}
@@ -606,9 +603,9 @@ comandaItems.forEach((item) => {
  <CardContent className="flex flex-col justify-between gap-3">
  <div className="flex items-start justify-between">
  <div className="flex flex-col gap-1 min-w-0">
- <span className="text-2xl font-black text-foreground tracking-tight">{card.value}</span>
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{card.label}</span>
- <span className="text-xs text-muted-foreground leading-snug">{card.description}</span>
+ <span className="t-cifra text-foreground">{card.value}</span>
+ <span className="t-etiqueta text-muted-foreground">{card.label}</span>
+ <span className="t-meta text-muted-foreground leading-snug">{card.description}</span>
  </div>
  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
  CHIP_TARJETA)}>
@@ -617,7 +614,7 @@ comandaItems.forEach((item) => {
  </div>
 
  {card.delta && (
- <Badge variant="secondary" className={cn("w-fit font-extrabold text-[11px]",
+ <Badge variant="secondary" className={cn("w-fit t-dato",
  card.positive ?"bg-success-soft text-success-foreground":"bg-destructive-soft text-destructive")}>
  {card.positive ?'↑':'↓'} {card.delta.replace(/^[+-]/,'')}
  </Badge>
@@ -639,11 +636,11 @@ comandaItems.forEach((item) => {
  <CardHeader>
  <div className="flex items-start justify-between gap-3">
  <div className="flex flex-col gap-0.5">
- <h3 className="font-extrabold text-base text-foreground">Evolución de ventas</h3>
- <p className="text-xs text-muted-foreground">Facturación dentro del periodo seleccionado.</p>
+ <h3 className="t-titulo text-foreground">Evolución de ventas</h3>
+ <p className="t-meta text-muted-foreground">Facturación dentro del periodo seleccionado.</p>
  </div>
  <button type="button" aria-pressed={compararAnterior} onClick={() => setCompararAnterior(v => !v)}
- className={cn("h-8 px-3 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors shrink-0",
+ className={cn("h-8 pointer-coarse:h-11 px-3 rounded-full border t-dato whitespace-nowrap cursor-pointer transition-colors shrink-0",
  compararAnterior ? "bg-muted text-foreground border-border" : "bg-card text-muted-foreground border-border hover:text-foreground")}>
  {compararAnterior ? 'Comparando con periodo anterior' : 'Comparar con periodo anterior'}
  </button>
@@ -651,7 +648,7 @@ comandaItems.forEach((item) => {
  </CardHeader>
  <CardContent>
  {ventasActuales === 0 ? (
- <div className="h-[230px] w-full flex items-center justify-center text-xs text-muted-foreground">
+ <div className="h-[230px] w-full flex items-center justify-center t-meta text-muted-foreground">
  Sin ventas registradas en el periodo.
  </div>
  ) : (
@@ -680,8 +677,8 @@ comandaItems.forEach((item) => {
  {/* Ventas por hora */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Ventas por hora y horas pico</h3>
- <p className="text-xs text-muted-foreground">La franja con más pedidos del día marca la hora pico operativa.</p>
+ <h3 className="t-titulo text-foreground">Ventas por hora y horas pico</h3>
+ <p className="t-meta text-muted-foreground">La franja con más pedidos del día marca la hora pico operativa.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">
  <ChartContainer config={ordersChartConfig} className="h-[230px] w-full">
@@ -689,12 +686,14 @@ comandaItems.forEach((item) => {
  <CartesianGrid vertical={false} />
  <XAxis dataKey="hora" tickLine={false} axisLine={false} tickMargin={8} interval={2} />
  <ChartTooltip content={<ChartTooltipContent />} />
- <Bar dataKey="ordenes" fill="var(--color-ordenes)" radius={4} />
+ <Bar dataKey="ordenes" fill="var(--color-ordenes)" radius={4}>
+ {ventasPorHora.map((d: any) => <Cell key={d.hora} fillOpacity={d.hora === peakHour ? 1 : 0.4} />)}
+ </Bar>
  </BarChart>
  </ChartContainer>
  <div className="flex items-center justify-between">
- <span className="text-sm font-bold text-foreground">Hora pico: {peakHour}</span>
- <span className="text-sm text-muted-foreground">{peakOrders} órdenes, {money(peakSales)}</span>
+ <span className="t-cuerpo-fuerte text-foreground">Hora pico: {peakHour}</span>
+ <span className="t-cuerpo text-muted-foreground">{peakOrders} órdenes, {money(peakSales)}</span>
  </div>
  </CardContent>
  </Card>
@@ -702,8 +701,8 @@ comandaItems.forEach((item) => {
  {/* Rentabilidad por día */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Rentabilidad promedio por día de semana</h3>
- <p className="text-xs text-muted-foreground">Usa ventas promedio por día para detectar el día más fuerte del periodo.</p>
+ <h3 className="t-titulo text-foreground">Rentabilidad promedio por día de semana</h3>
+ <p className="t-meta text-muted-foreground">Usa ventas promedio por día para detectar el día más fuerte del periodo.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">
  <ChartContainer config={weekdayChartConfig} className="h-[230px] w-full">
@@ -711,10 +710,12 @@ comandaItems.forEach((item) => {
  <CartesianGrid vertical={false} />
  <XAxis dataKey="dia" tickLine={false} axisLine={false} tickMargin={8} />
  <ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} />
- <Bar dataKey="promedio" fill="var(--color-promedio)" radius={4} />
+ <Bar dataKey="promedio" fill="var(--color-promedio)" radius={4}>
+ {ventasPorDiaSemana.map((d: any) => <Cell key={d.dia} fillOpacity={d.dia === diaMasRentable.dia ? 1 : 0.4} />)}
+ </Bar>
  </BarChart>
  </ChartContainer>
- <p className="text-sm font-bold text-foreground text-center">
+ <p className="t-cuerpo-fuerte text-foreground text-center">
  Día más rentable: {diaMasRentable.dia} - {money(diaMasRentable.promedio)}
  </p>
  </CardContent>
@@ -725,8 +726,8 @@ comandaItems.forEach((item) => {
  {/* Top productos */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Top productos vendidos</h3>
- <p className="text-xs text-muted-foreground">Productos con mayor volumen de venta por unidades.</p>
+ <h3 className="t-titulo text-foreground">Top productos vendidos</h3>
+ <p className="t-meta text-muted-foreground">Productos con mayor volumen de venta por unidades.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
  {topProductsByQty.map((item, index) => {
@@ -737,13 +738,13 @@ comandaItems.forEach((item) => {
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
  <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
- <p className="text-sm font-bold text-foreground truncate">{item.nombre}</p>
- <p className="text-xs text-muted-foreground">{item.cantidad} unidades</p>
+ <p className="t-cuerpo-fuerte text-foreground truncate">{item.nombre}</p>
+ <p className="t-meta text-muted-foreground">{item.cantidad} unidades</p>
  </div>
  </div>
  <div className="flex flex-col items-end shrink-0">
- <span className="text-sm font-black text-foreground">{money(item.total)}</span>
- <span className="text-xs text-muted-foreground">{pct.toFixed(0)}% de ventas</span>
+ <span className="t-cuerpo-fuerte text-foreground">{money(item.total)}</span>
+ <span className="t-meta text-muted-foreground">{pct.toFixed(0)}% de ventas</span>
  </div>
  </div>
  <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -758,8 +759,8 @@ comandaItems.forEach((item) => {
  {/* Top categorías */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Top categorías</h3>
- <p className="text-xs text-muted-foreground">Distribución de facturación por categoría de producto.</p>
+ <h3 className="t-titulo text-foreground">Top categorías</h3>
+ <p className="t-meta text-muted-foreground">Distribución de facturación por categoría de producto.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
  {topCategorias.map((c, i) => {
@@ -770,11 +771,11 @@ comandaItems.forEach((item) => {
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
  <RankBadge n={i + 1} />
  <div className="min-w-0 flex-1">
- <p className="text-sm font-bold text-foreground truncate">{c.nombre}</p>
- <p className="text-xs text-muted-foreground">{pct.toFixed(0)}% de ventas</p>
+ <p className="t-cuerpo-fuerte text-foreground truncate">{c.nombre}</p>
+ <p className="t-meta text-muted-foreground">{pct.toFixed(0)}% de ventas</p>
  </div>
  </div>
- <span className="text-sm font-black text-foreground shrink-0">{money(c.monto)}</span>
+ <span className="t-cuerpo-fuerte text-foreground shrink-0">{money(c.monto)}</span>
  </div>
  <div className="h-2 rounded-full bg-muted overflow-hidden">
  <div className={cn("h-full rounded-full", i === 0 ?"bg-info":"bg-info/50")} style={{ width:`${Math.min(100, pct)}%`}} />
@@ -790,20 +791,20 @@ comandaItems.forEach((item) => {
  {/* Clientes más valiosos */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Clientes más valiosos</h3>
- <p className="text-xs text-muted-foreground">Basado en visitas y gasto acumulado.</p>
+ <h3 className="t-titulo text-foreground">Clientes más valiosos</h3>
+ <p className="t-meta text-muted-foreground">Basado en visitas y gasto acumulado.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-2.5">
  {clientesFidelizacion.map((client, index) => (
- <div key={client.nombre} className="p-3 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
+ <div key={client.nombre} className="p-3 rounded-2xl border border-border bg-card flex items-center justify-between gap-3">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
  <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
- <p className="text-sm font-bold text-foreground truncate">{client.nombre}</p>
- <p className="text-xs text-muted-foreground">{client.visitas} visitas</p>
+ <p className="t-cuerpo-fuerte text-foreground truncate">{client.nombre}</p>
+ <p className="t-meta text-muted-foreground">{client.visitas} visitas</p>
  </div>
  </div>
- <span className="text-sm font-black text-foreground shrink-0">{money(client.gasto)}</span>
+ <span className="t-cuerpo-fuerte text-foreground shrink-0">{money(client.gasto)}</span>
  </div>
  ))}
  </CardContent>
@@ -812,21 +813,21 @@ comandaItems.forEach((item) => {
  {/* Resumen de fidelización */}
  <Card>
  <CardHeader>
- <h3 className="font-extrabold text-base text-foreground">Resumen de fidelización</h3>
- <p className="text-xs text-muted-foreground">Clientes, recurrencia y consumo promedio.</p>
+ <h3 className="t-titulo text-foreground">Resumen de fidelización</h3>
+ <p className="t-meta text-muted-foreground">Clientes, recurrencia y consumo promedio.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">
  <div className="flex items-center justify-between">
- <span className="text-sm font-bold text-foreground">Total clientes</span>
- <span className="text-sm font-black text-foreground">{clientes.length}</span>
+ <span className="t-cuerpo-fuerte text-foreground">Total clientes</span>
+ <span className="t-cuerpo-fuerte text-foreground">{clientes.length}</span>
  </div>
  <div className="flex items-center justify-between">
- <span className="text-sm font-bold text-foreground">Clientes con consumo en el periodo</span>
- <span className="text-sm font-black text-foreground">{clientesFidelizacion.length}</span>
+ <span className="t-cuerpo-fuerte text-foreground">Clientes con consumo en el periodo</span>
+ <span className="t-cuerpo-fuerte text-foreground">{clientesFidelizacion.length}</span>
  </div>
  <div className="flex items-center justify-between">
- <span className="text-sm font-bold text-foreground">Ticket promedio</span>
- <span className="text-sm font-black text-foreground">{money(ticketActual)}</span>
+ <span className="t-cuerpo-fuerte text-foreground">Ticket promedio</span>
+ <span className="t-cuerpo-fuerte text-foreground">{money(ticketActual)}</span>
  </div>
  </CardContent>
  </Card>

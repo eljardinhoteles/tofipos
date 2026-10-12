@@ -10,7 +10,7 @@ export const ORIGEN_LABEL: Record<VentaOrigen, string> = {
   mesa: 'Mesa',
   reserva_restaurante: 'Reserva restaurante',
   reserva_hotel: 'Reserva hotel',
-  habitacion: 'Checkout habitación',
+  habitacion: 'Consumo habitación',
 };
 
 export const ORIGEN_ICON: Record<VentaOrigen, typeof SquaresFour> = {
@@ -21,38 +21,64 @@ export const ORIGEN_ICON: Record<VentaOrigen, typeof SquaresFour> = {
   habitacion: Door,
 };
 
-// Rellenos (fondo sólido + texto blanco), a diferencia de los badges de estado
-// que van en tono claro con borde — así un badge de origen nunca se confunde
-// con el de estado.
+// Color = lugar de origen, igual que en el plano de Mesas: mesa = verde de marca,
+// habitación = azul, reserva restaurante = naranja, reserva hotel = violeta. Tono suave con borde fino para que
+// no compita con los chips de estado ni con el contenido de la fila.
 export const ORIGEN_CLASSES: Record<VentaOrigen, string> = {
-  mesa: 'bg-primary text-white border-primary',
-  reserva_restaurante: 'bg-warning-foreground text-white border-warning',
-  reserva_hotel: 'bg-info text-white border-info',
-  habitacion: 'bg-special text-white border-special',
+  mesa: 'bg-primary/10 text-primary border-primary/25',
+  reserva_restaurante: 'bg-warning-soft text-warning-foreground border-warning/40',
+  reserva_hotel: 'bg-special-soft text-special-foreground border-special/30',
+  habitacion: 'bg-info-soft text-info-foreground border-info/30',
+};
+
+// Solo el color del texto/icono de cada origen (para iconos sueltos fuera del badge).
+export const ORIGEN_TEXTO: Record<VentaOrigen, string> = {
+  mesa: 'text-primary',
+  reserva_restaurante: 'text-warning-foreground',
+  reserva_hotel: 'text-special-foreground',
+  habitacion: 'text-info-foreground',
+};
+
+// Fila abierta en el sidebar: mismo color con relleno sólido.
+export const ORIGEN_CLASSES_ACTIVO: Record<VentaOrigen, string> = {
+  mesa: 'bg-primary text-primary-foreground border-primary',
+  reserva_restaurante: 'bg-warning-foreground text-white border-warning-foreground',
+  reserva_hotel: 'bg-special text-white border-special',
+  habitacion: 'bg-info text-white border-info',
+};
+
+// Barra lateral de la fila seleccionada: el mismo color que el relleno del badge de origen activo.
+export const ORIGEN_BARRA_ACTIVA: Record<VentaOrigen, string> = {
+  mesa: 'shadow-[inset_3px_0_0_var(--primary)]',
+  reserva_restaurante: 'shadow-[inset_3px_0_0_var(--warning-foreground)]',
+  reserva_hotel: 'shadow-[inset_3px_0_0_var(--special)]',
+  habitacion: 'shadow-[inset_3px_0_0_var(--info)]',
 };
 
 interface OrigenBadgeProps {
   origen: VentaOrigen;
-  /** Compacto para listas (10px) o normal para detalle (12px). */
+  /** Compacto para listas o normal para detalle (mismo texto de 12px; cambia el relleno). */
   size?: 'sm' | 'md';
+  /** Relleno sólido: la fila u orden está abierta/seleccionada. */
+  activo?: boolean;
   /** Gris neutro (p. ej. ventas anuladas). */
   apagado?: boolean;
   className?: string;
 }
 
-export function OrigenBadge({ origen, size = 'sm', apagado = false, className }: OrigenBadgeProps) {
+export function OrigenBadge({ origen, size = 'sm', apagado = false, activo = false, className }: OrigenBadgeProps) {
   const Icon = ORIGEN_ICON[origen];
   return (
     <Badge
       variant="outline"
       className={cn(
-        'shrink-0 font-bold gap-1 whitespace-nowrap',
-        size === 'sm' ? 'text-[10px] px-1.5 py-0' : '',
-        apagado ? 'border-border text-muted-foreground bg-muted' : ORIGEN_CLASSES[origen],
+        'shrink-0 font-bold gap-1.5 whitespace-nowrap',
+        size === 'sm' ? 'h-6 px-2 [&>svg]:size-3.5!' : 'h-7 px-2.5 [&>svg]:size-4!',
+        apagado ? 'border-border text-muted-foreground bg-muted' : activo ? ORIGEN_CLASSES_ACTIVO[origen] : ORIGEN_CLASSES[origen],
         className
       )}
     >
-      <Icon size={size === 'sm' ? 10 : 12} weight="bold" /> {ORIGEN_LABEL[origen]}
+      <Icon size={size === 'sm' ? 14 : 16} weight="fill" /> {ORIGEN_LABEL[origen]}
     </Badge>
   );
 }

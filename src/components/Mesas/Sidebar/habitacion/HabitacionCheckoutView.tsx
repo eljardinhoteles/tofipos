@@ -2,8 +2,9 @@ import { imprimirConAviso } from '../../../../lib/imprimir';
 import { fechaLocal } from '../../../../lib/fechaLocal';
 import { useState, useMemo, useEffect } from'react';
 import { folioLabel } from '../../../../lib/folio';
-import { X, CaretRight, Receipt, CreditCard, Printer, Percent } from'@phosphor-icons/react';
+import { CaretRight, Receipt, CreditCard, Printer, Percent } from'@phosphor-icons/react';
 import { type Mesa, type HabitacionCuenta } from'../../../../db/database';
+import { ReservaHeader } from '../ReservaHeader';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa, createRxVenta } from'../../../../db/rxdb';
 import { Input } from'@/components/ui/input';
@@ -368,55 +369,40 @@ export function HabitacionCheckoutView({
 
   return (
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
-      {/* Header — mismo lenguaje que SidebarDetails/CuentaView */}
-      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-info md:text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-info text-white md:bg-white/15">
-            {roomNum}
-          </div>
-          <div className="flex flex-col">
-            <h3 className="font-extrabold text-base leading-tight md:text-white">Checkout</h3>
-            <span className="text-[10px] font-bold text-muted-foreground md:text-white/70">
-              {cuenta.huesped} · {selectedMesa.nombre}
-            </span>
-          </div>
-        </div>
-        <Button variant="ghost" size="icon-lg" aria-label="Volver" onClick={onBack} className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white">
-          <X size={18} weight="bold" />
-        </Button>
-      </header>
+      <ReservaHeader tono="info" badge={<span className="t-titulo">{roomNum}</span>} titulo="Checkout"
+        subtitulo={`${cuenta.huesped} · ${selectedMesa.nombre}`} onClose={onBack} />
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {subcuentas.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">Subcuenta a cobrar</span>
+            <span className="t-etiqueta text-muted-foreground px-0.5">Subcuenta a cobrar</span>
             <SubcuentaChips subcuentas={subcuentas} value={subSel} onChange={cambiarSubcuenta} mostrarTodas nombrePrincipal={cuenta.principal_nombre || 'Principal'} />
           </div>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="checkout-pagador" className="text-xs font-bold text-foreground">Nombre de quien paga</Label>
+          <Label htmlFor="checkout-pagador" className="t-dato! text-foreground">Nombre de quien paga</Label>
           <Input
             id="checkout-pagador" type="text" value={payerName}
             onChange={(e) => setPayerName(e.target.value)}
-            className="h-12 text-base font-semibold"
+            className="h-12 t-fila"
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">
+          <span className="t-etiqueta flex items-center gap-2 text-muted-foreground px-0.5">
             <Receipt size={14} weight="bold" /> Precuentas a cobrar
           </span>
           {ivaPendientes.length > 0 && (
-            <div className="flex items-center gap-3 rounded-xl bg-warning-soft border border-warning/40 p-3">
-              <div className="w-9 h-9 rounded-lg bg-card text-warning-foreground flex items-center justify-center shrink-0 shadow-xs">
+            <div className="flex items-center gap-3 rounded-2xl bg-warning-soft border border-warning/40 p-3">
+              <div className="size-9 pointer-coarse:size-11 rounded-lg bg-card text-warning-foreground flex items-center justify-center shrink-0 shadow-xs">
                 <Percent size={18} weight="bold" />
               </div>
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="text-xs font-extrabold text-warning-foreground leading-tight">
+                <span className="t-dato text-warning-foreground leading-tight">
                   {ivaPendientes.length} comanda{ivaPendientes.length === 1 ? '' : 's'} con IVA distinto al activo ({ivaPorcentaje}%)
                 </span>
-                <span className="text-[11px] font-semibold text-warning-foreground/80">
+                <span className="t-dato text-warning-foreground">
                   Total ${total.toFixed(2)} → ${totalConIvaActivo.toFixed(2)} con IVA {ivaPorcentaje}%
                 </span>
               </div>
@@ -435,7 +421,7 @@ export function HabitacionCheckoutView({
               const tieneCortesia = descuento > 0.001;
 
               return (
-                <div key={c.id} className={cn("flex items-stretch px-4", isOdd && "bg-muted/70")}>
+                <div key={c.id} className={cn("flex items-stretch px-4", isOdd && "bg-muted/40")}>
                   <div
                     role="button"
                     tabIndex={0}
@@ -445,8 +431,8 @@ export function HabitacionCheckoutView({
                   >
                     <Checkbox checked={isSelected} className="pointer-events-none shrink-0" />
                     <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-sm text-foreground truncate">Comanda #{folioLabel(c)}</span>
-                      <span className="text-[10px] text-muted-foreground font-semibold">
+                      <span className="t-cuerpo-fuerte text-foreground truncate">Comanda #{folioLabel(c)}</span>
+                      <span className="t-meta text-muted-foreground">
                         {new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short'})} · {new Date(c.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
                       </span>
                     </div>
@@ -460,13 +446,13 @@ export function HabitacionCheckoutView({
                       onClick={() => setDetalleComandaId(c.id)}
                       title="Ver ítems / aplicar cortesía"
                       aria-label={`Ver ítems de la comanda ${folioLabel(c)}`}
-                      className="h-auto min-h-11 min-w-28 pl-3 pr-2 py-1.5 gap-2 justify-between rounded-xl hover:bg-muted"
+                      className="h-auto min-h-11 min-w-28 pl-3 pr-2 py-1.5 gap-2 justify-between rounded-2xl hover:bg-muted"
                     >
                       <span className="flex flex-col items-end leading-tight">
                         {tieneCortesia && (
-                          <span className="text-[10px] font-bold text-warning-foreground">Cortesía −${descuento.toFixed(2)}</span>
+                          <span className="t-dato text-warning-foreground">Cortesía −${descuento.toFixed(2)}</span>
                         )}
-                        <span className="font-black text-sm text-foreground">${totalNeto.toFixed(2)}</span>
+                        <span className="t-cuerpo-fuerte text-foreground">${totalNeto.toFixed(2)}</span>
                       </span>
                       <CaretRight size={16} weight="bold" className="text-muted-foreground" />
                     </Button>
@@ -480,15 +466,15 @@ export function HabitacionCheckoutView({
 
       {/* Footer — mismo bloque de total que SidebarDetails/CuentaView */}
       <footer className="p-4 bg-muted/40 border-t border-border flex flex-col gap-3 shrink-0">
-        <div className="flex flex-col gap-1.5 px-2 py-1 text-sm font-semibold text-muted-foreground">
+        <div className="flex flex-col gap-1.5 px-2 py-1 t-cuerpo text-muted-foreground">
           <div className="flex items-center justify-between">
             <div className="flex flex-col leading-tight">
-              <span className="text-base font-black text-foreground">Total a Cobrar</span>
-              <span className="text-xs font-semibold text-muted-foreground">
+              <span className="t-titulo text-foreground">Total a Cobrar</span>
+              <span className="t-meta text-muted-foreground">
                 {comandasSeleccionadas.length}/{comandas.length} precuentas
               </span>
             </div>
-            <span className="text-xl font-black text-foreground">${total.toFixed(2)}</span>
+            <span className="t-valor text-foreground">${total.toFixed(2)}</span>
           </div>
         </div>
 
@@ -519,7 +505,7 @@ export function HabitacionCheckoutView({
           <Button
             type="button" variant="ghost" disabled={isProcessing}
             onClick={onBack}
-            className="w-full h-10 font-semibold text-muted-foreground hover:text-foreground hover:bg-muted"
+            className="w-full h-10 font-bold text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             Cancelar
           </Button>

@@ -71,9 +71,9 @@ export function AsignarMesaModal({ reserva, mesas, comandas, onClose }: AsignarM
           <DialogDescription className="sr-only">Elige una mesa libre para iniciar el servicio de la reserva</DialogDescription>
         </DialogHeader>
 
-        <div className="p-3 bg-muted/60 rounded-xl flex flex-col gap-1">
-          <span className="font-extrabold text-sm text-foreground">{reserva.nombre}</span>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground font-semibold">
+        <div className="p-3 bg-muted/60 rounded-2xl flex flex-col gap-1">
+          <span className="t-cuerpo-fuerte text-foreground">{reserva.nombre}</span>
+          <div className="flex items-center gap-3 t-meta text-muted-foreground">
             <span className="flex items-center gap-1"><Clock size={14} /> {reserva.hora}</span>
             <span>·</span>
             <span className="flex items-center gap-1"><Users size={14} /> {reserva.personas} pers</span>
@@ -81,9 +81,9 @@ export function AsignarMesaModal({ reserva, mesas, comandas, onClose }: AsignarM
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label className="text-xs font-bold text-foreground">Mesa disponible</Label>
+          <Label className="t-etiqueta! text-muted-foreground">Mesa disponible</Label>
           {mesasLibres.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
+            <p className="t-cuerpo text-muted-foreground text-center py-6">
               No hay mesas libres disponibles en este momento.
             </p>
           ) : (
@@ -95,7 +95,7 @@ export function AsignarMesaModal({ reserva, mesas, comandas, onClose }: AsignarM
                   aria-pressed={mesaSeleccionada === m.id}
                   onClick={() => setMesaSeleccionada(mesaSeleccionada === m.id ? null : m.id)}
                   title={m.piso || 'Sin zona'}
-                  className={cn('aspect-square rounded-xl border flex flex-col items-center justify-center font-black text-base transition-colors cursor-pointer',
+                  className={cn('aspect-square rounded-2xl border flex flex-col items-center justify-center t-titulo transition-colors cursor-pointer',
                     mesaSeleccionada === m.id
                       ? 'bg-foreground text-background border-foreground'
                       : 'border-border bg-card text-foreground hover:bg-muted')}>

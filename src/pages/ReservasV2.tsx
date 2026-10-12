@@ -19,6 +19,7 @@ export default function ReservasV2() {
  const {
  openConfirm,
  setReservaView,
+ selectedReservaId,
  setSelectedReservaId,
  setNuevaReservaPreset,
  reservaProductosComandaId,
@@ -184,6 +185,7 @@ export default function ReservasV2() {
  reservas={reservas}
  mesas={mesas}
  search={search}
+ activaId={selectedReservaId}
  onCardClick={openDetail}
  onAssign={handleOpenAssign}
  />
@@ -198,7 +200,7 @@ export default function ReservasV2() {
  zonasRows={zonasRows}
  mesas={mesas}
  search={search}
- highlightedId={highlightedId}
+ highlightedId={selectedReservaId ?? highlightedId}
  onCellClick={(date, zonaId) => {
  setSelectedReservaId(null);
  setNuevaReservaPreset({ fecha: date, zonaId });

@@ -88,6 +88,10 @@ export async function fetchCloudPrintServer(): Promise<CloudPrintServer | null> 
   const orgId = getOrgId();
   if (!orgId) return null;
   try {
+    // Sin sesión de Supabase (la del admin venció) las políticas RLS devuelven filas vacías SIN
+    // error: eso parecía "no hay servidor vinculado" y borraba la copia, rompiendo la impresión.
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session) return getCachedCloudPrintServer();
     const { data, error } = await supabase
       .from('print_servers')
       .select('id, organization_id, name, hostname, version, ips, system_printers, last_seen, paired_at')
@@ -103,6 +107,24 @@ export async function fetchCloudPrintServer(): Promise<CloudPrintServer | null> 
     return (data as CloudPrintServer | null) ?? null;
   } catch {
     return getCachedCloudPrintServer();
+  }
+}
+
+/** true/false según el último latido en la nube; null si no se pudo consultar (no bloquea). */
+export async function checkCloudServerOnline(serverId: string): Promise<boolean | null> {
+  try {
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session) return null;
+    const { data, error } = await supabase
+      .from('print_servers')
+      .select('last_seen, _deleted')
+      .eq('id', serverId)
+      .maybeSingle();
+    if (error || !data) return null;
+    if (data._deleted) return false;
+    return isCloudServerOnline({ last_seen: data.last_seen } as CloudPrintServer);
+  } catch {
+    return null;
   }
 }
 
@@ -252,6 +274,18 @@ async function enqueueJob(job: NewPrintJob) {
       if (result === 'ok') return { ok: true, via: 'lan' as const };
     }
     lanSkipUntil = Date.now() + 60_000;
+  }
+
+  // La copia guardada puede decir "conectado" aunque el programa se haya cerrado: se consulta
+  // el latido real antes de encolar para avisar en vez de dejar el ticket esperando.
+  if ((await checkCloudServerOnline(cloud.id)) === false && !isLoopbackBase()) {
+    throw new Error('El servidor de impresión está apagado o sin internet. Abre el programa en la PC de impresión y reintenta.');
+  }
+
+  // Encolar en la nube exige la sesión de Supabase; sin ella el insert falla con un error de RLS poco claro.
+  if (!(await supabase.auth.getSession()).data.session) {
+    if (isLoopbackBase()) return localJob();
+    throw new Error('La sesión de administrador venció: vuelve a iniciar sesión para imprimir por la nube.');
   }
 
   try {

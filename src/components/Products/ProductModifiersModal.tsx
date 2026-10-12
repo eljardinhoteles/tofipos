@@ -126,9 +126,9 @@ function ProductModifiersDialogContent({
  <div className="flex items-center justify-between border-b border-border pb-3">
  <DialogTitle asChild>
  <div className="flex items-center gap-2 truncate">
- <h3 className="font-extrabold text-sm text-foreground truncate">{product.nombre}</h3>
+ <h3 className="t-cuerpo-fuerte text-foreground truncate">{product.nombre}</h3>
  {modificadores.length > 1 && (
- <span className="text-xs font-semibold text-muted-foreground shrink-0">
+ <span className="t-meta text-muted-foreground shrink-0">
  {currentStep + 1}/{modificadores.length}
  </span>
  )}
@@ -139,8 +139,8 @@ function ProductModifiersDialogContent({
 
  {/* Group Label */}
  <div className="flex items-center justify-between">
- <h4 className="font-extrabold text-base text-foreground">{currentGroup.nombre}</h4>
- <span className={cn("px-2 py-0.5 rounded-md font-bold text-[10px]",
+ <h4 className="t-titulo text-foreground">{currentGroup.nombre}</h4>
+ <span className={cn("px-2 py-0.5 rounded-md t-dato",
  currentGroup.obligatorio ?"bg-destructive/10 text-destructive":"bg-muted text-muted-foreground")}>
  {currentGroup.obligatorio ?'Requerido':'Opcional'}
  </span>
@@ -154,7 +154,7 @@ function ProductModifiersDialogContent({
  <button
  key={option}
  type="button"onClick={() => toggle(option)}
- className={cn("w-full px-4 py-3 rounded-xl border-2 font-semibold text-sm flex items-center justify-between transition-all cursor-pointer select-none active:scale-98 text-left",
+ className={cn("w-full px-4 py-3 rounded-2xl border-2 t-cuerpo flex items-center justify-between transition-all cursor-pointer select-none active:scale-98 text-left",
  selected
  ?"bg-primary/10 border-primary text-primary":"bg-card border-border text-foreground")}
  >
@@ -170,14 +170,14 @@ function ProductModifiersDialogContent({
  <Button
  type="button"variant="ghost"disabled={currentStep === 0}
  onClick={() => setCurrentStep(s => s - 1)}
- className="text-muted-foreground text-xs font-bold gap-1">
+ className="text-muted-foreground t-meta gap-1">
  <ArrowLeft size={16} weight="bold"/> Atrás
  </Button>
 
  <Button
  type="button"disabled={!canProceed}
  onClick={handleNext}
- className={cn("font-bold text-xs gap-1.5",
+ className={cn("t-dato gap-1.5",
  isLastStep ?"bg-primary text-white":"")}
  >
  <span>{isLastStep ?'Agregar':'Siguiente'}</span>

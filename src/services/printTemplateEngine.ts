@@ -1048,3 +1048,95 @@ export function generarSolicitudDatosFacturacion(
 
   return t;
 }
+
+
+/**
+ * Ticket térmico del cierre de turno: totales, cobros por método y por origen, conteos de pendientes,
+ * novedades y línea de firma. Las listas largas (sin factura, sin comprobante) van solo como conteo;
+ * el detalle está en el asistente y en el reporte A4.
+ */
+export interface DatosTicketCierre {
+    fecha: string;
+    responsable: string;
+    origenes: string[];
+    omitidos: string[];
+    totalCobrado: number;
+    totalReembolsado: number;
+    saldoPendiente: number;
+    ventas: number;
+    anuladas: number;
+    pagos: { efectivo: number; tarjeta: number; transferencia: number; otros: number };
+    porOrigen: Array<{ titulo: string; total: number; lineas: Array<{ label: string; monto: number; sub?: boolean }> }>;
+    sinComprobante: number;
+    sinFactura: number;
+    /** Ventas a crédito registradas en el turno (constancia del crédito). */
+    creditos?: { cantidad: number; total: number };
+    novedades: string;
+    /** Listas para el reporte A4 (el ticket térmico solo usa los conteos). */
+    detalle?: {
+      sinComprobante: Array<{ cliente: string; metodo: string; monto: number }>;
+      sinFactura: Array<{ cliente: string; referencia: string; monto: number }>;
+      pendientes: Array<{ cliente: string; referencia: string; saldo: number }>;
+      creditos?: Array<{ cliente: string; referencia: string; monto: number }>;
+    };
+}
+
+export function generarTicketCierreTurno(
+  datos: DatosTicketCierre,
+  forPrinter = false,
+): string {
+  const p = (cmd: string) => forPrinter ? cmd : '';
+  const W = 48;
+  const dinero = (n: number) => `$${n.toFixed(2)}`;
+  let t = '';
+  if (forPrinter) t += POS.INIT;
+
+  const orgName = getOrgCache().nombre || 'EL JARDIN';
+  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON);
+  t += `${forPrinter ? orgName.toUpperCase() : alignCenter(orgName.toUpperCase(), W)}\n`;
+  t += `${forPrinter ? 'CIERRE DE TURNO' : alignCenter('CIERRE DE TURNO', W)}\n`;
+  t += p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
+  t += `${'-'.repeat(W)}\n`;
+  t += `${datos.fecha}\n`;
+  t += `Cierre por: ${datos.responsable}\n`;
+  t += `Origenes: ${datos.origenes.join(', ')}\n`;
+  if (datos.omitidos.length > 0) t += `Omitidos: ${datos.omitidos.join(', ')}\n`;
+  t += `${'-'.repeat(W)}\n`;
+
+  t += p(POS.BOLD_ON) + justifyBetween('TOTAL COBRADO', dinero(datos.totalCobrado), W) + '\n' + p(POS.BOLD_OFF);
+  t += justifyBetween('Reembolsos', dinero(datos.totalReembolsado), W) + '\n';
+  t += justifyBetween('Saldo pendiente', dinero(datos.saldoPendiente), W) + '\n';
+  t += justifyBetween('Ventas', `${datos.ventas}${datos.anuladas > 0 ? ` (+${datos.anuladas} anuladas)` : ''}`, W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+
+  t += p(POS.BOLD_ON) + `COBROS POR METODO\n` + p(POS.BOLD_OFF);
+  t += justifyBetween('Efectivo', dinero(datos.pagos.efectivo), W) + '\n';
+  t += justifyBetween('Tarjeta', dinero(datos.pagos.tarjeta), W) + '\n';
+  t += justifyBetween('Transferencia', dinero(datos.pagos.transferencia), W) + '\n';
+  if (datos.pagos.otros > 0) t += justifyBetween('Otros', dinero(datos.pagos.otros), W) + '\n';
+
+  const conCobros = datos.porOrigen.filter(o => o.total > 0);
+  if (conCobros.length > 0) {
+    t += `${'-'.repeat(W)}\n`;
+    t += p(POS.BOLD_ON) + `COBROS POR ORIGEN\n` + p(POS.BOLD_OFF);
+    for (const o of conCobros) {
+      t += p(POS.BOLD_ON) + justifyBetween(o.titulo, dinero(o.total), W) + '\n' + p(POS.BOLD_OFF);
+      for (const l of o.lineas) t += justifyBetween(`${l.sub ? '    ' : '  '}${l.label}`, dinero(l.monto), W) + '\n';
+    }
+  }
+
+  t += `${'-'.repeat(W)}\n`;
+  if (datos.creditos && datos.creditos.cantidad > 0) {
+    t += justifyBetween(`Ventas a credito (${datos.creditos.cantidad})`, dinero(datos.creditos.total), W) + '\n';
+  }
+  t += justifyBetween('Cobros sin comprobante', String(datos.sinComprobante), W) + '\n';
+  t += justifyBetween('Ventas sin factura', String(datos.sinFactura), W) + '\n';
+  t += `${'-'.repeat(W)}\n`;
+
+  t += p(POS.BOLD_ON) + `NOVEDADES DE CAJA\n` + p(POS.BOLD_OFF);
+  t += `${datos.novedades.trim() || 'Sin novedades.'}\n`;
+  t += `\n\n\n${'_'.repeat(W)}\n`;
+  t += p(POS.ALIGN_CENTER) + `Firma de quien cierra\n` + p(POS.ALIGN_LEFT);
+  t += `\n\n\n`;
+  return t;
+}

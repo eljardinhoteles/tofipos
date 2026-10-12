@@ -8,6 +8,8 @@ interface ReservasListaProps {
   reservas: Reserva[];
   mesas: Mesa[];
   search: string;
+  /** Reserva abierta en el sidebar: su tarjeta lleva el aro de activa. */
+  activaId?: string | null;
   onCardClick: (id: string) => void;
   onAssign: (r: Reserva) => void;
 }
@@ -24,7 +26,7 @@ const etiquetaDia = (iso: string) => {
 
 // Vista alternativa del calendario (cómoda en celular): de hoy en adelante, las
 // reservas agrupadas por día en tarjetas, ordenadas por hora.
-export function ReservasLista({ reservas, mesas, search, onCardClick, onAssign }: ReservasListaProps) {
+export function ReservasLista({ reservas, mesas, search, activaId, onCardClick, onAssign }: ReservasListaProps) {
   const codigos = useMemo(() => codigosReserva(reservas), [reservas]);
   const mesaPorId = useMemo(() => new Map(mesas.map(m => [m.id, m.nombre])), [mesas]);
 
@@ -43,8 +45,8 @@ export function ReservasLista({ reservas, mesas, search, onCardClick, onAssign }
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8 bg-background">
         <CalendarBlank size={44} className="text-muted-foreground/40" />
-        <span className="font-bold text-sm text-foreground">{search.trim() ? 'Sin resultados' : 'No hay reservas próximas'}</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="t-cuerpo-fuerte text-foreground">{search.trim() ? 'Sin resultados' : 'No hay reservas próximas'}</span>
+        <span className="t-meta text-muted-foreground">
           {search.trim() ? 'Prueba con otro nombre.' : 'Las reservas de hoy en adelante aparecerán aquí.'}
         </span>
       </div>
@@ -60,10 +62,10 @@ export function ReservasLista({ reservas, mesas, search, onCardClick, onAssign }
           <section key={fecha}>
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-2.5 bg-muted border-b border-border">
               <div className="flex items-baseline gap-2 min-w-0">
-                <h3 className="font-extrabold text-sm text-foreground first-letter:uppercase truncate">{principal}</h3>
-                {detalle && <span className="text-xs font-semibold text-muted-foreground first-letter:uppercase truncate">{detalle}</span>}
+                <h3 className="t-cuerpo-fuerte text-foreground first-letter:uppercase truncate">{principal}</h3>
+                {detalle && <span className="t-meta text-muted-foreground first-letter:uppercase truncate">{detalle}</span>}
               </div>
-              <span className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground shrink-0">
+              <span className="flex items-center gap-2 t-meta text-muted-foreground shrink-0">
                 <span className="flex items-center gap-1"><CalendarBlank size={13} /> {items.length}</span>
                 <span className="flex items-center gap-1"><Users size={13} /> {personas}</span>
               </span>
@@ -74,6 +76,7 @@ export function ReservasLista({ reservas, mesas, search, onCardClick, onAssign }
                   key={r.id}
                   reserva={r}
                   completa
+                  isHighlighted={r.id === activaId}
                   codigo={codigos[r.id]}
                   mesaNombre={r.mesa_id ? mesaPorId.get(r.mesa_id) : undefined}
                   onClick={() => onCardClick(r.id)}

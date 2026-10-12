@@ -1,8 +1,10 @@
 import { imprimirConAviso } from '../../../lib/imprimir';
+import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useEffect, useState, useMemo } from'react';
+import { ReservaHeader } from './ReservaHeader';
 import { ComandaTotales } from './ComandaTotales';
 import { folioLabel } from '../../../lib/folio';
-import { Printer, ArrowLeft, Door, Check } from'@phosphor-icons/react';
+import { Printer, Door, Check } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { SidebarEnviarHabitacion } from'./SidebarEnviarHabitacion';
@@ -229,7 +231,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  tipo:'directa',
  cliente_id: activeComanda.cliente_id || undefined,
  cliente_nombre: activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)}`,
+ referencia: `${nombreMesaCompleto(activeComanda.mesa_nombre || selectedMesa.nombre)} · #${folioLabel(activeComanda)}`,
  comanda_id: activeComanda.id,
  organization_id: orgId,
  }, saldoPendiente);
@@ -321,32 +323,21 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
  {/* Header: mismo patrón que la página "Cobrar cuenta" */}
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3 min-w-0">
- <Button type="button" variant="ghost" size="icon-lg" aria-label="Volver" onClick={onBack}
- className="rounded-xl bg-muted text-muted-foreground shrink-0">
- <ArrowLeft size={18} weight="bold"/>
- </Button>
- <div className="flex flex-col min-w-0">
- <h3 className="font-extrabold text-base text-foreground leading-tight">Pago total</h3>
- <span className="text-[10px] font-bold text-muted-foreground truncate">
- {selectedMesa.nombre.replace('Mesa','Mesa #')} · COMANDA #{folioLabel(activeComanda)}
- </span>
- </div>
- </div>
-
+ <ReservaHeader tono="neutro" titulo="Pago total" onBack={onBack}
+ subtitulo={`${selectedMesa.nombre.replace('Mesa','Mesa #')} · Comanda #${folioLabel(activeComanda)}`}
+ acciones={
  <Button type="button" variant="secondary" size="icon-lg" aria-label="Previsualizar precuenta" title="Previsualizar precuenta"
- onClick={handleShowPrecuentaPreview} className="rounded-xl shrink-0">
+ onClick={handleShowPrecuentaPreview} className="rounded-2xl shrink-0 bg-muted text-muted-foreground hover:bg-secondary">
  <Printer size={18} weight="bold" />
  </Button>
- </header>
+ } />
 
  {/* Main */}
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
  <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
- <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">Total a cobrar</span>
- <span className="text-4xl font-black text-foreground">${saldoPendiente.toFixed(2)}</span>
- <p className="text-xs text-muted-foreground max-w-[240px]">
+ <span className="t-etiqueta text-muted-foreground">Total a cobrar</span>
+ <span className="t-hero text-foreground">${saldoPendiente.toFixed(2)}</span>
+ <p className="t-meta text-muted-foreground max-w-[240px]">
  El método de pago (efectivo, tarjeta, transferencia) se asigna después en Centro de Ventas.
  </p>
  </div>

@@ -1,10 +1,11 @@
 import { useMemo, useState } from'react';
 import { useRxMenuCatalog } from'../hooks/useRxMenuCatalog';
-import { Trash, Plus, List, SquaresFour, CaretUp, CaretDown, CaretRight, Gear } from'@phosphor-icons/react';
+import { Trash, Plus, List, SquaresFour, CaretUp, CaretDown, Gear } from'@phosphor-icons/react';
 import { useUI } from'../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { createRxCategoria, updateRxCategoria, updateRxMenuItem } from'../db/rxdb';
 import { Button } from '@/components/ui/button';
+import { CheckRedondo } from '../components/Common/CheckRedondo';
 import { ReservaHeader } from '@/components/Mesas/Sidebar/ReservaHeader';
 import { PageFrame, PageHeader, PageContent, PageToolbar, HeaderSearch, headerPrimaryButtonClass, toolbarChipClass } from '../components/Common/PageHeader';
 import { Label } from '@/components/ui/label';
@@ -69,6 +70,8 @@ export default function MenuV2() {
  iva_porcentaje: item.iva_porcentaje
  })), [filteredItems]);
 
+ const activosCount = useMemo(() => safeMenuItems.filter(i => i.activo !== false).length, [safeMenuItems]);
+
  const handleEditClick = (product: any) => {
  setSelectedMenuProductId(product.id);
  setMenuView('producto');
@@ -93,8 +96,8 @@ export default function MenuV2() {
  return (
  <PageFrame>
  <PageHeader
- title={`${safeMenuItems.length} ${safeMenuItems.length === 1 ? 'Producto' : 'Productos'}`}
- subtitle={`${safeDbCategorias.length} ${safeDbCategorias.length === 1 ? 'categoría' : 'categorías'}`}
+ title="Productos"
+ subtitle={`${activosCount} ${activosCount === 1 ? 'activo' : 'activos'}`}
  search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar productos..." />}
  actions={
  <>
@@ -118,7 +121,7 @@ export default function MenuV2() {
  {cat.nombre}
  </button>
  ))}
- <button type="button" onClick={() => setIsManageCategoriesOpen(true)} aria-label="Gestionar categorías" className="h-8 w-8 rounded-full border border-dashed border-border text-muted-foreground flex items-center justify-center shrink-0 cursor-pointer">
+ <button type="button" onClick={() => setIsManageCategoriesOpen(true)} aria-label="Gestionar categorías" className="size-8 pointer-coarse:size-11 rounded-full border border-dashed border-border text-muted-foreground flex items-center justify-center shrink-0 cursor-pointer">
  <Gear size={14} weight="bold" />
  </button>
  </PageToolbar>
@@ -126,37 +129,40 @@ export default function MenuV2() {
 
  {/* Escritorio: columna de categorías + productos de la elegida */}
  <div className="flex-1 min-h-0 flex">
- <aside className="hidden md:flex w-[240px] shrink-0 border-r border-border bg-card flex-col overflow-y-auto py-3">
- <div className="flex items-center justify-between pl-4 pr-2 pb-1">
- <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Categorías</h2>
- <Button type="button" variant="ghost" size="icon" title="Gestionar categorías" aria-label="Gestionar categorías"
- onClick={() => setIsManageCategoriesOpen(true)} className="size-8 text-muted-foreground hover:text-foreground">
- <Gear size={16} weight="bold" />
+ <aside aria-label="Categorías" className="hidden md:flex w-64 shrink-0 border-r border-border bg-card flex-col overflow-y-auto p-3 gap-1">
+ <div className="flex items-center justify-between pl-3 pb-1">
+ <h2 className="t-etiqueta text-muted-foreground">Categorías</h2>
+ <Button type="button" variant="outline" size="sm" title="Gestionar categorías" aria-label="Gestionar categorías"
+ onClick={() => setIsManageCategoriesOpen(true)} className="h-8 gap-1.5 px-2.5 t-dato text-foreground">
+ <Gear size={14} weight="bold" /> Gestionar
  </Button>
  </div>
- <nav className="flex flex-col">
+ <nav className="flex flex-col gap-1">
  {[
  { id: 'all', nombre: 'Todos', icono: null as string | null | undefined, count: safeMenuItems.length, plan: false, primero: false },
  ...safeDbCategorias.map(c => ({ id: c.nombre, nombre: c.nombre, icono: c.icono, count: conteoPorCategoria.get(c.nombre) ?? 0, plan: !!c.es_comida_incluida, primero: !!c.imprimir_primero })),
- ].map(c => {
+ ].map((c, i) => {
  const Icon = c.id === 'all' ? List : getCategoryIcon(c.icono) ?? SquaresFour;
  const activa = selectedCategory === c.id;
  return (
+ <div key={c.id} className="contents">
  <button
- key={c.id}
  type="button"
  aria-current={activa ? 'true' : undefined}
  onClick={() => setSelectedCategory(c.id)}
- className={cn("flex items-center gap-3 h-11 pl-3.5 pr-4 border-l-[3px] text-left transition-colors cursor-pointer",
- activa ? "border-primary bg-muted text-foreground"
- : c.plan ? "border-transparent bg-info-soft text-info-foreground hover:bg-info/15"
- : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground")}
+ className={cn("flex items-center gap-3 min-h-11 px-3 py-2 rounded-2xl text-left transition-colors cursor-pointer touch-manipulation",
+ activa ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}
  >
- <Icon size={18} weight={activa ? "fill" : "regular"} className={cn("shrink-0", activa && !c.plan && "text-primary", c.plan && "text-info-foreground")} />
- <span className={cn("flex-1 min-w-0 truncate text-sm", activa ? "font-extrabold" : "font-semibold")}>{c.nombre}</span>
- {c.primero && <span title="Se imprime primero" aria-label="Se imprime primero" className="shrink-0 size-2 rounded-full bg-warning" />}
- <span className={cn("shrink-0 text-xs tabular-nums", activa ? "font-bold text-foreground" : "font-semibold text-muted-foreground/80")}>{c.count}</span>
+ <Icon size={18} weight={activa ? "fill" : "regular"} className="shrink-0" />
+ <span className="flex-1 min-w-0 flex items-center gap-1.5">
+ <span className={cn("truncate", activa ? "t-cuerpo-fuerte" : "t-cuerpo")}>{c.nombre}</span>
+ {c.plan && <span title="Incluida en el plan del huésped" className="shrink-0 px-1.5 rounded-md bg-info-soft text-info-foreground t-dato">Plan</span>}
+ {c.primero && <span title="Se imprime primero en cocina" className="shrink-0 px-1.5 rounded-md bg-warning-soft text-warning-foreground t-dato">1.º</span>}
+ </span>
+ <span className={cn("shrink-0 tabular-nums", activa ? "t-dato text-foreground" : "t-meta text-muted-foreground")}>{c.count}</span>
  </button>
+ {i === 0 && <div role="separator" className="h-px bg-border my-1" />}
+ </div>
  );
  })}
  </nav>
@@ -169,8 +175,8 @@ export default function MenuV2() {
  <div className="w-24 h-24 flex items-center justify-center">
  <img src="/menu.webp"alt=""aria-hidden="true"className="w-full h-full object-contain"/>
  </div>
- <h2 className="text-foreground font-bold text-lg">No se encontraron productos</h2>
- <p className="text-muted-foreground text-xs">Crea un nuevo producto para comenzar a vender.</p>
+ <h2 className="text-foreground t-valor">No se encontraron productos</h2>
+ <p className="t-meta text-muted-foreground">Crea un nuevo producto para comenzar a vender.</p>
  </div>
  ) : (
  <div className="pos-menu-grid">
@@ -202,7 +208,7 @@ export default function MenuV2() {
  {!isMobile && (
  <Sheet open={menuView === 'producto'} onOpenChange={(o) => { if (!o) { setMenuView('none'); setSelectedMenuProductId(null); } }}>
  <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
- className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 border-0 data-[side=right]:border-l-0">
+ className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 !border-0 shadow-none outline-none">
  <SheetTitle className="sr-only">Producto</SheetTitle>
  <SheetDescription className="sr-only">Crear o editar un producto del menú</SheetDescription>
  <SidebarMenuProduct />
@@ -240,20 +246,20 @@ export default function MenuV2() {
 
  <div className="p-4 flex flex-col gap-6 overflow-y-auto flex-1">
  <div className="flex flex-col gap-1.5">
- <Label htmlFor="cat-nombre" className="text-xs font-bold">Nombre</Label>
+ <Label htmlFor="cat-nombre" className="t-etiqueta! text-muted-foreground">Nombre</Label>
  <Input id="cat-nombre" type="text" value={ed.nombre}
  onChange={(e) => setEditingCategory(prev => prev && { ...prev, nombre: e.target.value })}
  onKeyDown={(e) => { if (e.key === 'Enter') guardar(); }}
- className="h-10 text-sm font-semibold" />
+ className="h-12 text-base" />
  </div>
 
  <div className="flex flex-col gap-2">
- <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Icono</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Icono</h4>
  <div className="grid grid-cols-8 gap-1.5">
  {Object.entries(CATEGORY_ICONS).map(([key, Icon]) => (
  <button key={key} type="button" title={key} aria-pressed={ed.icono === key}
  onClick={() => setEditingCategory(prev => prev && { ...prev, icono: prev.icono === key ? null : key })}
- className={cn("aspect-square rounded-xl flex items-center justify-center cursor-pointer transition-colors",
+ className={cn("aspect-square rounded-2xl flex items-center justify-center cursor-pointer transition-colors",
  ed.icono === key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground")}>
  <Icon size={18} weight="bold"/>
  </button>
@@ -262,19 +268,19 @@ export default function MenuV2() {
  </div>
 
  <div className="flex flex-col gap-2">
- <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ajustes</h4>
- <div className="rounded-2xl border border-border divide-y divide-border">
+ <h4 className="t-etiqueta text-muted-foreground">Ajustes</h4>
+ <div className="rounded-2xl border border-border bg-card shadow-xs divide-y divide-border">
  <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
  <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">Incluida en plan</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">La comida de esta categoría va incluida en el plan del huésped.</span>
+ <span className="t-cuerpo-fuerte text-foreground">Incluida en plan</span>
+ <span className="t-meta text-muted-foreground leading-snug">La comida de esta categoría va incluida en el plan del huésped.</span>
  </div>
  <Switch checked={ed.es_comida_incluida} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, es_comida_incluida: v })} />
  </label>
  <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
  <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">Imprime primero</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">Sale primero en la comanda de cocina.</span>
+ <span className="t-cuerpo-fuerte text-foreground">Imprime primero</span>
+ <span className="t-meta text-muted-foreground leading-snug">Sale primero en la comanda de cocina.</span>
  </div>
  <Switch checked={ed.imprimir_primero} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, imprimir_primero: v })} />
  </label>
@@ -282,8 +288,8 @@ export default function MenuV2() {
  </div>
  </div>
 
- <div className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-2 shrink-0">
- <Button type="button" variant="ghost" className="mr-auto font-bold text-destructive hover:text-destructive gap-1.5"
+ <div className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
+ <Button type="button" variant="outline" className="h-12 px-5 font-bold text-destructive hover:text-destructive gap-1.5"
  onClick={() => {
  openConfirm('¿Eliminar Categoría?',`Los productos de "${ed.nombre}" se quedarán sin categoría.`,
  async () => {
@@ -295,8 +301,7 @@ export default function MenuV2() {
  }}>
  <Trash size={16} /> Eliminar
  </Button>
- <Button type="button" variant="outline" className="font-bold" onClick={() => setEditingCategory(null)}>Cancelar</Button>
- <Button type="button" className="font-bold" onClick={guardar}>Guardar</Button>
+ <Button type="button" className="h-12 flex-1 font-bold" onClick={guardar}>Guardar cambios</Button>
  </div>
  </>
  );
@@ -326,16 +331,16 @@ export default function MenuV2() {
  <Input
  type="text" placeholder="Nueva categoría..." value={newCategoryName}
  onChange={(e) => setNewCategoryName(e.target.value)}
- className="flex-1 h-12 text-base font-semibold"/>
+ className="flex-1 h-12 text-base"/>
  <Button type="submit" disabled={!newCategoryName.trim()} className="h-12 px-5 font-bold gap-1.5">
  <Plus size={15} weight="bold"/> Añadir
  </Button>
  </form>
 
  {safeDbCategorias.length === 0 ? (
- <div className="py-8 text-center text-sm text-muted-foreground">Sin categorías aún</div>
+ <div className="py-8 text-center t-cuerpo text-muted-foreground">Sin categorías aún</div>
  ) : (
- <div className="flex flex-col divide-y divide-border -mx-4">
+ <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col divide-y divide-border">
  {safeDbCategorias.map((cat, idx) => {
  const CategoryIcon = getCategoryIcon(cat.icono);
  const nProductos = conteoPorCategoria.get(cat.nombre) ?? 0;
@@ -344,32 +349,31 @@ export default function MenuV2() {
  es_comida_incluida: !!cat.es_comida_incluida, imprimir_primero: !!cat.imprimir_primero,
  });
  return (
- <div key={cat.id} className="flex items-center gap-1 px-4 py-1.5 transition-colors hover:bg-muted/60">
- <div className="flex flex-col shrink-0">
- <button type="button" aria-label="Subir" onClick={() => handleMoveCategory(idx,'up')} disabled={idx === 0}
- className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:cursor-default cursor-pointer">
+ <div key={cat.id} className="flex items-center gap-1 pr-2 transition-colors hover:bg-muted/40">
+ <button type="button" onClick={abrirEdicion}
+ className="flex-1 min-w-0 min-h-16 flex items-center gap-3 pl-3 pr-2 py-2 text-left cursor-pointer touch-manipulation">
+ <span className="size-10 rounded-xl bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
+ {CategoryIcon ? <CategoryIcon size={20} weight="bold"/> : <SquaresFour size={20} />}
+ </span>
+ <span className="flex flex-col gap-0.5 flex-1 min-w-0">
+ <span className="flex items-center gap-1.5 min-w-0">
+ <span className="t-fila text-foreground truncate">{cat.nombre}</span>
+ {cat.es_comida_incluida && <span className="shrink-0 px-1.5 rounded-md bg-info-soft text-info-foreground t-dato">Plan</span>}
+ {cat.imprimir_primero && <span className="shrink-0 px-1.5 rounded-md bg-warning-soft text-warning-foreground t-dato">1.º</span>}
+ </span>
+ <span className="t-meta text-muted-foreground">{nProductos} {nProductos === 1 ? 'producto' : 'productos'}</span>
+ </span>
+ </button>
+ <div className="flex flex-col pointer-coarse:flex-row shrink-0">
+ <button type="button" aria-label={`Subir ${cat.nombre}`} onClick={() => handleMoveCategory(idx,'up')} disabled={idx === 0}
+ className="flex items-center justify-center size-7 pointer-coarse:size-11 rounded-2xl text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-25 disabled:cursor-default cursor-pointer">
  <CaretUp size={14} weight="bold"/>
  </button>
- <button type="button" aria-label="Bajar" onClick={() => handleMoveCategory(idx,'down')} disabled={idx === safeDbCategorias.length - 1}
- className="text-muted-foreground hover:text-foreground disabled:opacity-25 disabled:cursor-default cursor-pointer">
+ <button type="button" aria-label={`Bajar ${cat.nombre}`} onClick={() => handleMoveCategory(idx,'down')} disabled={idx === safeDbCategorias.length - 1}
+ className="flex items-center justify-center size-7 pointer-coarse:size-11 rounded-2xl text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-25 disabled:cursor-default cursor-pointer">
  <CaretDown size={14} weight="bold"/>
  </button>
  </div>
- <button type="button" onClick={abrirEdicion}
- className="flex-1 min-w-0 flex items-center gap-3 px-2 py-1.5 text-left cursor-pointer">
- <span className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
- {CategoryIcon ? <CategoryIcon size={18} weight="bold"/> : <SquaresFour size={18} />}
- </span>
- <span className="flex flex-col flex-1 min-w-0">
- <span className="flex items-center gap-1.5 min-w-0">
- <span className="font-bold text-sm text-foreground truncate">{cat.nombre}</span>
- {cat.es_comida_incluida && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-info-soft text-info-foreground text-[10px] font-bold">Plan</span>}
- {cat.imprimir_primero && <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-warning-soft text-warning-foreground text-[10px] font-bold">1.º</span>}
- </span>
- <span className="text-xs font-medium text-muted-foreground">{nProductos} {nProductos === 1 ? 'producto' : 'productos'}</span>
- </span>
- <CaretRight size={14} weight="bold" className="text-muted-foreground/60 shrink-0" />
- </button>
  </div>
  );
  })}
@@ -384,55 +388,49 @@ export default function MenuV2() {
  );
 }
 
+// Misma tarjeta que el selector de productos de Mesas (categoría arriba, nombre, precio abajo);
+// aquí en la esquina inferior derecha va el check de activo/inactivo.
 function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, CategoriaIcon }: any) {
- const isInactivo = product.activo === false;
- const Icono = CategoriaIcon ?? SquaresFour;
- return (
- <div
- onClick={onEdit}
- className={cn("group min-w-0 rounded-2xl p-3 md:p-4 border flex flex-col gap-3 min-h-36 cursor-pointer transition-shadow hover:shadow-md active:scale-98",
- isInactivo ? "bg-muted/50 border-border" : "bg-card",
- isSelected ? "border-primary ring-2 ring-primary/20 shadow-md" : !isInactivo && "border-border")}
- >
- <div className="flex items-center justify-between gap-2">
- <span className="flex items-center gap-1.5 min-w-0 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
- <Icono size={14} weight="bold" className="shrink-0" />
- <span className="truncate">{product.category}</span>
- </span>
- {onToggleActivo && (
- <Switch
- checked={!isInactivo}
- aria-label={isInactivo ? 'Activar producto' : 'Desactivar producto'}
- title={isInactivo ? 'Activar producto' : 'Desactivar producto'}
- onClick={(e) => e.stopPropagation()}
- onCheckedChange={(v) => onToggleActivo(v)}
- className="h-4 w-7 shrink-0 [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
- />
- )}
- </div>
+  const isInactivo = product.activo === false;
+  const Icono = CategoriaIcon ?? SquaresFour;
+  const nAdicionales: number = product.modificadores.length;
+  return (
+    <div
+      onClick={onEdit}
+      className={cn("group min-w-0 rounded-2xl p-3 md:p-4 border flex flex-col gap-3 min-h-36 cursor-pointer select-none active:scale-98",
+        isInactivo ? "bg-muted/40 border-border" : "bg-card border-border",
+        isSelected && "border-primary ring-2 ring-primary/30 shadow-md")}
+    >
+      <span className="t-etiqueta flex items-center gap-1.5 min-w-0 text-muted-foreground">
+        <Icono size={14} weight="bold" className="shrink-0" />
+        <span className="truncate">{product.category}</span>
+      </span>
 
- <h3 className={cn("font-extrabold text-base leading-snug line-clamp-2 break-words flex-1", isInactivo ? "text-muted-foreground" : "text-foreground")}>
- {product.name}
- </h3>
+      <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+        <h3 className={cn("t-titulo leading-snug line-clamp-2 break-words", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+          {product.name}
+        </h3>
+        {nAdicionales > 0 && (
+          <span className="flex items-center gap-1.5 t-meta text-muted-foreground">
+            <List size={14} weight="bold" className="shrink-0" />
+            Adicionales: {nAdicionales}
+          </span>
+        )}
+      </div>
 
- <div className="flex items-end justify-between gap-2">
- {product.precio_variable ? (
- <span className="text-sm font-black text-foreground">Precio variable</span>
- ) : (
- <span className={cn("text-xl font-black tabular-nums leading-none", isInactivo ? "text-muted-foreground" : "text-foreground")}>
- ${product.price.toFixed(2)}
- </span>
- )}
- <span className="flex items-center gap-2 shrink-0 text-xs font-bold text-muted-foreground">
- {isInactivo && <span className="px-1.5 py-0.5 rounded-md bg-muted">Inactivo</span>}
- {product.modificadores.length > 0 && (
- <span className="flex items-center gap-1" title="Modificadores">
- <List size={14} weight="bold" />
- {product.modificadores.length}
- </span>
- )}
- </span>
- </div>
- </div>
- );
+      <div className="flex items-end justify-between gap-2">
+        {product.precio_variable ? (
+          <span className="t-cuerpo-fuerte text-foreground">Precio variable</span>
+        ) : (
+          <span className={cn("t-valor tabular-nums leading-none", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+            ${product.price.toFixed(2)}
+          </span>
+        )}
+        {onToggleActivo && (
+          <CheckRedondo checked={!isInactivo} onCheckedChange={(v) => onToggleActivo(v)}
+            aria-label={isInactivo ? 'Activar producto' : 'Desactivar producto'} />
+        )}
+      </div>
+    </div>
+  );
 }

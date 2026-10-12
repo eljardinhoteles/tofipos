@@ -34,21 +34,21 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  type="button"
  title="Cambiar mesa"
  onClick={onCambiarMesa}
- className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
+ className={cn("w-10 h-10 pointer-coarse:size-11 rounded-2xl t-titulo flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
  enCuenta?"bg-warning-foreground text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
  {mesaNombre.replace(/^Mesa\s*/i,'')}
  </button>
  <div className="flex flex-col">
- <h3 className={cn("font-extrabold text-base leading-tight", enCuenta?"md:text-white":"md:text-primary-foreground")}>
+ <h3 className={cn("t-titulo leading-tight", enCuenta?"md:text-white":"md:text-primary-foreground")}>
  {titulo}
  </h3>
  <div className="flex items-center gap-1.5">
- <span className={cn("text-[10px] font-bold text-muted-foreground", enCuenta?"md:text-white/70":"md:text-primary-foreground/70")}>
+ <span className={cn("t-meta text-muted-foreground", enCuenta?"md:text-white/70":"md:text-primary-foreground/70")}>
  {subtitulo} · {mesaNombre}
  </span>
  {linkedMesa && (
- <span className={cn("flex items-center gap-1 w-fit px-1.5 py-0.5 rounded-md text-[10px] font-extrabold",
- enCuenta?"bg-warning-foreground/10 text-warning-foreground md:bg-white/20 md:text-white":"bg-primary/10 text-primary md:bg-primary-foreground/20 md:text-primary-foreground")}>
+ <span className={cn("flex items-center gap-1 w-fit px-1.5 py-0.5 rounded-md t-dato",
+ enCuenta?"bg-warning-foreground/10 text-warning-foreground md:bg-white/15 md:text-white":"bg-primary/10 text-primary md:bg-primary-foreground/15 md:text-primary-foreground")}>
  <Bed size={11} weight="fill"/>
  Hab. {linkedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || linkedMesa.nombre}
  </span>
@@ -63,7 +63,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  variant="ghost"size="icon-lg"title={linkedMesa ?'Cambiar o quitar la habitación' :'Vincular esta cuenta a una habitación'}
  aria-label={linkedMesa ?'Cambiar o quitar la habitación' :'Vincular esta cuenta a una habitación'}
  onClick={onVincularHabitacion}
- className={cn("rounded-xl text-muted-foreground",
+ className={cn("rounded-2xl text-muted-foreground",
  enCuenta?"md:text-white":"md:text-primary-foreground")}
  >
  <Bed size={18} weight="bold"/>
@@ -74,7 +74,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  variant="ghost"size="icon-lg"title="Dividir la mesa en varias cuentas"aria-label="Dividir la mesa en varias cuentas"
  disabled={dividiendo}
  onClick={onDividir}
- className={cn("rounded-xl text-muted-foreground",
+ className={cn("rounded-2xl text-muted-foreground",
  enCuenta?"md:text-white":"md:text-primary-foreground")}
  >
  <ArrowsLeftRight size={18} weight="bold"/>
@@ -82,7 +82,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  )}
  <Button
  variant="ghost"size="icon-lg"aria-label="Cerrar"onClick={onClose}
- className={cn("rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25",
+ className={cn("rounded-2xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25",
  enCuenta?"md:text-white":"md:text-primary-foreground")}
  >
  <X size={18} weight="bold"/>

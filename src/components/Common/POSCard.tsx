@@ -33,8 +33,8 @@ export const POSCard = memo(function POSCard({
  >
  <div className="flex flex-col gap-3 flex-1">
  <div className="flex flex-col gap-0.5">
- <h4 className="font-black text-base text-foreground truncate">{title}</h4>
- {subtitle && <span className="text-xs font-semibold text-muted-foreground">{subtitle}</span>}
+ <h4 className="t-titulo text-foreground truncate">{title}</h4>
+ {subtitle && <span className="t-dato text-muted-foreground">{subtitle}</span>}
  </div>
 
  {children && <div className="flex-1">{children}</div>}
@@ -42,9 +42,9 @@ export const POSCard = memo(function POSCard({
  {amount !== undefined && (
  <div className={cn("flex items-center mt-auto pt-2", ivaLabel ?"justify-between":"justify-end")}>
  {ivaLabel && (
- <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{ivaLabel}</span>
+ <span className="t-etiqueta text-muted-foreground">{ivaLabel}</span>
  )}
- <span className="font-black text-lg text-foreground">{amount}</span>
+ <span className="t-valor text-foreground">{amount}</span>
  </div>
  )}
  </div>

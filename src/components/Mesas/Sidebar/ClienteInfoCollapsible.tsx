@@ -26,10 +26,10 @@ interface ClienteInfoCollapsibleProps {
 // cambiar el cliente aunque el panel esté cerrado.
 export function ClienteInfoCollapsible({ open, onOpenChange, onEditar, linkedMesa, clienteVinculado, clienteNombre }: ClienteInfoCollapsibleProps) {
   return (
- <Collapsible open={open} onOpenChange={onOpenChange} className="shrink-0 border-b border-border bg-muted/50">
- <div className="w-full flex items-center justify-between px-4 py-2.5 transition-colors">
- <CollapsibleTrigger className="flex-1 flex items-center gap-2 cursor-pointer">
- <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+ <Collapsible open={open} onOpenChange={onOpenChange} className="shrink-0 border-b border-border bg-muted/40">
+ <div className="w-full flex items-center justify-between px-4 py-1.5 pointer-coarse:py-0 transition-colors">
+ <CollapsibleTrigger className="flex-1 self-stretch min-h-9 pointer-coarse:min-h-11 flex items-center gap-2 cursor-pointer">
+ <span className="t-etiqueta flex items-center gap-2 text-muted-foreground">
  <IdentificationCard size={14} />
  Datos del Cliente
  </span>
@@ -40,12 +40,12 @@ export function ClienteInfoCollapsible({ open, onOpenChange, onEditar, linkedMes
  </CollapsibleTrigger>
  <Button
  variant="ghost"size="icon-sm"onClick={onEditar}
- title="Cambiar cliente"className="text-muted-foreground shrink-0">
+ title="Cambiar cliente" aria-label="Cambiar cliente" className="text-muted-foreground shrink-0 -mr-2">
  <PencilSimple size={14} />
  </Button>
  </div>
  <CollapsibleContent>
- <div className="px-4 pb-3 flex flex-col gap-2 text-xs">
+ <div className="px-4 pb-3 flex flex-col gap-2 t-meta">
  {linkedMesa && (
  <div className="flex items-center gap-2 text-foreground">
  <Bed size={14} className="text-muted-foreground shrink-0"/>
@@ -100,7 +100,7 @@ export function ClienteInfoCollapsible({ open, onOpenChange, onEditar, linkedMes
 
  {(clienteVinculado.nombre_factura || clienteVinculado.numero_doc || clienteVinculado.direccion_fiscal || clienteVinculado.email_factura) && (
  <div className="flex flex-col gap-2 pt-2 mt-1 border-t border-border/60">
- <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+ <span className="t-etiqueta flex items-center gap-1.5 text-muted-foreground">
  <Buildings size={12} /> Facturación
  </span>
  {clienteVinculado.nombre_factura && (

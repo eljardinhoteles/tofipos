@@ -33,7 +33,7 @@ export function SidebarHabitacionDestino({ folio, cuentas, mesas, procesando, on
   );
   const cuentaSel = cuentas.find((c) => c.id === cuentaId);
   const subs = cuentaSel?.subcuentas ?? [];
-  const titulo = 'text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground';
+  const titulo = 't-etiqueta text-muted-foreground';
 
   return (
     <div className="h-full w-full bg-card flex flex-col overflow-hidden shadow-xl">
@@ -46,7 +46,7 @@ export function SidebarHabitacionDestino({ folio, cuentas, mesas, procesando, on
       />
 
       <main className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-6">
-        <p className="text-sm text-muted-foreground leading-snug">
+        <p className="t-cuerpo text-muted-foreground leading-snug">
           {vincular
             ? 'Elige la habitación de esta cuenta. Seguirá abierta en la mesa y se enviará a la habitación cuando la cargues.'
             : 'Elige la habitación activa a la que se transferirá esta comanda.'}

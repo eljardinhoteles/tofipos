@@ -375,13 +375,13 @@ export default function MesasV2() {
                 {vistaFondo === 'mapa' && (
                         <header className="h-16 md:h-[72px] px-6 bg-nav border-b-0 flex items-center justify-between shrink-0">
                             <div className="flex flex-col justify-center min-w-0">
-                                <h1 className="font-extrabold text-base text-nav-foreground truncate max-w-[240px]">
+                                <h1 className="t-titulo text-nav-foreground truncate max-w-[240px]">
                                     {localStorage.getItem('pos_org_name_cached') || 'POS'}
                                 </h1>
                                 <span
                                     title={printServerOk ? 'Servidor de impresión conectado' : 'Servidor de impresión sin conexión'}
-                                    className={cn("flex items-center gap-1.5 text-xs font-semibold leading-tight",
-                                        printServerOk ? 'text-nav-foreground/70' : 'text-red-300')}
+                                    className={cn("flex items-center gap-1.5 t-dato leading-tight",
+                                        printServerOk ? 'text-nav-foreground/70' : 'text-nav-alert')}
                                 >
                                     <span className={cn("w-2 h-2 rounded-full shrink-0", printServerOk ? 'bg-success' : 'bg-destructive')} />
                                     {printServerOk ? 'Impresión conectada' : 'Impresión sin conexión'}
@@ -393,7 +393,7 @@ export default function MesasV2() {
                                         e.stopPropagation();
                                         setMesaView('productos');
                                     }}
-                                    className="w-9 h-9 rounded-xl bg-nav-foreground active:scale-95 text-nav flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
+                                    className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground active:scale-95 text-nav flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
                                     <Basket size={18} weight="bold" />
                                 </button>
 
@@ -402,7 +402,7 @@ export default function MesasV2() {
                                         e.stopPropagation();
                                         handleImprimirSolicitudFacturacion();
                                     }}
-                                    className="w-9 h-9 rounded-xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer">
+                                    className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer">
                                     <Receipt size={18} weight="bold" />
                                 </button>
 
@@ -411,7 +411,7 @@ export default function MesasV2() {
                                         e.stopPropagation();
                                         setReportSidebarOpen(true);
                                     }}
-                                    className="hidden sm:flex w-9 h-9 rounded-xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground items-center justify-center transition-all shrink-0 cursor-pointer">
+                                    className="hidden sm:flex size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground items-center justify-center transition-all shrink-0 cursor-pointer">
                                     <ClipboardText size={18} weight="bold" />
                                 </button>
                             </div>
@@ -419,7 +419,7 @@ export default function MesasV2() {
                 )}
 
                 {/* Tarjeta de contenido: en escritorio el marco (sidebar + header) queda a la izquierda y arriba; la tarjeta llega al borde derecho e inferior */}
-                <div className={cn("flex-1 min-h-0 flex flex-col overflow-hidden", vistaFondo === 'mapa' && "bg-background rounded-t-2xl md:rounded-t-none md:rounded-tl-2xl")}>
+                <div className={cn("flex-1 min-h-0 flex flex-col overflow-hidden", vistaFondo === 'mapa' && "bg-background rounded-t-marco md:rounded-t-none md:rounded-tl-marco")}>
                 {vistaFondo === 'mapa' && (
                     <>
 
@@ -448,13 +448,13 @@ export default function MesasV2() {
                                                 .catch(err => console.warn('Error creando Habitaciones:', err));
                                         }
                                     }}
-                                    className={cn("px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs transition-all cursor-pointer shrink-0 whitespace-nowrap",
+                                    className={cn("px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
                                         selectedPiso.toLowerCase() === 'habitaciones' ? "bg-info text-white font-extrabold shadow-xs" : "bg-transparent text-foreground font-extrabold hover:text-info-foreground")}
                                 >
                                     {habitacionesActivasCount > 0 && (
                                         <span
                                             title={`${habitacionesActivasCount} habitación${habitacionesActivasCount === 1 ? '' : 'es'} con cuenta activa`}
-                                            className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center text-[10px] font-bold leading-none",
+                                            className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center t-dato leading-none",
                                                 selectedPiso.toLowerCase() === 'habitaciones' ? "bg-white text-info-foreground shadow-xs" : "bg-info text-white")}
                                         >
                                             {habitacionesActivasCount}
@@ -482,7 +482,7 @@ export default function MesasV2() {
                                                         pisoSectionRefs.current[piso]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                                     }
                                                 }}
-                                                className={cn("px-3.5 py-1.5 rounded-full text-xs transition-all cursor-pointer whitespace-nowrap border",
+                                                className={cn("px-3.5 py-1.5 rounded-full t-meta transition-all cursor-pointer whitespace-nowrap border",
                                                     active
                                                         ? "bg-primary text-primary-foreground font-bold border-primary shadow-xs" : "bg-card text-muted-foreground font-medium border-border")}
                                             >
@@ -492,7 +492,7 @@ export default function MesasV2() {
                                     })}
                                     <button
                                         type="button" onClick={() => setConfigView('pisos')}
-                                        className={cn("px-3.5 py-1.5 rounded-full text-xs transition-all cursor-pointer whitespace-nowrap border border-dashed font-semibold",
+                                        className={cn("px-3.5 py-1.5 rounded-full t-dato transition-all cursor-pointer whitespace-nowrap border border-dashed",
                                             configView !== 'none' ? "bg-primary/10 text-primary border-primary/40" : "bg-transparent text-muted-foreground border-border")}
                                     >
                                         + Añadir
@@ -534,14 +534,14 @@ export default function MesasV2() {
                                         <div className="w-24 h-24 flex items-center justify-center">
                                             <img src={selectedPiso.toLowerCase() === 'habitaciones' ? '/hotel.webp' : '/Mesas.webp'} alt="" aria-hidden="true" className="w-full h-full object-contain" />
                                         </div>
-                                        <h2 className="text-foreground font-extrabold text-xl">No hay zonas creadas</h2>
-                                        <p className="text-muted-foreground text-sm max-w-xs">
+                                        <h2 className="text-foreground t-valor">No hay zonas creadas</h2>
+                                        <p className="text-muted-foreground t-cuerpo max-w-xs">
                                             Crea tu primera zona o piso para empezar a agregar mesas.
                                         </p>
                                     </div>
                                     <button
                                         type="button" onClick={(e) => { e.stopPropagation(); handleOpenConfig(); }}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm active:scale-95 transition-all shadow-xs cursor-pointer">
+                                        className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary text-primary-foreground t-cuerpo active:scale-95 transition-all shadow-xs cursor-pointer">
                                         <Plus size={18} weight="bold" />
                                         Crear primera zona
                                     </button>
@@ -552,19 +552,19 @@ export default function MesasV2() {
                                         <div className="w-24 h-24 flex items-center justify-center">
                                             <img src={isHabitacionesSeleccionado ? '/hotel.webp' : '/Mesas.webp'} alt="" aria-hidden="true" className="w-full h-full object-contain" />
                                         </div>
-                                        <h2 className="text-foreground font-extrabold text-xl">
+                                        <h2 className="text-foreground t-valor">
                                             {isHabitacionesSeleccionado
                                                 ? 'No hay habitaciones' : showAllPisos
                                                     ? 'No hay mesas creadas' : `No hay mesas en ${selectedPiso}`}
                                         </h2>
-                                        <p className="text-muted-foreground text-sm max-w-xs">
+                                        <p className="text-muted-foreground t-cuerpo max-w-xs">
                                             {isHabitacionesSeleccionado
                                                 ? 'Añade las habitaciones del hotel para empezar a gestionar cuentas.' : 'Comienza configurando el plano de esta zona añadiendo tu primera mesa.'}
                                         </p>
                                     </div>
                                     <button
                                         type="button" onClick={(e) => { e.stopPropagation(); handleOpenConfig(); }}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm active:scale-95 transition-all shadow-xs cursor-pointer">
+                                        className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary text-primary-foreground t-cuerpo active:scale-95 transition-all shadow-xs cursor-pointer">
                                         <Plus size={18} weight="bold" />
                                         {isHabitacionesSeleccionado ? 'Añadir Habitación' : 'Añadir Primera Mesa'}
                                     </button>
@@ -579,7 +579,7 @@ export default function MesasV2() {
                                             key={piso}
                                             ref={(el) => { pisoSectionRefs.current[piso] = el; }}
                                             className="flex flex-col gap-4 scroll-mt-4">
-                                            <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            <h2 className="t-etiqueta text-muted-foreground">
                                                 {piso}
                                             </h2>
                                             <div className="pos-tables-grid">

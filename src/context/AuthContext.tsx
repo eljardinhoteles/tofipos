@@ -155,7 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logoutAdmin = async () => {
     try {
-      await supabase.auth.signOut();
+      // Alcance local: cerrar sesión en este equipo no debe cerrar la del mismo administrador en los demás.
+      await supabase.auth.signOut({ scope: 'local' });
       desvincularDispositivo();
       localStorage.removeItem('pos_admin_email');
       return { error: null };
@@ -266,7 +267,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .maybeSingle();
             if (remoto && remoto.activo && !remoto._deleted) perfil = remoto as UsuarioLocal;
           }
-          await verifier.auth.signOut();
+          // Alcance local: el cliente de verificación no guarda sesión. Con el alcance por defecto (global) Supabase
+          // revocaría TODAS las sesiones de esa cuenta en todos los equipos, incluida la del administrador si es la
+          // misma persona, y esos equipos pedirían volver a iniciar sesión sin avisar.
+          await verifier.auth.signOut({ scope: 'local' });
 
           if (!perfil) {
             return { success: false, error: 'Tu cuenta no pertenece a esta organización o está inactiva.' };

@@ -1,7 +1,7 @@
 import { useState } from'react';
 import dayjs from'dayjs';
 import'dayjs/locale/es';
-import { X, Calendar, User, Receipt, Bed } from'@phosphor-icons/react';
+import { Bed } from'@phosphor-icons/react';
 import { type Mesa } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
@@ -9,6 +9,7 @@ import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
 import { DatePickerField } from'@/components/ui/date-picker-field';
+import { ReservaHeader } from'../ReservaHeader';
 import { ClienteSelector } from'@/components/Common/ClienteSelector';
 
 dayjs.locale('es');
@@ -75,31 +76,15 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-info md:text-white">
- <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-info text-white md:bg-white/15">
- <Bed size={20} weight="bold"/>
- </div>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base leading-tight md:text-white">Iniciar Cuenta</h3>
- <span className="text-[10px] font-bold text-muted-foreground md:text-white/70">
- Habitación #{selectedMesa.nombre.replace(/\D/g,'') || selectedMesa.nombre}
- </span>
- </div>
- </div>
-
- <Button variant="ghost" size="icon-lg" aria-label="Cerrar" onClick={onClose} className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white">
- <X size={18} weight="bold"/>
- </Button>
- </header>
+ <ReservaHeader tono="info" badge={<Bed size={20} weight="bold"/>} titulo="Iniciar cuenta"
+ subtitulo={`Habitación ${selectedMesa.nombre.replace(/\D/g,'') || selectedMesa.nombre}`} onClose={onClose} />
 
  <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col">
  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
- <div className="flex flex-col gap-1.5">
- <Label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
- <User size={14} className="text-muted-foreground"/> Nombre del huésped *
- </Label>
+ <div className="flex flex-col gap-2">
+ <Label className="t-etiqueta! text-muted-foreground">Nombre del huésped *</Label>
  <ClienteSelector
+ tono="info"
  value={huesped}
  onChange={(nombre) => {
  setHuesped(nombre);
@@ -111,36 +96,24 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  </div>
 
  <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1.5">
- <Label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
- <Calendar size={14} className="text-muted-foreground"/> Check-in
- </Label>
- <DatePickerField
- value={checkIn}
- onChange={setCheckIn}
- />
+ <div className="flex flex-col gap-2">
+ <Label className="t-etiqueta! text-muted-foreground">Check-in</Label>
+ <DatePickerField value={checkIn} onChange={setCheckIn} className="h-12 bg-card border-border" />
  </div>
 
- <div className="flex flex-col gap-1.5">
- <Label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
- <Calendar size={14} className="text-muted-foreground"/> Check-out
- </Label>
- <DatePickerField
- value={checkOut}
- onChange={setCheckOut}
- />
+ <div className="flex flex-col gap-2">
+ <Label className="t-etiqueta! text-muted-foreground">Check-out</Label>
+ <DatePickerField value={checkOut} onChange={setCheckOut} className="h-12 bg-card border-border" />
  </div>
  </div>
 
- <div className="flex flex-col gap-1.5">
- <Label className="flex items-center gap-1.5 text-xs font-bold text-foreground">
- <Receipt size={14} className="text-muted-foreground"/> Notas / Observaciones
- </Label>
+ <div className="flex flex-col gap-2">
+ <Label className="t-etiqueta! text-muted-foreground">Notas / Observaciones</Label>
  <Textarea
  rows={3}
  placeholder="Observaciones de la estancia..." value={notas}
  onChange={(e) => setNotas(e.target.value)}
- className="min-h-24 text-base font-medium"
+ className="min-h-24 text-base"
  />
  </div>
 

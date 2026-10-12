@@ -39,7 +39,7 @@ export function SidebarAddTable({
  onSubmit(form);
  };
 
- const etiqueta = 'text-xs font-bold';
+ const etiqueta = 't-etiqueta! text-muted-foreground';
  const campo = 'h-11 text-base md:text-sm font-semibold';
 
  return (
@@ -57,7 +57,7 @@ export function SidebarAddTable({
  aria-label={isHabitacion ?'Eliminar habitación' :'Eliminar mesa'}
  title={isHabitacion ?'Eliminar habitación' :'Eliminar mesa'}
  onClick={() => openConfirm(isHabitacion ?'Eliminar habitación' :'Eliminar mesa',`¿Seguro que deseas eliminar ${initialValues.nombre ||(isHabitacion ?'esta habitación' :'esta mesa')}?`, onDelete)}
- className="rounded-xl bg-destructive-soft text-destructive hover:bg-destructive/20">
+ className="rounded-2xl bg-destructive-soft text-destructive hover:bg-destructive/20">
  <Trash size={18} weight="bold"/>
  </Button>
  )}

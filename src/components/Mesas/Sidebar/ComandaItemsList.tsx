@@ -62,9 +62,9 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items, selected
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
-        <Basket size={48} className="text-muted-foreground/40" />
-        <span className="font-bold text-xs text-foreground">Comanda vacía</span>
-        <span className="text-[11px] text-muted-foreground">Añade productos usando el menú.</span>
+        <Basket size={48} className="text-muted-foreground/60" />
+        <span className="t-dato text-foreground">Comanda vacía</span>
+        <span className="t-meta text-muted-foreground">Añade productos usando el menú.</span>
       </div>
     );
   }
@@ -107,11 +107,11 @@ export const TodasList = memo(function TodasList({ grupos, onSelectSubcomanda }:
             onClick={() => onSelectSubcomanda(g.comanda.id)}
             className="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-2 bg-muted border-y border-border cursor-pointer"
           >
-            <span className="font-extrabold text-xs uppercase tracking-wide text-foreground truncate">{g.comanda.subcomanda_nombre || g.comanda.cliente}</span>
-            <span className="font-black text-xs text-foreground shrink-0">${g.total.toFixed(2)}</span>
+            <span className="t-etiqueta text-foreground truncate">{g.comanda.subcomanda_nombre || g.comanda.cliente}</span>
+            <span className="t-dato text-foreground shrink-0">${g.total.toFixed(2)}</span>
           </button>
           {g.items.length === 0 ? (
-            <div className="px-4 py-3 text-[11px] text-muted-foreground">Sin productos</div>
+            <div className="px-4 py-3 t-meta text-muted-foreground">Sin productos</div>
           ) : g.items.map((item, index) => (
             <TodasFila key={item.id} item={item} index={index} comanda={g.comanda} onSelectSubcomanda={onSelectSubcomanda} />
           ))}

@@ -150,10 +150,10 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <Button
  type="button" variant="warning" onClick={onOpenCart}
  className="flex-col gap-0 flex-1 h-[52px] px-4 rounded-full active:scale-[0.96] min-w-0">
- <span className="text-[14px] font-extrabold truncate w-full text-center leading-tight">
+ <span className="t-cuerpo-fuerte truncate w-full text-center leading-tight">
  {cart.mesaNombre}
  </span>
- <span className="text-[12px] text-primary-foreground/90 font-medium truncate w-full text-center mt-0.5">
+ <span className="t-meta text-primary-foreground/90 truncate w-full text-center mt-0.5">
  {cart.itemCount} {cart.itemCount === 1 ?'item':'items'} · ${cart.total.toFixed(2)}
  </span>
  </Button>
@@ -178,7 +178,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <Button
  type="button" onClick={() => navigate('/v2/mesas')} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
  title="Mesas"
- className={cn("flex-1 h-[52px] rounded-full gap-2 text-sm font-bold drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "translate-y-28 pointer-events-none")}
+ className={cn("flex-1 h-[52px] rounded-full gap-2 t-cuerpo-fuerte drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "translate-y-28 pointer-events-none")}
  style={{ transitionDelay: menuCapasAbierto ? '90ms' : '0ms' }}
  >
  <SquaresFour size={20} weight={isMesasActive ?'fill':'regular'} />
@@ -200,7 +200,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <Drawer open={menuOpen} onOpenChange={setMenuOpen} dismissible handleOnly>
  <DrawerPortal>
  <DrawerOverlay />
- <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95dvh] max-h-[95dvh] bg-nav text-nav-foreground rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.35)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+ <DrawerContent className="fixed bottom-0 left-0 right-0 h-[95dvh] max-h-[95dvh] bg-nav text-nav-foreground rounded-t-marco shadow-[0_-8px_30px_rgba(0,0,0,0.35)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
  <DrawerDescription className="sr-only">Navegación entre secciones de la app</DrawerDescription>
  <DrawerHandle className="!bg-nav-foreground/40" />
  <DrawerTitle className="sr-only">Menú principal</DrawerTitle>
@@ -210,15 +210,15 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  <div className="flex items-center gap-3 min-w-0">
  <AguacateEgg className="w-9 h-9" />
  <div className="flex flex-col min-w-0">
- <span className="font-extrabold text-base text-nav-foreground leading-tight truncate">{orgNombre}</span>
- <span className="flex items-center gap-1.5 text-xs font-semibold text-nav-foreground/70 leading-tight">
+ <span className="t-titulo text-nav-foreground leading-tight truncate">{orgNombre}</span>
+ <span className="flex items-center gap-1.5 t-dato text-nav-foreground/70 leading-tight">
  <span className={cn("w-2 h-2 rounded-full shrink-0", printServerOk ? 'bg-success' : 'bg-destructive')} />
  {printServerOk ? 'Impresión conectada' : 'Impresión sin conexión'}
  </span>
  </div>
  </div>
  <DrawerClose asChild>
- <button type="button" aria-label="Cerrar" className="size-10 rounded-xl bg-nav-foreground/10 text-nav-foreground flex items-center justify-center shrink-0 cursor-pointer">
+ <button type="button" aria-label="Cerrar" className="size-10 rounded-2xl bg-nav-foreground/10 text-nav-foreground flex items-center justify-center shrink-0 cursor-pointer">
  <X size={18} weight="bold" />
  </button>
  </DrawerClose>
@@ -236,9 +236,9 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  className="flex items-center gap-4 px-5 h-14 border-l-[3px] border-transparent text-nav-foreground/40 select-none"
  >
  <Icon size={24} weight="regular" className="shrink-0" />
- <span className="flex flex-col leading-tight font-bold text-sm">
+ <span className="flex flex-col leading-tight t-cuerpo-fuerte">
  {item.label}
- <span className="text-[11px] font-semibold">Solo disponible en PC</span>
+ <span className="t-dato">Solo disponible en PC</span>
  </span>
  </div>
  );
@@ -250,7 +250,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  onClick={() => setMenuOpen(false)}
  style={{ '--mod': NAV_ACCENT[item.to] } as React.CSSProperties}
  className={({ isActive }) =>
- cn('flex items-center gap-4 px-5 h-14 border-l-[3px] font-bold text-sm transition-colors',
+ cn('flex items-center gap-4 px-5 h-14 border-l-[3px] t-cuerpo-fuerte transition-colors',
  isActive ? 'border-(--mod) text-(--mod)' : 'border-transparent text-nav-foreground/90 active:text-nav-foreground')
  }
  >
@@ -268,16 +268,16 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  {/* Usuario + cierre de sesión (en el sidebar de PC es el menú de la cuenta) */}
  <div className="shrink-0 border-t border-nav-foreground/10 p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-3">
  <div className="flex items-center gap-3">
- <span aria-hidden="true" className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center text-sm font-black shrink-0">
+ <span aria-hidden="true" className="size-11 rounded-full bg-nav-foreground/15 text-nav-foreground flex items-center justify-center t-cuerpo-fuerte shrink-0">
  {initials(userName)}
  </span>
  <div className="flex flex-col min-w-0 flex-1">
- <span className="font-extrabold text-sm text-nav-foreground truncate">{userName}</span>
- <span className="text-xs text-nav-foreground/70 font-semibold">{userRole}</span>
+ <span className="t-cuerpo-fuerte text-nav-foreground truncate">{userName}</span>
+ <span className="t-dato text-nav-foreground/70">{userRole}</span>
  </div>
  <button
  type="button" title="Configuración de cuenta" aria-label="Configuración de cuenta"
- className="size-11 rounded-xl bg-nav-foreground/10 text-nav-foreground flex items-center justify-center shrink-0 cursor-pointer"
+ className="size-11 rounded-2xl bg-nav-foreground/10 text-nav-foreground flex items-center justify-center shrink-0 cursor-pointer"
  onClick={() => { setMenuOpen(false); navigate('/ajustes'); }}
  >
  <UserGear size={18} weight="bold" />
@@ -285,7 +285,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  </div>
 
  <button type="button" onClick={handleLogout}
- className="w-full h-11 rounded-xl text-red-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-nav-foreground/10 cursor-pointer">
+ className="w-full h-11 rounded-2xl text-red-300 t-cuerpo flex items-center justify-center gap-2 hover:bg-nav-foreground/10 cursor-pointer">
  <SignOut size={16} weight="bold" /> Cerrar sesión
  </button>
  </div>
@@ -326,8 +326,8 @@ export function MenuCapaMovil() {
       <div className="flex items-center gap-3 pb-4 min-w-0">
         <AguacateEgg className="w-9 h-9" />
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="font-extrabold text-base text-nav-foreground leading-tight truncate">{orgNombre}</span>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-nav-foreground/70 leading-tight">
+          <span className="t-titulo text-nav-foreground leading-tight truncate">{orgNombre}</span>
+          <span className="flex items-center gap-1.5 t-dato text-nav-foreground/70 leading-tight">
             <span className={cn('w-2 h-2 rounded-full shrink-0', printServerOk ? 'bg-success' : 'bg-destructive')} />
             {printServerOk ? 'Impresión conectada' : 'Impresión sin conexión'}
           </span>
@@ -348,7 +348,7 @@ export function MenuCapaMovil() {
               <div key={item.to} aria-disabled="true"
                 className="rounded-2xl bg-nav-foreground/5 px-4 flex items-center gap-3 text-nav-foreground/40 select-none">
                 <Icon size={24} className="shrink-0" />
-                <span className="flex flex-col leading-tight text-sm font-bold">{item.label}<span className="text-[10px] font-semibold">Solo en PC</span></span>
+                <span className="flex flex-col leading-tight t-cuerpo-fuerte">{item.label}<span className="t-dato">Solo en PC</span></span>
               </div>
             );
           }
@@ -356,7 +356,7 @@ export function MenuCapaMovil() {
           return (
             <NavLink
               key={item.to} to={item.to} onClick={cerrar} tabIndex={abierto ? 0 : -1}
-              className={cn('rounded-2xl px-4 flex items-center gap-3 text-sm font-bold transition-all active:scale-[0.97]',
+              className={cn('rounded-2xl px-4 flex items-center gap-3 t-cuerpo-fuerte transition-all active:scale-[0.97]',
                 activo ? 'bg-nav-foreground/20 text-nav-foreground ring-1 ring-nav-foreground/50' : 'bg-nav-foreground/10 text-nav-foreground')}
             >
               <span className="shrink-0"><Icon size={26} weight={activo ? 'fill' : 'regular'} /></span>
@@ -375,8 +375,8 @@ export function MenuCapaMovil() {
           <SignOut size={22} weight="bold" />
         </button>
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="font-extrabold text-sm text-nav-foreground leading-tight truncate">{userName}</span>
-          <span className="text-xs text-nav-foreground/70 font-semibold leading-tight truncate">{userRole}</span>
+          <span className="t-cuerpo-fuerte text-nav-foreground leading-tight truncate">{userName}</span>
+          <span className="t-dato text-nav-foreground/70 leading-tight truncate">{userRole}</span>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise } from'@phosphor-icons/react';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise, Tag } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
@@ -12,6 +12,7 @@ import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { cn } from '@/lib/utils';
+import { usePlanHoy, TONOS_ETIQUETA, type EtiquetaPlan } from '../../lib/planificacion';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -141,6 +142,13 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  [safeDbCategorias]
  );
 
+ // Lo planificado para hoy en el Planificador (solo si el menú del día está confirmado): cada etiqueta con productos
+ // es una categoría virtual (id `plan:<etiqueta>`) y cada producto lleva sus etiquetas.
+ const planHoy = usePlanHoy();
+ const gruposPlan = planHoy.grupos;
+ const esGrupoPlan = (id: string | null | undefined) => !!id && id.startsWith('plan:');
+ const grupoPlanDe = (id: string | null | undefined) => (esGrupoPlan(id) ? gruposPlan.find(g => `plan:${g.etiqueta.id}` === id) : undefined);
+
  // Nombre de categoría -> ícono elegido por el admin (ver categoryIcons.ts),
  // para reemplazar el texto plano por algo reconocible de un vistazo.
  const categoryIconByName = useMemo(
@@ -193,6 +201,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return matchesSearch && item.favorito;
  }
 
+ if (esGrupoPlan(selectedCategory)) {
+ return matchesSearch && !!grupoPlanDe(selectedCategory)?.productoIds.has(item.id);
+ }
+
  const matchesCategory = !selectedCategory ||
  (item.categoria_nombre || 'Sin Categoría') === selectedCategory;
  return matchesSearch && matchesCategory;
@@ -212,7 +224,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  
  return a.nombre.localeCompare(b.nombre);
  });
- }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile]);
+ }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile, gruposPlan]);
 
  const groupedItems = useMemo(() => {
  const groups: { category: string; items: typeof filteredItems }[] = [];
@@ -244,12 +256,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  }, [safeMenuItems]);
  const itemsPC = useMemo(() => {
  if (categoriaPC === 'Recientes') return recentItems;
+ const grupoPlan = grupoPlanDe(categoriaPC);
+ if (grupoPlan) return safeMenuItems.filter(it => it.activo !== false && grupoPlan.productoIds.has(it.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
  return safeMenuItems
  .filter(it => it.activo !== false && (categoriaPC === 'Favoritos'
  ? it.favorito
  : (it.categoria_nombre || 'Sin Categoría') === categoriaPC))
  .sort((a, b) => a.nombre.localeCompare(b.nombre));
- }, [safeMenuItems, categoriaPC, recentItems]);
+ }, [safeMenuItems, categoriaPC, recentItems, gruposPlan]);
  const favoritosCount = useMemo(() => safeMenuItems.filter(it => it.activo !== false && it.favorito).length, [safeMenuItems]);
 
  const performAddToCart = useCallback(async (item: MenuItem, selectedModifiers: string[] = []) => {
@@ -325,7 +339,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  if (isLoading) {
  return (
- <div className="h-full w-full flex items-center justify-center bg-background text-muted-foreground text-xs font-semibold">
+ <div className="h-full w-full flex items-center justify-center bg-background text-muted-foreground t-dato">
  Cargando catálogo...
  </div>
  );
@@ -338,21 +352,21 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
     {!hideBackButton && (
       <button
         type="button" onClick={onBack}
-        className="w-10 h-10 rounded-xl bg-nav-foreground/10 hover:bg-nav-foreground/15 text-nav-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
+        aria-label="Volver" className="size-10 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 text-nav-foreground flex items-center justify-center transition-colors cursor-pointer shrink-0">
         <ArrowLeft size={18} weight="bold"/>
       </button>
     )}
     <div className="relative flex-1">
-      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-nav-foreground/60 z-10 pointer-events-none"/>
+      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-nav-foreground/70 z-10 pointer-events-none"/>
       <Input
         id="product-search-input"
         type="text" placeholder="Buscar productos..." value={searchQueryInput}
         onChange={(e) => setSearchQueryInput(e.target.value)}
-        className="w-full h-10 pl-9 pr-8 text-sm font-semibold rounded-xl bg-nav-foreground/10 border-transparent shadow-none text-nav-foreground placeholder:text-nav-foreground/55 focus-visible:ring-nav-foreground/30"/>
+        className="w-full h-10 pl-9 pr-8 t-cuerpo rounded-2xl bg-nav-foreground/10 border-transparent shadow-none text-nav-foreground placeholder:text-nav-foreground/70 focus-visible:ring-nav-foreground/30"/>
       {searchQueryInput && (
         <button
           type="button" onClick={() => { setSearchQueryInput(''); setSearchQueryDebounced(''); }}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-nav-foreground/60 hover:text-nav-foreground">
+          aria-label="Borrar búsqueda" className="absolute right-0 top-1/2 -translate-y-1/2 size-10 pointer-coarse:size-11 flex items-center justify-center text-nav-foreground/70 hover:text-nav-foreground cursor-pointer">
           <X size={14} weight="bold"/>
         </button>
       )}
@@ -365,15 +379,15 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           setSearchQueryInput('');
           setSearchQueryDebounced('');
         }}
-        title="Volver a categorías"
-        className="w-10 h-10 rounded-xl bg-nav-foreground text-nav flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-nav-foreground/90">
+        title="Volver a categorías" aria-label="Volver a categorías"
+        className="size-10 pointer-coarse:size-11 rounded-2xl bg-nav-foreground text-nav flex items-center justify-center transition-colors cursor-pointer shrink-0 hover:bg-nav-foreground/90">
         <ForkKnife size={18} weight="fill"/>
       </button>
     )}
   </header>
 
   {/* CONTENIDO PRINCIPAL */}
-  <div className="flex-1 relative flex flex-col min-h-0 bg-background rounded-t-2xl md:rounded-t-none md:rounded-tl-2xl overflow-hidden">
+  <div className="flex-1 relative flex flex-col min-h-0 bg-background rounded-t-marco md:rounded-t-none md:rounded-tl-marco overflow-hidden">
     {pcSplit && (
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Categorías arriba, en filas que se acomodan solas (2–3 en pantallas típicas).
@@ -384,9 +398,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           className="@container shrink-0 bg-background px-3 py-2 @6xl:px-4 @6xl:py-3 flex flex-wrap gap-1.5 @6xl:gap-2 max-h-[45dvh] overflow-y-auto"
         >
           {[
-            { id: 'Favoritos', icon: Star, count: favoritosCount, plan: false, fav: true },
-            ...(recentItems.length > 0 ? [{ id: 'Recientes', icon: ClockCounterClockwise, count: recentItems.length, plan: false, fav: false }] : []),
-            ...categories.map(cat => ({ id: cat, icon: getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife, count: conteoPorCategoria.get(cat) ?? 0, plan: planCategoryNames.has(cat), fav: false })),
+            { id: 'Favoritos', icon: Star, count: favoritosCount, plan: false, fav: true, etiqueta: undefined as EtiquetaPlan | undefined },
+            ...(recentItems.length > 0 ? [{ id: 'Recientes', icon: ClockCounterClockwise, count: recentItems.length, plan: false, fav: false, etiqueta: undefined as EtiquetaPlan | undefined }] : []),
+            ...gruposPlan.map(g => ({ id: `plan:${g.etiqueta.id}`, icon: Tag, count: g.productoIds.size, plan: false, fav: false, etiqueta: g.etiqueta as EtiquetaPlan | undefined })),
+            ...categories.map(cat => ({ id: cat, icon: getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife, count: conteoPorCategoria.get(cat) ?? 0, plan: planCategoryNames.has(cat), fav: false, etiqueta: undefined as EtiquetaPlan | undefined })),
           ].map(c => {
             const Icon = c.icon;
             const activa = categoriaPC === c.id;
@@ -396,9 +411,11 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                 type="button"
                 onClick={() => setSelectedCategory(c.id)}
                 aria-pressed={activa}
-                className={cn("h-8 pl-2.5 pr-3 @6xl:h-10 @6xl:pl-3 @6xl:pr-3.5 rounded-full flex items-center gap-1.5 @6xl:gap-2 text-xs @6xl:text-sm whitespace-nowrap transition-colors cursor-pointer",
+                className={cn("h-8 pointer-coarse:min-h-11 pl-2.5 pr-3 @6xl:h-10 @6xl:pl-3 @6xl:pr-3.5 rounded-full flex items-center gap-1.5 @6xl:gap-2 text-xs @6xl:text-sm whitespace-nowrap transition-colors cursor-pointer",
                   c.fav
                     ? (activa ? "bg-warning-foreground text-white font-extrabold shadow-xs" : "bg-warning-soft text-warning-foreground font-bold hover:bg-warning/20")
+                    : c.etiqueta
+                    ? cn('border', activa ? `${TONOS_ETIQUETA[c.etiqueta.tono].punto} border-transparent text-white font-extrabold shadow-xs` : `${TONOS_ETIQUETA[c.etiqueta.tono].chip} font-bold`)
                     : c.id === 'Recientes'
                     ? (activa ? "bg-foreground text-background font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted")
                     : c.plan
@@ -406,7 +423,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     : (activa ? "bg-primary text-primary-foreground font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted"))}
               >
                 <Icon size={16} weight={c.fav || activa ? 'fill' : 'bold'} className="@6xl:size-[18px]" />
-                {c.id}
+                {c.etiqueta ? c.etiqueta.nombre : c.id}
               </button>
             );
           })}
@@ -419,14 +436,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
               <div className="w-20 h-20 flex items-center justify-center">
                 <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
               </div>
-              <h3 className="font-extrabold text-foreground text-base">Sin productos</h3>
-              <p className="text-muted-foreground text-xs">
+              <h3 className="t-titulo text-foreground">Sin productos</h3>
+              <p className="text-muted-foreground t-meta">
                 {categoriaPC === 'Favoritos' ? 'Marca productos con la estrella para verlos aquí.' : 'No hay productos disponibles en esta categoría.'}
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">{categoriaPC}</span>
+              <span className="t-etiqueta text-muted-foreground px-1">{grupoPlanDe(categoriaPC)?.etiqueta.nombre ?? categoriaPC}</span>
               <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] @md:gap-3">
                 {itemsPC.map(item => (
                   <ProductCardV2
@@ -438,6 +455,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     preciosConIva={preciosConIva}
                     categoryIcon={getCategoryIcon(categoryIconByName.get(item.categoria_nombre || ''))}
                     isPlanItem={planCategoryNames.has(item.categoria_nombre || 'Sin Categoría')}
+                    etiquetas={planHoy.porProducto.get(item.id)}
                   />
                 ))}
               </div>
@@ -454,7 +472,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         <div className="flex flex-col gap-5">
           {recentItems.length > 0 && (
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
+              <span className="t-etiqueta text-muted-foreground px-1">
                 Usados recientemente
               </span>
               <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 py-1 @md:flex-wrap @md:overflow-visible @md:mx-0 @md:px-0 @md:py-0">
@@ -465,7 +483,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     onClick={() => handleAddProduct(item)}
                     className="flex items-center shrink-0 px-4 py-2.5 rounded-full bg-card shadow-xs hover:bg-muted transition-colors cursor-pointer"
                   >
-                    <span className="font-bold text-sm text-foreground whitespace-nowrap">{item.nombre}</span>
+                    <span className="t-cuerpo-fuerte text-foreground whitespace-nowrap">{item.nombre}</span>
                   </button>
                 ))}
               </div>
@@ -476,11 +494,22 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <button
               type="button"
               onClick={() => setSelectedCategory('Favoritos')}
-              className="h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full bg-warning-soft text-warning-foreground font-bold text-sm transition-all active:scale-95 transform-gpu cursor-pointer"
+              className="h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full bg-warning-soft text-warning-foreground t-cuerpo-fuerte transition-all active:scale-95 transform-gpu cursor-pointer"
             >
               <Star size={20} weight="fill" className="shrink-0" />
               <span className="truncate">Favoritos</span>
             </button>
+            {gruposPlan.map(g => (
+              <button
+                key={g.etiqueta.id}
+                type="button"
+                onClick={() => setSelectedCategory(`plan:${g.etiqueta.id}`)}
+                className={cn("h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full border t-cuerpo-fuerte transition-all active:scale-95 transform-gpu cursor-pointer", TONOS_ETIQUETA[g.etiqueta.tono].chip)}
+              >
+                <Tag size={20} weight="fill" className="shrink-0" />
+                <span className="truncate">{g.etiqueta.nombre}</span>
+              </button>
+            ))}
             {categories.map((cat) => {
               const CategoryIcon = getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife;
               const plan = planCategoryNames.has(cat);
@@ -489,7 +518,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={cn("h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full font-bold text-sm transition-all active:scale-95 transform-gpu cursor-pointer",
+                  className={cn("h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full t-cuerpo-fuerte transition-all active:scale-95 transform-gpu cursor-pointer",
                     plan
                       ? "bg-info/10 text-info-foreground"
                       : "bg-card text-foreground shadow-xs")}
@@ -508,14 +537,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             <div className="w-20 h-20 flex items-center justify-center">
               <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
             </div>
-            <h3 className="font-extrabold text-foreground text-base">Sin resultados</h3>
-            <p className="text-muted-foreground text-xs">No hay productos que coincidan con la búsqueda</p>
+            <h3 className="t-titulo text-foreground">Sin resultados</h3>
+            <p className="text-muted-foreground t-meta">No hay productos que coincidan con la búsqueda</p>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
             {groupedItems.map(group => (
               <div key={group.category} className="flex flex-col gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1">
+                <span className="t-etiqueta text-muted-foreground px-1">
                   {group.category}
                 </span>
                 {/* Lista (icono + texto + precio) en paneles angostos, grid de cards
@@ -533,6 +562,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                       preciosConIva={preciosConIva}
                       categoryIcon={getCategoryIcon(categoryIconByName.get(item.categoria_nombre || ''))}
                       isPlanItem={planCategoryNames.has(item.categoria_nombre || 'Sin Categoría')}
+                    etiquetas={planHoy.porProducto.get(item.id)}
                     />
                   ))}
                 </div>
@@ -600,10 +630,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  <div className="p-6 flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-extrabold text-lg text-foreground">{detailItem.nombre}</h3>
-            <span className="text-xs font-semibold text-muted-foreground">{detailItem.categoria_nombre}</span>
+            <h3 className="t-valor text-foreground">{detailItem.nombre}</h3>
+            <span className="t-meta text-muted-foreground">{detailItem.categoria_nombre}</span>
           </div>
-          <span className="text-xl font-black text-foreground">
+          <span className="t-valor text-foreground">
             ${(!preciosConIva && detailItem.iva_modalidad === 'sistema'
               ? detailItem.precio * (1 + ivaPorcentaje / 100)
               : detailItem.precio
@@ -614,8 +644,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  <div className="w-full h-[1px] bg-border"/>
 
  <div>
- <span className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider block mb-1">Descripción</span>
- <p className="text-xs text-muted-foreground leading-relaxed">
+ <span className="t-etiqueta text-muted-foreground block mb-1">Descripción</span>
+ <p className="t-meta text-muted-foreground leading-relaxed">
  {detailItem.descripcion ||'No hay una descripción disponible para este producto todavía.'}
  </p>
  </div>
@@ -623,7 +653,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  <div className="flex items-center gap-2 pt-2">
  <Button
  type="button"variant="outline"onClick={() => setDetailItem(null)}
- className="flex-1 font-bold text-xs">
+ className="flex-1 t-dato">
  Cerrar
  </Button>
  <Button
@@ -631,7 +661,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  handleAddProduct(detailItem);
  setDetailItem(null);
  }}
- className="flex-1 font-extrabold text-xs gap-1.5">
+ className="flex-1 t-dato gap-1.5">
  <Plus size={16} weight="bold"/> Añadir al Pedido
  </Button>
  </div>
@@ -668,6 +698,8 @@ interface ProductCardProps {
   preciosConIva: boolean;
   categoryIcon: ReturnType<typeof getCategoryIcon>;
   isPlanItem: boolean;
+  /** Etiquetas de hoy del Planificador (Promoción, Plato del día…). */
+  etiquetas?: EtiquetaPlan[];
 }
 
 // Un único componente cuyo propio layout cambia según el ancho del panel
@@ -675,7 +707,7 @@ interface ProductCardProps {
 // cuando el panel es angosto, card cuando hay espacio. Así nunca se
 // duplica el render entre "mobile" y "desktop" — solo existe una versión
 // del producto en el DOM en todo momento.
-const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva, categoryIcon: CategoryIcon, isPlanItem }: ProductCardProps) {
+const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva, categoryIcon: CategoryIcon, isPlanItem, etiquetas }: ProductCardProps) {
   const isSelected = currentQty > 0;
 
   const finalPrice = !preciosConIva && item.iva_modalidad === 'sistema'
@@ -695,7 +727,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
       onClick={() => onAdd(item)}
       className={cn(
         "border cursor-pointer select-none active:scale-98 transform-gpu",
-        "flex items-center gap-3 px-3 py-3 rounded-xl",
+        "flex items-center gap-3 px-3 py-3 rounded-2xl",
         "@md:flex-col @md:items-stretch @md:gap-3 @md:p-4 @md:rounded-2xl @md:min-h-36",
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md"
@@ -708,10 +740,10 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         type="button"
         onClick={alternarFavorito}
         aria-label={item.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
-        className={cn("shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer @md:hidden",
-          isSelected ? "bg-primary-foreground/20 text-primary-foreground" : isPlanItem ? "bg-primary/15" : "bg-muted")}>
+        className={cn("shrink-0 size-9 pointer-coarse:size-11 rounded-full flex items-center justify-center cursor-pointer @md:hidden",
+          isSelected ? "bg-primary-foreground/15 text-primary-foreground" : isPlanItem ? "bg-primary/15" : "bg-muted")}>
         {isSelected ? (
-          <span className="font-black text-sm">{currentQty}</span>
+          <span className="t-cuerpo-fuerte">{currentQty}</span>
         ) : item.favorito ? (
           <Star size={18} weight="fill" className="text-warning-foreground" />
         ) : (
@@ -721,7 +753,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
 
       {/* Panel ancho: categoría a la izquierda, favorito a la derecha */}
       <div className="hidden @md:flex items-center justify-between gap-2">
-        <span className={cn("flex items-center gap-1.5 min-w-0 text-[11px] font-bold uppercase tracking-wider", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+        <span className={cn("t-etiqueta flex items-center gap-1.5 min-w-0", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
           {CategoryIcon && <CategoryIcon size={14} weight="bold" className="shrink-0" />}
           <span className="truncate">{item.categoria_nombre || 'Sin categoría'}</span>
         </span>
@@ -729,21 +761,30 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
           type="button"
           onClick={alternarFavorito}
           aria-label={item.favorito ? 'Quitar de favoritos' : 'Marcar como favorito'}
-          className={cn("shrink-0 -m-1 p-1 rounded-full cursor-pointer", isSelected ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground/50 hover:text-warning-foreground")}>
+          className={cn("shrink-0 -m-3.5 p-3.5 rounded-full cursor-pointer", isSelected ? "text-primary-foreground/70 hover:text-primary-foreground" : "text-muted-foreground/60 hover:text-warning-foreground")}>
           <Star size={16} weight={item.favorito ? 'fill' : 'bold'} className={item.favorito && !isSelected ? 'text-warning-foreground' : undefined} />
         </button>
       </div>
 
-      <span className={cn("flex-1 font-extrabold text-base leading-snug line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
-        {item.nombre}
-      </span>
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <span className={cn("t-titulo leading-snug line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+          {item.nombre}
+        </span>
+        {etiquetas && etiquetas.length > 0 && (
+          <span className="flex flex-wrap gap-1">
+            {etiquetas.map(e => (
+              <span key={e.id} className={cn("t-dato px-2 py-0.5 rounded-md border", TONOS_ETIQUETA[e.tono].chip)}>{e.nombre}</span>
+            ))}
+          </span>
+        )}
+      </div>
 
-      <span className={cn("shrink-0 font-black text-sm tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+      <span className={cn("shrink-0 t-cuerpo-fuerte tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
 
       <div className="hidden @md:flex items-end justify-between gap-2">
-        <span className={cn("text-xl font-black leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+        <span className={cn("t-valor leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
         {isSelected && (
-          <span className="min-w-7 h-7 px-2 rounded-full bg-primary-foreground text-primary text-sm font-black flex items-center justify-center tabular-nums">
+          <span className="min-w-7 h-7 px-2 rounded-full bg-primary-foreground text-primary t-cuerpo-fuerte flex items-center justify-center tabular-nums">
             {currentQty}
           </span>
         )}

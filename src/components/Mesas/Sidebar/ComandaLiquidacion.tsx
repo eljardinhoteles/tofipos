@@ -7,7 +7,7 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 export function ComandaLiquidacion({ liquidacion }: { liquidacion: LiquidacionComanda }) {
   const { consumo, anticipoAplicado, porCobrar } = liquidacion;
   return (
-    <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-muted/60 text-sm font-semibold text-muted-foreground">
+    <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-muted/40 t-cuerpo text-muted-foreground">
       <div className="flex items-center justify-between">
         <span>Cuenta</span>
         <span className="font-bold text-foreground">{money(consumo)}</span>
@@ -19,12 +19,12 @@ export function ComandaLiquidacion({ liquidacion }: { liquidacion: LiquidacionCo
         </div>
       )}
       <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
-        <span className="text-base font-black text-foreground">
+        <span className="t-titulo text-foreground">
           Por cobrar
         </span>
-        <span className="text-xl font-black text-foreground">{money(porCobrar)}</span>
+        <span className="t-valor text-foreground">{money(porCobrar)}</span>
       </div>
-      <p className="text-[11px] font-medium leading-snug">
+      <p className="t-meta leading-snug">
         {porCobrar > 0.005
           ? 'Se ancla como pago en Centro de Ventas.'
           : 'Cubierta completa por el anticipo: no hay nada que cobrar.'}

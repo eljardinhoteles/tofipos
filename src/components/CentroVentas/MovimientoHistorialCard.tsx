@@ -8,7 +8,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+import { EstadoBadge } from '../Common/EstadoBadge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -149,32 +149,56 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (autorNombre) detalles.push(['Registrado por', autorNombre]);
   const toggleDetalle = () => setDetalleAbierto(v => !v);
 
+  // Anular un movimiento: botón de icono (visible al pasar el cursor; siempre visible en táctil) y confirmación con motivo.
+  const botonAnular = (titulo: string, tamano = 16) => puedeAnularse && !confirmando && (
+    <Button type="button" variant="ghost" size="icon" title={titulo} aria-label={titulo}
+      onClick={(e) => { e.stopPropagation(); setConfirmando(true); }}
+      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+      <Prohibit size={tamano} weight="bold" />
+    </Button>
+  );
+  const confirmarAnulacion = (
+    <>
+      <Input
+        type="text" placeholder="Motivo de anulación" value={motivo}
+        onChange={(e) => setMotivo(e.target.value)}
+        className="h-12 text-base flex-1 min-w-40 bg-background"
+      />
+      <Button type="button" variant="destructive" onClick={handleAnular} disabled={saving} className="shrink-0">
+        Confirmar
+      </Button>
+      <Button type="button" variant="ghost" onClick={() => { setConfirmando(false); setMotivo(''); }} className="shrink-0">
+        Cancelar
+      </Button>
+    </>
+  );
+
   if (m.tipo === 'ajuste') {
     return (
       <div className={cn(
-        "group relative flex items-center justify-between py-1.5 px-2 transition-all rounded-md",
-        m.anulado ? "opacity-60 bg-muted/20" : "hover:bg-muted/50"
+        "group relative flex items-center justify-between py-1.5 px-2 transition-all rounded-2xl",
+        m.anulado ? "opacity-60 bg-muted/40" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <Icon size={14} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-info-foreground"} />
           <div className="flex flex-col min-w-0 flex-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={cn("text-xs font-semibold", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
+              <span className={cn("t-cuerpo-fuerte tabular-nums", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
                 Ajuste {m.monto! > 0 ? '+' : '-'}${Math.abs(m.monto || 0).toFixed(2)}
               </span>
               {m.motivo && (
-                <span className={cn("text-[11px] truncate", m.anulado ? "text-muted-foreground" : "text-muted-foreground")}>
+                <span className="t-meta text-muted-foreground truncate">
                   ({m.motivo})
                 </span>
               )}
               {autorNombre && (
-                <span className={cn("text-[10px] truncate ml-1 opacity-0 group-hover:opacity-70 transition-opacity", m.anulado ? "text-muted-foreground" : "text-muted-foreground")}>
+                <span className="t-meta text-muted-foreground truncate ml-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   • por {autorNombre}
                 </span>
               )}
             </div>
             {m.anulado && m.anulado_motivo && (
-              <span className="text-[10px] text-destructive font-medium italic truncate">
+              <span className="t-meta text-destructive italic truncate">
                 Anulado: {m.anulado_motivo}
               </span>
             )}
@@ -182,40 +206,18 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] font-medium text-muted-foreground/70">
+          <span className="t-meta text-muted-foreground">
             {dayjs(m.fecha).format('DD MMM, HH:mm')}
           </span>
 
-          {m.anulado && (
-            <Badge variant="outline" className="text-[9px] font-bold border-border text-muted-foreground bg-muted px-1.5 py-0">
-              Anulado
-            </Badge>
-          )}
+          {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
 
-          {puedeAnularse && !confirmando && (
-            <button
-              type="button" onClick={() => setConfirmando(true)}
-              title="Anular este ajuste"
-              className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-            >
-              <Prohibit size={13} weight="bold" />
-            </button>
-          )}
+          {botonAnular('Anular este ajuste')}
         </div>
 
         {confirmando && (
-          <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border shadow-lg rounded-lg p-2 flex items-center gap-2">
-            <Input
-              type="text" placeholder="Motivo de anulación" value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="h-7 text-xs w-40 bg-background"
-            />
-            <Button type="button" variant="destructive" size="sm" onClick={handleAnular} disabled={saving} className="h-7 text-xs font-bold shrink-0">
-              Confirmar
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setConfirmando(false); setMotivo(''); }} className="h-7 text-xs shrink-0">
-              Cancelar
-            </Button>
+          <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border shadow-lg rounded-2xl p-2 flex items-center gap-2">
+            {confirmarAnulacion}
           </div>
         )}
       </div>
@@ -225,24 +227,24 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tipo === 'comentario') {
     return (
       <div className={cn(
-        "group relative rounded-xl p-2.5 flex flex-col gap-2 transition-all",
-        m.anulado ? "opacity-60" : "hover:bg-warning/40"
+        "group relative rounded-2xl p-2.5 flex flex-col gap-2 transition-all",
+        m.anulado ? "opacity-60" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center justify-between gap-2.5">
           {/* Izquierda: Icono + Texto del comentario + Autor */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-              m.anulado ? "text-muted-foreground" : "text-warning-foreground"
+              "text-muted-foreground"
             )}>
               <ChatText size={16} weight="bold" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <p className={cn("text-xs font-bold italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-warning-foreground")}>
+              <p className={cn("t-cuerpo italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
                 "{m.motivo || 'Sin texto'}"
               </p>
               {autorNombre && (
-                <span className={cn("text-[10px] font-extrabold truncate opacity-0 group-hover:opacity-100 transition-opacity", m.anulado ? "text-muted-foreground/60" : "text-warning-foreground/80")}>
+                <span className="t-meta text-muted-foreground truncate opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   por {autorNombre}
                 </span>
               )}
@@ -251,47 +253,25 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
 
           {/* Derecha: Fecha/Hora + Icono de anular */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className={cn("text-[10px] font-extrabold", m.anulado ? "text-muted-foreground/70" : "text-warning-foreground/70")}>
+            <span className="t-meta text-muted-foreground">
               {dayjs(m.fecha).format('DD MMM, HH:mm')}
             </span>
 
-            {m.anulado && (
-              <Badge variant="outline" className="text-[9px] font-bold border-border text-muted-foreground bg-muted px-1.5 py-0">
-                Anulado
-              </Badge>
-            )}
+            {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
 
-            {puedeAnularse && !confirmando && (
-              <button
-                type="button" onClick={() => setConfirmando(true)}
-                title="Anular este comentario"
-                className="p-1 text-warning-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-              >
-                <Prohibit size={13} weight="bold" />
-              </button>
-            )}
+            {botonAnular('Anular este comentario')}
           </div>
         </div>
 
         {m.anulado && m.anulado_motivo && (
-          <span className="text-[10px] text-destructive font-medium italic truncate pl-10">
+          <span className="t-meta text-destructive italic truncate pl-10">
             Anulado: {m.anulado_motivo}
           </span>
         )}
 
         {confirmando && (
-          <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-            <Input
-              type="text" placeholder="Motivo de anulación" value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              className="h-7 text-xs flex-1 bg-background"
-            />
-            <Button type="button" variant="destructive" size="sm" onClick={handleAnular} disabled={saving} className="h-7 text-xs font-bold shrink-0">
-              Confirmar
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => { setConfirmando(false); setMotivo(''); }} className="h-7 text-xs shrink-0">
-              Cancelar
-            </Button>
+          <div className="flex items-center gap-2 pt-1">
+            {confirmarAnulacion}
           </div>
         )}
       </div>
@@ -300,8 +280,8 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
 
   return (
     <div className={cn(
-      "group relative rounded-xl border border-border bg-card p-2.5 flex flex-col gap-2 transition-all shadow-2xs hover:border-primary/40 hover:shadow-xs",
-      m.anulado && "opacity-60 bg-muted/20"
+      "group relative rounded-2xl border border-border bg-card p-2.5 flex flex-col gap-2 transition-all shadow-2xs",
+      m.anulado && "opacity-60 bg-muted/40"
     )}>
       {/* Fila única de contenido: al tocarla se despliegan los datos del movimiento */}
       <div
@@ -319,7 +299,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               target="_blank"
               rel="noreferrer"
               title="Ver comprobante"
-              className="w-11 h-11 rounded-lg border border-border bg-muted/40 overflow-hidden block cursor-pointer"
+              className="w-11 h-11 rounded-xl border border-border bg-muted/40 overflow-hidden block cursor-pointer"
             >
               {comprobanteDisplayUrl && !isPdf ? (
                 <img
@@ -354,69 +334,61 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         {/* Texto central: Label + Detalle */}
         <div className="flex flex-col min-w-0 flex-1 justify-center">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className={cn("text-xs font-black text-foreground tracking-tight truncate flex items-center gap-1", m.anulado && "line-through")}>
+            <span className={cn("t-cuerpo-fuerte text-foreground truncate flex items-center gap-1", m.anulado && "line-through")}>
               {label}
             </span>
             {m.monto != null && m.monto !== 0 && (
-              <span className="text-xs font-black text-foreground shrink-0">${m.monto.toFixed(2)}</span>
+              <span className="t-cuerpo-fuerte tabular-nums text-foreground shrink-0">${m.monto.toFixed(2)}</span>
             )}
           </div>
-          <span className="text-[11px] text-muted-foreground truncate font-medium flex items-center gap-1.5">
+          <span className="t-meta text-muted-foreground truncate flex items-center gap-1.5">
             <span className="truncate">
               {m.motivo || m.numero_factura || (m.metodo_pago ? `Método: ${m.metodo_pago}` : 'Movimiento de venta')}
             </span>
             {montoAsociado > 0 && (
-              <span className="text-[10px] font-bold text-foreground dark:text-primary border-l border-border pl-1.5 shrink-0">
+              <span className="t-dato text-secondary-foreground border-l border-border pl-1.5 shrink-0">
                 Cubre ${montoAsociado.toFixed(2)}
               </span>
             )}
             {autorNombre && (
-              <span className="text-[10px] opacity-0 group-hover:opacity-70 transition-opacity border-l border-border pl-1.5 shrink-0">por {autorNombre}</span>
+              <span className="t-meta opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity border-l border-border pl-1.5 shrink-0">por {autorNombre}</span>
             )}
           </span>
         </div>
 
-        {/* Bloque derecho: Fecha + Badges + Botón de Basura en 1 fila */}
-        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <span className="text-[10px] font-bold text-muted-foreground/70 hidden sm:inline">
+        {/* Bloque derecho: fecha, nube/local, anular y flecha del detalle */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="t-meta text-muted-foreground hidden sm:inline">
             {dayjs(m.fecha).format('DD MMM, HH:mm')}
           </span>
-          <CaretDown size={12} weight="bold" onClick={toggleDetalle} className={cn('text-muted-foreground/60 transition-transform cursor-pointer', detalleAbierto && 'rotate-180')} />
 
-          {/* Badge de almacenamiento y botón de eliminar */}
           {admiteComprobante && m.comprobante_url && (
             <div className="flex items-center gap-1.5">
               {isOffline ? (
-                <Badge variant="outline" className="text-[9px] font-bold border-warning text-warning-foreground bg-warning-soft gap-1 px-1.5 py-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-warning-foreground animate-pulse" />
-                  Local
-                </Badge>
+                <EstadoBadge tono="warning" title="Aún no se sube a la nube">Local</EstadoBadge>
               ) : (
-                <Badge variant="outline" className="text-[9px] font-bold border-primary/40 text-primary bg-primary/10 gap-1 px-1.5 py-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  R2
-                </Badge>
+                <EstadoBadge tono="success" title="Comprobante guardado en la nube">Nube</EstadoBadge>
               )}
 
-              <button
-                type="button"
-                onClick={() => setDialogDeleteOpen(true)}
+              <Button
+                type="button" variant="ghost" size="icon"
+                onClick={(e) => { e.stopPropagation(); setDialogDeleteOpen(true); }}
                 disabled={uploading}
-                title="Eliminar comprobante"
-                className="p-1 rounded-md text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                title="Eliminar comprobante" aria-label="Eliminar comprobante"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               >
-                <Trash size={13} weight="bold" />
-              </button>
+                <Trash size={16} weight="bold" />
+              </Button>
             </div>
           )}
 
           {/* Botón rápido para adjuntar cuando no hay comprobante */}
           {admiteComprobante && !m.comprobante_url && (
-            <label className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded-md bg-muted/60 border border-dashed border-border text-[10px] font-bold text-muted-foreground cursor-pointer hover:bg-muted hover:border-primary/40 transition-all",
+            <label onClick={(e) => e.stopPropagation()} className={cn(
+              "min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 border border-dashed border-border t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation",
               uploading && "opacity-50 pointer-events-none"
             )}>
-              <UploadSimple size={12} weight="bold" className="text-muted-foreground" />
+              <UploadSimple size={14} weight="bold" />
               {uploading ? '...' : 'Adjuntar'}
               <input
                 type="file" accept="image/*,application/pdf" className="hidden"
@@ -428,63 +400,50 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
             </label>
           )}
 
-          {puedeAnularse && !confirmando && (
-            <button
-              type="button" onClick={() => setConfirmando(true)}
-              title="Anular este movimiento"
-              className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-            >
-              <Prohibit size={14} weight="bold" />
-            </button>
-          )}
+          <CaretDown size={14} weight="bold" className={cn('text-muted-foreground transition-transform', detalleAbierto && 'rotate-180')} />
         </div>
       </div>
 
       {detalleAbierto && (
-        <div className="rounded-lg bg-muted/50 p-3 flex flex-col gap-3">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <div className="rounded-2xl bg-muted/40 p-3 flex flex-col gap-3">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 items-baseline">
             {detalles.map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="font-semibold text-muted-foreground">{k}</dt>
-                <dd className="font-bold text-foreground break-words text-right">{v}</dd>
+                <dt className="t-etiqueta text-muted-foreground">{k}</dt>
+                <dd className="t-cuerpo-fuerte text-foreground break-words text-right">{v}</dd>
               </div>
             ))}
           </dl>
           {m.comprobante_url && comprobanteDisplayUrl && !isPdf && (
             <a href={fileUrl} target="_blank" rel="noreferrer" title="Abrir comprobante" className="block">
-              <img src={comprobanteDisplayUrl} alt="Comprobante" className="w-full max-h-64 object-contain rounded-md border border-border bg-card" />
+              <img src={comprobanteDisplayUrl} alt="Comprobante" className="w-full max-h-64 object-contain rounded-xl border border-border bg-card" />
             </a>
           )}
           {m.comprobante_url && isPdf && (
-            <a href={fileUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary flex items-center gap-1.5">
+            <a href={fileUrl} target="_blank" rel="noreferrer" className="t-dato text-primary flex items-center gap-1.5">
               <Paperclip size={14} /> Abrir comprobante (PDF)
             </a>
           )}
           {!m.comprobante_url && admiteComprobante && (
-            <span className="text-[11px] text-muted-foreground">Sin comprobante adjunto.</span>
+            <span className="t-meta text-muted-foreground">Sin comprobante adjunto.</span>
+          )}
+          {puedeAnularse && !confirmando && (
+            <Button type="button" variant="outline" onClick={() => setConfirmando(true)} className="self-end gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10">
+              <Prohibit size={16} weight="bold" /> Anular movimiento
+            </Button>
           )}
         </div>
       )}
 
       {m.anulado && (
-        <span className="text-[10px] text-destructive font-medium italic truncate pl-11">
+        <span className="t-meta text-destructive italic truncate pl-11">
           Anulado: {m.anulado_motivo}
         </span>
       )}
 
       {confirmando && (
-        <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-          <Input
-            type="text" placeholder="Motivo de anulación" value={motivo}
-            onChange={(e) => setMotivo(e.target.value)}
-            className="h-7 text-xs flex-1"
-          />
-          <Button type="button" variant="destructive" size="sm" onClick={handleAnular} disabled={saving} className="h-7 text-xs font-bold shrink-0">
-            Confirmar
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => { setConfirmando(false); setMotivo(''); }} className="h-7 text-xs shrink-0">
-            Cancelar
-          </Button>
+        <div className="flex items-center gap-2 pt-1">
+          {confirmarAnulacion}
         </div>
       )}
 
@@ -492,36 +451,29 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       <Dialog open={dialogDeleteOpen} onOpenChange={setDialogDeleteOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-foreground">
+            <DialogTitle className="t-titulo text-foreground">
               ¿Eliminar comprobante adjunto?
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground pt-1">
+            <DialogDescription className="t-meta text-muted-foreground pt-1">
               Esta acción desvinculará el archivo de este movimiento de venta. Si estás offline, la copia local en el dispositivo también será removida.
             </DialogDescription>
           </DialogHeader>
 
           <DialogFooter className="gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setDialogDeleteOpen(false)}
-              className="text-xs font-semibold"
-            >
+            <Button type="button" variant="outline" onClick={() => setDialogDeleteOpen(false)}>
               Cancelar
             </Button>
             <Button
               type="button"
               variant="destructive"
-              size="sm"
               disabled={uploading}
               onClick={async () => {
                 setDialogDeleteOpen(false);
                 await handleQuitarComprobante();
               }}
-              className="text-xs font-bold gap-1"
+              className="gap-1.5"
             >
-              <Trash size={14} /> Eliminar comprobante
+              <Trash size={16} /> Eliminar comprobante
             </Button>
           </DialogFooter>
         </DialogContent>

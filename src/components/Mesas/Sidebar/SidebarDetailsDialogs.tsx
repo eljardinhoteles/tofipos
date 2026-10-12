@@ -22,8 +22,8 @@ export function DividirMesaDialog({ opened, onOpenChange, procesando, onConfirm 
     <Dialog open={opened} onOpenChange={(open) => { if (!procesando) onOpenChange(open); }}>
       <DialogContent className="max-w-sm p-6 gap-4">
         <DialogHeader className="text-left">
-          <DialogTitle className="font-extrabold text-base">¿Dividir la mesa en varias cuentas?</DialogTitle>
-          <DialogDescription className="text-sm">
+          <DialogTitle className="t-titulo">¿Dividir la mesa en varias cuentas?</DialogTitle>
+          <DialogDescription className="t-cuerpo">
             La orden actual pasará a ser la primera cuenta y se creará una segunda vacía, para repartir los productos entre ellas.
           </DialogDescription>
         </DialogHeader>
@@ -60,7 +60,7 @@ export function CambiarMesaDialog({ opened, onOpenChange, folio, mesas, seleccio
           </DialogDescription>
         </DialogHeader>
         {mesas.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-6">
+          <p className="t-cuerpo text-muted-foreground text-center py-6">
             No hay mesas libres disponibles en este momento.
           </p>
         ) : (
@@ -70,7 +70,7 @@ export function CambiarMesaDialog({ opened, onOpenChange, folio, mesas, seleccio
                 key={mesa.id}
                 type="button"
                 onClick={() => onSelect(mesa)}
-                className={cn('aspect-square rounded-xl border flex flex-col items-center justify-center gap-0.5 font-black text-base transition-colors cursor-pointer',
+                className={cn('aspect-square rounded-2xl border flex flex-col items-center justify-center gap-0.5 t-titulo transition-colors cursor-pointer',
                   seleccionada?.id === mesa.id
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'border-border bg-muted/40 hover:bg-muted')}>
@@ -107,8 +107,8 @@ export function CuentaConPendientesDialog({ opened, onOpenChange, pendientes, on
     <Dialog open={opened} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm p-6 gap-4">
         <DialogHeader className="text-left">
-          <DialogTitle className="font-extrabold text-base">Hay productos sin enviar a cocina</DialogTitle>
-          <DialogDescription className="text-sm">
+          <DialogTitle className="t-titulo">Hay productos sin enviar a cocina</DialogTitle>
+          <DialogDescription className="t-cuerpo">
             {pendientes === 1 ? 'Hay 1 producto' : `Hay ${pendientes} productos`} que no se {pendientes === 1 ? 'ha' : 'han'} enviado a cocina. ¿Pedir la cuenta de todos modos?
           </DialogDescription>
         </DialogHeader>
@@ -139,9 +139,9 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
     <Dialog open={opened} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-6 gap-4">
         <DialogHeader className="text-left">
-          <DialogTitle className="font-extrabold text-base">Anticipo de la mesa</DialogTitle>
-          <DialogDescription className="text-sm">
-            Disponible: <span className="font-black text-info-foreground">{fmt(disponible)}</span>. Detalle tomado del registro en Centro de Ventas.
+          <DialogTitle className="t-titulo">Anticipo de la mesa</DialogTitle>
+          <DialogDescription className="t-cuerpo">
+            Disponible: <span className="font-extrabold text-info-foreground">{fmt(disponible)}</span>. Detalle tomado del registro en Centro de Ventas.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,10 +151,10 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
               .filter((m: any) => !m.anulado && (m.tipo === 'pago' || m.tipo === 'reembolso' || (m.tipo === 'comentario' && m.motivo?.startsWith('Anticipo aplicado: $') && !m.motivo.startsWith('Anticipo aplicado: $0.00'))))
               .sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
             return (
-              <div key={venta.id} className="rounded-xl border border-border overflow-hidden">
-                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/60">
-                  <span className="text-xs font-extrabold text-foreground truncate">{venta.referencia || 'Venta'}</span>
-                  <span className="text-xs font-black text-info-foreground shrink-0">{fmt(dispV)}</span>
+              <div key={venta.id} className="rounded-2xl border border-border overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40">
+                  <span className="t-dato text-foreground truncate">{venta.referencia || 'Venta'}</span>
+                  <span className="t-dato text-info-foreground shrink-0">{fmt(dispV)}</span>
                 </div>
                 <div className="flex flex-col divide-y divide-border">
                   {movs.map((m: any) => {
@@ -164,23 +164,23 @@ export function AnticipoDetalleDialog({ opened, onOpenChange, disponible, ventas
                     return (
                       <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-bold text-foreground truncate">
+                          <span className="t-cuerpo-fuerte text-foreground truncate">
                             {esPago ? 'Anticipo recibido' : esDevolucion ? 'Devolución' : 'Aplicado a una cuenta'}
                             {esPago && m.metodo_pago ? ` · ${METODOS[m.metodo_pago] ?? m.metodo_pago}` : ''}
                           </span>
-                          <span className="text-[11px] text-muted-foreground truncate">
+                          <span className="t-meta text-muted-foreground truncate">
                             {fecha.toLocaleDateString('es', { day: '2-digit', month: 'short' })} {fecha.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                             {!esPago && m.motivo ? ` · ${m.motivo.replace('Anticipo aplicado: ', '')}` : ''}
                             {esPago && m.transferencia_referencia ? ` · Ref. ${m.transferencia_referencia}` : ''}
                           </span>
                         </div>
-                        <span className={cn('text-sm font-black shrink-0', esPago ? 'text-foreground' : 'text-muted-foreground')}>
+                        <span className={cn('t-cuerpo-fuerte shrink-0', esPago ? 'text-foreground' : 'text-muted-foreground')}>
                           {esPago ? '+' : '−'}{fmt(esPago || esDevolucion ? (m.monto ?? 0) : Number(/\$([\d.]+)/.exec(m.motivo ?? '')?.[1] ?? 0))}
                         </span>
                       </div>
                     );
                   })}
-                  {movs.length === 0 && <span className="px-3 py-2 text-xs text-muted-foreground">Sin movimientos.</span>}
+                  {movs.length === 0 && <span className="px-3 py-2 t-meta text-muted-foreground">Sin movimientos.</span>}
                 </div>
               </div>
             );

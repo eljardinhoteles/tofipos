@@ -52,14 +52,14 @@ const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigi
 function Stepper({ value, max, onChange, label, min = 1 }: { value: number; max: number; onChange: (n: number) => void; label?: string; min?: number }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {label && <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-center">{label}</span>}
+      {label && <span className="t-etiqueta text-muted-foreground text-center">{label}</span>}
       <div className="flex items-center h-14 rounded-full border border-border bg-transparent overflow-hidden">
         <button type="button" aria-label="Menos" disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}
           className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
           <Minus size={20} weight="bold" />
         </button>
-        <span className="flex-1 text-center font-black text-2xl text-foreground tabular-nums">
-          {value}{max < 9999 && value !== max ? <span className="text-sm text-muted-foreground font-bold"> / {max}</span> : null}
+        <span className="flex-1 text-center t-cifra text-foreground tabular-nums">
+          {value}{max < 9999 && value !== max ? <span className="t-cuerpo-fuerte text-muted-foreground"> / {max}</span> : null}
         </span>
         <button type="button" aria-label="Más" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}
           className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
@@ -108,8 +108,8 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
       {/* Estado: pill flotante sobre el borde superior del footer, mismo
           lenguaje que el botón "Añadir" (el footer es `relative`). */}
       {!ocultarEstado && (
-      <span className={cn('absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 px-4 inline-flex items-center gap-1.5 rounded-full border text-xs font-bold whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.12)]',
-        confirmado && !parcial ? 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary/30 text-primary' : 'bg-orange-50 border-orange-300 text-orange-600')}>
+      <span className={cn('absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 px-4 inline-flex items-center gap-1.5 rounded-full border t-dato whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.18)]',
+        confirmado && !parcial ? 'bg-[color-mix(in_oklab,var(--primary)_14%,var(--card))] border-primary/30 text-primary' : 'bg-warning-soft border-warning text-warning-foreground')}>
         {confirmado && !parcial ? <CheckCircle size={15} weight="fill" /> : <Clock size={15} weight="fill" />}
         {confirmado && !parcial ? 'En cocina' : 'Pendiente'}
       </span>
@@ -118,11 +118,11 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
       {/* Cabecera: (acción, si no es el menú), y producto con su precio unitario */}
       <div className="flex flex-col gap-0.5 pt-2">
         {vista !== 'menu' && (
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{titulos[vista]}</span>
+          <span className="t-etiqueta text-muted-foreground">{titulos[vista]}</span>
         )}
         <div className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 font-extrabold text-lg text-foreground truncate">{item.nombre}</span>
-          <span className="shrink-0 text-base font-bold text-muted-foreground tabular-nums">{money(item.precio)} c/u</span>
+          <span className="min-w-0 t-valor text-foreground truncate">{item.nombre}</span>
+          <span className="shrink-0 t-fila text-muted-foreground tabular-nums">{money(item.precio)} c/u</span>
         </div>
       </div>
 
@@ -131,13 +131,13 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
           <Stepper value={cantidad} max={9999} onChange={setCantidad} />
           {precioVariable && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-border px-4 h-14">
-              <label htmlFor="precio-variable" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Precio unitario</label>
+              <label htmlFor="precio-variable" className="t-etiqueta text-muted-foreground">Precio unitario</label>
               <div className="flex items-center gap-1">
-                <span className="text-lg font-black text-muted-foreground">$</span>
+                <span className="t-valor text-muted-foreground">$</span>
                 <Input id="precio-variable" type="number" inputMode="decimal" step="0.01" min={0}
                   value={Number.isNaN(precio) ? '' : precio}
                   onChange={(e) => setPrecio(parseFloat(e.target.value))}
-                  className="h-10 w-28 text-right text-lg font-black border-0 shadow-none focus-visible:ring-0 px-1" />
+                  className="h-10 w-28 text-right t-valor border-0 shadow-none focus-visible:ring-0 px-1" />
               </div>
             </div>
           )}
@@ -172,16 +172,16 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
             </>
           )}
           {conCortesia && (
-            <div className="p-3 rounded-xl bg-muted border border-border flex flex-col gap-0.5">
-              <span className="text-xs font-bold text-foreground">Cortesía aplicada</span>
-              {item.cortesia_motivo && <span className="text-[11px] text-foreground/80">{item.cortesia_motivo}</span>}
+            <div className="p-3 rounded-2xl bg-muted border border-border flex flex-col gap-0.5">
+              <span className="t-dato text-foreground">Cortesía aplicada</span>
+              {item.cortesia_motivo && <span className="t-meta text-muted-foreground">{item.cortesia_motivo}</span>}
             </div>
           )}
           {meta && (
-            <div className="p-3 rounded-xl bg-special-soft flex flex-col gap-2">
+            <div className="p-3 rounded-2xl bg-special-soft flex flex-col gap-2">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-special-foreground">Valor repartido entre cuentas</span>
-                <span className="text-[11px] text-special-foreground/80">
+                <span className="t-dato text-special-foreground">Valor repartido entre cuentas</span>
+                <span className="t-meta text-special-foreground">
                   {meta.tipo === 'parte'
                     ? `Parte${meta.i ? ` ${meta.i}` : ''} de ${meta.n} del valor del plato. Cocina no la recibe.`
                     : `Este plato queda en $0 aquí; su valor se repartió entre ${meta.partes.length} cuenta${meta.partes.length === 1 ? '' : 's'}.`}
@@ -244,7 +244,7 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
         <>
           {item.cantidad > 1 && <Stepper value={cantAccion} max={item.cantidad} onChange={setCantAccion} label="Unidades a repartir" />}
           <div className="flex flex-col gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Entre qué cuentas</span>
+            <span className="t-etiqueta text-muted-foreground">Entre qué cuentas</span>
             {destinosRepartir.map(d => {
               const activa = seleccion.includes(d.id);
               return (
@@ -253,7 +253,7 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
                   type="button"
                   aria-pressed={activa}
                   onClick={() => toggleDestino(d.id)}
-                  className={cn('w-full h-12 px-4 rounded-xl flex items-center justify-between text-sm font-bold transition-colors cursor-pointer',
+                  className={cn('w-full h-12 px-4 rounded-2xl flex items-center justify-between t-cuerpo-fuerte transition-colors cursor-pointer',
                     activa ? 'bg-primary text-primary-foreground' : 'bg-card text-foreground shadow-xs hover:bg-muted')}
                 >
                   {d.nombre}
@@ -266,9 +266,9 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
             const montos = calcularPartes(item.precio * cantAccion, seleccion.length);
             const min = Math.min(...montos), max = Math.max(...montos);
             return (
-              <div className="text-center text-sm font-bold text-muted-foreground">
+              <div className="text-center t-cuerpo-fuerte text-muted-foreground">
                 Cada cuenta paga <span className="text-foreground">{min === max ? money(min) : `${money(min)} – ${money(max)}`}</span>
-                <span className="block text-[11px] font-semibold">Este plato queda en $0 en esta cuenta.</span>
+                <span className="block t-dato">Este plato queda en $0 en esta cuenta.</span>
               </div>
             );
           })()}
@@ -298,13 +298,13 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
           <div className="grid grid-cols-3 gap-2">
             {[100, 50, 25].map(p => (
               <button key={p} type="button" onClick={() => setPct(p)}
-                className={cn('h-11 rounded-xl border text-sm font-bold cursor-pointer',
+                className={cn('h-11 rounded-2xl border t-cuerpo-fuerte cursor-pointer',
                   pct === p ? 'bg-primary border-primary text-white' : 'bg-card border-border')}>
                 {p}%
               </button>
             ))}
           </div>
-          <div className="text-center text-sm font-bold text-muted-foreground">
+          <div className="text-center t-cuerpo-fuerte text-muted-foreground">
             Descuento <span className="text-foreground">{money(cantAccion * item.precio * pct / 100)}</span>
           </div>
           <div className="flex flex-col gap-2">

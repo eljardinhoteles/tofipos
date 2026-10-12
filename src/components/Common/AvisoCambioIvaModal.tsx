@@ -85,22 +85,22 @@ export function AvisoCambioIvaModal() {
             <div className="w-11 h-11 rounded-xl bg-warning-soft text-warning-foreground flex items-center justify-center shrink-0">
               <Percent size={24} weight="bold" />
             </div>
-            <div className="flex items-center gap-2 font-black text-2xl text-foreground tabular-nums">
+            <div className="flex items-center gap-2 t-cifra text-foreground tabular-nums">
               {aviso.actual}% <ArrowRight size={18} weight="bold" className="text-muted-foreground" /> {aviso.destino.porcentaje}%
             </div>
           </div>
-          <DialogTitle className="font-extrabold text-base">{t.titulo}</DialogTitle>
-          <DialogDescription className="text-xs">{t.descripcion}</DialogDescription>
+          <DialogTitle className="t-titulo">{t.titulo}</DialogTitle>
+          <DialogDescription className="t-meta">{t.descripcion}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Qué debes cambiar</span>
+          <span className="t-etiqueta text-muted-foreground">Qué debes cambiar</span>
           {t.pasos.map(({ icon: Icon, texto }, i) => (
-            <div key={i} className="flex items-start gap-3 rounded-xl bg-muted p-3">
+            <div key={i} className="flex items-start gap-3 rounded-2xl bg-muted p-3">
               <div className="w-7 h-7 rounded-lg bg-card text-foreground flex items-center justify-center shrink-0 shadow-xs">
                 <Icon size={16} weight="bold" />
               </div>
-              <span className="text-sm font-semibold text-foreground leading-snug">{texto}</span>
+              <span className="t-cuerpo text-foreground leading-snug">{texto}</span>
             </div>
           ))}
         </div>

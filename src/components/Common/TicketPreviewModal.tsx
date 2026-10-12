@@ -108,7 +108,7 @@ export function TicketPreviewModal({
  <Dialog open={opened} onOpenChange={(open) => !open && cerrar()}>
  <DialogContent showCloseButton={false} className="flex flex-col gap-4 p-6 max-w-md max-h-[90dvh] max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0 max-sm:w-screen max-sm:h-dvh max-sm:max-w-none max-sm:max-h-none max-sm:rounded-none max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
  <DialogHeader>
- <DialogTitle className="flex items-center gap-2 text-base">
+ <DialogTitle className="flex items-center gap-2">
  <FileText size={18} className="text-muted-foreground"/> {title}
  </DialogTitle>
  <DialogDescription className="sr-only">Vista previa del documento a imprimir</DialogDescription>
@@ -123,17 +123,17 @@ export function TicketPreviewModal({
  </Tabs>
  )}
 
- <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4 bg-card border border-border rounded-xl">
+ <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4 bg-card border border-border rounded-2xl">
  {renderFormattedContent(esCocina ? kitchenContent : content)}
  </div>
 
  <div className="grid grid-cols-2 gap-2 pt-1 shrink-0">
- <Button type="button"variant="outline"onClick={cerrar} className="h-12 font-bold text-sm">
+ <Button type="button"variant="outline"onClick={cerrar} className="h-12 t-cuerpo-fuerte">
  Cerrar
  </Button>
  <Button
  type="button"onClick={imprimirAhora}
- className="h-12 bg-primary text-white font-extrabold text-sm gap-1.5">
+ className="h-12 bg-primary text-white t-cuerpo-fuerte gap-1.5">
  <Printer size={16} /> {esCocina ? 'Imprimir cocina' : 'Imprimir'}
  </Button>
  </div>

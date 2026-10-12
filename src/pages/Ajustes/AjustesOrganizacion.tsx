@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Building, FloppyDisk } from '@phosphor-icons/react';
+import { FloppyDisk } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { showToast } from '@/lib/toast';
 import { setOrgCache } from '../../lib/orgCache';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { EstadoBadge } from '../../components/Common/EstadoBadge';
+import { Campo, Fila, Grupo, Seccion, Vacio } from '../../components/Ajustes/AjustesUI';
 import { Button } from '@/components/ui/button';
 import AjustesUsuarios from './AjustesUsuarios';
 
@@ -106,100 +107,39 @@ export default function AjustesOrganizacion() {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-6 py-6">
-      <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-              <Building size={22} weight="fill" />
-            </div>
-            <div className="flex flex-col">
-              <h3 className="font-extrabold text-base text-foreground">Organización</h3>
-              <p className="text-xs text-muted-foreground">Datos del establecimiento y administración del local.</p>
-            </div>
-          </div>
+  const campo = (clave: keyof OrgForm) => ({
+    value: form[clave],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [clave]: e.target.value })),
+    className: 'h-12 text-base',
+  });
 
-          <Button size="sm" disabled={saving || loading || !orgId} onClick={handleSave}>
-            <FloppyDisk size={16} weight="bold" /> Guardar
+  return (
+    <div className="flex flex-col gap-6">
+      <Seccion titulo="Organización" descripcion="Datos del establecimiento: salen en los tickets y comprobantes.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Campo etiqueta="Nombre *" htmlFor="org-nombre"><Input id="org-nombre" type="text" required placeholder="Ej. Hotel Valle de Guadalupe" {...campo('nombre')} /></Campo>
+          <Campo etiqueta="RUC" htmlFor="org-ruc"><Input id="org-ruc" type="text" placeholder="Ej. 1790012345001" {...campo('ruc')} /></Campo>
+          <Campo etiqueta="Teléfono" htmlFor="org-tel"><Input id="org-tel" type="text" placeholder="Ej. +593 99 123 4567" {...campo('telefono')} /></Campo>
+          <Campo etiqueta="Dirección" htmlFor="org-dir"><Input id="org-dir" type="text" placeholder="Ej. Av. Principal 123 y Calle 4" {...campo('direccion')} /></Campo>
+        </div>
+        <div className="flex justify-end">
+          <Button disabled={saving || loading || !orgId} onClick={handleSave} className="h-12 gap-2 px-6">
+            <FloppyDisk size={18} weight="bold" /> Guardar cambios
           </Button>
         </div>
+      </Seccion>
 
-        <div className="w-full h-[1px] bg-border" />
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
-            <Label className="text-xs font-bold">Nombre de Organización *</Label>
-            <Input
-              type="text"
-              required
-              placeholder="Ej. Hotel Valle de Guadalupe"
-              value={form.nombre}
-              onChange={(e) => setForm(prev => ({ ...prev, nombre: e.target.value }))}
-              className="h-9 text-xs font-semibold"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
-            <Label className="text-xs font-bold">RUC</Label>
-            <Input
-              type="text"
-              placeholder="Ej. 1790012345001"
-              value={form.ruc}
-              onChange={(e) => setForm(prev => ({ ...prev, ruc: e.target.value }))}
-              className="h-9 text-xs"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
-            <Label className="text-xs font-bold">Teléfono</Label>
-            <Input
-              type="text"
-              placeholder="Ej. +593 99 123 4567"
-              value={form.telefono}
-              onChange={(e) => setForm(prev => ({ ...prev, telefono: e.target.value }))}
-              className="h-9 text-xs"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 col-span-2">
-            <Label className="text-xs font-bold">Dirección</Label>
-            <Input
-              type="text"
-              placeholder="Ej. Av. Principal 123 y Calle 4"
-              value={form.direccion}
-              onChange={(e) => setForm(prev => ({ ...prev, direccion: e.target.value }))}
-              className="h-9 text-xs"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <h3 className="font-extrabold text-base text-foreground">Usuario conectado</h3>
-            <p className="text-xs text-muted-foreground">Sesión activa en este dispositivo.</p>
-          </div>
-          {connectedUser && (
-            <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground font-extrabold text-xs uppercase">
-              {connectedUser.rol}
-            </span>
-          )}
-        </div>
-
-        <div className="w-full h-[1px] bg-border" />
-
+      <Seccion titulo="Usuario conectado" descripcion="Sesión activa en este dispositivo.">
         {connectedUser ? (
-          <div className="flex flex-col gap-1 text-xs">
-            <span className="font-extrabold text-foreground text-sm">{connectedUser.nombre}</span>
-            <span className="text-muted-foreground font-semibold">Rol: {connectedUser.rol}</span>
-            <span className="text-muted-foreground font-semibold">Correo: {connectedUser.email || 'N/A'}</span>
-          </div>
+          <Grupo>
+            <Fila titulo={connectedUser.nombre} ayuda={connectedUser.email || 'Sin correo'}>
+              <EstadoBadge tono="info" className="capitalize">{connectedUser.rol}</EstadoBadge>
+            </Fila>
+          </Grupo>
         ) : (
-          <span className="text-xs text-muted-foreground font-semibold">No hay una sesión activa todavía.</span>
+          <Grupo><Vacio>No hay una sesión activa todavía.</Vacio></Grupo>
         )}
-      </div>
+      </Seccion>
 
       <AjustesUsuarios />
     </div>

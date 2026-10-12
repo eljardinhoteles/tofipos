@@ -342,6 +342,8 @@ async function cloudFetch(cfg, action, body, timeoutMs = 35000) {
   if (!res.ok) {
     const err = new Error(data.error || `HTTP ${res.status}`);
     err.status = res.status;
+    err.reason = data.reason || null;
+    err.replacedBy = data.replaced_by || null;
     throw err;
   }
   return data;
@@ -356,6 +358,7 @@ async function pairWithCloud(pkg) {
   );
   state.cloud = { url: pkg.u, anon: pkg.k || null, server_id: data.server_id, secret: data.secret, organization_id: data.organization_id };
   saveState();
+  setCloudStatus({ state: 'connecting' });
 }
 
 function applyCloudPrinters(list) {
@@ -383,6 +386,7 @@ async function handleCloudJob(job) {
     if (errors.length) error = errors.join(' | ');
   }
   console.log(`[cloud] job ${job.id} (${job.kind}) → ${error ? 'FALLÓ: ' + error : 'ok'}`);
+  recordJob({ id: job.id, kind: job.kind, ok: !error, error });
   try {
     await cloudFetch(state.cloud, 'ack', { server_id: state.cloud.server_id, job_id: job.id, status: error ? 'failed' : 'done', error }, 15000);
   } catch (err) {
@@ -394,12 +398,48 @@ async function handleCloudJob(job) {
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 let cloudLoopRunning = false;
 
+// Estado visible en el panel local (http://localhost:18181/).
+//   connecting · online · offline (sin internet, reintenta solo) · unlinked (la nube ya no reconoce este servidor)
+const cloudStatus = { state: state.cloud ? 'connecting' : 'local', message: '', reason: null, replacedBy: null, since: Date.now(), lastOk: null };
+function setCloudStatus(next) {
+  if (cloudStatus.state !== next.state) cloudStatus.since = Date.now();
+  Object.assign(cloudStatus, { message: '', reason: null, replacedBy: null }, next);
+}
+
+const UNLINK_MESSAGES = {
+  unpaired: 'Este servidor fue desvinculado desde Ajustes → Impresión.',
+  replaced: 'Otro equipo se vinculó y reemplazó a este servidor (solo se permite uno por organización).',
+  unknown: 'La nube ya no tiene registro de este servidor.',
+  invalid: 'La nube rechazó el secreto de este servidor.',
+};
+
+// Últimos trabajos de la nube, para mostrarlos en el panel.
+const recentJobs = [];
+function recordJob(entry) {
+  recentJobs.unshift({ at: new Date().toISOString(), ...entry });
+  recentJobs.length = Math.min(recentJobs.length, 30);
+}
+
+// Espera que se puede cortar (reintentar ahora / vincular de nuevo) sin esperar el backoff.
+let wakeLoop = null;
+function interruptibleSleep(ms) {
+  return new Promise(resolve => {
+    const t = setTimeout(done, ms);
+    function done() { clearTimeout(t); wakeLoop = null; resolve(); }
+    wakeLoop = done;
+  });
+}
+function wakeCloudLoop() {
+  if (wakeLoop) wakeLoop();
+  else if (state.cloud && !cloudLoopRunning) cloudLoop();
+}
+
 async function cloudLoop() {
   if (cloudLoopRunning) return;
   cloudLoopRunning = true;
   let lastCatalog = 0;
   let backoff = 2000;
-  console.log(`[cloud] conectado a la nube (servidor ${state.cloud.server_id})`);
+  console.log(`[cloud] conectando a la nube (servidor ${state.cloud.server_id})`);
   while (state.cloud) {
     try {
       const report = { hostname: os.hostname(), version: VERSION, ips: lanIps() };
@@ -414,16 +454,22 @@ async function cloudLoop() {
       }
       const res = await cloudFetch(state.cloud, 'poll', { server_id: state.cloud.server_id, wait_seconds: 20, report });
       backoff = 2000;
+      cloudStatus.lastOk = Date.now();
+      if (cloudStatus.state !== 'online') setCloudStatus({ state: 'online' });
       applyCloudPrinters(res.printers);
       for (const job of res.jobs || []) await handleCloudJob(job);
     } catch (err) {
       if (err.status === 401) {
-        console.error('[cloud] este servidor fue desvinculado o su secreto es inválido. Vuelve a vincularlo con --pair.');
-        await sleep(60000);
+        const reason = err.reason || 'invalid';
+        const message = UNLINK_MESSAGES[reason] || UNLINK_MESSAGES.invalid;
+        if (cloudStatus.state !== 'unlinked') console.error(`[cloud] ${message} Vuelve a vincularlo desde el panel (http://localhost:${PORT}) o con --pair.`);
+        setCloudStatus({ state: 'unlinked', reason, message, replacedBy: err.replacedBy });
+        await interruptibleSleep(60000);
         continue;
       }
       console.warn(`[cloud] sin conexión con la nube (${err.message}); reintentando…`);
-      await sleep(backoff);
+      setCloudStatus({ state: 'offline', message: err.message });
+      await interruptibleSleep(backoff);
       backoff = Math.min(backoff * 2, 30000);
     }
   }
@@ -450,7 +496,37 @@ async function bootstrapCloud() {
 
 // ── Servidor ──────────────────────────────────────────────────────────────────
 
+function openPanelInBrowser() {
+  if (process.argv.includes('--no-open') || process.env.POS_NO_OPEN) return;
+  const url = `http://localhost:${PORT}`;
+  try {
+    const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+  } catch {}
+}
+
+const PORT = 18181;
 const app = express();
+// Panel local: va antes de CORS a propósito (solo loopback, sin cabeceras CORS).
+app.use(require('./panel').createPanelRouter({
+  port: PORT,
+  getState: () => ({
+    token: state.auth_token,
+    cloud: state.cloud ? { server_id: state.cloud.server_id, organization_id: state.cloud.organization_id } : null,
+    status: { ...cloudStatus },
+    printers: getPrinters(),
+    queue: state.queue.length,
+    version: VERSION,
+    hostname: os.hostname(),
+    ips: lanIps(),
+    jobs: recentJobs,
+  }),
+  pair: async (input) => { await pairWithCloud(parsePairingPackage(input)); wakeCloudLoop(); },
+  retry: () => { setCloudStatus({ state: 'connecting' }); wakeCloudLoop(); },
+  unlink: () => { state.cloud = null; delete state.cloud_printers; cloudPrinters = []; saveState(); setCloudStatus({ state: 'local' }); wakeCloudLoop(); },
+  regenerateToken: () => { state.auth_token = generateToken(); saveState(); return state.auth_token; },
+}));
 // CORS abierto en origin: las tablets acceden por IP:puerto directo, sin un
 // origen fijo conocido de antemano. La seguridad real la da el token
 // (requireToken), no CORS.
@@ -589,8 +665,9 @@ app.delete('/jobs/:id', requireToken, (req, res) => {
   res.json({ ok: true });
 });
 
-const PORT = 18181;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`print server listening on 0.0.0.0:${PORT}`);
+  console.log(`Panel de control: http://localhost:${PORT}`);
+  openPanelInBrowser();
   bootstrapCloud().catch(err => console.error('[cloud] error al iniciar:', err.message));
 });

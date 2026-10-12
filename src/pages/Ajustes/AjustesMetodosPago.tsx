@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Bank, CreditCard, Plus, X } from '@phosphor-icons/react';
+import { Bank, CreditCard, Plus, Trash } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
+import { Fila, Grupo, Seccion, Vacio } from '../../components/Ajustes/AjustesUI';
 import { useMetodosPagoConfig } from '../../hooks/useMetodosPagoConfig';
 
 // Sección reutilizada para ambas listas (bancos y redes de tarjeta): mismo
@@ -52,52 +53,33 @@ function ListaEditable({
   };
 
   return (
-    <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-muted text-muted-foreground">
-          <Icon size={20} weight="bold" />
-        </div>
-        <div className="flex flex-col">
-          <h3 className="font-extrabold text-base text-foreground">{titulo}</h3>
-          <p className="text-xs text-muted-foreground">{descripcion}</p>
-        </div>
-      </div>
-
+    <Seccion titulo={titulo} descripcion={descripcion}>
       <div className="flex items-center gap-2">
         <Input
-          type="text" placeholder={placeholder} value={nuevo}
+          type="text" placeholder={placeholder} value={nuevo} aria-label={placeholder}
           onChange={(e) => setNuevo(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleAgregar(); }}
-          className="h-9 text-xs flex-1"
+          className="h-12 flex-1 min-w-0 text-base"
         />
-        <Button type="button" size="sm" onClick={handleAgregar} disabled={saving || !nuevo.trim()}>
-          <Plus size={14} weight="bold" /> Agregar
+        <Button type="button" onClick={handleAgregar} disabled={saving || !nuevo.trim()} className="h-12 shrink-0 gap-1.5 px-5">
+          <Plus size={18} weight="bold" /> Agregar
         </Button>
       </div>
-
-      {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground font-semibold text-center py-4">
-          Sin opciones configuradas todavía.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {items.map(item => (
-            <span
-              key={item}
-              className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full bg-muted border border-border text-xs font-bold text-foreground"
-            >
-              {item}
-              <button
-                type="button" onClick={() => handleQuitar(item)} disabled={saving}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <X size={11} weight="bold" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+      <Grupo>
+        {items.length === 0 ? (
+          <Vacio>Sin opciones configuradas todavía.</Vacio>
+        ) : (
+          items.map((item) => (
+            <Fila key={item} titulo={item} icono={<Icon size={18} className="text-muted-foreground shrink-0" />}>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Quitar ${item}`} onClick={() => handleQuitar(item)} disabled={saving}
+                className="size-11 text-muted-foreground hover:text-destructive touch-manipulation">
+                <Trash size={18} />
+              </Button>
+            </Fila>
+          ))
+        )}
+      </Grupo>
+    </Seccion>
   );
 }
 
@@ -110,7 +92,7 @@ export default function AjustesMetodosPago() {
   const { bancos, redesTarjeta, guardarBancos, guardarRedesTarjeta } = useMetodosPagoConfig();
 
   return (
-    <div className="flex flex-col gap-6 py-6">
+    <div className="flex flex-col gap-6">
       <ListaEditable
         icon={Bank}
         titulo="Bancos destino"

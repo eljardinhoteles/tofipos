@@ -143,24 +143,24 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
             }}
             className="h-12 text-base"
           />
-          <Button size="icon" className="h-12 w-12 shrink-0 rounded-xl" onClick={submit} disabled={!text.trim()} aria-label="Crear subcomanda">
+          <Button size="icon" className="h-12 w-12 shrink-0 rounded-2xl" onClick={submit} disabled={!text.trim()} aria-label="Crear subcomanda">
             <Check size={22} weight="bold" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-12 w-12 shrink-0 rounded-xl" onClick={closeEditor} aria-label="Cancelar">
+          <Button size="icon" variant="ghost" className="h-12 w-12 shrink-0 rounded-2xl" onClick={closeEditor} aria-label="Cancelar">
             <X size={22} weight="bold" />
           </Button>
         </div>
 
         {sugerencias.length > 0 && (
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sugeridos · toca para crear</span>
+            <span className="t-etiqueta text-muted-foreground">Sugeridos · toca para crear</span>
             <div className="flex flex-wrap gap-2">
               {sugerencias.map(s => (
                 <button
                   key={s}
                   type="button"
                   onClick={async () => { await onAdd(s); closeEditor(); }}
-                  className="h-11 px-4 rounded-full border border-border bg-card text-sm font-bold cursor-pointer active:scale-95 transition-transform"
+                  className="h-11 px-4 rounded-full border border-border bg-card t-cuerpo-fuerte cursor-pointer active:scale-95 transition-transform"
                 >
                   {s}
                 </button>
@@ -179,7 +179,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
           type="button"
           aria-label="Ver subcomandas anteriores"
           onClick={() => scrollFila(-1)}
-          className="hidden md:flex absolute left-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
+          className="hidden md:flex absolute left-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 size-8 pointer-coarse:size-11 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
         >
           <CaretLeft size={16} weight="bold" />
         </button>
@@ -189,7 +189,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
           type="button"
           aria-label="Ver más subcomandas"
           onClick={() => scrollFila(1)}
-          className="hidden md:flex absolute right-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
+          className="hidden md:flex absolute right-1 top-[2.125rem] md:top-1/2 -translate-y-1/2 z-10 size-8 pointer-coarse:size-11 rounded-full bg-card border border-border shadow items-center justify-center cursor-pointer active:scale-95"
         >
           <CaretRight size={16} weight="bold" />
         </button>
@@ -224,9 +224,9 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
                   ? (isActive ? 'border-warning bg-warning-foreground text-white' : 'border-warning bg-warning-soft text-warning-foreground')
                   : (isActive ? 'border-primary bg-primary text-white' : 'border-border bg-card'))}
             >
-              <span className="w-full text-xs font-extrabold leading-tight truncate">{c.subcomanda_nombre}</span>
-              <span className={cn('text-[10px] font-medium leading-tight',
-                isActive ? 'text-white/80' : enCuenta ? 'text-warning-foreground' : 'text-muted-foreground')}>
+              <span className="w-full t-dato leading-tight truncate">{c.subcomanda_nombre}</span>
+              <span className={cn('t-meta leading-tight',
+                isActive ? 'text-white/70' : enCuenta ? 'text-warning-foreground' : 'text-muted-foreground')}>
                 {cantidad} {cantidad === 1 ? 'item' : 'items'}
               </span>
             </button>

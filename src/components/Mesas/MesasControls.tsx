@@ -50,12 +50,12 @@ export function MesasControls({
                 <div className="flex items-center gap-2">
                     <button
                         type="button" onClick={onOpenAddTable}
-                        className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
+                        className="h-9 pointer-coarse:h-11 px-3.5 rounded-full bg-primary text-primary-foreground t-dato flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
                         <Plus size={16} weight="bold" /> Mesa
                     </button>
                     <button
                         type="button" onClick={onOpenManage}
-                        className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
+                        className="h-9 pointer-coarse:h-11 px-3.5 rounded-full bg-primary text-primary-foreground t-dato flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
                         <Plus size={16} weight="bold" /> Piso
                     </button>
                 </div>,
@@ -66,7 +66,7 @@ export function MesasControls({
                 <div className="flex items-center gap-2">
                     <button
                         type="button" onClick={onToggleEditMode}
-                        className={cn("h-9 px-4 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border shadow-2xs",
+                        className={cn("h-9 pointer-coarse:h-11 px-4 rounded-full t-dato flex items-center gap-1.5 transition-all cursor-pointer border shadow-2xs",
                             isEditMode
                                 ? "bg-foreground text-background border-foreground" : "bg-card text-foreground border-border")}
                     >

@@ -28,7 +28,7 @@ export function FilterChips({
  <button
  key={option.value}
  type="button"onClick={() => onChange(option.value)}
- className={cn("px-3.5 py-1.5 rounded-full font-bold text-xs whitespace-nowrap transition-all cursor-pointer border select-none",
+ className={cn("px-3.5 py-1.5 rounded-full t-dato whitespace-nowrap transition-all cursor-pointer border select-none",
  active
  ?"bg-foreground text-background border-foreground shadow-xs":"bg-card text-muted-foreground border-border")}
  >

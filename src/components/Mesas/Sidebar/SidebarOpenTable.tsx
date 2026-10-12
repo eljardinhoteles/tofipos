@@ -1,7 +1,8 @@
+import { ReservaHeader } from './ReservaHeader';
 import { HabitacionOpcion } from './habitacion/HabitacionOpcion';
 import { filtrarCuentasHabitacionVigentes } from '../../../lib/habitacionCuentas';
 import { useEffect, useState } from'react';
-import { X, Users, Minus, Plus, Check } from'@phosphor-icons/react';
+import { Users, Minus, Plus, Check } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { Tabs, TabsList, TabsTrigger } from'@/components/ui/tabs';
@@ -92,33 +93,12 @@ export function SidebarOpenTable({
  setCustomerName(cuenta.huesped);
  };
 
- const titulo = 'text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground';
+ const titulo = 't-etiqueta text-muted-foreground';
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden">
- {/* Header — en desktop el fondo completo es color primary; en móvil el fondo
- queda neutro y solo el badge del número de mesa lleva el color, igual que
- en SidebarDetails (un header sólido se ve mal dentro del bottom-sheet). */}
- <header className="p-4 bg-card text-foreground md:bg-primary md:text-primary-foreground flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground md:bg-primary-foreground/15 md:text-primary-foreground font-black text-base flex items-center justify-center shrink-0">
- {selectedMesa.nombre.toLowerCase().startsWith('mesa')
- ? selectedMesa.nombre.replace(/^Mesa\s*/i, '')
- : selectedMesa.nombre}
- </div>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base md:text-primary-foreground leading-tight">{tableDisplay}</h3>
- <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:text-primary-foreground/70">
- Apertura de Mesa
- </span>
- </div>
- </div>
-
- <Button variant="ghost" size="icon-lg" aria-label="Cerrar" onClick={onClose}
- className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-primary-foreground">
- <X size={18} weight="bold"/>
- </Button>
- </header>
+ <ReservaHeader tono="primary" titulo={tableDisplay} subtitulo="Apertura de mesa" onClose={onClose}
+ badge={<span className="t-titulo">{selectedMesa.nombre.replace(/^Mesa\s*/i, '')}</span>} />
 
  {/* Cuerpo Scrollable */}
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
@@ -134,7 +114,7 @@ export function SidebarOpenTable({
  id="guest-count" type="number" inputMode="numeric" min={1} aria-label="Cantidad de comensales"
  value={guestCount || ''}
  onChange={(e) => setGuestCount(Math.max(0, Number(e.target.value)))}
- className="h-full flex-1 rounded-none border-0 shadow-none focus-visible:ring-0 text-center text-2xl font-black tabular-nums bg-transparent"/>
+ className="h-full flex-1 rounded-none border-0 shadow-none focus-visible:ring-0 text-center t-cifra tabular-nums bg-transparent"/>
  <button type="button" aria-label="Más" onClick={() => setGuestCount(guestCount + 1)}
  className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted transition-colors">
  <Plus size={20} weight="bold"/>
@@ -178,7 +158,7 @@ export function SidebarOpenTable({
 
  {/* Cliente elegido de la lista */}
  {clienteId && (
- <span className="flex items-center gap-1.5 text-xs font-bold text-success-foreground">
+ <span className="flex items-center gap-1.5 t-dato text-success-foreground">
  <Check size={14} weight="bold" /> Cliente vinculado
  </span>
  )}

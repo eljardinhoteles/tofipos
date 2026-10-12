@@ -18,6 +18,7 @@ import {
   CurrencyDollar,
   Pulse,
   Buildings,
+  CalendarStar,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ const navItemsV2 = [
   { label: 'Ventas', to: '/v2/centro-ventas', icon: CurrencyDollar, accent: NAV_ACCENT['/v2/centro-ventas'] },
   { label: 'Clientes', to: '/v2/clientes', icon: Users, accent: NAV_ACCENT['/v2/clientes'] },
   { label: 'Productos', to: '/v2/menu', icon: Bag, accent: NAV_ACCENT['/v2/menu'] },
+  { label: 'Planificador', to: '/v2/planificacion', icon: CalendarStar, accent: NAV_ACCENT['/v2/planificacion'] },
   { label: 'Métricas', to: '/v2/metricas', icon: ChartBar, accent: NAV_ACCENT['/v2/metricas'] },
 ];
 
@@ -44,8 +46,8 @@ const settingsItem = { label: 'Ajustes', to: '/v2/ajustes', icon: Gear, accent: 
 // Módulos ocultos del sidebar para roles operativos (mesero/cajero) —
 // solo visuales, no impide navegar ahí directamente por URL.
 const RESTRICTED_LABELS_BY_ROLE: Record<string, string[]> = {
-  mesero: ['Reservas', 'Métricas'],
-  cajero: ['Reservas', 'Métricas'],
+  mesero: ['Reservas', 'Métricas', 'Planificador'],
+  cajero: ['Reservas', 'Métricas', 'Planificador'],
 };
 
 type NavItem = typeof settingsItem;
@@ -74,7 +76,7 @@ function ModuleLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
     >
       <Icon size={24} weight={isActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/mod:scale-110 group-hover/mod:-translate-y-0.5')} />
       {isActive && (
-        <span className="w-full px-1 text-center text-[11px] leading-tight truncate font-bold">
+        <span className="w-full px-1 text-center t-dato leading-tight truncate">
           {item.label}
         </span>
       )}
@@ -85,7 +87,7 @@ function ModuleLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
 
 // Utilidades del pie (ajustes, sync, cuenta): solo icono + tooltip, sin fondo.
 const utilButtonClass =
-  'relative size-11 rounded-lg bg-transparent text-nav-foreground/75 hover:bg-transparent hover:text-nav-foreground aria-expanded:bg-nav-foreground/10 aria-expanded:text-nav-foreground focus-visible:border-transparent focus-visible:ring-nav-foreground/40';
+  'relative size-11 rounded-xl bg-transparent text-nav-foreground/75 hover:bg-transparent hover:text-nav-foreground aria-expanded:bg-nav-foreground/10 aria-expanded:text-nav-foreground focus-visible:border-transparent focus-visible:ring-nav-foreground/40';
 
 function UtilTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -204,16 +206,16 @@ export function MainSidebarV2() {
           </UtilTooltip>
           <PopoverContent side="right" align="end" sideOffset={12} className="w-64 p-1.5">
             <div className="flex items-center gap-3 px-3 py-2.5">
-              <span aria-hidden="true" className="size-10 rounded-xl bg-muted text-foreground flex items-center justify-center text-sm font-black shrink-0">
+              <span aria-hidden="true" className="size-10 rounded-xl bg-muted text-foreground flex items-center justify-center t-cuerpo-fuerte shrink-0">
                 {userIniciales}
               </span>
               <div className="min-w-0">
-                <div className="text-sm font-extrabold truncate">{userName}</div>
-                <div className="text-xs font-semibold text-muted-foreground">{userRole}</div>
-                {userEmail && <div className="text-[11px] text-muted-foreground truncate">{userEmail}</div>}
+                <div className="t-cuerpo-fuerte truncate">{userName}</div>
+                <div className="t-dato text-muted-foreground">{userRole}</div>
+                {userEmail && <div className="t-meta text-muted-foreground truncate">{userEmail}</div>}
               </div>
             </div>
-            <div className="px-3 pb-2 flex flex-col gap-1 text-xs text-muted-foreground">
+            <div className="px-3 pb-2 flex flex-col gap-1 t-meta text-muted-foreground">
               {orgNombre && (
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Buildings size={13} className="shrink-0" />
@@ -228,14 +230,14 @@ export function MainSidebarV2() {
             <Separator className="my-1" />
             <Button
               variant="ghost"
-              className="w-full justify-start h-9 px-3 rounded-lg"
+              className="w-full justify-start h-9 px-3 rounded-2xl"
               onClick={() => { setUserMenuOpen(false); setModalOpen(true); }}
             >
               <ArrowsClockwise size={16} /> Estado de sync
             </Button>
             <Button
               variant="ghost"
-              className="w-full justify-start h-9 px-3 rounded-lg text-destructive hover:bg-destructive/10"
+              className="w-full justify-start h-9 px-3 rounded-2xl text-destructive hover:bg-destructive/10"
               onClick={() => (currentMesero ? logoutMesero() : logoutAdmin())}
             >
               <SignOut size={16} /> Cerrar sesión

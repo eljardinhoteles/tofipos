@@ -54,7 +54,7 @@ export const TableNode = memo(function TableNode({
  "bg-info/10 border-info/40 text-info-foreground dark:bg-info/30 dark:border-info")}
  >
  <div className="flex items-center justify-between">
- <span className="text-[10px] font-black uppercase tracking-wider">
+ <span className="t-etiqueta">
  {isFree ?'Libre': activeComanda?.estado ==='cuenta'?'Cuenta':'Ocupada'}
  </span>
  <Bed
@@ -64,18 +64,23 @@ export const TableNode = memo(function TableNode({
  />
  </div>
 
- <div className="flex flex-col items-center justify-center gap-0.5 text-center my-auto w-full min-w-0">
- <span className="font-black text-xl leading-none truncate max-w-full">
+ {/* Número = dato principal; el tipo lo acompaña como secundario. */}
+ <div className="flex flex-col items-center justify-center text-center my-auto w-full min-w-0">
+ <span className={cn("t-cifra leading-none truncate max-w-full", isFree && !isSelected && "text-foreground")}>
  {roomNumber}
  </span>
- <span className="text-[10px] font-bold opacity-80 truncate max-w-full">
- {roomType}
+ <span className="t-meta capitalize truncate max-w-full mt-1">
+ {roomType.toLowerCase()}
  </span>
- {cliente && (
- <div className="flex items-center justify-center gap-1 mt-1 font-extrabold text-[10px] max-w-full min-w-0 text-inherit">
- <User size={10} className="shrink-0"/>
- <span className="truncate">{cliente}</span>
  </div>
+
+ {/* Huésped al pie: ocupa su propio renglón y la tarjeta siempre conserva la misma altura. */}
+ <div className="flex items-center justify-center gap-1 min-h-4 max-w-full min-w-0">
+ {cliente && (
+ <>
+ <User size={12} weight="bold" className="shrink-0"/>
+ <span className="t-dato truncate">{cliente}</span>
+ </>
  )}
  </div>
  </div>
@@ -113,9 +118,9 @@ export const TableNode = memo(function TableNode({
  {renderChairs()}
 
  <div className="flex items-center justify-between relative z-10">
- <span className={cn("text-[10px] font-black uppercase tracking-wider",
+ <span className={cn("t-etiqueta",
  isSelected 
- ?"text-white/90": effectiveState ==='libre'?"text-muted-foreground": effectiveState ==='cuenta'?"text-warning-foreground":"text-primary")}>
+ ?"text-white/70": effectiveState ==='libre'?"text-muted-foreground": effectiveState ==='cuenta'?"text-warning-foreground":"text-primary")}>
  {effectiveState ==='libre'?'Libre': effectiveState ==='cuenta'?'Cuenta':'Ocupada'}
  </span>
 
@@ -128,34 +133,34 @@ export const TableNode = memo(function TableNode({
  ) : (
  <ForkKnife size={14} className={isSelected ?"text-white":"text-primary"} />
  )}
- {tiempoActivo && <span className="text-xs font-extrabold">{tiempoActivo}</span>}
+ {tiempoActivo && <span className="t-dato">{tiempoActivo}</span>}
  </div>
  )}
  </div>
 
  <div className="flex flex-col items-center justify-center gap-1 text-center my-auto relative z-10 w-full min-w-0">
- <span className={cn("font-black text-lg leading-tight truncate max-w-full",
+ <span className={cn("t-valor leading-tight truncate max-w-full",
  effectiveState ==='libre'&& !isSelected ?"text-foreground":"text-inherit")}>
  {mesa.nombre}
  </span>
 
  {roomBadge && (
- <span className={cn("px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wide",
- isSelected ?"bg-white/20 text-white":"bg-info text-white")}>
+ <span className={cn("px-2 py-0.5 rounded-md t-dato",
+ isSelected ?"bg-white/15 text-white":"bg-info text-white")}>
  HAB: {roomBadge.match(/\d+/)?.[0] || roomBadge}
  </span>
  )}
 
  {isMultiple && (
- <span className={cn("flex items-center gap-1 px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wide",
- isSelected ?"bg-white/20 text-white":"bg-primary/15 text-primary")}>
+ <span className={cn("flex items-center gap-1 px-2 py-0.5 rounded-md t-dato",
+ isSelected ?"bg-white/15 text-white":"bg-primary/15 text-primary")}>
  <Stack size={10} weight="fill" />
  {subcomandasCount} CUENTAS
  </span>
  )}
 
  {cliente && !isMultiple && (
- <span className="text-[10px] font-extrabold truncate max-w-full mt-1">
+ <span className="t-meta truncate max-w-full mt-1">
  {cliente}
  </span>
  )}

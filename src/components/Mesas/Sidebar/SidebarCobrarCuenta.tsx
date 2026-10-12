@@ -1,5 +1,6 @@
-import { ArrowLeft, Printer, CircleNotch, Check } from '@phosphor-icons/react';
+import { Printer, CircleNotch, Check } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
+import { ReservaHeader } from './ReservaHeader';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ComandaTotales } from './ComandaTotales';
@@ -44,23 +45,7 @@ export function SidebarCobrarCuenta({
 
   return (
     <div className="h-full w-full bg-card flex flex-col overflow-hidden shadow-xl">
-      <header className="p-4 border-b border-border flex items-center gap-3 shrink-0 shadow-xs">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={procesando}
-          aria-label="Volver"
-          className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex flex-col min-w-0">
-          <h3 className="font-extrabold text-base text-foreground leading-tight">Cobrar cuenta</h3>
-          <span className="text-[10px] font-bold text-muted-foreground truncate">
-            COMANDA #{folio} · {mesaNombre}
-          </span>
-        </div>
-      </header>
+      <ReservaHeader tono="neutro" titulo="Cobrar cuenta" subtitulo={`Comanda #${folio} · ${mesaNombre}`} onBack={() => { if (!procesando) onBack(); }} />
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <ComandaTotales
@@ -74,10 +59,10 @@ export function SidebarCobrarCuenta({
         />
 
         {hayAnticipo && (
-          <div className="flex flex-col gap-2 p-3 rounded-xl bg-info-soft">
+          <div className="flex flex-col gap-2 p-3 rounded-2xl bg-info-soft">
             <div className="flex items-center justify-between">
-              <Label className="font-semibold text-xs text-info-foreground">Anticipo disponible</Label>
-              <span className="font-black text-sm text-info-foreground">${anticipo.toFixed(2)}</span>
+              <Label className="t-dato! text-info-foreground">Anticipo disponible</Label>
+              <span className="t-cuerpo-fuerte text-info-foreground">${anticipo.toFixed(2)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Input
@@ -88,7 +73,7 @@ export function SidebarCobrarCuenta({
               <Button type="button" variant="outline" className="h-10 font-bold shrink-0 bg-card" onClick={() => onAnticipoUsarChange(maxUsar)}>Todo</Button>
               <Button type="button" variant="outline" className="h-10 font-bold shrink-0 bg-card" onClick={() => onAnticipoUsarChange(0)}>Nada</Button>
             </div>
-            <p className="text-[11px] font-medium text-info-foreground/80">
+            <p className="t-meta text-info-foreground">
               {sobrante > 0.005
                 ? `Quedan $${sobrante.toFixed(2)} de anticipo sin usar.`
                 : 'Se descuenta de lo que se cobra ahora.'}
@@ -97,32 +82,32 @@ export function SidebarCobrarCuenta({
         )}
 
         {sobrante > 0.005 && ultimaCuentaDeMesa && (
-          <div className="p-3 rounded-xl bg-warning-soft text-warning-foreground text-xs font-semibold leading-snug">
+          <div className="p-3 rounded-2xl bg-warning-soft text-warning-foreground t-dato leading-snug">
             Sobran ${sobrante.toFixed(2)} de anticipo y es la última cuenta de la mesa. Al cobrar, ese dinero ya no se puede aplicar a otra cuenta: devuélvelo al cliente y regístralo como reembolso en Centro de Ventas.
           </div>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cobrar-pagador" className="font-semibold text-xs text-muted-foreground">Nombre de quien paga</Label>
+          <Label htmlFor="cobrar-pagador" className="t-meta! text-muted-foreground">Nombre de quien paga</Label>
           <Input
             id="cobrar-pagador"
             type="text"
             placeholder="Ej: Juan Pérez"
             value={closePayerName}
             onChange={(e) => setClosePayerName(e.target.value)}
-            className="h-12 text-base font-semibold"
+            className="h-12 t-fila"
           />
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="t-meta text-muted-foreground">
           El cobro queda registrado para anclarlo en Centro de Ventas y la mesa se libera si no quedan otras cuentas abiertas.
         </p>
       </main>
 
       <footer className="p-4 border-t border-border shrink-0 flex flex-col gap-3">
         <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-bold uppercase text-muted-foreground">A cobrar ahora</span>
-          <span className="font-black text-2xl text-foreground">${cobrarAhora.toFixed(2)}</span>
+          <span className="t-etiqueta text-muted-foreground">A cobrar ahora</span>
+          <span className="t-cifra text-foreground">${cobrarAhora.toFixed(2)}</span>
         </div>
         <Button className="w-full h-12 font-bold gap-2" disabled={procesando} onClick={() => onConfirm(true)}>
           {procesando ? (<><CircleNotch size={18} className="animate-spin" /> Cobrando…</>) : (<><Printer size={18} weight="bold" /> Cobrar e imprimir</>)}

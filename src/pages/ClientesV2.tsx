@@ -5,12 +5,12 @@ import {
 
 } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
+import { Paginacion } from'../components/Common/Paginacion';
 import { useUI } from'../context/UIContext';
 import { ClienteFormModal } from'../components/Clientes/ClienteFormModal';
 import { useRxClientes } from'../hooks/useRxClientes';
 import { useRxComandas } from'../hooks/useRxComandas';
 import { initVerticalRxDb } from'../db/rxdb';
-import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
 import { PageFrame, PageHeader, PageContent, HeaderSearch, headerPrimaryButtonClass } from'../components/Common/PageHeader';
 
@@ -116,10 +116,10 @@ export default function ClientesV2() {
 
  <PageContent>
  {/* En móvil el buscador no cabe en el header: va en una fila propia */}
- <div className="md:hidden px-6 py-2 shrink-0">
+ <div className="md:hidden px-4 py-2 shrink-0">
  <div className="relative">
- <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
- <Input type="text" placeholder="Buscar por nombre, teléfono o DNI..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-9 text-xs" />
+ <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+ <Input type="text" placeholder="Buscar por nombre, teléfono o DNI..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-11 text-base" />
  </div>
  </div>
 
@@ -130,98 +130,91 @@ export default function ClientesV2() {
  <div className="w-24 h-24 flex items-center justify-center">
  <img src="/Clients.webp"alt=""aria-hidden="true"className="w-full h-full object-contain"/>
  </div>
- <h2 className="text-foreground font-bold text-lg">No se encontraron clientes</h2>
- <p className="text-muted-foreground text-xs">Intenta cambiar el criterio de búsqueda o registra uno nuevo.</p>
+ <h2 className="t-titulo text-foreground">No se encontraron clientes</h2>
+ <p className="t-meta text-muted-foreground">Intenta cambiar el criterio de búsqueda o registra uno nuevo.</p>
  </div>
  ) : (
  <div className="flex flex-col">
- <table className="w-full text-left text-xs">
- <thead className="sticky top-0 z-10 bg-muted shadow-[0_1px_0_var(--border)] text-muted-foreground font-bold uppercase tracking-wider">
+ <table className="w-full text-left">
+ <thead className="sticky top-0 z-10 bg-muted shadow-[0_1px_0_var(--border)] t-etiqueta text-muted-foreground">
  <tr>
- <th className="px-6 py-3.5">Cliente</th>
- <th className="px-6 py-3.5">Contacto</th>
- <th className="px-6 py-3.5">Documento</th>
- <th className="px-6 py-3.5">Facturación</th>
- <th className="px-6 py-3.5">Notas</th>
- <th className="px-6 py-3.5 text-right">Acciones</th>
+ <th className="px-3 sm:px-6 py-3.5">Cliente</th>
+ <th className="px-3 sm:px-6 py-3.5">Contacto</th>
+ <th className="px-3 sm:px-6 py-3.5 hidden md:table-cell">Facturación</th>
+ <th className="px-3 sm:px-6 py-3.5 hidden lg:table-cell">Notas</th>
+ <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 text-right">Acciones</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border">
  {paginatedClientes.map((cliente) => {
  const isSystemCliente = cliente.id ==='99999999999';
  return (
- <tr key={cliente.id} className="transition-colors">
- <td className="px-6 py-4">
+ <tr key={cliente.id} className="hover:bg-muted/60 transition-colors">
+ <td className="px-3 sm:px-6 py-3">
  <div className="flex flex-col">
- <span className="font-extrabold text-foreground text-sm">{cliente.nombre}</span>
- <span className="text-[11px] text-muted-foreground">
- Registrado {new Date(cliente.created_at).toLocaleDateString()}
+ <span className="t-fila text-foreground">{cliente.nombre}</span>
+ <span className="t-meta text-muted-foreground tabular-nums">
+ {cliente.dni || 'Sin documento'}
  </span>
  </div>
  </td>
- <td className="px-6 py-4">
+ <td className="px-3 sm:px-6 py-3">
  <div className="flex flex-col gap-0.5">
  {cliente.telefono ? (
  <a
  href={getWhatsAppLink(cliente.telefono) ||'#'}
- target="_blank"rel="noreferrer"className="font-bold text-foreground">
+ target="_blank"rel="noreferrer"className="t-cuerpo-fuerte text-foreground">
  {cliente.telefono}
  </a>
  ) : (
- <span className="text-muted-foreground">Sin teléfono</span>
+ <span className="t-cuerpo text-muted-foreground">Sin teléfono</span>
  )}
  {cliente.email && (
- <span className="text-[11px] text-muted-foreground truncate">{cliente.email}</span>
+ <span className="t-meta text-muted-foreground truncate">{cliente.email}</span>
  )}
  </div>
  </td>
- <td className="px-6 py-4">
- <span className={cn("px-2.5 py-1 rounded-md font-semibold text-[11px]",
- cliente.dni ?"bg-muted text-muted-foreground":"bg-muted text-muted-foreground")}>
- {cliente.dni ||'Sin documento'}
- </span>
- </td>
- <td className="px-6 py-4">
+ <td className="px-3 sm:px-6 py-3 hidden md:table-cell">
  {cliente.nombre_factura || cliente.numero_doc ? (
  <div className="flex flex-col gap-1">
  {cliente.nombre_factura && (
- <span className="font-semibold text-foreground">{cliente.nombre_factura}</span>
+ <span className="t-cuerpo-fuerte text-foreground">{cliente.nombre_factura}</span>
  )}
  {cliente.numero_doc && (
- <span className="px-2 py-0.5 rounded-md bg-special-soft text-special-foreground font-bold text-[10px] w-fit">
+ <span className="px-2 py-0.5 rounded-md bg-special-soft text-special-foreground t-dato w-fit">
  {(cliente.tipo_doc ||'cedula').toUpperCase()} · {cliente.numero_doc}
  </span>
  )}
  </div>
  ) : (
- <span className="text-muted-foreground">Sin datos</span>
+ <span className="t-cuerpo text-muted-foreground">Sin datos</span>
  )}
  </td>
- <td className="px-6 py-4 max-w-xs">
- <span className="text-muted-foreground line-clamp-2">{cliente.notas ||'Sin notas'}</span>
+ <td className="px-3 sm:px-6 py-3 max-w-xs hidden lg:table-cell">
+ <span className="t-cuerpo text-muted-foreground line-clamp-2">{cliente.notas ||'Sin notas'}</span>
  </td>
- <td className="px-6 py-4 text-right">
+ <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3 text-right">
  <div className="flex items-center justify-end gap-1">
  {!isSystemCliente ? (
  <button
- type="button"onClick={() => handleOpenEdit(cliente)}
- className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center cursor-pointer transition-colors">
+ type="button"onClick={() => handleOpenEdit(cliente)} aria-label={`Editar ${cliente.nombre}`} title="Editar"
+ className="size-9 pointer-coarse:size-11 rounded-2xl text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center cursor-pointer transition-colors">
  <PencilSimple size={16} />
  </button>
  ) : (
- <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground flex items-center justify-center cursor-not-allowed">
+ <div aria-hidden="true" className="size-9 pointer-coarse:size-11 rounded-2xl text-muted-foreground/40 flex items-center justify-center cursor-not-allowed">
  <PencilSimple size={16} />
  </div>
  )}
 
  {!isSystemCliente ? (
  <button
- type="button"onClick={() => handleDelete(cliente.id)}
- className="w-8 h-8 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center cursor-pointer transition-colors">
+ type="button"onClick={() => handleDelete(cliente.id)} aria-label={`Eliminar ${cliente.nombre}`} title="Eliminar"
+ className="size-9 pointer-coarse:size-11 rounded-2xl text-muted-foreground hover:bg-destructive-soft hover:text-destructive flex items-center justify-center cursor-pointer transition-colors">
  <Trash size={16} />
  </button>
  ) : (
- <div className="w-8 h-8 rounded-lg bg-muted text-muted-foreground flex items-center justify-center cursor-not-allowed">
+ <div aria-hidden="true" className="size-9 pointer-coarse:size-11 rounded-2xl text-muted-foreground/40 flex items-center justify-center cursor-not-allowed">
  <Trash size={16} />
  </div>
  )}
@@ -235,35 +228,12 @@ export default function ClientesV2() {
  </div>
  )}
 
- </main>
-
- {/* Paginación (fija, fuera del scroll de la tabla) */}
- {filteredClientes.length > 0 && (
- <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-card shrink-0">
- <span className="text-xs font-semibold text-muted-foreground">
- Mostrando {Math.min((page - 1) * itemsPerPage + 1, filteredClientes.length)}-
- {Math.min(page * itemsPerPage, filteredClientes.length)} de {filteredClientes.length}
- </span>
-
- <div className="flex items-center gap-1">
- <button
- type="button" disabled={page === 1}
- onClick={() => setPage(p => Math.max(1, p - 1))}
- className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer disabled:cursor-default">
- Anterior
- </button>
- <span className="px-3 text-xs font-bold text-foreground">
- Página {page} de {totalPages}
- </span>
- <button
- type="button" disabled={page === totalPages}
- onClick={() => setPage(p => Math.min(totalPages, p + 1))}
- className="px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted text-xs font-semibold text-muted-foreground disabled:opacity-40 transition-colors cursor-pointer disabled:cursor-default">
- Siguiente
- </button>
+<div className="md:hidden pb-[calc(env(safe-area-inset-bottom)+96px)]">
+ <Paginacion page={page} totalPages={totalPages} total={filteredClientes.length} pageSize={itemsPerPage} onPageChange={setPage} />
  </div>
- </div>
- )}
+  </main>
+
+ <Paginacion className="hidden md:block" page={page} totalPages={totalPages} total={filteredClientes.length} pageSize={itemsPerPage} onPageChange={setPage} />
 
  </PageContent>
 

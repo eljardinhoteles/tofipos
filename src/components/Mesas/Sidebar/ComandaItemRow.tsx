@@ -54,36 +54,36 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  // Sin fondos ni recuadros; la jerarquía la dan el peso y el color del texto.
  const content = (
  <div className="flex items-start gap-3 w-full px-4 py-3">
- <span className={cn("w-8 shrink-0 self-center text-center text-xl leading-6 font-bold tracking-[-0.04em]",
+ <span className={cn("w-8 shrink-0 self-center text-center t-valor leading-6 tracking-[-0.04em]",
  isAnulado ?"text-destructive": isFullyPaid ?"text-foreground":"text-foreground")}>
  {item.cantidad}
  </span>
 
  <div className="flex flex-col flex-1 min-w-0 gap-0.5">
  <div className="flex items-start justify-between gap-3">
- <span className={cn("font-bold text-[17px] leading-6 break-words",
+ <span className={cn("t-fila leading-6 break-words",
  isAnulado ?"line-through text-muted-foreground":"text-foreground")}>
  {item.nombre}
  </span>
  <span className="flex items-center gap-1.5 shrink-0 leading-6">
- <span className={cn("font-medium text-base tabular-nums",
+ <span className={cn("t-fila tabular-nums",
  tachado ?"line-through text-muted-foreground":"text-foreground")}>
  {dinero(item.precio * item.cantidad)}
  </span>
  {isLocked && !isAnulado && !porConfirmar && <CheckCircle size={16} weight="fill"className="text-primary shrink-0"aria-label="Confirmado"/>}
- {porConfirmar && <Clock size={16} weight="fill"className="text-orange-500 shrink-0"aria-label="Por confirmar"/>}
+ {porConfirmar && <Clock size={16} weight="fill"className="text-warning-foreground shrink-0"aria-label="Por confirmar"/>}
  </span>
  </div>
 
  {item.modificadores && item.modificadores.length > 0 && (
- <span className="flex items-baseline gap-2 text-[15px] font-medium text-[#9a6b3d] leading-snug">
- <span aria-hidden="true"className="w-1.5 h-1.5 rounded-full bg-[#9a6b3d] shrink-0 translate-y-[-1px]"/>
+ <span className="flex items-baseline gap-2 t-cuerpo text-warning-foreground leading-snug">
+ <span aria-hidden="true"className="w-1.5 h-1.5 rounded-full bg-warning-foreground shrink-0 translate-y-[-1px]"/>
  <span>{item.modificadores.join(' · ')}</span>
  </span>
  )}
 
  {(isAnulado || isCortesia || pagado > 0 || reparto) && (
- <div className="flex items-center gap-2 flex-wrap text-[13px] font-bold">
+ <div className="flex items-center gap-2 flex-wrap t-cuerpo-fuerte">
  {isAnulado && <span className="text-destructive">ANULADO</span>}
  {isCortesia && <span className="text-foreground">CORTESÍA</span>}
  {reparto && (
@@ -101,10 +101,10 @@ export const ComandaItemRow = memo(function ComandaItemRow({ item, onClick, isSe
  )}
 
  {isAnulado && item.anulado_motivo && (
- <span className="text-[15px] text-muted-foreground">Motivo: {item.anulado_motivo}</span>
+ <span className="t-cuerpo text-muted-foreground">Motivo: {item.anulado_motivo}</span>
  )}
  {isCortesia && item.cortesia_motivo && (
- <span className="text-[15px] text-muted-foreground">Motivo: {item.cortesia_motivo}</span>
+ <span className="t-cuerpo text-muted-foreground">Motivo: {item.cortesia_motivo}</span>
  )}
  </div>
  </div>

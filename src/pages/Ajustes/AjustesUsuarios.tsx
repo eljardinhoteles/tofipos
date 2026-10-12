@@ -1,5 +1,5 @@
 import { useState } from'react';
-import { Pencil, Plus, Trash, X } from'@phosphor-icons/react';
+import { Pencil, Plus, Trash, UserCircle } from'@phosphor-icons/react';
 import { useAuth } from'../../context/AuthContext';
 import { useUI } from'../../context/UIContext';
 import { useRxUsuarios } from'../../hooks/useRxUsuarios';
@@ -10,6 +10,12 @@ import { showToast } from'@/lib/toast';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
+import { EstadoBadge } from '../../components/Common/EstadoBadge';
+import { CheckRedondo } from '../../components/Common/CheckRedondo';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from'@/components/ui/select';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from'@/components/ui/sheet';
+import { ReservaHeader } from'../../components/Mesas/Sidebar/ReservaHeader';
+import { Fila, Grupo, Seccion, TITULO_SECCION, Vacio } from'../../components/Ajustes/AjustesUI';
 
 
 type Rol ='admin'|'mesero'|'cajero';
@@ -150,140 +156,124 @@ export default function AjustesUsuarios() {
   if (!canManage) {
     const expiredEmail = localStorage.getItem('pos_admin_email');
     return (
-      <div className="bg-card p-6 rounded-2xl border border-border text-center flex flex-col items-center justify-center gap-4">
-        <div className="font-bold text-muted-foreground text-sm">
-          Solo los administradores pueden gestionar usuarios.
-        </div>
-        {expiredEmail && (
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-xs text-muted-foreground max-w-xs">
-              Tu sesión de administrador ({expiredEmail}) expiró por inactividad de la plataforma. Para gestionar usuarios debes iniciar sesión nuevamente.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => {
-              // Limpiamos el admin email para obligar al re-login en la pantalla inicial
-              localStorage.removeItem('pos_admin_email');
-              window.location.href = '/';
-            }}>
-              Re-autenticar como Administrador
-            </Button>
-          </div>
-        )}
-      </div>
+      <Seccion titulo="Usuarios del local" descripcion="Colaboradores que inician sesión en este local.">
+        <Grupo>
+          <Vacio>Solo los administradores pueden gestionar usuarios.</Vacio>
+          {expiredEmail && (
+            <Fila
+              titulo="Tu sesión de administrador expiró"
+              ayuda={`${expiredEmail} · para gestionar usuarios debes iniciar sesión nuevamente.`}
+            >
+              <Button variant="outline" className="h-11" onClick={() => {
+                // Limpiamos el admin email para obligar al re-login en la pantalla inicial
+                localStorage.removeItem('pos_admin_email');
+                window.location.href = '/';
+              }}>
+                Re-autenticar
+              </Button>
+            </Fila>
+          )}
+        </Grupo>
+      </Seccion>
     );
   }
 
- return (
- <div className="bg-card p-6 rounded-2xl border border-border shadow-xs flex flex-col gap-4">
- <div className="flex items-center justify-between">
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground">Usuarios del Local</h3>
- <p className="text-xs text-muted-foreground">Los colaboradores inician sesión con Supabase Auth.</p>
- </div>
+  const etiqueta = TITULO_SECCION;
+  const etiquetaSwitch = 't-fila text-foreground cursor-pointer';
 
- <Button size="sm"disabled={!orgId} onClick={openCreate}>
- <Plus size={16} weight="bold"/> Agregar Usuario
- </Button>
- </div>
+  return (
+    <>
+      <Seccion
+        titulo="Usuarios del local"
+        descripcion="Los colaboradores inician sesión con su correo y contraseña."
+        accion={
+          <Button disabled={!orgId} onClick={openCreate} className="h-12 gap-1.5 px-5">
+            <Plus size={18} weight="bold" /> Agregar usuario
+          </Button>
+        }
+      >
+        <Grupo>
+          {usuarios.length === 0 && <Vacio>Aún no hay usuarios.</Vacio>}
+          {usuarios.map((user) => (
+            <Fila
+              key={user.id}
+              titulo={user.nombre}
+              ayuda={user.email || 'Sin correo'}
+              icono={
+                <span aria-hidden="true" className="size-9 rounded-full bg-muted text-muted-foreground t-dato flex items-center justify-center shrink-0">
+                  {user.nombre.slice(0, 2).toUpperCase()}
+                </span>
+              }
+            >
+              <EstadoBadge tono="info">{ROL_LABELS[(user.rol as Rol)] || user.rol}</EstadoBadge>
+              {user.activo === false && <EstadoBadge tono="neutral">Inactivo</EstadoBadge>}
+              <Button type="button" variant="ghost" size="icon" aria-label={`Editar ${user.nombre}`} onClick={() => openEdit(user)} className="size-11 text-muted-foreground touch-manipulation">
+                <Pencil size={18} />
+              </Button>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Eliminar ${user.nombre}`} disabled={isSelfUser(user)} onClick={() => deleteUser(user)}
+                className="size-11 text-muted-foreground hover:text-destructive touch-manipulation">
+                <Trash size={18} />
+              </Button>
+            </Fila>
+          ))}
+        </Grupo>
+      </Seccion>
 
- <div className="w-full h-[1px] bg-border"/>
+      <Sheet open={userModalOpen} onOpenChange={(open) => { if (!open && !saving) setUserModalOpen(false); }}>
+        <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
+          className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 data-[side=right]:border-l-0">
+          <SheetHeader className="p-0 gap-0 space-y-0">
+            <SheetTitle className="sr-only">{editingUser ? 'Editar colaborador' : 'Agregar colaborador'}</SheetTitle>
+            <SheetDescription className="sr-only">Datos de acceso y rol del colaborador</SheetDescription>
+            <ReservaHeader tono="neutro" badge={<UserCircle size={22} weight="bold" />} titulo={editingUser ? 'Editar colaborador' : 'Agregar colaborador'}
+              subtitulo={editingUser ? editingUser.nombre : 'Nuevo usuario'} onClose={() => setUserModalOpen(false)} />
+          </SheetHeader>
 
- <div className="flex flex-col gap-2">
- {usuarios.map((user) => (
- <div key={user.id} className="p-4 rounded-xl bg-muted border border-border flex items-center justify-between">
- <div className="flex items-center gap-3">
- <div className="w-9 h-9 rounded-full bg-muted text-muted-foreground font-extrabold text-xs flex items-center justify-center">
- {user.nombre.slice(0, 2).toUpperCase()}
- </div>
- <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">{user.nombre}</span>
- <span className="text-[10px] text-muted-foreground font-semibold">{user.email ||'Sin correo'}</span>
- </div>
- </div>
+          <main className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="usr-nombre" className={etiqueta}>Nombre completo *</Label>
+              <Input id="usr-nombre" type="text" required placeholder="Ej: Juan Pérez" value={formNombre} onChange={(e) => setFormNombre(e.target.value)} className="h-12 text-base" />
+            </div>
 
- <div className="flex items-center gap-3">
- <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-bold text-[10px] uppercase">
- {ROL_LABELS[(user.rol as Rol)] || user.rol}
- </span>
+            <div className="flex flex-col gap-2">
+              <Label className={etiqueta}>Rol</Label>
+              <Select value={formRol} onValueChange={(v) => setFormRol(v as Rol)}>
+                <SelectTrigger className="h-12 w-full text-base"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ROL_LABELS) as Rol[]).map((rol) => (
+                    <SelectItem key={rol} value={rol}>{ROL_LABELS[rol]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
- <div className="flex items-center gap-1">
- <button
- type="button"onClick={() => openEdit(user)}
- className="p-1.5 rounded-lg text-primary cursor-pointer">
- <Pencil size={16} />
- </button>
- <button
- type="button"disabled={isSelfUser(user)}
- onClick={() => deleteUser(user)}
- className="p-1.5 rounded-lg text-destructive disabled:opacity-30 cursor-pointer">
- <Trash size={16} />
- </button>
- </div>
- </div>
- </div>
- ))}
- </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="usr-email" className={etiqueta}>Correo electrónico *</Label>
+              <Input id="usr-email" type="email" required placeholder="ejemplo@hotel.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className="h-12 text-base" />
+            </div>
 
- {userModalOpen && (
- <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
- <div className="bg-card rounded-2xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
- <div className="flex items-center justify-between border-b border-border pb-3">
- <h3 className="font-extrabold text-base text-foreground">
- {editingUser ?'Editar Colaborador':'Agregar Colaborador'}
- </h3>
- <button type="button"onClick={() => setUserModalOpen(false)} className="text-muted-foreground">
- <X size={16} />
- </button>
- </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="usr-pass" className={etiqueta}>Contraseña{editingUser ? ' (déjala vacía para no cambiarla)' : ' *'}</Label>
+              <Input id="usr-pass" type="password" placeholder="Mínimo 6 caracteres" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} className="h-12 text-base" />
+            </div>
 
- <div className="flex flex-col gap-3">
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Nombre Completo *</Label>
- <Input
- type="text"required
- placeholder="Ej: Juan Pérez"value={formNombre}
- onChange={(e) => setFormNombre(e.target.value)}
- className="h-9 text-xs"/>
- </div>
+            {editingUser && (
+              <div className="flex items-center justify-between gap-4 pt-5 border-t border-border">
+                <div className="flex flex-col">
+                  <Label htmlFor="usr-activo" className={etiquetaSwitch}>Usuario activo</Label>
+                  <span className="t-meta text-muted-foreground">Un usuario inactivo no puede iniciar sesión.</span>
+                </div>
+                <CheckRedondo id="usr-activo" aria-label="Usuario activo" checked={formActivo} onCheckedChange={setFormActivo} />
+              </div>
+            )}
+          </main>
 
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Rol</Label>
- <select
- value={formRol}
- onChange={(e) => setFormRol(e.target.value as Rol)}
- className="h-9 px-3 text-xs bg-input/50 border border-transparent rounded-2xl focus:outline-none focus:border-ring font-semibold">
- <option value="cajero">Cajero</option>
- <option value="mesero">Mesero</option>
- <option value="admin">Administrador</option>
- </select>
- </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Correo Electrónico *</Label>
- <Input
- type="email"required
- placeholder="ejemplo@hotel.com"value={formEmail}
- onChange={(e) => setFormEmail(e.target.value)}
- className="h-9 text-xs"/>
- </div>
-
- <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Contraseña</Label>
- <Input
- type="password"placeholder="Mínimo 6 caracteres"value={formPassword}
- onChange={(e) => setFormPassword(e.target.value)}
- className="h-9 text-xs"/>
- </div>
- </div>
-
- <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
- <Button variant="outline"size="sm"onClick={() => setUserModalOpen(false)}>Cancelar</Button>
- <Button size="sm"disabled={saving} onClick={saveUser}>
- {saving ?'Guardando...':'Guardar Cambios'}
- </Button>
- </div>
- </div>
- </div>
- )}
- </div>
- );
+          <footer className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
+            <Button variant="outline" disabled={saving} onClick={() => setUserModalOpen(false)} className="h-12 px-5">Cancelar</Button>
+            <Button disabled={saving} onClick={saveUser} className="h-12 flex-1">{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+          </footer>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
 }

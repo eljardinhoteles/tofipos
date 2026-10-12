@@ -62,7 +62,7 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
             Cerrar mesa
           </Button>
         ) : (
-          <Button variant="dangerGhost" className="w-full h-10 font-semibold" onClick={p.onAnular}>
+          <Button variant="dangerGhost" className="w-full h-10 font-bold" onClick={p.onAnular}>
             Anular
           </Button>
         )}

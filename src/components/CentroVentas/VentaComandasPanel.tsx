@@ -67,7 +67,7 @@ export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelPro
   };
 
   if (relacionadas.length === 0) {
-    return <p className="text-xs text-muted-foreground py-2">Esta venta no tiene comandas vinculadas.</p>;
+    return <p className="t-meta text-muted-foreground py-2">Esta venta no tiene comandas vinculadas.</p>;
   }
 
   return (
@@ -80,23 +80,23 @@ export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelPro
             type="button"
             onClick={() => abrirComanda(c)}
             title="Abrir la comanda"
-            className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl border border-border bg-card cursor-pointer text-left hover:bg-muted/40 transition-colors"
+            className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl border border-border bg-card cursor-pointer text-left hover:bg-muted/40 transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="font-black text-sm text-foreground tabular-nums">#{folioLabel(c)}</span>
+              <span className="t-cuerpo-fuerte text-foreground tabular-nums">#{folioLabel(c)}</span>
               <div className="flex flex-col min-w-0">
-                <span className="text-xs font-bold text-foreground truncate flex items-center gap-1">
+                <span className="t-dato text-foreground truncate flex items-center gap-1">
                   <ForkKnife size={11} weight="bold" className="shrink-0" />
                   {c.subcomanda_nombre || c.cliente || c.mesa_nombre || 'Comanda'}
                 </span>
-                <span className="text-[11px] text-muted-foreground truncate">
+                <span className="t-meta text-muted-foreground truncate">
                   {c.mesa_nombre || 'Mesa'} · {dayjs(c.created_at).format('DD MMM HH:mm')}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className={cn('px-2 py-0.5 rounded-md text-[10px] font-bold', est.cls)}>{est.label}</span>
-              <span className="font-black text-sm text-foreground">{money(c.total ?? 0)}</span>
+              <span className={cn('px-2 py-0.5 rounded-md t-dato', est.cls)}>{est.label}</span>
+              <span className="t-cuerpo-fuerte text-foreground">{money(c.total ?? 0)}</span>
               <CaretRight size={14} weight="bold" className="text-muted-foreground" />
             </div>
           </button>

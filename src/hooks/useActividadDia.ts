@@ -3,6 +3,9 @@ import { initVerticalRxDb, forceSyncAll } from '../db/rxdb';
 import { useDbEpoch } from './useDbEpoch';
 import { construirActividad, inicioDelDia } from '../lib/actividadDia';
 import { showToast } from '../lib/toast';
+import dayjs from 'dayjs';
+import { listarCierresDelDia } from '../lib/cierresTurnoApi';
+import type { CierreTurno } from '../lib/cierreTurno';
 
 type Colecciones = Record<'comandas' | 'items' | 'pagos' | 'ventas' | 'habitaciones' | 'mesas' | 'usuarios', any[]>;
 const VACIO: Colecciones = { comandas: [], items: [], pagos: [], ventas: [], habitaciones: [], mesas: [], usuarios: [] };
@@ -19,6 +22,8 @@ export function useActividadDia(activo: boolean) {
   const [tick, setTick] = useState(0);
   const [refrescando, setRefrescando] = useState(false);
   const [actualizadoA, setActualizadoA] = useState<Date | null>(null);
+  // Los cierres de turno viven en Supabase: se consultan aparte; sin conexión simplemente no aparecen.
+  const [cierres, setCierres] = useState<CierreTurno[]>([]);
   // Se recalcula al abrir y al actualizar: si la app quedó abierta pasada la medianoche, "hoy" cambia.
   const inicio = useMemo(() => (activo ? inicioDelDia() : ''), [activo, tick]);
 
@@ -56,6 +61,15 @@ export function useActividadDia(activo: boolean) {
     return () => { vivo = false; subs.forEach(s => s.unsubscribe()); };
   }, [activo, inicio, dbEpoch, tick]);
 
+  useEffect(() => {
+    if (!activo || !inicio) return;
+    let vivo = true;
+    listarCierresDelDia(dayjs(inicio).format('YYYY-MM-DD'))
+      .then(c => { if (vivo) setCierres(c); })
+      .catch(() => { if (vivo) setCierres([]); });
+    return () => { vivo = false; };
+  }, [activo, inicio, tick]);
+
   // Pide a Supabase lo más reciente (movimientos de otros dispositivos) y vuelve a leer.
   // Lo que llegue después aparece solo: las consultas son en vivo.
   const refrescar = useCallback(async () => {
@@ -72,6 +86,6 @@ export function useActividadDia(activo: boolean) {
     }, 1200);
   }, []);
 
-  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio }) : []), [activo, datos, inicio]);
+  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio, cierres }) : []), [activo, datos, inicio, cierres]);
   return { eventos, cargando, refrescar, refrescando, actualizadoA };
 }

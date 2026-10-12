@@ -1,4 +1,5 @@
 import { imprimirConAviso } from '../../../lib/imprimir';
+import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useEffect, useState, useMemo } from'react';
 import { folioLabel } from '../../../lib/folio';
 import {
@@ -175,7 +176,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  tipo:'directa',
  cliente_id: activeComanda.cliente_id || undefined,
  cliente_nombre: nameOfPayer?.trim() || activeComanda.cliente || undefined,
- referencia: `Mesa ${activeComanda.mesa_nombre || selectedMesa.nombre} · #${folioLabel(activeComanda)} · ${labelDivision}`,
+ referencia: `${nombreMesaCompleto(activeComanda.mesa_nombre || selectedMesa.nombre)} · #${folioLabel(activeComanda)} · ${labelDivision}`,
  comanda_id: activeComanda.id,
  organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
  }, monto);
@@ -249,7 +250,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  }
  };
 
-  const titulo = 'text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground';
+  const titulo = 't-etiqueta text-muted-foreground';
   const nombreMesa = selectedMesa.nombre.toLowerCase().startsWith('mesa') ? selectedMesa.nombre : `Mesa ${selectedMesa.nombre}`;
   const montoInvalido = !montoCustom || Number(montoCustom) <= 0 || Number(montoCustom) > saldoPendiente;
   const sinNombre = !payerName.trim();
@@ -276,11 +277,11 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
         {!splitMethod ? (
           saldoPendiente <= 0.001 ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-success-soft text-success-foreground flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-success-soft text-success-foreground flex items-center justify-center">
                 <Check size={24} weight="bold" />
               </div>
-              <span className="font-extrabold text-sm text-foreground">Cuenta ya pagada</span>
-              <span className="text-xs text-muted-foreground max-w-[220px]">
+              <span className="t-cuerpo-fuerte text-foreground">Cuenta ya pagada</span>
+              <span className="t-meta text-muted-foreground max-w-[220px]">
                 Esta cuenta ya fue cubierta en su totalidad, no hay saldo para dividir.
               </span>
             </div>
@@ -288,30 +289,30 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
             <>
               <section className="rounded-2xl border border-border px-5 py-4 flex flex-col items-center gap-0.5 text-center">
                 <span className={titulo}>Total a dividir</span>
-                <span className="text-3xl font-black text-foreground tabular-nums">${saldoPendiente.toFixed(2)}</span>
+                <span className="t-hero text-foreground tabular-nums">${saldoPendiente.toFixed(2)}</span>
               </section>
 
               <section className="flex flex-col gap-3">
                 <h4 className={titulo}>Método de división</h4>
                 <button type="button" onClick={() => selectSplitMethod('iguales')}
-                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/60 active:bg-muted transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-muted text-foreground flex items-center justify-center shrink-0">
                     <Users size={20} weight="bold" />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-extrabold text-sm text-foreground">Partes iguales</span>
-                    <span className="text-xs text-muted-foreground">Divide el saldo entre N personas por igual.</span>
+                    <span className="t-cuerpo-fuerte text-foreground">Partes iguales</span>
+                    <span className="t-meta text-muted-foreground">Divide el saldo entre N personas por igual.</span>
                   </div>
                   <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
                 </button>
                 <button type="button" onClick={() => selectSplitMethod('monto')}
-                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+                  className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/60 active:bg-muted transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-muted text-foreground flex items-center justify-center shrink-0">
                     <CurrencyCircleDollar size={20} weight="bold" />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-extrabold text-sm text-foreground">Monto fijo</span>
-                    <span className="text-xs text-muted-foreground">Registra un pago rápido por una cantidad específica.</span>
+                    <span className="t-cuerpo-fuerte text-foreground">Monto fijo</span>
+                    <span className="t-meta text-muted-foreground">Registra un pago rápido por una cantidad específica.</span>
                   </div>
                   <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
                 </button>
@@ -335,7 +336,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                       className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
                       <Minus size={20} weight="bold" />
                     </button>
-                    <span className="flex-1 text-center text-2xl font-black tabular-nums">{personas}</span>
+                    <span className="flex-1 text-center t-cifra tabular-nums">{personas}</span>
                     <button type="button" aria-label="Más" disabled={personas >= 20}
                       onClick={() => { setPersonas(Math.min(20, personas + 1)); setSelectedPersonaIdx(null); setPaidPersonaIndexes([]); }}
                       className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
@@ -357,18 +358,18 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                           disabled={isPaid}
                           onClick={() => setSelectedPersonaIdx(isSelected ? null : idx)}
                           className={cn('p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-left transition-colors',
-                            isPaid ? 'bg-muted/60 border-border opacity-60 cursor-default'
+                            isPaid ? 'bg-muted/40 border-border opacity-60 cursor-default'
                               : isSelected ? 'bg-primary border-primary text-primary-foreground cursor-pointer'
-                                : 'bg-card border-border cursor-pointer hover:bg-muted/50')}
+                                : 'bg-card border-border cursor-pointer hover:bg-muted/60')}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={cn('w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs',
-                              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : isPaid ? 'bg-success text-white' : 'bg-muted text-foreground')}>
+                            <div className={cn('size-8 pointer-coarse:size-11 rounded-full flex items-center justify-center t-dato',
+                              isSelected ? 'bg-primary-foreground/15 text-primary-foreground' : isPaid ? 'bg-success text-white' : 'bg-muted text-foreground')}>
                               {isPaid ? <Check size={16} weight="bold" /> : idx + 1}
                             </div>
-                            <span className="font-extrabold text-sm">{isPaid ? `Persona ${idx + 1} · pagada` : `Persona ${idx + 1}`}</span>
+                            <span className="t-cuerpo-fuerte">{isPaid ? `Persona ${idx + 1} · pagada` : `Persona ${idx + 1}`}</span>
                           </div>
-                          <span className="font-black text-sm tabular-nums">${montoPorPersona.toFixed(2)}</span>
+                          <span className="t-cuerpo-fuerte tabular-nums">${montoPorPersona.toFixed(2)}</span>
                         </button>
                       );
                     })}
@@ -381,17 +382,17 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
               <section className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <h4 className={titulo}>Monto a pagar</h4>
-                  <span className="text-xs font-bold text-muted-foreground tabular-nums">Pendiente: ${saldoPendiente.toFixed(2)}</span>
+                  <span className="t-meta text-muted-foreground tabular-nums">Pendiente: ${saldoPendiente.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center gap-2 rounded-2xl border border-border px-4 h-14">
-                  <span className="text-lg font-black text-muted-foreground">$</span>
+                  <span className="t-valor text-muted-foreground">$</span>
                   <Input
                     type="number" inputMode="decimal" step="0.01" min={0} max={saldoPendiente} placeholder="0.00" value={montoCustom}
                     onChange={(e) => setMontoCustom(parseFloat(e.target.value) || '')}
-                    className={cn('h-10 flex-1 border-0 shadow-none focus-visible:ring-0 px-1 text-lg font-black', Number(montoCustom) > saldoPendiente && 'text-destructive')} />
+                    className={cn('h-10 flex-1 border-0 shadow-none focus-visible:ring-0 px-1 t-valor', Number(montoCustom) > saldoPendiente && 'text-destructive')} />
                 </div>
                 {Number(montoCustom) > saldoPendiente && (
-                  <span className="text-xs font-bold text-destructive">
+                  <span className="t-dato text-destructive">
                     El monto no puede superar el pendiente (${saldoPendiente.toFixed(2)}).
                   </span>
                 )}
@@ -439,12 +440,12 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
       <Dialog open={!!cobrarModalState} onOpenChange={(open) => { if (!open) setCobrarModalState(null); }}>
         <DialogContent className="max-w-sm p-6 gap-4">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-extrabold text-base">Cobrar e imprimir</DialogTitle>
-            <DialogDescription className="text-sm">Se registra el cobro de {payerName.trim() || 'esta parte'} y se imprime su ticket.</DialogDescription>
+            <DialogTitle className="t-titulo">Cobrar e imprimir</DialogTitle>
+            <DialogDescription className="t-cuerpo">Se registra el cobro de {payerName.trim() || 'esta parte'} y se imprime su ticket.</DialogDescription>
           </DialogHeader>
           <div className="rounded-2xl border border-border py-4 text-center flex flex-col gap-0.5">
             <span className={titulo}>Monto</span>
-            <span className="font-black text-3xl text-foreground tabular-nums">${(cobrarModalState?.monto ?? 0).toFixed(2)}</span>
+            <span className="t-hero text-foreground tabular-nums">${(cobrarModalState?.monto ?? 0).toFixed(2)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" variant="outline" className="h-11 font-bold" onClick={() => setCobrarModalState(null)}>Cancelar</Button>

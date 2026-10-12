@@ -1,7 +1,7 @@
 {
   "name": "pos-food-app",
   "private": true,
-  "version": "3.0.9",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@google/design.md": "^0.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.10.1",
     "@types/papaparse": "^5.5.2",

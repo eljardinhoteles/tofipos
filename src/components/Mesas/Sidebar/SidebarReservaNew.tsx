@@ -176,8 +176,8 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  }
  };
 
- const etiqueta = 'text-xs font-bold text-foreground';
- const campo = 'h-12 text-base font-semibold';
+ const etiqueta = 't-etiqueta! text-muted-foreground';
+ const campo = 'h-12 text-base';
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
@@ -190,7 +190,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
 
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cliente</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Cliente</h4>
  <div className="flex flex-col gap-1.5">
  <Label className={etiqueta}>Nombre del cliente *</Label>
  <ClienteSelector
@@ -202,16 +202,16 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  setEmail(cliente.email ||'');
  }}
  />
- {nombreError && <span className="text-xs text-destructive font-bold">{nombreError}</span>}
+ {nombreError && <span className="t-dato text-destructive">{nombreError}</span>}
  </div>
  </section>
 
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Cuándo y cuántos</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Cuándo y cuántos</h4>
  <div className="grid grid-cols-2 gap-3">
  <div className="flex flex-col gap-1.5">
  <Label className={etiqueta}>Fecha</Label>
- <DatePickerField value={fecha} onChange={setFecha} />
+ <DatePickerField value={fecha} onChange={setFecha} className="h-12 bg-card border-border" />
  </div>
  <div className="flex flex-col gap-1.5">
  <Label htmlFor="reserva-hora" className={etiqueta}>Hora</Label>
@@ -225,7 +225,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
  <Minus size={20} weight="bold" />
  </button>
- <span className="flex-1 text-center font-black text-2xl text-foreground tabular-nums">{personas}</span>
+ <span className="flex-1 text-center t-cifra text-foreground tabular-nums">{personas}</span>
  <button type="button" aria-label="Más" disabled={personas >= 50} onClick={() => setPersonas(Math.min(50, personas + 1))}
  className="h-full w-20 flex items-center justify-center text-foreground cursor-pointer active:bg-muted disabled:opacity-30 disabled:cursor-default transition-colors">
  <Plus size={20} weight="bold" />
@@ -235,17 +235,17 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  </section>
 
  <section className="flex flex-col gap-3">
- <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Detalles</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Detalles</h4>
  <div className="flex flex-col gap-1.5">
  <Label className={etiqueta}>Zona preferida</Label>
  <Select value={zonaId ||'__any__'} onValueChange={(v) => setZonaId(v ==='__any__'?'': v)}>
- <SelectTrigger className="h-12 w-full px-3 text-base font-semibold rounded-2xl bg-card border-border shadow-xs">
+ <SelectTrigger className="h-12 w-full px-3 text-base rounded-2xl bg-card border-border shadow-xs">
  <SelectValue />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="__any__" className="text-sm">Cualquier zona</SelectItem>
+ <SelectItem value="__any__" className="t-cuerpo">Cualquier zona</SelectItem>
  {zonas.map(z => (
- <SelectItem key={z.id} value={z.id} className="text-sm">{z.nombre}</SelectItem>
+ <SelectItem key={z.id} value={z.id} className="t-cuerpo">{z.nombre}</SelectItem>
  ))}
  </SelectContent>
  </Select>
@@ -256,7 +256,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  id="reserva-nota" rows={3}
  placeholder="Ej: Mesa cerca de la ventana..." value={nota}
  onChange={e => setNota(e.target.value)}
- className="min-h-24 text-base font-medium"
+ className="min-h-24 t-fila"
  />
  </div>
  </section>

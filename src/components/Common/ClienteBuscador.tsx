@@ -53,8 +53,8 @@ export function ClienteBuscador({
     return (
       <div className="p-2.5 rounded-2xl border border-ring ring-3 ring-ring/30 bg-input/50 flex items-center justify-between gap-2">
         <div className="flex flex-col min-w-0">
-          <span className="font-medium text-sm text-foreground truncate">{seleccionado.nombre}</span>
-          <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+          <span className="t-cuerpo text-foreground truncate">{seleccionado.nombre}</span>
+          <span className="t-dato text-muted-foreground truncate tabular-nums">
             {detalleCliente(seleccionado)}
           </span>
         </div>
@@ -83,7 +83,7 @@ export function ClienteBuscador({
       </div>
 
       {termino && resultados.length === 0 && (
-        <span className="text-xs text-muted-foreground px-1">Sin resultados</span>
+        <span className="t-meta text-muted-foreground px-1">Sin resultados</span>
       )}
 
       {resultados.map((c: any) => (
@@ -93,8 +93,8 @@ export function ClienteBuscador({
           onClick={() => { onChange(c.id); setBusqueda(''); }}
           className={cn('p-2.5 rounded-2xl border border-transparent bg-input/50 flex items-center justify-between gap-2 transition-all cursor-pointer text-left')}>
           <div className="flex flex-col min-w-0">
-            <span className="font-medium text-sm text-foreground truncate">{c.nombre}</span>
-            <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+            <span className="t-cuerpo text-foreground truncate">{c.nombre}</span>
+            <span className="t-dato text-muted-foreground truncate tabular-nums">
               {detalleCliente(c)}
             </span>
           </div>

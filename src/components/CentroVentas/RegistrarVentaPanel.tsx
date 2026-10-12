@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ORIGEN_ICON } from '../Common/OrigenBadge';
-import { BedIcon, ForkKnife, Door, X, Paperclip, CheckCircle, CreditCard, UserPlus } from '@phosphor-icons/react';
+import { ORIGEN_ICON, ORIGEN_CLASSES } from '../Common/OrigenBadge';
+import { BedIcon, ForkKnife, Door, CheckCircle, CreditCard, UserPlus, FloppyDisk } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,11 @@ import { useMetodosPagoConfig } from '../../hooks/useMetodosPagoConfig';
 import { useAuth } from '../../context/AuthContext';
 import { createRxVenta, agregarVentaMovimiento } from '../../db/rxdb';
 import { subirComprobante } from '@/lib/comprobantes';
+import { RedCobroRadios } from '../Common/RedCobroRadios';
+import { ComprobanteAdjunto } from '../Common/ComprobanteAdjunto';
+import { EstadoBadge } from '../Common/EstadoBadge';
+import { OrigenBadge } from '../Common/OrigenBadge';
+import { documentoCliente } from '../../lib/documentoCliente';
 import { ClienteBuscador } from '../Common/ClienteBuscador';
 import { ClienteFormModal } from '../Clientes/ClienteFormModal';
 import type { VentaOrigen, VentaTipo } from '../../db/rxdb';
@@ -32,7 +37,7 @@ const ORIGEN_OPTS: { value: VentaOrigen; label: string; icon: typeof ORIGEN_ICON
   { value: 'reserva_hotel', label: 'Reserva hotel', icon: BedIcon },
   { value: 'reserva_restaurante', label: 'Reserva restaurante', icon: ForkKnife },
   { value: 'mesa', label: 'Mesa', icon: ORIGEN_ICON.mesa },
-  { value: 'habitacion', label: 'Checkout habitación', icon: Door },
+  { value: 'habitacion', label: 'Consumo habitación', icon: Door },
 ];
 
 const METODOS = ['efectivo', 'tarjeta', 'transferencia', 'otros'] as const;
@@ -44,6 +49,15 @@ const METODOS = ['efectivo', 'tarjeta', 'transferencia', 'otros'] as const;
  * registrar manualmente lo que no pasó por ahí, o para dar de alta un
  * crédito corporativo desde cero.
  */
+function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-start gap-1.5 min-w-0">
+      <span className="t-etiqueta text-muted-foreground">{etiqueta}</span>
+      <span className="t-fila text-foreground min-w-0 break-words">{valor}</span>
+    </div>
+  );
+}
+
 export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanelProps) {
   const { clientes } = useRxClientes();
   const { currentMesero } = useAuth();
@@ -52,6 +66,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
   const [origen, setOrigen] = useState<VentaOrigen>('reserva_hotel');
   const [tipo, setTipo] = useState<VentaTipo>('directa');
   const [saving, setSaving] = useState(false);
+  const [paso, setPaso] = useState<1 | 2 | 3>(1);
+  const [intentado, setIntentado] = useState(false);
 
   const [clienteId, setClienteId] = useState('');
   const [nombre, setNombre] = useState('');
@@ -67,11 +83,30 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
   const cliente = clientes.find((c: any) => c.id === clienteId);
   const esCredito = tipo === 'credito';
 
+  const continuar = () => {
+    if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
+    setPaso(2);
+  };
+
+  const falta = {
+    monto: !(parseFloat(monto) > 0),
+    red: !esCredito && metodo === 'tarjeta' && !redTarjeta,
+    numero: !esCredito && metodo === 'transferencia' && !numeroComprobanteTransf.trim(),
+  };
+
+  const revisar = () => {
+    setIntentado(true);
+    if (falta.monto || falta.red || falta.numero) { showToast.error('Completa los campos marcados en rojo'); return; }
+    setPaso(3);
+  };
+
+
   const handleSubmit = async () => {
     const montoNum = parseFloat(monto);
     if (!montoNum || montoNum <= 0) { showToast.error('Ingresa un monto válido'); return; }
     if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
     if (!esCredito && metodo === 'tarjeta' && !redTarjeta) { showToast.error('Selecciona la red de cobro de la tarjeta'); return; }
+    if (!esCredito && metodo === 'transferencia' && !numeroComprobanteTransf.trim()) { showToast.error('Ingresa el número de comprobante de la transferencia'); return; }
 
     setSaving(true);
     try {
@@ -121,26 +156,132 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
     }
   };
 
-  const etiqueta = "text-xs font-bold text-foreground";
+  const etiqueta = "t-etiqueta! text-muted-foreground";
   const seccion = "flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-xs";
-  const tituloSeccion = "text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground";
+  const tituloSeccion = "t-etiqueta text-muted-foreground";
+  const datos = "grid grid-cols-1 @md:grid-cols-2 gap-x-6 gap-y-5";
 
   return (
     <div className="h-full min-h-0 flex flex-col">
-      <div className="px-6 py-4 flex items-start justify-between gap-4 shrink-0 border-b border-border bg-card">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="font-extrabold text-base text-foreground leading-tight">Registrar venta</h3>
-          <span className="text-xs font-medium text-muted-foreground">
-            Origen: de dónde sale. Tipo: cómo se cobra — cualquier combinación es válida.
-          </span>
+      <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
+        <div className="min-w-0 mr-auto flex flex-col">
+          {paso === 3 ? (
+            <span className="t-titulo text-secondary-foreground">Revisar información</span>
+          ) : (cliente || nombre.trim()) ? (
+            <>
+              <span className="t-titulo uppercase text-secondary-foreground truncate">{cliente?.nombre || nombre.trim()}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="t-meta text-muted-foreground truncate">{(cliente && documentoCliente(cliente)) || 'Sin documento'}</span>
+                <EstadoBadge tono={esCredito ? 'destructive' : 'success'}>{esCredito ? 'Crédito' : 'Directa'}</EstadoBadge>
+              </span>
+            </>
+          ) : (
+            <span className="t-titulo text-secondary-foreground">Registrar venta</span>
+          )}
         </div>
-        <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" onClick={onCancel} className="h-9 w-9 text-muted-foreground shrink-0">
-          <X size={18} />
-        </Button>
+        <div className="shrink-0 flex items-center gap-2">
+        {paso === 1 && (
+          <>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={continuar} disabled={esCredito ? !clienteId : !clienteId && !nombre.trim()}>
+              Continuar
+            </Button>
+          </>
+        )}
+        {paso === 2 && (
+          <>
+            <Button type="button" variant="outline" onClick={() => setPaso(1)}>
+              Atrás
+            </Button>
+            <Button type="button" onClick={revisar}>
+              Continuar
+            </Button>
+          </>
+        )}
+        {paso === 3 && (
+          <>
+            <Button type="button" variant="outline" onClick={() => setPaso(2)} disabled={saving}>
+              Atrás
+            </Button>
+            <Button type="button" onClick={handleSubmit} disabled={saving}>
+              <FloppyDisk size={18} weight="bold" /> {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </>
+        )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto @container">
         <div className="mx-auto w-full max-w-3xl p-6 flex flex-col gap-4">
+          <span className="t-etiqueta text-muted-foreground">
+            Paso {paso} de 3 · {paso === 1 ? 'Cliente y tipo de cobro' : paso === 2 ? 'Tipo de venta y cobro' : 'Revisión'}
+          </span>
+          {paso === 3 ? (
+            <>
+              <section className={seccion}>
+                <div className="flex items-center justify-between">
+                  <h4 className={tituloSeccion}>Cliente</h4>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPaso(1)}>Editar</Button>
+                </div>
+                <div className={datos}>
+                  <Dato etiqueta="Nombre" valor={<span className="uppercase">{cliente?.nombre || nombre.trim() || 'Sin nombre'}</span>} />
+                  <Dato etiqueta="Documento" valor={(cliente && documentoCliente(cliente)) || 'Sin documento'} />
+                  <Dato etiqueta="Tipo de cobro" valor={<EstadoBadge tono={esCredito ? 'destructive' : 'success'}>{esCredito ? 'Crédito' : 'Directa'}</EstadoBadge>} />
+                </div>
+              </section>
+
+              <section className={seccion}>
+                <div className="flex items-center justify-between">
+                  <h4 className={tituloSeccion}>Venta</h4>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPaso(2)}>Editar</Button>
+                </div>
+                <div className={datos}>
+                  <Dato etiqueta="Monto" valor={<span className="t-valor">${(parseFloat(monto) || 0).toFixed(2)}</span>} />
+                  <Dato etiqueta="Origen" valor={<OrigenBadge origen={origen} />} />
+                  {!esCredito && <Dato etiqueta="Método de pago" valor={metodo.charAt(0).toUpperCase() + metodo.slice(1)} />}
+                  {!esCredito && metodo === 'transferencia' && bancoDestino && <Dato etiqueta="Banco destino" valor={bancoDestino} />}
+                  {!esCredito && metodo === 'transferencia' && <Dato etiqueta="N.º de comprobante" valor={numeroComprobanteTransf.trim()} />}
+                  {!esCredito && metodo === 'tarjeta' && <Dato etiqueta="Red de cobro" valor={redTarjeta} />}
+                  {!esCredito && comprobanteFile && <Dato etiqueta="Comprobante" valor={comprobanteFile.name} />}
+                  {esCredito && <Dato etiqueta="Saldo" valor="Queda pendiente de cobro" />}
+                </div>
+              </section>
+
+              {descripcion.trim() && (
+                <section className={seccion}>
+                  <div className="flex items-center justify-between">
+                    <h4 className={tituloSeccion}>Detalle</h4>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPaso(2)}>Editar</Button>
+                  </div>
+                  <Dato etiqueta="Descripción" valor={descripcion.trim()} />
+                </section>
+              )}
+            </>
+          ) : paso === 1 ? (
+            <>
+          {/* Cliente */}
+          <section className={seccion}>
+            <div className="flex items-center justify-between">
+              <h4 className={tituloSeccion}>Cliente {esCredito && <span className="text-destructive">*</span>}</h4>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setNuevoClienteOpen(true)} className="gap-1 text-primary">
+                <UserPlus size={14} weight="bold" /> Nuevo cliente
+              </Button>
+            </div>
+            <ClienteBuscador
+              value={clienteId}
+              onChange={setClienteId}
+              placeholder={esCredito ? 'Cliente / agencia (requerido)' : 'Buscar cliente registrado (opcional)'}
+              inputClassName="h-10 pl-9 t-cuerpo"
+            />
+            {esCredito && !clienteId && <p className="t-meta text-destructive">Selecciona un cliente o agencia para la venta a crédito</p>}
+            <div className="flex flex-col gap-1.5">
+              <Label className={etiqueta}>{esCredito ? 'Nombre de referencia (opcional)' : 'Nombre (si no está registrado)'}</Label>
+              <Input type="text" placeholder="Ej. Juan Pérez" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-12 text-base" />
+            </div>
+          </section>
+
           {/* Tipo de cobro */}
           <section className={seccion}>
             <h4 className={tituloSeccion}>Tipo de cobro</h4>
@@ -149,16 +290,17 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                 { value: 'directa', label: 'Directa', icon: CheckCircle },
                 { value: 'credito', label: 'Crédito', icon: CreditCard },
               ] as const).map(({ value, label, icon: Icon }) => (
-                <button
+                <Button
                   key={value} type="button" aria-pressed={tipo === value} onClick={() => setTipo(value)}
-                  className={cn("h-11 rounded-xl border text-sm font-bold transition-colors cursor-pointer flex items-center justify-center gap-2",
-                    tipo === value ? "bg-foreground text-background border-foreground" : "bg-card border-border text-muted-foreground hover:text-foreground")}
+                  variant={tipo === value ? 'default' : 'outline'}
+                  className={cn("h-12 gap-2 text-muted-foreground hover:text-foreground",
+                    tipo === value && (value === 'credito' ? "bg-destructive border-destructive text-white hover:text-white" : "bg-success border-success text-white hover:text-white"))}
                 >
                   <Icon size={16} weight="bold" /> {label}
-                </button>
+                </Button>
               ))}
             </div>
-            <p className={cn("rounded-xl px-3 py-2 text-xs font-semibold leading-snug",
+            <p className={cn("rounded-2xl px-3 py-2 t-dato leading-snug",
               esCredito ? "bg-warning-soft text-warning-foreground" : "bg-muted text-muted-foreground")}>
               {esCredito
                 ? 'Queda registrada con saldo pendiente — se liquida después desde el detalle.'
@@ -166,6 +308,9 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
             </p>
           </section>
 
+            </>
+          ) : (
+            <>
           {/* Origen */}
           <section className={seccion}>
             <h4 className={tituloSeccion}>Origen</h4>
@@ -173,59 +318,38 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
               {ORIGEN_OPTS.map(o => (
                 <button
                   key={o.value} type="button" aria-pressed={origen === o.value} onClick={() => setOrigen(o.value)}
-                  className={cn("py-3 px-2 rounded-xl border flex flex-col items-center gap-1.5 transition-colors cursor-pointer",
-                    origen === o.value ? "bg-muted border-foreground text-foreground" : "bg-card border-border text-muted-foreground hover:text-foreground")}
+                  className={cn("py-3 px-2 rounded-2xl border flex flex-col items-center gap-1.5 transition-colors cursor-pointer",
+                    origen === o.value ? ORIGEN_CLASSES[o.value] : "bg-card border-border text-muted-foreground hover:text-foreground")}
                 >
                   <o.icon size={22} weight={origen === o.value ? 'fill' : 'bold'} />
-                  <span className="text-xs font-bold text-center leading-tight">{o.label}</span>
+                  <span className="t-dato text-center leading-tight">{o.label}</span>
                 </button>
               ))}
             </div>
           </section>
 
-          {/* Cliente */}
-          <section className={seccion}>
-            <div className="flex items-center justify-between">
-              <h4 className={tituloSeccion}>Cliente {esCredito && <span className="text-destructive">*</span>}</h4>
-              <button type="button" onClick={() => setNuevoClienteOpen(true)}
-                className="flex items-center gap-1 text-xs font-bold text-primary hover:underline cursor-pointer">
-                <UserPlus size={13} weight="bold" /> Nuevo cliente
-              </button>
-            </div>
-            <ClienteBuscador
-              value={clienteId}
-              onChange={setClienteId}
-              placeholder={esCredito ? 'Cliente / agencia (requerido)' : 'Buscar cliente registrado (opcional)'}
-              inputClassName="h-10 pl-9 text-sm font-semibold"
-            />
-            <div className="flex flex-col gap-1.5">
-              <Label className={etiqueta}>{esCredito ? 'Nombre de referencia (opcional)' : 'Nombre (si no está registrado)'}</Label>
-              <Input type="text" placeholder="Ej. Juan Pérez" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-10 text-sm font-semibold" />
-            </div>
-          </section>
-
           {/* Monto y pago */}
           <section className={seccion}>
-            <h4 className={tituloSeccion}>{esCredito ? 'Monto' : 'Cobro'}</h4>
             <div className={cn("grid gap-3", esCredito ? "grid-cols-1" : "grid-cols-1 @md:grid-cols-2")}>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="venta-monto" className={etiqueta}>Monto</Label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground pointer-events-none">$</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 t-cuerpo-fuerte text-muted-foreground pointer-events-none">$</span>
                   <Input id="venta-monto" type="number" inputMode="decimal" step="0.01" min={0} placeholder="0.00" value={monto}
-                    onChange={(e) => setMonto(e.target.value)} className="h-10 pl-7 text-sm font-bold" />
+                    onChange={(e) => setMonto(e.target.value)} aria-invalid={intentado && falta.monto} className="h-12 pl-7 text-base" />
                 </div>
+                {intentado && falta.monto && <p className="t-meta text-destructive">Ingresa un monto mayor a 0</p>}
               </div>
               {!esCredito && (
                 <div className="flex flex-col gap-1.5">
                   <Label className={etiqueta}>Método de pago</Label>
                   <Select value={metodo} onValueChange={(v) => setMetodo(v as typeof METODOS[number])}>
-                    <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
+                    <SelectTrigger className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {METODOS.map(m => (
-                        <SelectItem key={m} value={m} className="text-sm">{m.charAt(0).toUpperCase() + m.slice(1)}</SelectItem>
+                        <SelectItem key={m} value={m} className="t-cuerpo">{m.charAt(0).toUpperCase() + m.slice(1)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -238,18 +362,19 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                 <div className="flex flex-col gap-1.5">
                   <Label className={etiqueta}>Banco destino</Label>
                   <Select value={bancoDestino || undefined} onValueChange={setBancoDestino}>
-                    <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
+                    <SelectTrigger className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
                       <SelectValue placeholder={bancos.length ? 'Selecciona' : 'Sin bancos configurados'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {bancos.map(b => (<SelectItem key={b} value={b} className="text-sm">{b}</SelectItem>))}
+                      {bancos.map(b => (<SelectItem key={b} value={b} className="t-cuerpo">{b}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label className={etiqueta}>N.º de comprobante</Label>
+                  <Label className={etiqueta}>N.º de comprobante *</Label>
                   <Input type="text" placeholder="Ej. 000123456" value={numeroComprobanteTransf}
-                    onChange={(e) => setNumeroComprobanteTransf(e.target.value)} className="h-10 text-sm font-semibold" />
+                    onChange={(e) => setNumeroComprobanteTransf(e.target.value)} aria-invalid={intentado && falta.numero} className="h-12 text-base" />
+                  {intentado && falta.numero && <p className="t-meta text-destructive">Ingresa el número de comprobante</p>}
                 </div>
               </div>
             )}
@@ -257,52 +382,30 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
             {!esCredito && metodo === 'tarjeta' && (
               <div className="flex flex-col gap-1.5">
                 <Label className={etiqueta}>Red de cobro *</Label>
-                <Select value={redTarjeta || undefined} onValueChange={setRedTarjeta}>
-                  <SelectTrigger className={cn("h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs", !redTarjeta && "border-destructive/50")}>
-                    <SelectValue placeholder={redesTarjeta.length ? 'Selecciona (obligatorio)' : 'Sin redes configuradas'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {redesTarjeta.map(r => (<SelectItem key={r} value={r} className="text-sm">{r}</SelectItem>))}
-                  </SelectContent>
-                </Select>
+                <RedCobroRadios redes={redesTarjeta} value={redTarjeta} onChange={setRedTarjeta} invalido={intentado && falta.red} />
+                {intentado && falta.red && <p className="t-meta text-destructive">Selecciona la red de cobro</p>}
+              </div>
+            )}
+
+            {!esCredito && (
+              <div className="flex flex-col gap-1.5">
+                <Label className={etiqueta}>Comprobante de pago (opcional)</Label>
+                <ComprobanteAdjunto file={comprobanteFile} onChange={setComprobanteFile} />
               </div>
             )}
           </section>
 
           {/* Detalle */}
           <section className={seccion}>
-            <h4 className={tituloSeccion}>Detalle</h4>
             <div className="flex flex-col gap-1.5">
               <Label className={etiqueta}>Descripción / referencia (opcional)</Label>
               <Textarea placeholder="Ej. reserva del 12 al 15 de agosto" value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)} className="min-h-24 text-sm font-medium" />
+                onChange={(e) => setDescripcion(e.target.value)} className="min-h-24 text-base" />
             </div>
-            {!esCredito && (
-              <div className="flex flex-col gap-1.5">
-                <Label className={etiqueta}>Comprobante de pago (opcional)</Label>
-                <label className="flex items-center gap-2 h-11 px-3 rounded-xl border border-dashed border-border text-sm font-semibold text-muted-foreground cursor-pointer hover:bg-muted/60 hover:text-foreground transition-colors">
-                  <Paperclip size={16} className="shrink-0" />
-                  <span className="truncate">{comprobanteFile ? comprobanteFile.name : 'Adjuntar foto o PDF'}</span>
-                  <input type="file" accept="image/*,application/pdf" className="hidden"
-                    onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)} />
-                </label>
-              </div>
-            )}
           </section>
+            </>
+          )}
         </div>
-      </div>
-
-      <div className="px-6 py-4 border-t border-border bg-card flex items-center justify-end gap-2 shrink-0">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={saving} className="h-10 px-5 font-bold">
-          Cancelar
-        </Button>
-        <Button
-          type="button" onClick={handleSubmit}
-          disabled={saving || (!esCredito && metodo === 'tarjeta' && !redTarjeta)}
-          className="h-10 px-6 font-bold"
-        >
-          {saving ? 'Registrando…' : 'Registrar'}
-        </Button>
       </div>
 
       <ClienteFormModal

@@ -36,7 +36,7 @@ export function ReservasDelDia({ mesas, comandas }: { mesas: any[]; comandas: an
 
   return (
     <section aria-label="Reserva de Mesas" className="hidden md:flex mb-5 flex-col gap-2">
-      <h2 className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
+      <h2 className="t-etiqueta flex items-center gap-1.5 text-muted-foreground">
         <CalendarCheck size={13} weight="bold" /> Reserva de Mesas · {delDia.length}
       </h2>
       <div className="flex items-stretch gap-2 overflow-x-auto hide-scrollbar py-1 -my-1 -mx-5 px-5">

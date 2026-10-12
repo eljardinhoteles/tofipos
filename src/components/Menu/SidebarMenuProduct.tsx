@@ -1,11 +1,15 @@
 import { useEffect, useState } from'react';
-import { X, Plus, Trash, Sparkle } from'@phosphor-icons/react';
+import { X, Plus, Trash, Sparkle, ForkKnife } from'@phosphor-icons/react';
 import { type ModifierGroup } from'../../db/database';
 import { useUI } from'../../context/UIContext';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb, createRxCategoria, createRxMenuItem, updateRxMenuItem } from'../../db/rxdb';
 import { useRxMenuCatalog } from'../../hooks/useRxMenuCatalog';
 import { MODIFIER_TEMPLATES } from'@/lib/modifierTemplates';
+import { obtenerIvaProducto, calcularPreciosItem } from'../../lib/taxUtils';
+import { useIvaActivo } from'../../hooks/useIvaActivo';
+import { ReservaHeader } from'../Mesas/Sidebar/ReservaHeader';
+import { CheckRedondo } from'../Common/CheckRedondo';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Switch } from'@/components/ui/switch';
@@ -28,6 +32,7 @@ export function SidebarMenuProduct() {
  const [precioVariable, setPrecioVariable] = useState(false);
  const [ivaModalidad, setIvaModalidad] = useState<'sistema'|'especifico'|'exento'>('sistema');
  const [ivaPorcentaje, setIvaPorcentaje] = useState(15);
+ const { porcentaje: ivaSistema, preciosConIva } = useIvaActivo();
  const [nombreError, setNombreError] = useState('');
  const [isNuevaCategoria, setIsNuevaCategoria] = useState(false);
 
@@ -208,41 +213,41 @@ export function SidebarMenuProduct() {
  setSelectedMenuProductId(null);
  };
 
+ // Valor final de venta con el IVA que aplicará a este producto (general, propio o exento).
+ const tasaProducto = obtenerIvaProducto({ iva_modalidad: ivaModalidad, iva_porcentaje: Number.isNaN(ivaPorcentaje) ? undefined : ivaPorcentaje }, ivaSistema);
+ const calculo = calcularPreciosItem(precio || 0, 1, tasaProducto, preciosConIva);
+ const dinero = (n: number) => `$${n.toFixed(2)}`;
+
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden">
- <header className="h-16 md:h-[72px] px-4 border-b border-border flex items-center justify-between shrink-0">
- <div className="flex items-center gap-3">
- <button
- type="button"onClick={handleClose}
- className="w-9 h-9 rounded-xl bg-muted text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <X size={18} weight="bold"/>
- </button>
- <h3 className="font-extrabold text-base text-foreground leading-tight">
- {editingProduct ?'Editar Producto':'Nuevo Producto'}
- </h3>
- </div>
-
- <div className="flex items-center gap-2">
- <Switch checked={activo} onCheckedChange={setActivo} />
- <Label className="text-xs font-bold cursor-pointer">Activo</Label>
- </div>
- </header>
+ <ReservaHeader tono="primary" cerrada={!activo} badge={<ForkKnife size={20} weight="bold" />}
+ titulo={editingProduct ? 'Editar producto' : 'Nuevo producto'}
+ subtitulo={editingProduct?.nombre?.trim() || 'Menú'} onClose={handleClose} />
 
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+ {/* Disponibilidad: lo primero, en su propio paper */}
+ <div className="rounded-2xl border border-border bg-card shadow-xs flex items-center justify-between gap-4 p-3.5">
+ <label htmlFor="producto-activo" className="flex flex-col gap-0.5 min-w-0 cursor-pointer">
+ <span className="t-cuerpo-fuerte text-foreground">Producto activo</span>
+ <span className="t-meta text-muted-foreground leading-snug">Si está inactivo no aparece para vender.</span>
+ </label>
+ <CheckRedondo id="producto-activo" checked={activo} onCheckedChange={setActivo} aria-label="Producto activo" />
+ </div>
+
  {/* Datos básicos */}
  <section className="flex flex-col gap-4">
  <div className="flex flex-col gap-1.5">
- <Label htmlFor="producto-nombre" className="text-xs font-bold">Nombre del producto *</Label>
+ <Label htmlFor="producto-nombre" className="t-etiqueta! text-muted-foreground">Nombre del producto *</Label>
  <Input
  id="producto-nombre" type="text" placeholder="Ej: Lomo Saltado" value={nombre}
  onChange={e => { setNombre(e.target.value); setNombreError(''); }}
- className="h-10 text-sm font-semibold"/>
- {nombreError && <span className="text-[11px] text-destructive font-bold">{nombreError}</span>}
+ className="h-12 text-base"/>
+ {nombreError && <span className="t-meta text-destructive">{nombreError}</span>}
  </div>
 
  <div className="grid grid-cols-2 gap-3">
  <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Categoría</Label>
+ <Label className="t-etiqueta! text-muted-foreground">Categoría</Label>
  {!isNuevaCategoria ? (
  <Select
  value={categoria}
@@ -254,14 +259,14 @@ export function SidebarMenuProduct() {
  setCategoria(val);
  }
  }}>
- <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs">
+ <SelectTrigger className="h-12 w-full px-3 text-base rounded-2xl bg-card border-border shadow-xs">
  <SelectValue placeholder="Selecciona..." />
  </SelectTrigger>
  <SelectContent>
  {dbCategorias.map(c => (
- <SelectItem key={c.id} value={c.nombre} className="text-sm font-medium">{c.nombre}</SelectItem>
+ <SelectItem key={c.id} value={c.nombre} className="t-cuerpo">{c.nombre}</SelectItem>
  ))}
- <SelectItem value="__new__" className="text-sm font-bold text-muted-foreground">+ Nueva categoría</SelectItem>
+ <SelectItem value="__new__" className="t-cuerpo-fuerte text-muted-foreground">+ Nueva categoría</SelectItem>
  </SelectContent>
  </Select>
  ) : (
@@ -269,7 +274,7 @@ export function SidebarMenuProduct() {
  <Input
  type="text" placeholder="Nueva categoría" value={categoria}
  onChange={e => setCategoria(e.target.value)}
- className="h-10 pr-9 text-sm font-semibold"/>
+ className="h-12 pr-11 text-base"/>
  <button type="button" aria-label="Elegir una existente" onClick={() => { setIsNuevaCategoria(false); setCategoria(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
  <X size={14} weight="bold" />
  </button>
@@ -277,42 +282,56 @@ export function SidebarMenuProduct() {
  )}
  </div>
  <div className="flex flex-col gap-1.5">
- <Label htmlFor="producto-precio" className="text-xs font-bold">{precioVariable ? 'Precio de referencia' : 'Precio'}</Label>
+ <Label htmlFor="producto-precio" className="t-etiqueta! text-muted-foreground">{precioVariable ? 'Precio de referencia' : preciosConIva ? 'Precio (con IVA)' : 'Precio (sin IVA)'}</Label>
  <div className="relative">
- <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground pointer-events-none">$</span>
+ <span className="absolute left-3.5 top-1/2 -translate-y-1/2 t-cuerpo-fuerte text-muted-foreground pointer-events-none">$</span>
  <Input
  id="producto-precio" type="number" inputMode="decimal" step="0.01" min={0}
  placeholder="0.00" value={precio || ''}
  onChange={e => setPrecio(parseFloat(e.target.value) || 0)}
- className="h-10 pl-7 text-sm font-bold"/>
+ className="h-12 pl-7 text-base"/>
  </div>
  </div>
+ </div>
+ {/* Qué se cobra realmente: precio final con el IVA que le toca a este producto */}
+ <div className="rounded-2xl bg-muted/40 border border-border p-3.5 flex items-center justify-between gap-4">
+ <div className="flex flex-col gap-0.5 min-w-0">
+ <span className="t-etiqueta text-muted-foreground">{precioVariable ? 'Precio final referencial' : 'Se vende a'}</span>
+ <span className="t-meta text-muted-foreground tabular-nums">
+ {tasaProducto > 0
+ ? preciosConIva
+ ? `Incluye IVA ${tasaProducto}% (${dinero(calculo.ivaUnitario)}) · base ${dinero(calculo.precioNeto)}`
+ : `Base ${dinero(calculo.precioNeto)} + IVA ${tasaProducto}% (${dinero(calculo.ivaUnitario)})`
+ : 'Sin IVA (0%)'}
+ </span>
+ </div>
+ <span className="t-valor text-foreground shrink-0">{dinero(calculo.precioBruto)}</span>
  </div>
  </section>
 
  {/* Ajustes del producto: cada fila = qué es + interruptor a la derecha */}
  <section className="flex flex-col gap-2">
- <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ajustes</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Ajustes</h4>
  <div className="rounded-2xl border border-border divide-y divide-border">
  <label htmlFor="precioVariable" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
  <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">Precio variable</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">Se puede cambiar el precio al añadirlo a una comanda.</span>
+ <span className="t-cuerpo-fuerte text-foreground">Precio variable</span>
+ <span className="t-meta text-muted-foreground leading-snug">Se puede cambiar el precio al añadirlo a una comanda.</span>
  </div>
  <Switch id="precioVariable" checked={precioVariable} onCheckedChange={setPrecioVariable} />
  </label>
  <label htmlFor="esBebida" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
  <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">Es bebida</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">Se imprime en barra.</span>
+ <span className="t-cuerpo-fuerte text-foreground">Es bebida</span>
+ <span className="t-meta text-muted-foreground leading-snug">Se imprime en barra.</span>
  </div>
  <Switch id="esBebida" checked={esBebida} onCheckedChange={setEsBebida} />
  </label>
  <div className="flex items-center justify-between gap-4 p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
- <span className="text-sm font-bold text-foreground">IVA</span>
- <span className="text-xs font-medium text-muted-foreground leading-snug">
- {ivaModalidad === 'sistema' ? 'Usa el IVA general.' : ivaModalidad === 'exento' ? 'Sin IVA (0%).' : 'Tasa propia de este producto.'}
+ <span className="t-cuerpo-fuerte text-foreground">IVA</span>
+ <span className="t-meta text-muted-foreground leading-snug">
+ {ivaModalidad === 'sistema' ? `Usa el IVA activo en el sistema (${ivaSistema}%).` : ivaModalidad === 'exento' ? 'Sin IVA (0%).' : 'Tasa propia de este producto.'}
  </span>
  </div>
  <div className="flex items-center gap-2 shrink-0">
@@ -321,18 +340,18 @@ export function SidebarMenuProduct() {
  <Input type="number" inputMode="decimal" min={0} max={100} step="0.01" aria-label="Tasa de IVA"
  value={Number.isNaN(ivaPorcentaje) ? '' : ivaPorcentaje}
  onChange={e => setIvaPorcentaje(parseFloat(e.target.value))}
- className="h-10 w-20 pr-6 text-sm font-bold text-right"/>
- <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground pointer-events-none">%</span>
+ className="h-12 w-24 pr-7 text-base text-right"/>
+ <span className="absolute right-2.5 top-1/2 -translate-y-1/2 t-meta text-muted-foreground pointer-events-none">%</span>
  </div>
  )}
  <Select value={ivaModalidad} onValueChange={val => setIvaModalidad(val as any)}>
- <SelectTrigger className="h-10 w-full px-3 text-sm font-semibold rounded-2xl bg-card border-border shadow-xs !w-36">
+ <SelectTrigger className="h-12 w-full px-3 text-base rounded-2xl bg-card border-border shadow-xs !w-36">
  <SelectValue placeholder="Selecciona..." />
  </SelectTrigger>
  <SelectContent>
- <SelectItem value="sistema" className="text-sm font-medium">General</SelectItem>
- <SelectItem value="especifico" className="text-sm font-medium">Tasa propia</SelectItem>
- <SelectItem value="exento" className="text-sm font-medium">Exento (0%)</SelectItem>
+ <SelectItem value="sistema" className="t-cuerpo">General</SelectItem>
+ <SelectItem value="especifico" className="t-cuerpo">Tasa propia</SelectItem>
+ <SelectItem value="exento" className="t-cuerpo">Exento (0%)</SelectItem>
  </SelectContent>
  </Select>
  </div>
@@ -343,14 +362,14 @@ export function SidebarMenuProduct() {
  {/* Grupos de modificadores (ej:"Tipo de papas"-> Fritas / Doradas) */}
  <div className="flex flex-col gap-2">
  <div className="flex items-center justify-between">
- <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Opciones adicionales</h4>
+ <h4 className="t-etiqueta text-muted-foreground">Opciones adicionales</h4>
  <div className="flex items-center gap-1">
  {MODIFIER_TEMPLATES.length > 0 && (
  <Popover>
  <PopoverTrigger asChild>
  <Button
  type="button"variant="ghost"size="sm"
- className="h-7 px-2 text-xs font-bold text-primary gap-1">
+ className="h-7 px-2 t-dato text-primary gap-1">
  <Sparkle size={14} weight="bold"/> Sugerencias
  </Button>
  </PopoverTrigger>
@@ -360,9 +379,9 @@ export function SidebarMenuProduct() {
  key={template.nombre}
  type="button"
  onClick={() => applyModifierTemplate(template)}
- className="w-full text-left px-2.5 py-2 rounded-lg hover:bg-muted transition-colors cursor-pointer flex flex-col gap-0.5">
- <span className="text-xs font-bold text-foreground">{template.nombre}</span>
- <span className="text-[10px] text-muted-foreground">{template.opciones.join(' · ')}</span>
+ className="w-full text-left px-2.5 py-2 rounded-2xl hover:bg-muted transition-colors cursor-pointer flex flex-col gap-0.5">
+ <span className="t-dato text-foreground">{template.nombre}</span>
+ <span className="t-meta text-muted-foreground">{template.opciones.join(' · ')}</span>
  </button>
  ))}
  </PopoverContent>
@@ -370,25 +389,25 @@ export function SidebarMenuProduct() {
  )}
  <Button
  type="button"variant="ghost"size="sm"onClick={addModifierGroup}
- className="h-7 px-2 text-xs font-bold text-primary gap-1">
+ className="h-7 px-2 t-dato text-primary gap-1">
  <Plus size={14} weight="bold"/> Añadir grupo
  </Button>
  </div>
  </div>
 
  {modificadores.length === 0 ? (
- <p className="text-[11px] text-muted-foreground">
+ <p className="t-meta text-muted-foreground">
  Sin opciones adicionales. Añade un grupo para ofrecer variantes como"Tipo de papas"(Fritas, Doradas).
  </p>
  ) : (
  <div className="flex flex-col gap-3">
  {modificadores.map(group => (
- <div key={group.id} className="flex flex-col gap-2.5 p-3 rounded-xl bg-muted/60">
+ <div key={group.id} className="flex flex-col gap-2.5 p-3 rounded-2xl bg-muted/40">
  <div className="flex items-center gap-2">
  <Input
  type="text"placeholder="Nombre del grupo (Ej: Tipo de papas)"value={group.nombre}
  onChange={e => updateModifierGroup(group.id, { nombre: e.target.value })}
- className="h-8 text-xs font-semibold flex-1"/>
+ className="h-10 text-base flex-1"/>
  <Button
  type="button"variant="ghost"size="icon"aria-label="Eliminar grupo de opciones"onClick={() => removeModifierGroup(group.id)}
  className="h-8 w-8 shrink-0 text-destructive">
@@ -402,14 +421,14 @@ export function SidebarMenuProduct() {
  checked={group.obligatorio}
  onCheckedChange={v => updateModifierGroup(group.id, { obligatorio: v })}
  />
- <span className="text-[11px] font-bold text-muted-foreground">Obligatorio</span>
+ <span className="t-meta text-muted-foreground">Obligatorio</span>
  </label>
  <label className="flex items-center gap-1.5 cursor-pointer">
  <Switch
  checked={group.multi}
  onCheckedChange={v => updateModifierGroup(group.id, { multi: v })}
  />
- <span className="text-[11px] font-bold text-muted-foreground">Selección múltiple</span>
+ <span className="t-meta text-muted-foreground">Selección múltiple</span>
  </label>
  </div>
 
@@ -420,7 +439,7 @@ export function SidebarMenuProduct() {
  type="text"placeholder={`Opción ${idx + 1} (Ej: Papas Fritas)`}
  value={opcion}
  onChange={e => updateOption(group.id, idx, e.target.value)}
- className="h-8 text-xs font-semibold flex-1 bg-card"/>
+ className="h-8 t-dato flex-1 bg-card"/>
  <Button
  type="button"variant="ghost"size="icon"aria-label="Quitar opción"onClick={() => removeOption(group.id, idx)}
  className="h-8 w-8 shrink-0 text-muted-foreground">
@@ -430,7 +449,7 @@ export function SidebarMenuProduct() {
  ))}
  <Button
  type="button"variant="outline"size="sm"onClick={() => addOption(group.id)}
- className="h-8 text-xs font-bold gap-1 self-start">
+ className="h-8 t-dato gap-1 self-start">
  <Plus size={13} weight="bold"/> Añadir opción
  </Button>
  </div>
@@ -441,14 +460,14 @@ export function SidebarMenuProduct() {
  </div>
  </main>
 
- <footer className="p-4 border-t border-border bg-muted/40 flex items-center justify-end gap-2 shrink-0">
+ <footer className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
  {/* Importar varios productos desde un CSV: solo al crear (y solo en PC). */}
  {!editingProduct && (
- <div className="hidden md:block mr-auto"><CsvUploader /></div>
+ <div className="hidden md:block"><CsvUploader /></div>
  )}
  {editingProduct && (
- <button
- type="button"onClick={() => {
+ <Button type="button" variant="outline" className="h-12 px-5 font-bold text-destructive hover:text-destructive"
+ onClick={() => {
  openConfirm('Eliminar producto','¿Estás seguro de eliminar este producto del menú?',
  async () => {
  await updateRxMenuItem(editingProduct.id, { _deleted: true });
@@ -456,16 +475,13 @@ export function SidebarMenuProduct() {
  handleClose();
  }
  );
- }}
- className="px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive font-bold text-xs cursor-pointer">
+ }}>
  Eliminar
- </button>
+ </Button>
  )}
- <button
- type="button"onClick={handleSubmit}
- className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs cursor-pointer shadow-xs">
- {editingProduct ?'Guardar':'Crear producto'}
- </button>
+ <Button type="button" onClick={handleSubmit} className="h-12 flex-1 font-bold">
+ {editingProduct ?'Guardar cambios':'Crear producto'}
+ </Button>
  </footer>
  </div>
  );

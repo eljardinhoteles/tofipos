@@ -201,21 +201,44 @@ Deno.serve(async (req) => {
       const secret = req.headers.get("x-print-secret") || "";
       if (!serverId || !secret) return json({ error: "No autorizado" }, 401);
 
-      const { data: secretRow } = await admin
+      const { data: secretRow, error: secretErr } = await admin
         .from("print_server_secrets")
         .select("secret_hash")
         .eq("server_id", serverId)
         .maybeSingle();
-      const { data: server } = await admin
+      const { data: server, error: serverErr } = await admin
         .from("print_servers")
         .select("id, organization_id, _deleted")
         .eq("id", serverId)
         .maybeSingle();
+      // Un fallo transitorio de la base NO es "desvinculado": sin esto devolvía 401 y el
+      // servidor creía haber perdido el vínculo. 503 = reintentar, no revincular.
+      if (secretErr || serverErr) return json({ error: "Base de datos no disponible, reintentando" }, 503);
 
       const hash = await sha256Hex(secret);
       if (!secretRow?.secret_hash || !server || server._deleted || !timingSafeEqual(secretRow.secret_hash, hash)) {
         await sleep(500);
-        return json({ error: "Secreto inválido o servidor desvinculado" }, 401);
+        // Motivo para que el servidor lo muestre en su panel. El secreto ya falló, así que
+        // solo se revela el nombre del equipo que lo reemplazó cuando el servidor existe y fue
+        // dado de baja (su id es un UUID imposible de adivinar).
+        let reason = "invalid";
+        let replacedBy: string | null = null;
+        if (server?._deleted) {
+          const { data: current } = await admin
+            .from("print_servers")
+            .select("hostname")
+            .eq("organization_id", server.organization_id)
+            .eq("_deleted", false)
+            .not("paired_at", "is", null)
+            .order("paired_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          reason = current ? "replaced" : "unpaired";
+          replacedBy = current?.hostname ?? null;
+        } else if (!server) {
+          reason = "unknown";
+        }
+        return json({ error: "Secreto inválido o servidor desvinculado", reason, replaced_by: replacedBy }, 401);
       }
       const orgId = server.organization_id as string;
 

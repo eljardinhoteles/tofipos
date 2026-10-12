@@ -41,18 +41,18 @@ export function CalendarHeader({ visibleDates, search, setSearch, searchOpen, se
  onChange={(v) => { setSearch(v); setSearchOpen(v.trim().length > 1); }}
  />
  {searchOpen && vista === 'calendario' && (
- <div className="absolute top-11 left-0 w-96 max-w-full bg-card text-foreground rounded-xl shadow-xl border border-border p-2 z-50 flex flex-col gap-1 max-h-60 overflow-y-auto">
+ <div className="absolute top-11 left-0 w-96 max-w-full bg-card text-foreground rounded-2xl shadow-xl border border-border p-2 z-50 flex flex-col gap-1 max-h-60 overflow-y-auto">
  {reservas
  .filter(r => r.nombre.toLowerCase().includes(search.toLowerCase()))
  .map(r => (
  <div
  key={r.id}
  onClick={() => { onResultClick(r); setSearchOpen(false); }}
- className="p-2 rounded-xl cursor-pointer hover:bg-muted flex flex-col gap-0.5">
- <span className="font-extrabold text-xs text-foreground">{r.nombre}</span>
- <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+ className="min-h-11 px-3 py-2 rounded-2xl cursor-pointer hover:bg-muted flex flex-col justify-center gap-0.5">
+ <span className="t-cuerpo-fuerte text-foreground">{r.nombre}</span>
+ <div className="flex items-center justify-between t-meta text-muted-foreground">
  <span>{r.fecha} · {r.hora}</span>
- <span className="px-1.5 py-0.5 rounded-xl bg-card border border-border text-muted-foreground font-bold uppercase">
+ <span className="t-dato px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
  {STATUS_LABEL[r.estado] || r.estado}
  </span>
  </div>
@@ -103,7 +103,7 @@ export function CalendarNav({ startDate, setStartDate, shiftDays, goToday, visib
  </Button>
  <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
  <PopoverTrigger asChild>
- <Button type="button" variant="ghost" title="Elegir fecha" className="h-8 px-2 min-w-0 flex-1 font-extrabold text-xs">
+ <Button type="button" variant="ghost" title="Elegir fecha" className="h-8 px-2 min-w-0 flex-1 t-dato">
  <span className="inline-block first-letter:uppercase truncate">{mes}</span>
  </Button>
  </PopoverTrigger>

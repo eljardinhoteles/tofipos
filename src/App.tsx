@@ -46,13 +46,13 @@ function LoginColumna({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex w-full md:w-1/2 lg:w-[55%] flex-col items-center overflow-y-auto p-6">
       <div className="md:hidden self-start flex items-center gap-3">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary">
+        <div className="flex size-11 items-center justify-center rounded-xl bg-primary">
           <img src="/Icon-app.webp" alt="TofiPOS" className="size-7 object-contain" />
         </div>
         <span className="font-heading text-lg font-semibold tracking-tight text-foreground">TofiPOS</span>
       </div>
       <div className="my-auto w-full max-w-sm flex flex-col gap-6 py-8">{children}</div>
-      <p className="text-[11px] font-semibold text-muted-foreground/70 tabular-nums">{appVersionLabel()}</p>
+      <p className="t-dato text-muted-foreground/70 tabular-nums">{appVersionLabel()}</p>
     </div>
   );
 }
@@ -215,7 +215,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-foreground text-background font-bold text-sm">
+      <div className="h-screen w-screen flex items-center justify-center bg-foreground text-background t-cuerpo-fuerte">
         Cargando sistema...
       </div>
     );
@@ -228,8 +228,8 @@ export default function App() {
       <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-background text-center gap-4">
         <ArrowsClockwise size={32} className="animate-spin text-muted-foreground" />
         <div className="flex flex-col gap-1">
-          <h2 className="font-extrabold text-lg text-foreground">Sincronizando datos...</h2>
-          <p className="text-xs text-muted-foreground max-w-sm">
+          <h2 className="t-valor text-foreground">Sincronizando datos...</h2>
+          <p className="t-meta text-muted-foreground max-w-sm">
             Descargando mesas, menú y configuración. Esto solo pasa la primera vez que vinculas este dispositivo.
           </p>
         </div>
@@ -247,10 +247,10 @@ export default function App() {
           }}
         />
         <div className="relative flex items-center gap-2.5">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-primary-foreground/15">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary-foreground/15">
             <img src="/Icon-app.webp" alt="TofiPOS" className="w-6 h-6 object-contain" />
           </div>
-          <span className="font-heading text-base font-semibold tracking-tight">TofiPOS</span>
+          <span className="font-heading t-fila tracking-tight">TofiPOS</span>
         </div>
         <div className="relative flex flex-col gap-5 max-w-sm">
           <h1 className="font-heading text-3xl font-semibold leading-tight">
@@ -268,7 +268,7 @@ export default function App() {
             ))}
           </div>
         </div>
-        <p className="relative text-xs text-primary-foreground/60">
+        <p className="relative t-meta text-primary-foreground/60">
           © {new Date().getFullYear()} TofiPOS
         </p>
       </div>
@@ -281,7 +281,7 @@ export default function App() {
           <LoginColumna>
               <div className="flex flex-col gap-1.5">
                 <h2 className="font-heading text-xl font-medium text-foreground">Configuración POS</h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="t-cuerpo text-muted-foreground">
                   Inicia sesión con tu cuenta de administrador para vincular este dispositivo.
                 </p>
               </div>
@@ -317,7 +317,7 @@ export default function App() {
                       onClick={() => setVerPassword(v => !v)}
                       aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                       aria-pressed={verPassword}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 flex size-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 flex size-9 items-center justify-center rounded-2xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors"
                     >
                       {verPassword ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
                     </button>
@@ -339,14 +339,14 @@ export default function App() {
                 <h2 className="font-heading text-xl font-medium text-foreground">
                   {isCreatingOrg || orgs.length === 0 ? 'Crear establecimiento' : 'Establecimientos'}
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="t-cuerpo text-muted-foreground">
                   {isCreatingOrg || orgs.length === 0
                     ? 'Aún no hay ninguno: crea el primero para vincular este dispositivo.'
                     : 'Elige a cuál se vinculará este dispositivo.'}
                 </p>
               </div>
               {loadingOrgs ? (
-                <div className="py-8 text-center text-sm font-medium text-muted-foreground">
+                <div className="py-8 text-center t-cuerpo text-muted-foreground">
                   Cargando...
                 </div>
               ) : (
@@ -392,7 +392,7 @@ export default function App() {
                                 <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${elegido ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                                   <Buildings size={20} weight="bold" />
                                 </div>
-                                <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-foreground">{o.label}</span>
+                                <span className="min-w-0 flex-1 truncate t-cuerpo-fuerte text-foreground">{o.label}</span>
                                 {elegido && (
                                   <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                                     <Check size={14} weight="bold" />

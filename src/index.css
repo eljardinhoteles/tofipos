@@ -70,19 +70,30 @@
   --success-foreground: oklch(0.45 0.13 145);
   --warning: oklch(0.75 0.15 85);
   --warning-soft: oklch(0.96 0.04 85);
-  --warning-foreground: oklch(0.53 0.14 60);
-  --info: oklch(0.54 0.14 240);
-  --info-soft: oklch(0.95 0.03 240);
-  --info-foreground: oklch(0.48 0.13 245);
+  --warning-foreground: oklch(0.57 0.16 48);
+  --info: oklch(0.54 0.12 225);
+  --info-soft: oklch(0.95 0.027 225);
+  --info-foreground: oklch(0.47 0.11 229);
   --special: oklch(0.52 0.19 300);
   --special-soft: oklch(0.95 0.03 300);
   --special-foreground: oklch(0.46 0.18 300);
+  /* Colores de etiqueta elegibles (planificador). No son estados: identifican una etiqueta. */
+  --rose: oklch(0.56 0.2 16);
+  --rose-soft: oklch(0.96 0.025 12);
+  --rose-foreground: oklch(0.47 0.2 14);
+  --teal: oklch(0.5 0.1 185);
+  --teal-soft: oklch(0.96 0.03 185);
+  --teal-foreground: oklch(0.43 0.09 188);
+  --slate: oklch(0.52 0.045 257);
+  --slate-soft: oklch(0.96 0.01 250);
+  --slate-foreground: oklch(0.4 0.045 257);
 
   /* Navegación (navbar móvil y sidebar de escritorio): verde bosque oscuro,
      distinto de --primary para que los acentos sigan contrastando sobre él. */
   --nav: oklch(0.27 0.024 160);
   --nav-foreground: oklch(0.975 0.007 160.078);
-  --nav-accent: oklch(0.8 0.15 160);
+  --nav-accent: oklch(0.87 0.16 122);
+  --nav-alert: oklch(0.8 0.12 25);
 
   /* Gráficos: escala de la marca (verde) */
   --chart-1: oklch(0.85 0.08 160);
@@ -133,16 +144,26 @@
   --warning: oklch(0.8 0.14 85);
   --warning-soft: oklch(0.32 0.06 85);
   --warning-foreground: oklch(0.8 0.14 80);
-  --info: oklch(0.72 0.12 240);
-  --info-soft: oklch(0.3 0.05 245);
-  --info-foreground: oklch(0.82 0.1 240);
+  --info: oklch(0.72 0.11 225);
+  --info-soft: oklch(0.3 0.047 228);
+  --info-foreground: oklch(0.82 0.095 225);
   --special: oklch(0.7 0.15 300);
   --special-soft: oklch(0.3 0.06 300);
   --special-foreground: oklch(0.82 0.11 300);
+  --rose: oklch(0.7 0.17 16);
+  --rose-soft: oklch(0.3 0.06 14);
+  --rose-foreground: oklch(0.83 0.1 14);
+  --teal: oklch(0.72 0.11 185);
+  --teal-soft: oklch(0.3 0.045 188);
+  --teal-foreground: oklch(0.83 0.09 185);
+  --slate: oklch(0.68 0.04 257);
+  --slate-soft: oklch(0.3 0.025 257);
+  --slate-foreground: oklch(0.82 0.03 257);
 
   --nav: oklch(0.2 0.03 158.776);
   --nav-foreground: oklch(0.975 0.007 160.078);
-  --nav-accent: oklch(0.8 0.15 160);
+  --nav-accent: oklch(0.87 0.16 122);
+  --nav-alert: oklch(0.8 0.12 25);
 
   --chart-1: oklch(0.85 0.08 160);
   --chart-2: oklch(0.72 0.11 160);
@@ -206,12 +227,22 @@
   --color-special: var(--special);
   --color-special-soft: var(--special-soft);
   --color-special-foreground: var(--special-foreground);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-rose-foreground: var(--rose-foreground);
+  --color-teal: var(--teal);
+  --color-teal-soft: var(--teal-soft);
+  --color-teal-foreground: var(--teal-foreground);
+  --color-slate: var(--slate);
+  --color-slate-soft: var(--slate-soft);
+  --color-slate-foreground: var(--slate-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-nav: var(--nav);
   --color-nav-foreground: var(--nav-foreground);
   --color-nav-accent: var(--nav-accent);
+  --color-nav-alert: var(--nav-alert);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -235,6 +266,8 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Esquinas del marco de contenido: página sobre el marco oscuro (todas las vistas y tamaños). */
+  --radius-marco: 1.25rem;
 }
 
 /* ── 4. Base global ───────────────────────────────────────── */
@@ -336,4 +369,62 @@
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
   }
+}
+
+/* ── 5. Escala tipográfica (ver DESIGN.md) ────────────────────
+   Un rol = tamaño + peso. El color se pone aparte (text-foreground / text-muted-foreground). */
+@utility t-etiqueta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+@utility t-meta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+}
+@utility t-cuerpo {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+}
+@utility t-fila {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+}
+@utility t-titulo {
+  font-size: 1rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+@utility t-valor {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+@utility t-cifra {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+@utility t-dato {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 700;
+}
+@utility t-cuerpo-fuerte {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+}
+@utility t-hero {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }

@@ -62,11 +62,11 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.DialogTitle>) {
- return <DialogPrimitive.DialogTitle className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />
+ return <DialogPrimitive.DialogTitle className={cn("t-titulo", className)} {...props} />
 }
 
 function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.DialogDescription>) {
- return <DialogPrimitive.DialogDescription className={cn("text-sm text-muted-foreground", className)} {...props} />
+ return <DialogPrimitive.DialogDescription className={cn("t-cuerpo text-muted-foreground", className)} {...props} />
 }
 
 export { Dialog, DialogTrigger, DialogPortal, DialogClose, DialogOverlay, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription }

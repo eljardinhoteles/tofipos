@@ -20,6 +20,8 @@ interface ClienteSelectorProps {
   id?: string;
   className?: string;
   maxResults?: number;
+  /** Color de la fila elegida: el de marca (por defecto) o azul en los flujos de hotel. */
+  tono?: 'primary' | 'info';
 }
 
 export function ClienteSelector({
@@ -30,6 +32,7 @@ export function ClienteSelector({
   id,
   className,
   maxResults = 8,
+  tono = 'primary',
 }: ClienteSelectorProps) {
   const { clientes } = useRxClientes();
 
@@ -41,56 +44,61 @@ export function ClienteSelector({
       .slice(0, maxResults);
   }, [value, clientes, maxResults]);
 
+  const azul = tono === 'info';
+
   const handlePick = (cliente: RxCliente) => {
     onChange(cliente.nombre);
     onSelect?.(cliente);
   };
 
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       <div className="relative">
-        <MagnifyingGlass size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <MagnifyingGlass size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           id={id}
           type="text"
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="pl-8"
+          className="h-12 pl-10 pr-12 text-base"
         />
         {value && (
           <button
             type="button"
+            aria-label="Borrar búsqueda"
             onClick={() => onChange('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground cursor-pointer">
-            <X size={14} weight="bold" />
+            className="absolute right-1 top-1/2 -translate-y-1/2 size-11 flex items-center justify-center rounded-2xl text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation">
+            <X size={16} weight="bold" />
           </button>
         )}
       </div>
 
       {value.trim() && searchResults.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {searchResults.map(c => {
             const isSelected = c.nombre === value;
             return (
               <button
                 key={c.id}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => handlePick(c)}
                 className={cn(
-                  'p-2.5 rounded-2xl border flex items-center justify-between gap-2 transition-all cursor-pointer text-left',
-                  isSelected ? 'border-ring ring-3 ring-ring/30 bg-input/50' : 'border-transparent bg-input/50'
+                  'min-h-16 px-3 py-2 rounded-2xl border flex items-center gap-3 transition-colors cursor-pointer text-left touch-manipulation active:scale-[0.99]',
+                  isSelected ? (azul ? 'border-info bg-info-soft ring-1 ring-info' : 'border-primary bg-primary/10 ring-1 ring-primary') : 'border-border bg-card hover:bg-muted/40'
                 )}
               >
-                <div className="flex flex-col min-w-0">
-                  <span className="font-medium text-sm text-foreground truncate">{c.nombre}</span>
-                  <span className="text-xs font-semibold text-muted-foreground truncate tabular-nums">
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span className="t-fila text-foreground truncate">{c.nombre}</span>
+                  <span className="t-meta text-muted-foreground truncate tabular-nums">
                     {detalleCliente(c)}
                   </span>
                 </div>
-                {isSelected && (
-                  <Check size={16} weight="bold" className="text-primary shrink-0" />
-                )}
+                <span aria-hidden="true" className={cn('size-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+                  isSelected ? (azul ? 'bg-info border-info text-white' : 'bg-primary border-primary text-primary-foreground') : 'border-border')}>
+                  {isSelected && <Check size={16} weight="bold" />}
+                </span>
               </button>
             );
           })}

@@ -139,7 +139,7 @@ export function A4ReportPreviewModal({
  <DialogDescription className="sr-only">Vista previa del reporte de cocina consolidado en formato A4</DialogDescription>
  </DialogHeader>
 
- <div className="flex-1 overflow-y-auto p-6 bg-muted border border-border rounded-xl">
+ <div className="flex-1 overflow-y-auto p-6 bg-muted border border-border rounded-2xl">
  <div className="a4-report-preview-scale">
  <ReportDocument mesasData={mesasData} consolidado={consolidado} />
  </div>

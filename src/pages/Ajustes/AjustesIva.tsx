@@ -1,16 +1,18 @@
 import { useState } from'react';
 import dayjs from'dayjs';
-import { Percent, Plus, Trash, Check, PencilSimple, CalendarBlank } from'@phosphor-icons/react';
+import { Percent, Plus, Trash, PencilSimple, CalendarBlank } from'@phosphor-icons/react';
 import { showToast } from'@/lib/toast';
 import { createRxAjusteIva, updateRxAjusteIva } from'../../db/rxdb';
 import { useRxAjustesIva } from'../../hooks/useRxAjustesIva';
-import { cn } from'@/lib/utils';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
-import { Switch } from'@/components/ui/switch';
+import { CheckRedondo } from '../../components/Common/CheckRedondo';
 import { DatePickerField } from'@/components/ui/date-picker-field';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from'@/components/ui/dialog';
+import { EstadoBadge } from '../../components/Common/EstadoBadge';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from'@/components/ui/sheet';
+import { ReservaHeader } from'../../components/Mesas/Sidebar/ReservaHeader';
+import { Fila, Grupo, Seccion, TITULO_SECCION, Vacio } from'../../components/Ajustes/AjustesUI';
 
 // Ajustes → IVA: tasas de la organización, cuál está activa y las temporales (feriados).
 export default function AjustesIva() {
@@ -128,147 +130,113 @@ export default function AjustesIva() {
  }
  };
 
- return (
- <>
- <div className="bg-card rounded-2xl border border-border p-6 shadow-xs flex flex-col gap-6">
- <div className="flex items-center justify-between gap-4">
- <div className="flex items-center gap-4">
- <div className="w-12 h-12 rounded-xl bg-muted text-muted-foreground flex items-center justify-center font-bold">
- <Percent size={24} weight="bold"/>
- </div>
- <div>
- <h2 className="font-extrabold text-base text-foreground">Configuración de IVA</h2>
- <p className="text-xs text-muted-foreground">
- Administra las diferentes tasas de IVA y activa la correspondiente para tus ventas.
- </p>
- </div>
- </div>
+  const titulo = TITULO_SECCION;
+  const etiquetaSwitch = 't-fila text-foreground cursor-pointer';
 
- <button
- type="button"onClick={() => { resetModal(); setModalOpen(true); }}
- className="h-9 px-4 rounded-lg bg-primary active:scale-95 text-primary-foreground font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer">
- <Plus size={16} weight="bold"/> Nueva Tasa
- </button>
- </div>
+  return (
+    <>
+      <Seccion
+        titulo="IVA"
+        descripcion="Tasas de la organización: activa la que se aplica a las ventas. Las temporales (feriados) solo generan avisos."
+        accion={
+          <Button type="button" onClick={() => { resetModal(); setModalOpen(true); }} className="h-12 gap-1.5 px-5">
+            <Plus size={18} weight="bold" /> Nueva tasa
+          </Button>
+        }
+      >
+        <Grupo>
+          {ajustesIva.length === 0 ? (
+            <Vacio>No hay tasas de IVA configuradas todavía. Crea una para empezar.</Vacio>
+          ) : ajustesIva.map((item) => (
+            <Fila
+              key={item.id}
+              titulo={
+                <span className="flex items-center gap-2">
+                  <span className="t-valor tabular-nums">{item.porcentaje}%</span>
+                  {item.activo && <EstadoBadge tono="success">Activa</EstadoBadge>}
+                </span>
+              }
+              ayuda={
+                <>
+                  {item.precios_con_iva ? 'Los precios incluyen IVA' : 'El IVA se suma al total'}
+                  {item.vigente_desde && item.vigente_hasta && (
+                    <span className="mt-0.5 flex items-center gap-1 t-cuerpo-fuerte text-warning-foreground">
+                      <CalendarBlank size={12} weight="bold" />
+                      Temporal: {dayjs(item.vigente_desde).format('D MMM')} – {dayjs(item.vigente_hasta).format('D MMM YYYY')}
+                    </span>
+                  )}
+                </>
+              }
+            >
+              {!item.activo && <Button type="button" variant="outline" onClick={() => handleActivarIva(item.id)} className="h-11">Activar</Button>}
+              <Button type="button" variant="ghost" size="icon" title="Editar" aria-label="Editar tasa" onClick={() => abrirEdicion(item)} className="size-11 text-muted-foreground touch-manipulation">
+                <PencilSimple size={18} />
+              </Button>
+              {!item.activo && (
+                <Button type="button" variant="ghost" size="icon" title="Eliminar" aria-label="Eliminar tasa" onClick={() => handleEliminarIva(item.id, item.activo)}
+                  className="size-11 text-muted-foreground hover:text-destructive touch-manipulation">
+                  <Trash size={18} />
+                </Button>
+              )}
+            </Fila>
+          ))}
+        </Grupo>
+      </Seccion>
 
- <div className="w-full h-[1px] bg-border"/>
+      <Sheet open={modalOpen} onOpenChange={(open) => { if (!open) resetModal(); }}>
+        <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
+          className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 data-[side=right]:border-l-0">
+          <SheetHeader className="p-0 gap-0 space-y-0">
+            <SheetTitle className="sr-only">{editingId ? 'Editar tasa de IVA' : 'Nueva tasa de IVA'}</SheetTitle>
+            <SheetDescription className="sr-only">Porcentaje de IVA y vigencia de la tasa</SheetDescription>
+            <ReservaHeader tono="neutro" badge={<Percent size={20} weight="bold" />} titulo={editingId ? 'Editar tasa' : 'Nueva tasa'} subtitulo="IVA" onClose={resetModal} />
+          </SheetHeader>
 
- {ajustesIva.length === 0 ? (
- <div className="py-12 text-center text-xs text-muted-foreground">
- No hay tasas de IVA configuradas todavía. Crea una para empezar.
- </div>
- ) : (
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
- {ajustesIva.map((item) => (
- <div
- key={item.id}
- className={cn("p-4 rounded-xl border transition-all flex items-start justify-between",
- item.activo
- ?"border-primary bg-primary/5 shadow-xs":"border-border bg-card")}
- >
- <div className="flex flex-col gap-1">
- <div className="flex items-center gap-2">
- <span className="font-black text-2xl text-foreground">{item.porcentaje}%</span>
- {item.activo && (
- <span className="px-2 py-0.5 rounded-md bg-primary text-white font-bold text-[10px] flex items-center gap-1">
- <Check size={10} weight="bold"/> Activo
- </span>
- )}
- </div>
- <span className="text-xs font-medium text-muted-foreground">
- {item.precios_con_iva ?'Precios incluyen IVA':'IVA se suma al total'}
- </span>
- {item.vigente_desde && item.vigente_hasta && (
- <span className="flex items-center gap-1 text-[11px] font-bold text-warning-foreground">
- <CalendarBlank size={12} weight="bold"/>
- Temporal: {dayjs(item.vigente_desde).format('D MMM')} – {dayjs(item.vigente_hasta).format('D MMM YYYY')}
- </span>
- )}
- </div>
+          <main className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="iva-porcentaje" className={titulo}>Porcentaje de IVA</Label>
+              <Input id="iva-porcentaje" type="number" placeholder="Ej. 15" value={nuevoPorcentaje} onChange={(e) => setNuevoPorcentaje(Number(e.target.value))} className="h-12 t-fila" />
+            </div>
 
- <div className="flex items-center gap-1">
- <button
- type="button"title="Editar"onClick={() => abrirEdicion(item)}
- className="w-8 h-8 rounded-lg text-muted-foreground flex items-center justify-center cursor-pointer transition-colors hover:text-foreground">
- <PencilSimple size={16} />
- </button>
- {!item.activo && (
- <button
- type="button"onClick={() => handleActivarIva(item.id)}
- className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs transition-colors cursor-pointer">
- Activar
- </button>
- )}
- {!item.activo && (
- <button
- type="button"onClick={() => handleEliminarIva(item.id, item.activo)}
- className="w-8 h-8 rounded-lg text-muted-foreground flex items-center justify-center cursor-pointer transition-colors">
- <Trash size={16} />
- </button>
- )}
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- <Dialog open={modalOpen} onOpenChange={(open) => { if (!open) resetModal(); }}>
- <DialogContent className="max-w-sm gap-5">
- <DialogHeader>
- <DialogTitle>{editingId ?'Editar tasa de IVA':'Nueva tasa de IVA'}</DialogTitle>
- <DialogDescription className="sr-only">Porcentaje de IVA y vigencia de la tasa</DialogDescription>
- </DialogHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col">
+                <Label htmlFor="preciosConIva" className={etiquetaSwitch}>Precios con IVA incluido</Label>
+                <span className="t-meta text-muted-foreground">Activa si los precios del menú ya contienen este porcentaje.</span>
+              </div>
+              <CheckRedondo id="preciosConIva" aria-label="Precios con IVA incluido" checked={nuevoPreciosConIva} onCheckedChange={setNuevoPreciosConIva} />
+            </div>
 
- <div className="flex flex-col gap-4">
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Porcentaje de IVA</Label>
- <Input
- type="number"placeholder="Ej. 15"value={nuevoPorcentaje}
- onChange={(e) => setNuevoPorcentaje(Number(e.target.value))}
- className="h-10 text-sm font-semibold"/>
- </div>
+            <div className="flex flex-col gap-4 pt-6 border-t border-border">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <Label htmlFor="esTemporal" className={etiquetaSwitch}>Tasa temporal (feriados)</Label>
+                  <span className="t-meta text-muted-foreground">Avisa al personal cuándo cambiar el IVA. No se activa sola.</span>
+                </div>
+                <CheckRedondo id="esTemporal" aria-label="Tasa temporal" checked={esTemporal} onCheckedChange={setEsTemporal} />
+              </div>
+              {esTemporal && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    <Label className={titulo}>Desde</Label>
+                    <DatePickerField value={vigenteDesde} onChange={setVigenteDesde} className="h-12 bg-card border-border" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className={titulo}>Hasta</Label>
+                    <DatePickerField value={vigenteHasta} onChange={setVigenteHasta} className="h-12 bg-card border-border" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </main>
 
- <div className="flex items-center gap-3">
- <Switch
- id="preciosConIva"checked={nuevoPreciosConIva}
- onCheckedChange={setNuevoPreciosConIva}
- />
- <div className="flex flex-col">
- <Label htmlFor="preciosConIva"className="text-xs font-bold cursor-pointer">Precios con IVA incluido</Label>
- <span className="text-[11px] text-muted-foreground">Activa si los precios del menú ya contienen este porcentaje.</span>
- </div>
- </div>
- <div className="flex flex-col gap-3 pt-3 border-t border-border">
- <div className="flex items-center gap-3">
- <Switch id="esTemporal"checked={esTemporal} onCheckedChange={setEsTemporal} />
- <div className="flex flex-col">
- <Label htmlFor="esTemporal"className="text-xs font-bold cursor-pointer">Tasa temporal (feriados)</Label>
- <span className="text-[11px] text-muted-foreground">Avisa al personal cuándo cambiar el IVA. No se activa sola.</span>
- </div>
- </div>
- {esTemporal && (
- <div className="grid grid-cols-2 gap-3">
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Desde</Label>
- <DatePickerField value={vigenteDesde} onChange={setVigenteDesde} className="h-10 bg-card border-border" />
- </div>
- <div className="flex flex-col gap-1.5">
- <Label className="text-xs font-bold">Hasta</Label>
- <DatePickerField value={vigenteHasta} onChange={setVigenteHasta} className="h-10 bg-card border-border" />
- </div>
- </div>
- )}
- </div>
- </div>
-
- <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
- <Button variant="outline" onClick={resetModal} className="font-bold">Cancelar</Button>
- <Button disabled={creating} onClick={handleGuardarIva} className="font-bold">
- {creating ?'Guardando...': editingId ?'Guardar':'Crear tasa'}
- </Button>
- </div>
- </DialogContent>
- </Dialog>
- </>
- );
+          <footer className="p-4 border-t border-border bg-muted/40 flex items-center gap-2 shrink-0">
+            <Button variant="outline" onClick={resetModal} className="h-12 px-5">Cancelar</Button>
+            <Button disabled={creating} onClick={handleGuardarIva} className="h-12 flex-1">
+              {creating ? 'Guardando...' : editingId ? 'Guardar' : 'Crear tasa'}
+            </Button>
+          </footer>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
 }

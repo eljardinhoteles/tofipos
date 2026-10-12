@@ -29,7 +29,7 @@ export function SubcuentaChips({ subcuentas, value, onChange, mostrarTodas, nomb
             type="button"
             onClick={() => onChange(o.id)}
             className={cn(
-              'h-10 px-4 rounded-full border text-sm font-bold cursor-pointer transition-colors active:scale-95',
+              'h-10 pointer-coarse:h-11 px-4 rounded-full border t-cuerpo-fuerte cursor-pointer transition-colors active:scale-95',
               activo ? 'border-info bg-info text-white' : 'border-border bg-card text-foreground'
             )}
           >

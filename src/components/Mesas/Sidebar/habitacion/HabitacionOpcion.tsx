@@ -2,7 +2,7 @@ import { Check } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 // Opción de habitación activa: misma presentación al abrir una mesa vinculada
-// y al cargar una comanda a una habitación (etiqueta HAB + huésped + tipo).
+// y al cargar una comanda a una habitación (número de habitación + huésped + tipo).
 
 interface HabitacionOpcionProps {
   /** Nombre de la mesa de la habitación, p. ej. "Hab. 3 (CABAÑA JACUZZI)". */
@@ -26,26 +26,24 @@ export function HabitacionOpcion({ mesaNombre, huesped, seleccionada, onSelect, 
       aria-pressed={seleccionada}
       onClick={onSelect}
       className={cn(
-        'flex items-center justify-between p-3 rounded-2xl border-2 transition-all cursor-pointer text-left select-none',
-        seleccionada ? (azul ? 'border-info bg-info-soft shadow-sm' : 'border-primary bg-primary/10 shadow-sm') : 'border-border bg-card'
+        'flex items-center gap-3 py-2 pl-2 pr-3 rounded-2xl border text-left select-none cursor-pointer transition-colors touch-manipulation active:scale-[0.99]',
+        seleccionada
+          ? (azul ? 'border-info bg-info-soft ring-1 ring-info' : 'border-primary bg-primary/10 ring-1 ring-primary')
+          : 'border-border bg-card hover:bg-muted/40'
       )}
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={cn('w-10 h-10 rounded-xl flex flex-col items-center justify-center font-black text-sm shrink-0 leading-none',
-          seleccionada ? (azul ? 'bg-info text-white' : 'bg-primary text-primary-foreground') : 'bg-muted text-muted-foreground')}>
-          <span className="text-[9px] uppercase font-extrabold opacity-70">HAB</span>
-          <span>{numero}</span>
-        </div>
-        <div className="flex flex-col min-w-0">
-          <span className="font-extrabold text-sm text-foreground truncate">{huesped}</span>
-          {tipo && <span className="text-xs font-semibold text-muted-foreground truncate">{tipo}</span>}
-        </div>
+      <div className={cn('size-12 rounded-md flex items-center justify-center shrink-0',
+        seleccionada ? (azul ? 'bg-info text-white' : 'bg-primary text-primary-foreground') : 'bg-muted text-muted-foreground')}>
+        <span className="t-valor leading-none">{numero}</span>
       </div>
-      {seleccionada && (
-        <div className={cn('w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm', azul ? 'bg-info text-white' : 'bg-primary text-primary-foreground')}>
-          <Check size={14} weight="bold" />
-        </div>
-      )}
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+        <span className="t-fila text-foreground truncate">{huesped}</span>
+        {tipo && <span className="t-meta text-muted-foreground truncate capitalize">{tipo.toLowerCase()}</span>}
+      </div>
+      <span aria-hidden="true" className={cn('size-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+        seleccionada ? (azul ? 'bg-info border-info text-white' : 'bg-primary border-primary text-primary-foreground') : 'border-border')}>
+        {seleccionada && <Check size={16} weight="bold" />}
+      </span>
     </button>
   );
 }

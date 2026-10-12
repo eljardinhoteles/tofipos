@@ -144,14 +144,14 @@ export function CsvUploader() {
 
         <div className="flex flex-col gap-6 py-4">
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold">1. Descarga la plantilla</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <h3 className="t-cuerpo">1. Descarga la plantilla</h3>
+            <p className="t-meta text-muted-foreground leading-relaxed">
               Descarga el archivo CSV base. Rellénalo con los datos de tus productos usando Excel o Google Sheets. No modifiques los nombres de las columnas.
             </p>
             <button
               type="button"
               onClick={downloadTemplate}
-              className="h-9 px-4 rounded-md bg-secondary text-secondary-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer w-full justify-center hover:opacity-80 border border-border"
+              className="h-9 px-4 rounded-2xl bg-secondary text-secondary-foreground t-dato flex items-center gap-2 transition-all cursor-pointer w-full justify-center hover:opacity-80 border border-border"
             >
               <DownloadSimple size={16} />
               Descargar Plantilla CSV
@@ -161,8 +161,8 @@ export function CsvUploader() {
           <div className="w-full h-[1px] bg-border" />
 
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold">2. Sube tu archivo</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <h3 className="t-cuerpo">2. Sube tu archivo</h3>
+            <p className="t-meta text-muted-foreground leading-relaxed">
               Sube el archivo CSV rellenado. Las categorías que no existan se crearán automáticamente.
             </p>
             <input
@@ -176,7 +176,7 @@ export function CsvUploader() {
               type="button"
               disabled={isProcessing}
               onClick={() => fileInputRef.current?.click()}
-              className="h-10 px-4 rounded-md bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 shadow-xs"
+              className="h-10 px-4 rounded-2xl bg-primary text-primary-foreground t-dato flex items-center gap-2 transition-all cursor-pointer w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 shadow-xs"
             >
               {isProcessing ? (
                 <>

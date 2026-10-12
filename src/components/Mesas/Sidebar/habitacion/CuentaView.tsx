@@ -6,6 +6,7 @@ import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets, 
 import { Input } from '@/components/ui/input';
 import { useHorizontalWheel } from '../../../../hooks/useHorizontalWheel';
 import { type Mesa, type HabitacionCuenta } from '../../../../db/database';
+import { ReservaHeader } from '../ReservaHeader';
 import { initVerticalRxDb, updateRxHabitacionCuenta, updateRxMesa } from '../../../../db/rxdb';
 import { TicketPreviewModal } from '../../../Common/TicketPreviewModal';
 import { Button } from '@/components/ui/button';
@@ -168,30 +169,11 @@ export function CuentaView({
 
   return (
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
-      {/* Header — mismo lenguaje que SidebarDetails: badge circular con el
-          número de la unidad, título + subtítulo, fondo temático en desktop. */}
-      <header className="p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground md:bg-info md:text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0 bg-info text-white md:bg-white/15">
-            {roomNum}
-          </div>
-          <div className="flex flex-col">
-            <h3 className="font-extrabold text-base leading-tight md:text-white">
-              {cuenta.huesped}
-            </h3>
-            <span className="text-[10px] font-bold text-muted-foreground md:text-white/70">
-              {roomType} · {selectedMesa.nombre}
-            </span>
-          </div>
-        </div>
-
-        <Button variant="ghost" size="icon-lg" aria-label="Cerrar" onClick={onClose} className="rounded-xl bg-muted text-muted-foreground md:bg-white/15 md:hover:bg-white/25 md:text-white">
-          <X size={18} weight="bold" />
-        </Button>
-      </header>
+      <ReservaHeader tono="info" badge={<span className="t-titulo">{roomNum}</span>} titulo={cuenta.huesped}
+        subtitulo={`${roomType} · ${selectedMesa.nombre}`} onClose={onClose} />
 
       {/* Subcuentas: p. ej. las 2 familias de una villa que llevan sus consumos por separado */}
-      <div className="shrink-0 border-b border-border bg-muted/50 px-3 py-2.5 flex flex-col gap-2">
+      <div className="shrink-0 border-b border-border bg-muted/40 px-3 py-2.5 flex flex-col gap-2">
         {agregandoSub || renombrandoId ? (
           <div className="flex items-center gap-2">
             <Input
@@ -205,15 +187,15 @@ export function CuentaView({
               }}
               className="h-11 text-base"
             />
-            <Button size="icon" className="h-11 w-11 shrink-0 rounded-xl" onClick={handleGuardarSub} disabled={!nuevaSub.trim()} aria-label={renombrandoId ? 'Guardar nombre' : 'Crear subcuenta'}>
+            <Button size="icon" className="h-11 w-11 shrink-0 rounded-2xl" onClick={handleGuardarSub} disabled={!nuevaSub.trim()} aria-label={renombrandoId ? 'Guardar nombre' : 'Crear subcuenta'}>
               <Check size={20} weight="bold" />
             </Button>
             {renombrandoId && renombrandoId !== PRINCIPAL_ID && !comandasTodas.some(c => c.habitacion_subcuenta_id === renombrandoId) && (
-              <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0 rounded-xl text-destructive" onClick={handleEliminarSub} aria-label="Eliminar subcuenta">
+              <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0 rounded-2xl text-destructive" onClick={handleEliminarSub} aria-label="Eliminar subcuenta">
                 <Trash size={20} weight="bold" />
               </Button>
             )}
-            <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0 rounded-xl" onClick={cerrarEditorSub} aria-label="Cancelar">
+            <Button size="icon" variant="ghost" className="h-11 w-11 shrink-0 rounded-2xl" onClick={cerrarEditorSub} aria-label="Cancelar">
               <X size={20} weight="bold" />
             </Button>
           </div>
@@ -248,8 +230,8 @@ export function CuentaView({
                     activo ? 'border-info bg-info text-white' : 'border-transparent bg-card shadow-(--shadow-btn)'
                   )}
                 >
-                  <span className="w-full text-xs font-extrabold leading-tight truncate">{o.nombre}</span>
-                  <span className={cn('text-[10px] font-medium leading-tight', activo ? 'text-white/80' : 'text-muted-foreground')}>
+                  <span className="w-full t-dato leading-tight truncate">{o.nombre}</span>
+                  <span className={cn('t-meta leading-tight', activo ? 'text-white/70' : 'text-muted-foreground')}>
                     {o.cantidad} {o.cantidad === 1 ? 'comanda' : 'comandas'}
                   </span>
                 </button>
@@ -261,7 +243,7 @@ export function CuentaView({
               aria-label="Agregar subcuenta"
               className={cn(
                 'shrink-0 h-12 rounded-full border border-dashed border-border bg-transparent text-muted-foreground flex items-center justify-center gap-1.5 cursor-pointer active:scale-95',
-                subcuentas.length > 0 ? 'w-12' : 'px-4 text-sm font-bold'
+                subcuentas.length > 0 ? 'w-12' : 'px-4 t-cuerpo-fuerte'
               )}
             >
               <Plus size={subcuentas.length > 0 ? 18 : 16} weight="bold" />
@@ -275,11 +257,11 @@ export function CuentaView({
       <main className="flex-1 overflow-y-auto">
         {comandasVisibles.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 text-center px-8 py-16">
-            <span className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
+            <span className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
               <Receipt size={28} weight="bold" />
             </span>
-            <span className="font-extrabold text-sm text-foreground">Sin consumos aún</span>
-            <span className="text-xs text-muted-foreground max-w-[16rem]">Las comandas cargadas a esta habitación aparecerán aquí.</span>
+            <span className="t-cuerpo-fuerte text-foreground">Sin consumos aún</span>
+            <span className="t-meta text-muted-foreground max-w-[16rem]">Las comandas cargadas a esta habitación aparecerán aquí.</span>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -296,26 +278,26 @@ export function CuentaView({
                   className={cn("w-full text-left flex items-center gap-3 px-4 py-3 focus:outline-none focus-visible:bg-primary/10 border-l-4 border-l-transparent",
                     // Sin transition-colors: con el sombreado intercalado, al cambiar
                     // el filtro el índice de la fila cambia y el fondo se animaba (flash).
-                    isOdd && "bg-muted/70", sinCargar && "opacity-50 grayscale cursor-default", onOpenComanda && !sinCargar && "enabled:cursor-pointer enabled:hover:border-l-primary")}
+                    isOdd && "bg-muted/40", sinCargar && "opacity-50 grayscale cursor-default", onOpenComanda && !sinCargar && "enabled:cursor-pointer enabled:hover:border-l-primary")}
                 >
-                  <div className="w-7 h-7 rounded-md font-bold text-xs flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
+                  <div className="w-7 h-7 rounded-lg t-dato flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
                     <Receipt size={14} weight="bold" />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-sm text-foreground truncate">
+                      <span className="t-cuerpo-fuerte text-foreground truncate">
                         Comanda #{folioLabel(c)}
                         {subcuentas.length > 0 && (
-                          <span className="ml-2 px-1.5 py-0.5 rounded bg-info/15 text-info-foreground dark:bg-info/40 dark:text-info-soft text-[10px] font-extrabold">
+                          <span className="ml-2 px-1.5 py-0.5 rounded-md bg-info/15 text-info-foreground dark:bg-info/40 dark:text-info-soft t-dato">
                             {nombreSub(c.habitacion_subcuenta_id) ?? nombrePrincipal}
                           </span>
                         )}
                       </span>
-                      <span className="font-black text-sm text-foreground shrink-0">
+                      <span className="t-cuerpo-fuerte text-foreground shrink-0">
                         {sinCargar ? 'Sin cargar' : `$${c.total?.toFixed(2) || '0.00'}`}
                       </span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground font-semibold">
+                    <span className="t-meta text-muted-foreground">
                       {sinCargar && `${c.mesa_nombre || 'Mesa'} · `}{new Date(c.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })} · {new Date(c.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -331,34 +313,34 @@ export function CuentaView({
         <div className="flex flex-col gap-0.5 px-2 py-1">
           {filtroSub === 'todas' ? (
             <div className="flex items-center justify-between">
-              <span className="text-base font-black text-foreground">Total Cuenta</span>
-              <span className="text-xl font-black text-foreground">${totalConIva.toFixed(2)}</span>
+              <span className="t-titulo text-foreground">Total Cuenta</span>
+              <span className="t-valor text-foreground">${totalConIva.toFixed(2)}</span>
             </div>
           ) : (
             <>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total Cuenta</span>
+              <span className="t-etiqueta text-muted-foreground">Total Cuenta</span>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-base font-black text-foreground flex items-center gap-1 min-w-0">
+                <span className="t-titulo text-foreground flex items-center gap-1 min-w-0">
                   <span className="truncate">{nombreSub(filtroSub) ?? nombrePrincipal}</span>
                   <button
                     type="button"
                     aria-label="Editar subcuenta"
                     onClick={() => { setRenombrandoId(filtroSub ?? PRINCIPAL_ID); setNuevaSub(nombreSub(filtroSub) ?? ''); }}
-                    className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                    className="shrink-0 size-8 pointer-coarse:size-11 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
                   >
                     <PencilSimple size={16} weight="bold" />
                   </button>
                 </span>
-                <span className="text-xl font-black text-foreground shrink-0">${totalConIva.toFixed(2)}</span>
+                <span className="t-valor text-foreground shrink-0">${totalConIva.toFixed(2)}</span>
               </div>
             </>
           )}
         </div>
 
         {sinCargarCount > 0 && (
-          <div className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-warning-foreground">
+          <div className="flex items-start gap-2 rounded-2xl bg-warning-soft px-3 py-2.5 text-warning-foreground">
             <WarningCircle size={18} weight="fill" className="shrink-0 mt-px" />
-            <p className="text-xs font-semibold leading-snug">
+            <p className="t-dato leading-snug">
               {sinCargarCount === 1 ? 'Hay 1 comanda' : `Hay ${sinCargarCount} comandas`} sin cargar. Cárgala{sinCargarCount === 1 ? '' : 's'} a una habitación o cóbrala{sinCargarCount === 1 ? '' : 's'} en su mesa para hacer el checkout.
             </p>
           </div>
@@ -374,7 +356,7 @@ export function CuentaView({
             <CreditCard size={18} weight="bold" className="mr-1.5" /> Checkout
           </Button>
           <Button
-            variant="dangerGhost" className="w-full h-10 font-semibold"
+            variant="dangerGhost" className="w-full h-10 font-bold"
             onClick={handleAnular}
             disabled={anulando || !puedeAnular}
             title={puedeAnular ? undefined : 'No se puede anular: esta cuenta ya tiene comandas cargadas'}

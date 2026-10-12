@@ -187,23 +187,23 @@ export function SidebarKitchenReport({
  role="checkbox"
  aria-checked={checked}
  onClick={onToggle}
- className={cn('w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors border-b border-border/60',
+ className={cn('w-full min-h-16 flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors border-b border-border/60',
  checked && 'bg-primary/10')}
  >
- <span className={cn('w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors',
+ <span className={cn('size-7 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors',
  checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent')}>
- <Check size={14} weight="bold" />
+ <Check size={16} weight="bold" />
  </span>
- <span className="flex flex-col min-w-0">
- <span className="font-extrabold text-sm text-foreground truncate">{titulo}</span>
- {detalle && <span className="text-xs font-semibold text-muted-foreground truncate">{detalle}</span>}
+ <span className="flex flex-col gap-0.5 min-w-0">
+ <span className="t-fila text-foreground truncate">{titulo}</span>
+ {detalle && <span className="t-meta text-muted-foreground truncate">{detalle}</span>}
  </span>
  </button>
  );
 
  const encabezadoSeccion = (titulo: string, extra?: React.ReactNode) => (
  <div className="flex items-center justify-between px-4 py-2 border-y border-border bg-muted/40">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{titulo}</span>
+ <span className="t-etiqueta text-muted-foreground">{titulo}</span>
  {extra}
  </div>
  );
@@ -212,12 +212,12 @@ export function SidebarKitchenReport({
  <div className="flex-1 overflow-y-auto">
  {encabezadoSeccion(`Mesas activas · ${activeMesas.length}`, (
  <span className="flex items-center gap-1">
- <Button type="button" variant="ghost" size="sm" onClick={handleSelectAll} className="h-6 px-2 text-[11px] font-bold">Todas</Button>
- <Button type="button" variant="ghost" size="sm" onClick={handleDeselectAll} className="h-6 px-2 text-[11px] font-bold text-muted-foreground">Ninguna</Button>
+ <Button type="button" variant="ghost" size="sm" onClick={handleSelectAll} className="h-6 px-2 t-dato">Todas</Button>
+ <Button type="button" variant="ghost" size="sm" onClick={handleDeselectAll} className="h-6 px-2 t-dato text-muted-foreground">Ninguna</Button>
  </span>
  ))}
  {activeMesas.length === 0 ? (
- <span className="block text-xs text-muted-foreground font-semibold text-center py-8">No hay mesas activas.</span>
+ <span className="block t-meta text-muted-foreground text-center py-8">No hay mesas activas.</span>
  ) : (
  activeMesas.map(mesa => {
  const { habitacionNombre, clienteNombre } = mesaExtrasPorMesa(mesa.id);
@@ -231,7 +231,7 @@ export function SidebarKitchenReport({
 
  {encabezadoSeccion(`Reservas de hoy · ${reservasHoy.length}`)}
  {reservasHoy.length === 0 ? (
- <span className="block text-xs text-muted-foreground font-semibold text-center py-8">No hay reservas pendientes para hoy.</span>
+ <span className="block t-meta text-muted-foreground text-center py-8">No hay reservas pendientes para hoy.</span>
  ) : (
  reservasHoy.map((reserva: any) =>
  fila(reserva.id, selectedReservas.has(reserva.id), () => toggleReserva(reserva.id, !selectedReservas.has(reserva.id)),
@@ -259,7 +259,7 @@ export function SidebarKitchenReport({
  <Drawer open={opened} dismissible handleOnly onOpenChange={v => !v && onClose()}>
  <DrawerPortal>
  <DrawerOverlay />
- <DrawerContent className="fixed bottom-0 left-0 right-0 h-dvh max-h-dvh pt-[env(safe-area-inset-top)] bg-card rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
+ <DrawerContent className="fixed bottom-0 left-0 right-0 h-dvh max-h-dvh pt-[env(safe-area-inset-top)] bg-card rounded-t-marco shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">
  <DrawerTitle className="sr-only">Reporte de Cocina</DrawerTitle>
  <DrawerDescription className="sr-only">Consolidado de mesas activas para reporte de cocina</DrawerDescription>
  <DrawerHandle />

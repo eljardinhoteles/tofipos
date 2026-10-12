@@ -24,7 +24,6 @@ interface ComandaTotalesProps {
   /** Texto de la fila principal (por defecto "Total"). */
   etiquetaTotal?: string;
   /** Color del importe principal: azul de marca o verde de "pagado". */
-  tono?: 'primary' | 'success';
   /** Presenta el resumen como tarjeta gris (comprobantes) en vez de integrado al footer. */
   tarjeta?: boolean;
 }
@@ -33,10 +32,10 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 
 // Resumen de importes de una comanda: subtotal, IVA, total y, si ya hubo
 // cobros parciales, lo cobrado y el restante.
-export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, total, totalPagado = 0, saldoPendiente = 0, anticipo = 0, detallado = true, desglose = true, onEditarIva, onVerPagos, onVerAnticipo, etiquetaTotal = 'Total', tono = 'primary', tarjeta = false }: ComandaTotalesProps) {
+export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, total, totalPagado = 0, saldoPendiente = 0, anticipo = 0, detallado = true, desglose = true, onEditarIva, onVerPagos, onVerAnticipo, etiquetaTotal = 'Total', tarjeta = false }: ComandaTotalesProps) {
   return (
-    <div className={cn('flex flex-col gap-1.5 text-sm font-semibold text-muted-foreground',
-      tarjeta ? 'p-3.5 rounded-xl bg-muted/60' : 'px-2 py-1')}>
+    <div className={cn('flex flex-col gap-1.5 t-cuerpo text-muted-foreground',
+      tarjeta ? 'p-3.5 rounded-2xl bg-muted/40' : 'px-2 py-1')}>
       {detallado && desglose && (
         <>
           <div className="flex items-center justify-between">
@@ -66,8 +65,8 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
       )}
       <div className={cn('flex items-center justify-between',
         detallado && desglose && (tarjeta ? 'pt-2 mt-1 border-t border-border' : 'pt-2 mt-1 border-t border-dashed border-border'))}>
-        <span className="text-base font-black text-foreground">{etiquetaTotal}</span>
-        <span className={cn('text-xl font-black', tono === 'success' ? 'text-foreground' : 'text-foreground')}>{money(total)}</span>
+        <span className="t-titulo text-foreground">{etiquetaTotal}</span>
+        <span className={'t-valor text-foreground'}>{money(total)}</span>
       </div>
       {totalPagado > 0 && detallado && (
         // Cuenta dividida registra cobros parciales antes del cierre.
@@ -76,18 +75,18 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             type="button"
             onClick={onVerPagos}
             title="Ver detalle de los cobros"
-            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-primary/10 text-primary cursor-pointer hover:bg-primary/15 hover:text-primary transition-colors"
+            className="flex items-center justify-between px-3 py-2 mt-1 rounded-2xl bg-primary/10 text-primary cursor-pointer hover:bg-primary/15 hover:text-primary transition-colors"
           >
             <span className="flex items-center gap-1.5 font-bold">
               Ya cobrado
               <Eye size={14} weight="bold" className="opacity-70" />
             </span>
-            <span className="font-black">{money(totalPagado)}</span>
+            <span className="font-extrabold">{money(totalPagado)}</span>
           </button>
         ) : (
-          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-primary/10 text-primary">
+          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-2xl bg-primary/10 text-primary">
             <span className="font-bold">Ya cobrado</span>
-            <span className="font-black">{money(totalPagado)}</span>
+            <span className="font-extrabold">{money(totalPagado)}</span>
           </div>
         )
       )}
@@ -98,25 +97,25 @@ export function ComandaTotales({ subtotal, iva, ivaPorcentaje, ivaEsOverride, to
             type="button"
             onClick={onVerAnticipo}
             title="Ver el detalle del anticipo"
-            className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-info/10 text-info-foreground cursor-pointer hover:bg-info/15 transition-colors"
+            className="flex items-center justify-between px-3 py-2 mt-1 rounded-2xl bg-info/10 text-info-foreground cursor-pointer hover:bg-info/15 transition-colors"
           >
             <span className="flex items-center gap-1.5 font-bold">
               Anticipo disponible
               <Eye size={14} weight="bold" className="opacity-70" />
             </span>
-            <span className="font-black">{money(anticipo)}</span>
+            <span className="font-extrabold">{money(anticipo)}</span>
           </button>
         ) : (
-          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-xl bg-info/10 text-info-foreground">
+          <div className="flex items-center justify-between px-3 py-2 mt-1 rounded-2xl bg-info/10 text-info-foreground">
             <span className="font-bold">Anticipo disponible</span>
-            <span className="font-black">{money(anticipo)}</span>
+            <span className="font-extrabold">{money(anticipo)}</span>
           </div>
         )
       )}
       {totalPagado > 0 && detallado && (
         <div className="flex items-center justify-between">
-          <span className="text-base font-black text-foreground">Restante</span>
-          <span className="text-xl font-black text-warning-foreground">{money(saldoPendiente)}</span>
+          <span className="t-titulo text-foreground">Restante</span>
+          <span className="t-valor text-warning-foreground">{money(saldoPendiente)}</span>
         </div>
       )}
     </div>

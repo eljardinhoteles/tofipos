@@ -17,7 +17,7 @@ interface SidebarConfigPisosProps {
 
 const encabezadoSeccion = (titulo: string) => (
  <div className="px-4 py-2.5 border-y border-border bg-muted">
- <span className="text-[11px] font-extrabold uppercase tracking-wider text-foreground/70">{titulo}</span>
+ <span className="t-etiqueta text-muted-foreground">{titulo}</span>
  </div>
 );
 
@@ -63,7 +63,7 @@ export function SidebarConfigPisos({
  </form>
 
  {zonas.length === 0 && (
- <span className="block text-xs text-muted-foreground font-semibold text-center py-8">Aún no hay zonas. Crea la primera arriba.</span>
+ <span className="block t-meta text-muted-foreground text-center py-8">Aún no hay zonas. Crea la primera arriba.</span>
  )}
  {zonas.map((piso, i) => {
  const mesasCount = allMesas.filter(m => m.piso === piso.nombre).length;
@@ -71,11 +71,11 @@ export function SidebarConfigPisos({
  <div key={piso.id} className="flex items-center gap-1 pl-3 pr-4 border-b border-border">
  <span className="flex flex-col shrink-0">
  <button type="button" aria-label={`Subir ${piso.nombre}`} disabled={i === 0} onClick={() => onReorderPiso(piso.id,'up')}
- className="p-1 text-foreground/70 disabled:opacity-25 cursor-pointer disabled:cursor-default">
+ className="p-1 text-muted-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default">
  <CaretUp size={14} weight="bold"/>
  </button>
  <button type="button" aria-label={`Bajar ${piso.nombre}`} disabled={i === zonas.length - 1} onClick={() => onReorderPiso(piso.id,'down')}
- className="p-1 text-foreground/70 disabled:opacity-25 cursor-pointer disabled:cursor-default">
+ className="p-1 text-muted-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default">
  <CaretDown size={14} weight="bold"/>
  </button>
  </span>
@@ -85,10 +85,10 @@ export function SidebarConfigPisos({
  className="flex-1 min-w-0 flex items-center gap-3 pl-1 py-3 text-left cursor-pointer"
  >
  <span className="flex flex-col flex-1 min-w-0">
- <span className="font-extrabold text-sm text-foreground truncate">{piso.nombre}</span>
- <span className="text-xs text-muted-foreground font-semibold">{mesasCount} {mesasCount === 1 ?'mesa':'mesas'}</span>
+ <span className="t-cuerpo-fuerte text-foreground truncate">{piso.nombre}</span>
+ <span className="t-meta text-muted-foreground">{mesasCount} {mesasCount === 1 ?'mesa':'mesas'}</span>
  </span>
- <CaretRight size={16} weight="bold" className="text-foreground/50 shrink-0"/>
+ <CaretRight size={16} weight="bold" className="text-muted-foreground shrink-0"/>
  </button>
  </div>
  );
@@ -109,7 +109,7 @@ export function SidebarConfigPisos({
  <span className="flex items-center gap-2">
  <Bed size={18} weight="bold"/> Hotel · Habitaciones
  </span>
- <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+ <span className="flex items-center gap-1.5 t-meta text-muted-foreground">
  {habitacionesPiso ? habitacionesCount : 'Activar'}
  <CaretRight size={14} weight="bold"/>
  </span>

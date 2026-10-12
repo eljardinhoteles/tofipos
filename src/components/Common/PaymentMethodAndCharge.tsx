@@ -47,7 +47,7 @@ export function PaymentMethodAndCharge({
 
  return (
  <div className="flex flex-col gap-3">
- <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Método de Pago</span>
+ <span className="t-etiqueta text-muted-foreground">Método de Pago</span>
  <div className="grid grid-cols-2 gap-2">
  {enabled.map(m => {
  const Icon = m.icon;
@@ -69,11 +69,11 @@ export function PaymentMethodAndCharge({
 
  {showDetails && method ==='tarjeta'&& settings.cardNetworks.length > 0 && (
  <div className="flex flex-col gap-1">
- <label className="text-xs font-bold text-foreground">Red de cobro</label>
+ <label className="t-dato text-foreground">Red de cobro</label>
  <select
  value={selectedCardNetwork ||''}
  onChange={(e) => onCardNetworkChange?.(e.target.value || null)}
- className="h-10 px-3 text-xs bg-muted border border-border rounded-xl font-semibold">
+ className="h-10 pointer-coarse:h-11 px-3 t-dato bg-muted border border-border rounded-2xl">
  <option value="">Selecciona red</option>
  {settings.cardNetworks.map((net) => (
  <option key={net} value={net}>{net}</option>
@@ -86,11 +86,11 @@ export function PaymentMethodAndCharge({
  <div className="flex flex-col gap-2">
  {settings.transferBanks.length > 0 && (
  <div className="flex flex-col gap-1">
- <label className="text-xs font-bold text-foreground">Cuenta / Banco</label>
+ <label className="t-dato text-foreground">Cuenta / Banco</label>
  <select
  value={selectedTransferBank ||''}
  onChange={(e) => onTransferBankChange?.(e.target.value || null)}
- className="h-10 px-3 text-xs bg-muted border border-border rounded-xl font-semibold">
+ className="h-10 pointer-coarse:h-11 px-3 t-dato bg-muted border border-border rounded-2xl">
  <option value="">Selecciona banco</option>
  {settings.transferBanks.map((banco) => (
  <option key={banco} value={banco}>{banco}</option>
@@ -100,11 +100,11 @@ export function PaymentMethodAndCharge({
  )}
  {settings.requireTransferReference && (
  <div className="flex flex-col gap-1">
- <Label className="text-xs font-bold">Número de transferencia</Label>
+ <Label className="t-dato!">Número de transferencia</Label>
  <Input
  type="text"placeholder="Ingresa referencia"value={transferReference}
  onChange={(e) => onTransferReferenceChange?.(e.target.value)}
- className="h-9 text-xs font-semibold"/>
+ className="h-9 pointer-coarse:h-11 t-dato"/>
  </div>
  )}
  </div>

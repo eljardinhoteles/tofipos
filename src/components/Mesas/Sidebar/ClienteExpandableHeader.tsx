@@ -63,10 +63,10 @@ export function ClienteExpandableHeader({
  return (
  <div className="flex flex-col w-full">
  {expanded && (
- <div className="p-3 bg-muted rounded-xl border border-border my-2 flex flex-col gap-2">
+ <div className="p-3 bg-muted rounded-2xl border border-border my-2 flex flex-col gap-2">
  {isChanging ? (
  <div className="flex flex-col gap-2">
- <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+ <span className="t-etiqueta text-muted-foreground">
  Cambiar Cliente de la Cuenta
  </span>
  <div className="flex items-start gap-2">
@@ -85,19 +85,19 @@ export function ClienteExpandableHeader({
  setIsChanging(false);
  }
  }}
- className="w-9 h-9 rounded-lg shrink-0">
+ className="size-12 rounded-2xl shrink-0">
  <Check size={16} weight="bold"/>
  </Button>
  <Button
  type="button"size="icon"variant="secondary"aria-label="Cancelar cambio"onClick={() => setIsChanging(false)}
- className="w-9 h-9 rounded-lg shrink-0">
+ className="size-12 rounded-2xl shrink-0">
  <X size={16} weight="bold"/>
  </Button>
  </div>
  </div>
  ) : (
  <div className="flex flex-col gap-3">
- <div className="flex flex-col gap-1 text-xs text-muted-foreground font-medium">
+ <div className="flex flex-col gap-1 t-meta text-muted-foreground">
  {datosRows.map(r => (
  <div key={r.label} className="flex justify-between gap-2">
  <span className="text-muted-foreground font-bold shrink-0">{r.label}:</span>
@@ -107,8 +107,8 @@ export function ClienteExpandableHeader({
  </div>
 
  {tieneFacturacion && (
- <div className="flex flex-col gap-1 text-xs text-muted-foreground font-medium pt-2 border-t border-border/60">
- <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider mb-0.5">Facturación</span>
+ <div className="flex flex-col gap-1 t-meta text-muted-foreground pt-2 border-t border-border/60">
+ <span className="t-etiqueta text-muted-foreground mb-0.5">Facturación</span>
  {facturacionRows.map(r => (
  <div key={r.label} className="flex justify-between gap-2">
  <span className="text-muted-foreground font-bold shrink-0">{r.label}:</span>
@@ -122,7 +122,7 @@ export function ClienteExpandableHeader({
  {!isSystemCliente && showEditButton && onEdit && (
  <button
  type="button"onClick={onEdit}
- className="flex-1 py-1.5 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ className="flex-1 py-1.5 rounded-2xl bg-primary/10 text-primary t-dato flex items-center justify-center gap-1 cursor-pointer">
  <PencilSimple size={14} /> Editar
  </button>
  )}
@@ -132,13 +132,13 @@ export function ClienteExpandableHeader({
  setTempValue(clienteNombre ||'');
  setIsChanging(true);
  }}
- className="flex-1 py-1.5 rounded-lg bg-warning-soft text-warning-foreground font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ className="flex-1 py-1.5 rounded-2xl bg-warning-soft text-warning-foreground t-dato flex items-center justify-center gap-1 cursor-pointer">
  <Users size={14} /> Cambiar
  </button>
  )}
  <button
  type="button"onClick={handleCopy}
- className="flex-1 py-1.5 rounded-lg bg-border text-foreground font-bold text-xs flex items-center justify-center gap-1 cursor-pointer">
+ className="flex-1 py-1.5 rounded-2xl bg-border text-foreground t-dato flex items-center justify-center gap-1 cursor-pointer">
  <CopyIcon size={14} /> Copiar
  </button>
  </div>

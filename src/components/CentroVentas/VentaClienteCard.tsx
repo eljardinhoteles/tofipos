@@ -96,8 +96,7 @@ export function VentaClienteCard({ venta }: VentaClienteCardProps) {
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-2 pt-3 border-t border-border">
-        <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">Cliente</span>
+      <div className="flex flex-col gap-2">
         <ClienteSelector
           value={nombreLibre}
           placeholder="Buscar cliente o escribir nombre libre..."
@@ -108,10 +107,10 @@ export function VentaClienteCard({ venta }: VentaClienteCardProps) {
           onSelect={(cliente: RxCliente) => setClienteId(cliente.id)}
         />
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={saving} className="h-9 flex-1">
+          <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={saving} className="h-12 flex-1 font-bold">
             <X size={14} /> Cancelar
           </Button>
-          <Button type="button" onClick={handleSave} disabled={saving} className="h-9 flex-1">
+          <Button type="button" onClick={handleSave} disabled={saving} className="h-12 flex-1 font-bold">
             <Check size={14} /> Guardar
           </Button>
         </div>
@@ -124,33 +123,24 @@ export function VentaClienteCard({ venta }: VentaClienteCardProps) {
   const tieneFacturacion = c && (c.nombre_factura || c.numero_doc || c.direccion_fiscal || c.email_factura);
 
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-border">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider">Cliente</span>
-        <button
-          type="button" onClick={startEdit}
-          className="text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-          title="Cambiar cliente"
-        >
-          <PencilSimple size={14} />
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <User size={14} className="text-muted-foreground shrink-0" />
-        <span className="text-xs font-extrabold text-foreground">{venta.cliente_nombre || 'Sin cliente'}</span>
-        {c?.tipo_cliente && (
-          <span className="text-[10px] font-bold text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        {c?.tipo_cliente ? (
+          <span className="t-dato text-muted-foreground px-2 py-1 rounded-md bg-muted">
             {TIPO_CLIENTE_LABEL[c.tipo_cliente] ?? c.tipo_cliente}
           </span>
-        )}
+        ) : <span />}
+        <Button type="button" variant="ghost" size="icon" onClick={startEdit} title="Cambiar cliente" aria-label="Cambiar cliente"
+          className="text-muted-foreground hover:text-primary">
+          <PencilSimple size={16} />
+        </Button>
       </div>
 
       {(tieneContacto || tieneFacturacion) && (
         <div className="grid grid-cols-2 gap-4">
           {tieneContacto && (
-            <div className="flex flex-col gap-1 text-xs min-w-0">
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Contacto</span>
+            <div className="flex flex-col gap-1 t-meta min-w-0">
+              <span className="t-etiqueta text-muted-foreground">Contacto</span>
               {c.telefono && <DatoRow icon={Phone} value={c.telefono} />}
               {c.email && <DatoRow icon={EnvelopeSimple} value={c.email} />}
               {c.direccion && <DatoRow icon={MapPin} value={c.direccion} />}
@@ -158,8 +148,8 @@ export function VentaClienteCard({ venta }: VentaClienteCardProps) {
           )}
 
           {tieneFacturacion && (
-            <div className="flex flex-col gap-1 text-xs min-w-0">
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <div className="flex flex-col gap-1 t-meta min-w-0">
+              <span className="t-etiqueta text-muted-foreground flex items-center gap-1.5">
                 <Buildings size={11} /> Facturación
               </span>
               {c.nombre_factura && <DatoRow icon={User} value={c.nombre_factura} />}

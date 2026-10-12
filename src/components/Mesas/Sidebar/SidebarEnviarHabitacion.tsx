@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from'react';
 import { folioLabel } from '../../../lib/folio';
-import { ArrowLeft, Door, Check } from'@phosphor-icons/react';
+import { Door, Check } from'@phosphor-icons/react';
 import type { Comanda } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SubcuentaChips } from'./habitacion/SubcuentaChips';
 import { filtrarCuentasHabitacionVigentes } from'../../../lib/habitacionCuentas';
+import { ReservaHeader } from'./ReservaHeader';
 import { initVerticalRxDb, updateRxComanda, liberarMesaSiSinOperativas } from'../../../db/rxdb';
 
 interface SidebarEnviarHabitacionProps {
@@ -76,17 +77,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
 
  return (
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
- <header className="p-4 border-b border-border flex items-center justify-between shrink-0 shadow-xs">
- <div className="flex items-center gap-3">
- <button type="button"onClick={onBack} className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center">
- <ArrowLeft size={18} />
- </button>
- <div className="flex flex-col">
- <h3 className="font-extrabold text-base text-foreground leading-tight">Enviar a Habitación</h3>
- <span className="text-[10px] font-bold text-muted-foreground">Comanda #{folioLabel(activeComanda)}</span>
- </div>
- </div>
- </header>
+ <ReservaHeader tono="neutro" badge={null} titulo="Enviar a Habitación" subtitulo={`Comanda #${folioLabel(activeComanda)}`} onBack={onBack} />
 
  <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
  {cuentasActivas.map((cuenta) => {
@@ -101,8 +92,8 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  <div className="flex items-center gap-3">
  <Door size={20} className={isSelected ?'text-primary':'text-muted-foreground'} />
  <div className="flex flex-col">
- <span className="font-extrabold text-xs text-foreground">{cuenta.huesped}</span>
- <span className="text-[10px] text-muted-foreground font-semibold">Habitación activa</span>
+ <span className="t-dato text-foreground">{cuenta.huesped}</span>
+ <span className="t-meta text-muted-foreground">Habitación activa</span>
  </div>
  </div>
  </div>
@@ -115,7 +106,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  if (subs.length === 0) return null;
  return (
  <div className="flex flex-col gap-2 pt-3 border-t border-border">
- <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cargar a la subcuenta</span>
+ <span className="t-etiqueta text-muted-foreground">Cargar a la subcuenta</span>
  <SubcuentaChips subcuentas={subs} value={selectedSubcuentaId} onChange={setSelectedSubcuentaId} nombrePrincipal={cuentaSel?.principal_nombre || 'Principal'} />
  </div>
  );
@@ -126,7 +117,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  <button
  type="button"disabled={!selectedCuentaId || isProcessing}
  onClick={handleEnviar}
- className="w-full py-3.5 rounded-xl bg-primary disabled:opacity-40 text-primary-foreground font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+ className="w-full py-3.5 rounded-2xl bg-primary disabled:opacity-40 text-primary-foreground t-dato flex items-center justify-center gap-2 cursor-pointer shadow-xs">
  <Check size={18} weight="bold"/> Confirmar Cargo (${totales.total.toFixed(2)})
  </button>
  </footer>

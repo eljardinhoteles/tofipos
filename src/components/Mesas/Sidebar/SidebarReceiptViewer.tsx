@@ -1,11 +1,12 @@
 import { imprimirConAviso } from '../../../lib/imprimir';
 import { ComandaTotales } from'./ComandaTotales';
+import { ReservaHeader } from './ReservaHeader';
 import { folioLabel } from '../../../lib/folio';
 import { ComandaLiquidacion } from'./ComandaLiquidacion';
 import { ComandaDividida, type ParteDividida } from'./ComandaDividida';
 import { liquidacionComanda } from'../../../lib/anticipoMesa';
 import { useEffect, useState, useMemo } from'react';
-import { X, Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
+import { Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { ComandaItemRow } from'./ComandaItemRow';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
@@ -241,63 +242,30 @@ export function SidebarReceiptViewer({
  {/* Header — mismo lenguaje que SidebarDetails: badge circular con el
  número de la mesa/habitación, título + subtítulo, fondo temático en
  desktop según el estado de la comanda. */}
- <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
- esComandaEnHabitacionActiva ?"md:bg-info md:text-white": isAnulada ?"md:bg-destructive md:text-white":"md:bg-primary md:text-primary-foreground")}>
- <div className="flex items-center gap-3">
- <div className={cn("w-10 h-10 rounded-xl font-black text-base flex items-center justify-center shrink-0",
- esComandaEnHabitacionActiva ?"bg-info text-white md:bg-white/15": isAnulada ?"bg-destructive text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
- {badgeNum}
- </div>
- <div className="flex flex-col min-w-0">
- <h3 className={cn("font-extrabold text-base leading-tight truncate",
- esComandaEnHabitacionActiva || isAnulada ?"md:text-white":"md:text-primary-foreground")}>
- Comanda #{folioLabel(activeComanda)}
- </h3>
- <div className="flex items-center gap-1.5">
- {activeComanda?.created_at && (
- <span className={cn("text-[10px] font-bold text-muted-foreground",
- esComandaEnHabitacionActiva || isAnulada ?"md:text-white/70":"md:text-primary-foreground/70")}>
- {new Date(activeComanda.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric'})}
- {' · '}
- {new Date(activeComanda.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}
- </span>
- )}
- {isFacturado && (
- <span className="text-xs font-bold text-primary">
- Factura: {activeComanda.factura_nro ||'Sin número'}
- </span>
- )}
- </div>
- </div>
- </div>
-
- <div className="flex items-center gap-2">
- <span className={cn("px-3 py-1 rounded-full font-black text-xs uppercase shrink-0",
- esComandaEnHabitacionActiva
- ?"bg-white/20 text-white": isFacturado
- ?"bg-muted text-muted-foreground": isAnulada
- ?"bg-white/20 text-white":"bg-muted text-muted-foreground")}>
+ <ReservaHeader
+ tono={esComandaEnHabitacionActiva ? 'info' : isAnulada ? 'destructive' : 'primary'}
+ badge={<span className="t-titulo">{badgeNum}</span>}
+ titulo={`Comanda #${folioLabel(activeComanda)}`}
+ subtitulo={[
+ activeComanda?.created_at && `${new Date(activeComanda.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric'})} · ${new Date(activeComanda.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}`,
+ isFacturado && `Factura: ${activeComanda.factura_nro || 'Sin número'}`,
+ ].filter(Boolean).join(' · ')}
+ acciones={
+ <span className="t-etiqueta px-3 py-1 rounded-full shrink-0 bg-muted text-muted-foreground md:bg-white/15 md:text-white">
  {esComandaEnHabitacionActiva ?'En Habitación': isFacturado ?'Conciliada': isAnulada ?'Anulada':'Cobrada'}
  </span>
- <Button
- variant="ghost"size="icon-lg"aria-label="Cerrar"onClick={onClose}
- className={cn("rounded-xl text-muted-foreground",
- esComandaEnHabitacionActiva || isAnulada ?"md:text-white":"md:text-primary-foreground")}
- >
- <X size={18} weight="bold"/>
- </Button>
- </div>
- </header>
+ }
+ onClose={onClose} />
 
  {/* Datos del cliente / ubicación, mismo bloque que el resto de sidebars */}
  <div className="px-4 py-2.5 border-b border-border shrink-0 flex flex-col gap-1.5">
  <div className="flex items-center gap-2 text-foreground">
  <User size={14} className="text-primary shrink-0"/>
- <span className="font-semibold text-xs truncate">{activeComanda?.cliente || habitacionCuenta?.huesped ||'Consumidor Final'}</span>
+ <span className="t-dato truncate">{activeComanda?.cliente || habitacionCuenta?.huesped ||'Consumidor Final'}</span>
  </div>
  <div className="flex items-center gap-2 text-foreground">
  {activeComanda?.habitacion_cuenta_id ? <Bed size={14} className="text-primary shrink-0"/> : <ForkKnife size={14} className="text-primary shrink-0"/>}
- <span className="font-semibold text-xs">
+ <span className="t-dato">
  {(() => {
  if (activeComanda?.habitacion_cuenta_id) {
  const roomName = habitacionMesa?.nombre || activeComanda?.mesa_nombre ||'Habitación';
@@ -314,10 +282,10 @@ export function SidebarReceiptViewer({
 
  {isAnulada && activeComanda?.motivo_anulacion && (
       <div className="px-4 py-2.5 bg-destructive/10 dark:bg-destructive/30 border-b border-destructive/15 dark:border-destructive shrink-0">
-        <span className="text-[10px] font-bold uppercase text-destructive dark:text-destructive tracking-wider block mb-0.5">
+        <span className="t-etiqueta text-destructive dark:text-destructive block mb-0.5">
           Motivo de Anulación
         </span>
-        <p className="text-xs text-destructive dark:text-white font-medium leading-relaxed">
+        <p className="t-meta text-destructive dark:text-white leading-relaxed">
           {activeComanda.motivo_anulacion}
         </p>
       </div>
@@ -337,7 +305,6 @@ export function SidebarReceiptViewer({
  ivaPorcentaje={ivaPorcentaje}
  total={liquidacion ? liquidacion.consumo : totalPagado}
  etiquetaTotal={liquidacion ? 'Total cuenta' : 'Total Pagado'}
- tono="success"
  />
  {liquidacion && <ComandaLiquidacion liquidacion={liquidacion} />}
  <ComandaDividida partes={partesDivididas} />

@@ -130,8 +130,8 @@ function calcular(venta: RxVenta): VentaConMovimientos {
  * saldo y estado (anclado/facturado/anulado), nunca son campos propios,
  * siempre se recalculan sumando/inspeccionando el array.
  */
-export function useVentasConMovimientos() {
-  const { ventas } = useRxVentas()
+export function useVentasConMovimientos(opciones: { desde?: string | null } = {}) {
+  const { ventas } = useRxVentas(opciones)
 
   const items = useMemo<VentaConMovimientos[]>(() => {
     return (ventas as RxVenta[])

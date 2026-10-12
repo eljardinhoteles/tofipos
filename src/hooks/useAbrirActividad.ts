@@ -31,6 +31,14 @@ export function useAbrirActividad() {
       setMesaView('mapa');
     };
 
+    if (destino.tipo === 'cierre') {
+      if (isMobile) { showToast.info('El cierre se ve en Centro de Ventas', 'Disponible en la versión de escritorio.'); return; }
+      try { sessionStorage.setItem('pos_cierre_a_abrir', '1'); } catch { /* sin storage */ }
+      setActividadOpen(false);
+      navigate('/v2/centro-ventas');
+      return;
+    }
+
     if (destino.tipo === 'venta') {
       if (isMobile) { showToast.info('Esta venta se ve en Centro de Ventas', 'Disponible en la versión de escritorio.'); return; }
       try { sessionStorage.setItem('pos_venta_a_abrir', destino.ventaId); } catch { /* sin storage */ }

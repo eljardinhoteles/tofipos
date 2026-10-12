@@ -43,7 +43,7 @@ export function CalendarCell({
  className={cn("p-2 min-h-[100px] border-b border-r border-border transition-colors flex flex-col gap-1 cursor-pointer select-none",
  isToday ?"bg-primary/5": isWeekend ?"bg-muted/40":"bg-background",
  isMonthEnd &&"border-r-2 border-r-foreground/20",
- hovered &&"bg-muted/80")}
+ hovered &&"bg-muted/60")}
  >
  {dayReservas.map(r => (
  <ReservaCard
@@ -62,7 +62,7 @@ export function CalendarCell({
  onClick={(e) => { e.stopPropagation(); onCellClick(); }}
  className="mt-auto pt-1 flex items-center justify-center gap-1 text-muted-foreground transition-colors">
  <Plus size={14} weight="bold"/>
- {hovered && <span className="text-[10px] font-bold">Nueva</span>}
+ {hovered && <span className="t-dato">Nueva</span>}
  </div>
  </div>
  );
