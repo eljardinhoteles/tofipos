@@ -38,7 +38,8 @@ export default defineConfig({
     tailwindcss(),
     // basicSsl(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': la app avisa de una versión nueva y se actualiza al tocar "Actualizar" (ver AvisoVersionNueva), sin recargarse sola en medio de un cobro.
+      registerType: 'prompt',
       devOptions: {
         enabled: true,
         type: 'module',

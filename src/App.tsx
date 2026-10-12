@@ -21,7 +21,7 @@ import {
   Buildings,
   Check,
 } from '@phosphor-icons/react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { AvisoVersionNueva } from './components/Common/AvisoVersionNueva';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -85,19 +85,6 @@ export default function App() {
   const [, setOrganizacionNombre] = useState<string | null>(
     () => localStorage.getItem('pos_org_name_cached') || null
   );
-
-  const [, setNeedRefresh] = useState(false);
-  const [, setOfflineReady] = useState(false);
-
-
-  useRegisterSW({
-    onNeedRefresh() {
-      setNeedRefresh(true);
-    },
-    onOfflineReady() {
-      setOfflineReady(true);
-    },
-  });
 
   useEffect(() => {
     let alive = true;
@@ -441,6 +428,7 @@ export default function App() {
   return (
     <>
       <SonnerToaster position="top-center" />
+      <AvisoVersionNueva />
       {content}
     </>
   );

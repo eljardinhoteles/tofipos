@@ -112,7 +112,7 @@ async function arrancar() {
   // Si IndexedDB tarda o falla, se arranca igual (sin restaurar).
   await Promise.race([restaurarSesionSiHaceFalta(), new Promise((r) => setTimeout(r, 2500))]);
 
-  const [{ default: React }, { default: ReactDOM }, { default: App }, { UIProvider }, { AuthProvider }, rxdb, pwa] =
+  const [{ default: React }, { default: ReactDOM }, { default: App }, { UIProvider }, { AuthProvider }, rxdb] =
     await Promise.all([
       import('react'),
       import('react-dom/client'),
@@ -120,10 +120,8 @@ async function arrancar() {
       import('./context/UIContext'),
       import('./context/AuthContext'),
       import('./db/rxdb'),
-      import('virtual:pwa-register'),
     ]);
 
-  pwa.registerSW({ immediate: true });
   (window as any).__diagnosSync = rxdb.diagnoseSyncState;
   mantenerRespaldo();
 
