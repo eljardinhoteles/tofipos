@@ -121,6 +121,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   const [motivoAjustePago, setMotivoAjustePago] = useState('');
   const [pagosSeleccionados, setPagosSeleccionados] = useState<Set<string>>(new Set());
   const [accion, setAccion] = useState<AccionId | null>(null);
+  // Pago de tarjeta cobrado en caja: el voucher lo imprime el terminal, no lleva comprobante adjunto.
+  const [sinComprobante, setSinComprobante] = useState(false);
 
   const accionesDisponibles = useMemo<AccionId[]>(() => {
     // Si la venta está anulada, todo queda estrictamente en solo lectura:
@@ -153,13 +155,14 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   useEffect(() => {
     setComprobanteFile(null);
+    setSinComprobante(false);
   }, [accionActiva]);
 
   // Un pago en efectivo no tiene comprobante que subir — se deshabilita en
   // vez de solo ocultar para dejar claro que la opción existe pero no
   // aplica a este método, y se limpia cualquier archivo ya seleccionado si
   // el usuario cambia de método después de elegir uno.
-  const comprobanteDeshabilitado = accionActiva === 'pago' && metodoPago === 'efectivo';
+  const comprobanteDeshabilitado = accionActiva === 'pago' && (metodoPago === 'efectivo' || (metodoPago === 'tarjeta' && sinComprobante));
 
   useEffect(() => {
     if (comprobanteDeshabilitado) setComprobanteFile(null);
@@ -207,6 +210,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       transferencia_banco: metodoPago === 'transferencia' ? (bancoDestino || undefined) : undefined,
       transferencia_referencia: metodoPago === 'transferencia' ? (numeroComprobanteTransf.trim() || undefined) : undefined,
       tarjeta_red: metodoPago === 'tarjeta' ? (redTarjeta || undefined) : undefined,
+      sin_comprobante: metodoPago === 'tarjeta' && sinComprobante ? true : undefined,
       usuario_id: getUsuarioId(),
     })) {
       if (montoAjuste > 0) {
@@ -227,6 +231,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       setBancoDestino('');
       setNumeroComprobanteTransf('');
       setRedTarjeta('');
+      setSinComprobante(false);
       setAjustarVentaPago(false);
       setMotivoAjustePago('');
     }
@@ -423,20 +428,6 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                     <RedCobroRadios redes={redesTarjeta} value={redTarjeta} onChange={setRedTarjeta} invalido={!redTarjeta} />
                   </div>
                 )}
-
-                <div className="col-span-2 flex flex-col gap-2 mt-2 pt-2 border-t border-border/50">
-                  <Casilla checked={ajustarVentaPago} onChange={setAjustarVentaPago}>Ajustar venta para evitar excedente</Casilla>
-                  {ajustarVentaPago && (
-                    <div className="flex flex-col gap-1 mt-1">
-                      <Label className="t-etiqueta! text-muted-foreground">Motivo del ajuste</Label>
-                      <Input
-                        type="text" placeholder="Ej. Propina, recargo adicional..." value={motivoAjustePago}
-                        onChange={(e) => setMotivoAjustePago(e.target.value)}
-                        className="h-12 text-base"
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
@@ -560,9 +551,30 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                 file={comprobanteFile}
                 onChange={setComprobanteFile}
                 disabled={comprobanteDeshabilitado}
-                title={comprobanteDeshabilitado ? 'Un pago en efectivo no requiere comprobante' : undefined}
+                title={comprobanteDeshabilitado ? (metodoPago === 'efectivo' ? 'Un pago en efectivo no requiere comprobante' : 'Marcado como sin comprobante (voucher del terminal)') : undefined}
                 placeholder={accionActiva === 'comentario' ? 'Adjuntar documento (opcional)' : 'Adjuntar comprobante (opcional)'}
               />
+            )}
+            {/* Opciones del pago, juntas al final: lo que se marca y lo que se ajusta. */}
+            {accionActiva === 'pago' && (
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-0">
+                  {metodoPago === 'tarjeta' && (
+                    <Casilla compacta checked={sinComprobante} onChange={setSinComprobante}>No requiere comprobante</Casilla>
+                  )}
+                  <Casilla compacta checked={ajustarVentaPago} onChange={setAjustarVentaPago}>Ajustar venta para evitar excedente</Casilla>
+                </div>
+                {ajustarVentaPago && (
+                  <div className="flex flex-col gap-1 mt-1">
+                    <Label className="t-etiqueta! text-muted-foreground">Motivo del ajuste</Label>
+                    <Input
+                      type="text" placeholder="Ej. Propina, recargo adicional..." value={motivoAjustePago}
+                      onChange={(e) => setMotivoAjustePago(e.target.value)}
+                      className="h-12 text-base"
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </div>
             </div>

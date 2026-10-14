@@ -461,6 +461,9 @@ export interface RxVentaMovimiento {
   anulado_por?: string
   // Cierre de turno que incluyó este cobro (pago o reembolso). Un movimiento con cierre_id ya no entra al cierre siguiente.
   cierre_id?: string
+  // Pago de tarjeta cobrado en caja: el voucher lo imprime el terminal, así que no lleva comprobante adjunto. Un pago
+  // marcado así cuenta como respaldado en el seguimiento de la venta y en el cierre de caja.
+  sin_comprobante?: boolean
 }
 
 // Venta: unidad de negocio (Centro de Ventas v2). Reemplaza el enfoque de
@@ -909,13 +912,14 @@ const ventaMovimientoSubSchema = {
     anulado_motivo: { type: ['string', 'null'] },
     anulado_at: { type: ['string', 'null'] },
     anulado_por: { type: ['string', 'null'] },
-    cierre_id: { type: ['string', 'null'] }
+    cierre_id: { type: ['string', 'null'] },
+    sin_comprobante: { type: ['boolean', 'null'] }
   },
   required: ['id', 'tipo', 'fecha']
 } as const
 
 const ventaSchema = {
-  version: 6,
+  version: 7,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -1230,6 +1234,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v5 → v6: cierre_id opcional en cada movimiento (cierre de turno) — passthrough,
         // ningún movimiento existente pertenece a un cierre todavía.
         6: (oldDoc: any) => oldDoc,
+        // v6 → v7: sin_comprobante opcional en cada movimiento (pago de tarjeta cobrado en caja) — passthrough,
+        // ningún movimiento existente lo usa todavía.
+        7: (oldDoc: any) => oldDoc,
       },
     },
     ajustes_iva: {
@@ -2689,6 +2696,7 @@ export async function agregarVentaMovimiento(
     numero_factura: input.numero_factura,
     pagos_asociados: input.pagos_asociados,
     comprobante_url: input.comprobante_url,
+    sin_comprobante: input.sin_comprobante,
     fecha: input.fecha || new Date().toISOString(),
     usuario_id: input.usuario_id,
   }
@@ -2783,6 +2791,19 @@ export async function adjuntarComprobanteMovimiento(ventaId: string, movimientoI
 
 
   return result
+}
+
+// Marca (o desmarca) un pago como «no requiere comprobante» (tarjeta cobrada en caja). Como adjuntar un comprobante,
+// solo toca ese campo del movimiento: el resto queda intacto.
+export async function marcarSinComprobanteMovimiento(ventaId: string, movimientoId: string, sinComprobante: boolean) {
+  const db = await initVerticalRxDb()
+  getActiveOrgIdStrict()
+  const doc = await db.ventas.findOne(ventaId).exec(true)
+  const before = doc?.toJSON()
+  const movimientos = (before?.movimientos ?? []).map((m: any) =>
+    m.id === movimientoId ? { ...m, sin_comprobante: sinComprobante } : m
+  )
+  return doc.update({ $set: { movimientos, _modified: new Date().toISOString() } } as any)
 }
 
 export async function createRxCategoria(input: Omit<RxCategoria, '_deleted' | '_modified'>) {

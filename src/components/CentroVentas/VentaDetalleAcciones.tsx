@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import dayjs from 'dayjs';
 import { limpiarReferencia } from '../../lib/nombreMesa';
 import {
   Receipt, Prohibit, Paperclip, Trash,
@@ -27,7 +26,7 @@ import { VentaClienteCard } from './VentaClienteCard';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
 import { VentaComandasPanel, useComandasDeVenta } from './VentaComandasPanel';
-import { OrigenBadge } from '../Common/OrigenBadge';
+import { ORIGEN_BORDE, ORIGEN_FONDO, ORIGEN_ICON, ORIGEN_LABEL, ORIGEN_TEXTO } from '../Common/OrigenBadge';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
 import type { VentaMovimientoTipo } from '../../db/rxdb';
 
@@ -143,7 +142,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 bg-[color-mix(in_oklab,var(--background),var(--foreground)_4%)]">
       {/* Header fijo, del mismo alto que la fila de filtros: el cliente de la venta, con un botón para ver sus datos. */}
       <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
         <div className="min-w-0 mr-auto flex flex-col">
@@ -162,42 +161,37 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           <VentaClienteCard venta={venta} />
         </div>
       )}
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
-        {/* Resumen de la venta en una franja de ancho completo más clara que el fondo de la página (sin tarjeta, borde ni
-            sombra): el título con todo el ancho; debajo, el origen a la izquierda y monto y saldo a la derecha. Los archivos viven en su
-            propia pestaña. */}
-        <div className="flex flex-col gap-3 bg-card/60 -mx-6 -mt-6 px-6 py-5">
-          <h3 className="t-titulo text-foreground line-clamp-2 select-text">{limpiarReferencia(venta.referencia) || '—'}</h3>
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">
+        {/* Resumen de la venta en una tarjeta (mismo estilo que las del historial): junta la información inicial para
+            leerla de una vez. A la izquierda título + origen; a la derecha monto y saldo. Las cifras solo se tiñen cuando hay algo que atender (saldo pendiente o excedente); en cero se apagan. */}
+        <div className={cn("@container flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-2xl border px-5 py-4 shadow-2xs", item.anulado ? "bg-muted border-border" : cn(ORIGEN_FONDO[venta.origen], ORIGEN_BORDE[venta.origen]))}>
+          <div className="flex flex-col items-start gap-2 min-w-0 flex-1 basis-36">
+            <h3 title={limpiarReferencia(venta.referencia) || undefined} className="t-titulo text-foreground line-clamp-3 select-text">{limpiarReferencia(venta.referencia) || '—'}</h3>
+            <span className={cn("flex items-center gap-1.5 t-cuerpo-fuerte", item.anulado ? "text-muted-foreground" : ORIGEN_TEXTO[venta.origen])}>
+              {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
+              {ORIGEN_LABEL[venta.origen]}
+            </span>
+          </div>
 
-          {/* Dos filas. Título con todo el ancho; debajo, a la izquierda el badge de origen con la fecha de última actualización y a la
-              derecha el resumen de importes como una sola pieza —monto | saldo— con las cifras del mismo tamaño. Las
-              cifras solo se tiñen cuando hay algo que atender (saldo pendiente o excedente); en cero se apagan. */}
-          <div className="flex items-center justify-between gap-x-6 gap-y-3 flex-wrap">
-            <div className="flex flex-col items-start gap-1.5">
-              <OrigenBadge origen={venta.origen} size="md" />
-              <span className="t-meta text-muted-foreground">Última actualización · {dayjs(item.fechaUltimoMovimiento).format('DD MMM, HH:mm')}</span>
+          <div className="flex items-stretch rounded-2xl bg-card/70 divide-x divide-border/70 shrink-0">
+            <div className="flex flex-col gap-0.5 px-5 py-2.5">
+              <span className="t-etiqueta text-muted-foreground">Monto</span>
+              <span className="t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
             </div>
-
-            <div className="flex items-stretch rounded-2xl bg-background/80 divide-x divide-border/70">
-              <div className="flex flex-col gap-0.5 px-5 py-2.5">
-                <span className="t-etiqueta text-muted-foreground">Monto</span>
-                <span className="t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5 px-5 py-2.5">
-                <span className="t-etiqueta text-muted-foreground">Saldo</span>
-                {item.saldo > 0.01 ? (
-                  <span className="t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
-                ) : item.saldo < -0.01 ? (
-                  <span className="t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
-                ) : (
-                  <span className="t-valor text-foreground/35 tabular-nums">$0.00</span>
-                )}
-              </div>
+            <div className="flex flex-col gap-0.5 px-5 py-2.5">
+              <span className="t-etiqueta text-muted-foreground">Saldo</span>
+              {item.saldo > 0.01 ? (
+                <span className="t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
+              ) : item.saldo < -0.01 ? (
+                <span className="t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
+              ) : (
+                <span className="t-valor text-foreground/50 tabular-nums">$0.00</span>
+              )}
             </div>
           </div>
 
           {item.anulado && (
-            <div className="flex flex-col gap-1.5 rounded-2xl bg-destructive/10 px-4 py-3">
+            <div className="basis-full flex flex-col gap-1.5 rounded-2xl bg-destructive/10 px-4 py-3">
               <div className="flex items-center gap-1.5 text-destructive">
                 <Prohibit size={14} weight="fill" />
                 <span className="t-etiqueta">Anulado</span>
@@ -249,8 +243,8 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           </DialogContent>
         </Dialog>
 
-        {/* Pestañas: historial de movimientos / comandas de la venta */}
-        <div className="flex flex-col gap-2">
+        {/* Pestañas: historial de movimientos / archivos / comandas de la venta */}
+        <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 w-fit">
               {([['historial', 'Historial'], ['archivos', 'Archivos'], ['comandas', 'Comandas']] as const).map(([id, label]) => (
@@ -275,11 +269,12 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               onClick={handleVerificarSync}
               disabled={checkingSync}
               title="Verificar si esta venta está sincronizada en Supabase"
               className={cn(
-                "shrink-0 gap-1.5 text-muted-foreground hover:text-foreground",
+                "shrink-0 gap-1.5 t-meta text-muted-foreground/80 hover:text-foreground",
                 syncResult === 'reintentado' && "text-warning-foreground hover:text-warning-foreground",
                 syncResult === 'error' && "text-destructive hover:text-destructive"
               )}
@@ -311,7 +306,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             ) : (
               <div className="flex flex-col gap-2">
                 {item.documentosAdjuntos.map((doc) => (
-                  <div key={doc.id} className="group flex items-center gap-3 rounded-2xl bg-card border border-border px-4 py-3">
+                  <div key={doc.id} className="group flex items-center gap-3 rounded-2xl bg-card shadow-2xs px-4 py-3">
                     <a
                       href={resolverComprobanteUrl(doc.url)}
                       target="_blank"

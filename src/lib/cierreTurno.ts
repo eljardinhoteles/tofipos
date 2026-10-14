@@ -109,7 +109,7 @@ export function calcularResumenCierre(items: VentaConMovimientos[], dia: Dayjs):
         if (m.transferencia_banco) grupo.bancos[m.transferencia_banco] = (grupo.bancos[m.transferencia_banco] || 0) + m.monto;
       } else { pagos.otros += m.monto; grupo.otros += m.monto; }
 
-      if (m.metodo_pago !== 'efectivo' && !m.comprobante_url) {
+      if (m.metodo_pago !== 'efectivo' && !m.sin_comprobante && !m.comprobante_url) {
         pagosSinComprobante.push({ item, metodo: m.metodo_pago || 'otros', monto: m.monto });
       }
     }

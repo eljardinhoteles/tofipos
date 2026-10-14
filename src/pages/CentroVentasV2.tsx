@@ -1,6 +1,8 @@
 import { useRef, useMemo, useState, useEffect, useDeferredValue } from 'react';
-import { Plus, Receipt as ReceiptEmpty, CreditCard, Money, ArrowLeft, ChatText, Check, X as XIcon, CaretRight } from '@phosphor-icons/react';
+import { Plus, Receipt as ReceiptEmpty, CreditCard, Money, ArrowLeft, ChatText, Checks, CaretRight } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
+import { ventaCompleta, ventaIncompleta } from '../lib/seguimientoVenta';
+import { IndicadoresSeguimiento } from '../components/CentroVentas/IndicadoresSeguimiento';
 import { jornadaDe } from '../lib/jornada';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
@@ -33,23 +35,22 @@ const ORIGEN_FILTERS: VentaOrigen[] = ['mesa', 'reserva_restaurante', 'reserva_h
 
 // Dropdown de estado: solo clasificadores de conciliación, combinables
 // entre sí. Directa/Crédito quedan como chips principales aparte.
-type EstadoFiltro = 'pagado' | 'facturado' | 'anulado' | 'incompleta';
+type EstadoFiltro = 'pagado' | 'facturado' | 'anulado' | 'incompleta' | 'completa';
 
 const ESTADO_FILTERS: { value: EstadoFiltro; label: string }[] = [
   { value: 'pagado', label: 'Pagado' },
   { value: 'facturado', label: 'Facturado' },
   { value: 'anulado', label: 'Anulado' },
   { value: 'incompleta', label: 'Incompleta (sin factura/comprobante)' },
+  { value: 'completa', label: 'Completa (cobrada, con comprobante y factura)' },
 ];
 
 function cumpleEstado(item: VentaConMovimientos, filtro: EstadoFiltro) {
   if (filtro === 'pagado') return item.totalPagado > 0;
   if (filtro === 'facturado') return item.facturado;
   if (filtro === 'anulado') return item.anulado;
-  if (filtro === 'incompleta') {
-    const comprobanteOk = !!item.comprobanteUrl || item.metodoPago === 'efectivo';
-    return !item.anulado && (!item.facturado || !comprobanteOk);
-  }
+  if (filtro === 'incompleta') return ventaIncompleta(item);
+  if (filtro === 'completa') return ventaCompleta(item);
   return true;
 }
 
@@ -57,16 +58,19 @@ function cumpleEstado(item: VentaConMovimientos, filtro: EstadoFiltro) {
 // prioridad sobre pagado porque ya cerró todo el ciclo), pagado (verde),
 // pendiente de cobro (naranja), o anulado (rojo) — mismos colores que los estados de Órdenes; badge de texto, en vez de
 // un cluster de iconos sueltos.
-type EstadoPrincipal = 'facturado' | 'pagado' | 'pendiente' | 'anulado';
+type EstadoPrincipal = 'completa' | 'facturado' | 'pagado' | 'pendiente' | 'anulado';
 
 const ESTADO_PRINCIPAL_LABEL: Record<EstadoPrincipal, string> = {
+  completa: 'Completa',
   facturado: 'Facturado',
   pagado: 'Pagado',
   pendiente: 'Pendiente',
   anulado: 'Anulado',
 };
 
+// Completa no usa badge (ver la fila): va como texto verde liso, sin fondo.
 const ESTADO_PRINCIPAL_BADGE: Record<EstadoPrincipal, { tono: TonoEstado }> = {
+  completa: { tono: 'neutral' },
   facturado: { tono: 'special' },
   pagado: { tono: 'success' },
   pendiente: { tono: 'warning' },
@@ -75,6 +79,8 @@ const ESTADO_PRINCIPAL_BADGE: Record<EstadoPrincipal, { tono: TonoEstado }> = {
 
 function estadoPrincipalDe(item: VentaConMovimientos): EstadoPrincipal {
   if (item.anulado) return 'anulado';
+  // Sin nada pendiente (cobro, comprobante y factura): el estado lo dice y los indicadores se ocultan.
+  if (ventaCompleta(item)) return 'completa';
   // facturaAlDia exige además que no haya pagos posteriores a la última
   // factura — un pago nuevo tras facturar hace que la venta vuelva a verse
   // como "Pagado" hasta que se facture también ese monto (ver useVentasConMovimientos).
@@ -402,7 +408,6 @@ export default function CentroVentasV2() {
                     const isAnulada = estado === 'anulado';
                     // Saldo solo cuando hubo un cobro parcial; si está todo pendiente, el total ya lo dice.
                     const parcial = item.saldo > 0.01 && item.saldo < item.montoTotal - 0.01;
-                    const comprobanteOk = !!item.comprobanteUrl || item.metodoPago === 'efectivo';
                     const detalleVenta = [limpiarReferencia(item.venta.referencia) || null, parcial && !isAnulada ? `Saldo $${item.saldo.toFixed(2)}` : null].filter(Boolean).join(' · ');
                     return (
                       <button
@@ -414,45 +419,33 @@ export default function CentroVentasV2() {
                           active ? cn("bg-muted", isAnulada ? "shadow-[inset_3px_0_0_var(--muted-foreground)]" : ORIGEN_BARRA_ACTIVA[item.venta.origen]) : "hover:bg-muted/60"
                         )}
                       >
-                        {/* Dos columnas y tres filas alineadas (sin cuadrícula visible): cliente | total, detalle (mesa o referencia y comanda) | indicadores
-                            (comprobante y factura. ✓ completo, ✗ falta; efectivo no requiere comprobante), origen | estado. */}
+                        {/* Dos columnas y tres filas alineadas (sin cuadrícula visible): cliente | valor, detalle (mesa o referencia y
+                            comanda) | estado, origen | tres indicadores (cobro, comprobante y factura). */}
                         <div className={cn("flex-1 min-w-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-4", isAnulada && "opacity-50")}>
                           <span className={cn("t-titulo uppercase truncate", isAnulada ? "text-muted-foreground" : "text-secondary-foreground")}>
                               {item.venta.cliente_nombre || 'Sin cliente'}
                             </span>
                           <span className="justify-self-end"><span className="flex items-baseline gap-1.5">
-                              {item.venta.tipo === 'credito' && (
+                              {/* Un crédito ya saldado termina igual que cualquier venta completa: sin la marca «Crédito». */}
+                              {item.venta.tipo === 'credito' && estado !== 'completa' && (
                                 <span className={cn("t-meta", isAnulada ? "text-muted-foreground" : "text-destructive")}>Crédito</span>
                               )}
-                              <span className={cn("t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
+                              <span className={cn("t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
                                 ${item.montoTotal.toFixed(2)}
                               </span>
                             </span></span>
                           {detalleVenta ? <span className="t-meta leading-relaxed text-muted-foreground truncate">{detalleVenta}</span> : <span />}
-                          <div className="justify-self-end"><div className="flex items-center gap-1.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className={cn("size-5 rounded-full flex items-center justify-center border",
-                                    comprobanteOk && !isAnulada ? "bg-success border-success text-white" : "bg-card border-border text-muted-foreground")}>
-                                    {comprobanteOk ? <Check size={12} weight="bold" /> : <XIcon size={12} weight="bold" />}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {item.comprobanteUrl ? 'Tiene comprobante' : item.metodoPago === 'efectivo' ? 'Pago en efectivo, sin comprobante requerido' : 'Sin comprobante'}
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className={cn("size-5 rounded-full flex items-center justify-center border",
-                                    item.facturado && !isAnulada ? "bg-special border-special text-white" : "bg-card border-border text-muted-foreground")}>
-                                    {item.facturado ? <Check size={12} weight="bold" /> : <XIcon size={12} weight="bold" />}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {item.facturado ? `Facturado${item.numeroFactura ? ` · ${item.numeroFactura}` : ''}` : 'Sin factura'}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div></div>
+                          {estado === 'completa' ? (
+                            // Sin fondo a propósito: verde = bien, pero más liviano que el badge "Pagado" (que tiene fondo) y
+                            // distinto del gris de las anuladas.
+                            <span className="justify-self-end inline-flex items-center gap-1 px-1 t-dato text-success-foreground">
+                              <Checks size={16} weight="bold" /> {ESTADO_PRINCIPAL_LABEL[estado]}
+                            </span>
+                          ) : (
+                            <span className="justify-self-end"><EstadoBadge tono={ESTADO_PRINCIPAL_BADGE[estado].tono}>
+                              {ESTADO_PRINCIPAL_LABEL[estado]}
+                            </EstadoBadge></span>
+                          )}
                           <div className="justify-self-start flex items-center gap-2 min-w-0">
                             <OrigenBadge origen={item.venta.origen} apagado={isAnulada} activo={active} />
                             {item.textoComentarios && (
@@ -464,9 +457,9 @@ export default function CentroVentasV2() {
                               </Tooltip>
                             )}
                           </div>
-                          <span className="justify-self-end"><EstadoBadge tono={ESTADO_PRINCIPAL_BADGE[estado].tono}>
-                              {ESTADO_PRINCIPAL_LABEL[estado]}
-                            </EstadoBadge></span>
+                          <div className="justify-self-end"><div className="flex items-center gap-1.5">
+                              {!isAnulada && estado !== 'completa' && <IndicadoresSeguimiento item={item} />}
+                            </div></div>
                         </div>
                       </button>
                     );

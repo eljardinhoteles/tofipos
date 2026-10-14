@@ -85,7 +85,7 @@ export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelPro
             type="button"
             onClick={() => abrirComanda(c)}
             title="Abrir la comanda"
-            className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl border border-border bg-card cursor-pointer text-left hover:bg-muted/40 transition-colors"
+            className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl bg-card shadow-2xs cursor-pointer text-left hover:bg-muted/40 transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="t-cuerpo-fuerte text-foreground tabular-nums">#{folioLabel(c)}</span>

@@ -39,6 +39,22 @@ export const ORIGEN_TEXTO: Record<VentaOrigen, string> = {
   habitacion: 'text-info-foreground',
 };
 
+// Fondo suave del color de cada origen (p. ej. la tarjeta de resumen del detalle de una venta).
+export const ORIGEN_FONDO: Record<VentaOrigen, string> = {
+  mesa: 'bg-primary-soft',
+  reserva_restaurante: 'bg-warning-soft',
+  reserva_hotel: 'bg-special-soft',
+  habitacion: 'bg-info-soft',
+};
+
+// Borde fino del color de cada origen, el mismo del badge (para la tarjeta de resumen).
+export const ORIGEN_BORDE: Record<VentaOrigen, string> = {
+  mesa: 'border-primary/25',
+  reserva_restaurante: 'border-warning/40',
+  reserva_hotel: 'border-special/30',
+  habitacion: 'border-info/30',
+};
+
 // Fila abierta en el sidebar: mismo color con relleno sólido.
 export const ORIGEN_CLASSES_ACTIVO: Record<VentaOrigen, string> = {
   mesa: 'bg-primary text-primary-foreground border-primary',

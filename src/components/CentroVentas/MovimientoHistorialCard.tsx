@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import dayjs from 'dayjs';
 import { showToast } from '@/lib/toast';
 import { useAuth } from '../../context/AuthContext';
-import { anularVentaMovimiento, adjuntarComprobanteMovimiento } from '../../db/rxdb';
+import { anularVentaMovimiento, adjuntarComprobanteMovimiento, marcarSinComprobanteMovimiento } from '../../db/rxdb';
 import { subirComprobante, eliminarComprobante, resolverComprobanteUrl, resolverComprobanteUrlAsync } from '@/lib/comprobantes';
 import { useRxUsuarios } from '@/hooks/useRxUsuarios';
 import type { RxVentaMovimiento, VentaMovimientoTipo } from '../../db/rxdb';
@@ -151,9 +151,21 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tarjeta_red) detalles.push(['Red de tarjeta', m.tarjeta_red]);
   if (m.numero_factura) detalles.push(['Factura', m.numero_factura]);
   if (m.motivo) detalles.push(['Motivo', m.motivo]);
+  if (m.sin_comprobante) detalles.push(['Comprobante', 'No requiere (voucher del terminal)']);
   detalles.push(['Fecha', dayjs(m.fecha).format('DD MMM YYYY, HH:mm')]);
   if (autorNombre) detalles.push(['Registrado por', autorNombre]);
   const toggleDetalle = () => setDetalleAbierto(v => !v);
+
+  // Pago de tarjeta sin comprobante adjunto: se puede marcar como cobrado en caja (el terminal imprime el voucher).
+  const puedeMarcarSinComprobante = !m.anulado && m.tipo === 'pago' && m.metodo_pago === 'tarjeta' && !m.comprobante_url;
+  const handleAlternarSinComprobante = async () => {
+    try {
+      await marcarSinComprobanteMovimiento(ventaId, m.id, !m.sin_comprobante);
+    } catch (e) {
+      console.error(e);
+      showToast.error('No se pudo actualizar el pago');
+    }
+  };
 
   // Anular un movimiento: botón de icono (visible al pasar el cursor; siempre visible en táctil) y confirmación con motivo.
   const botonAnular = (titulo: string, tamano = 16) => puedeAnularse && !confirmando && (
@@ -182,30 +194,29 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tipo === 'ajuste') {
     return (
       <div className={cn(
-        "group relative flex items-center justify-between py-1.5 px-2.5 border border-transparent transition-all rounded-2xl",
+        "group relative flex items-center justify-between py-1.5 px-2.5 transition-all rounded-2xl",
         m.anulado ? "opacity-60 bg-muted/40" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <Icon size={14} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-info-foreground"} />
+          <span className="w-9 shrink-0 flex items-center justify-center">
+            <Icon size={16} weight="bold" className={m.anulado ? "text-muted-foreground" : "text-info-foreground"} />
+          </span>
           <div className="flex flex-col min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={cn("t-cuerpo-fuerte tabular-nums", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
-                Ajuste {m.monto! > 0 ? '+' : '-'}${Math.abs(m.monto || 0).toFixed(2)}
-              </span>
-              {m.motivo && (
-                <span className="t-meta text-muted-foreground truncate">
-                  ({m.motivo})
-                </span>
-              )}
+            <span className={cn("t-cuerpo-fuerte tabular-nums whitespace-nowrap", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
+              Ajuste {m.monto! > 0 ? '+' : '-'}${Math.abs(m.monto || 0).toFixed(2)}
+            </span>
+            <span className="t-meta text-muted-foreground">
+              <span className="tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
               {autorNombre && (
-                <span className="t-meta text-muted-foreground truncate ml-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                  • por {autorNombre}
-                </span>
+                <span className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"> · por {autorNombre}</span>
               )}
-            </div>
-            <span className="t-meta text-muted-foreground tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
+            </span>
+            {/* El motivo se lee completo (puede ser largo): en su propia línea y con saltos, sin recortar. */}
+            {m.motivo && (
+              <span className="t-meta text-secondary-foreground whitespace-pre-wrap break-words mt-0.5">{m.motivo}</span>
+            )}
             {m.anulado && m.anulado_motivo && (
-              <span className="t-meta text-destructive italic truncate">
+              <span className="t-meta text-destructive italic break-words">
                 Anulado: {m.anulado_motivo}
               </span>
             )}
@@ -233,20 +244,20 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tipo === 'comentario') {
     return (
       <div className={cn(
-        "group relative rounded-2xl border border-transparent p-2.5 flex flex-col gap-2 transition-all",
+        "group relative rounded-2xl p-2.5 flex flex-col gap-2 transition-all",
         m.anulado ? "opacity-60" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center justify-between gap-2.5">
           {/* Izquierda: Icono + Texto del comentario + Autor */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className={cn(
-              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
               "text-muted-foreground"
             )}>
               <ChatText size={16} weight="bold" />
             </div>
             <div className="flex flex-col min-w-0 flex-1">
-              <p className={cn("t-cuerpo italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
+              <p className={cn("t-cuerpo italic whitespace-pre-wrap break-words", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
                 "{m.motivo || 'Sin texto'}"
               </p>
               <span className="t-meta text-muted-foreground truncate">
@@ -270,7 +281,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         </div>
 
         {m.anulado && m.anulado_motivo && (
-          <span className="t-meta text-destructive italic truncate pl-10">
+          <span className="t-meta text-destructive italic break-words pl-[46px]">
             Anulado: {m.anulado_motivo}
           </span>
         )}
@@ -286,7 +297,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
 
   return (
     <div className={cn(
-      "group relative rounded-2xl border border-border bg-card p-2.5 flex flex-col gap-2 transition-all shadow-2xs",
+      "group relative rounded-2xl bg-card p-2.5 flex flex-col gap-2 transition-all shadow-2xs",
       m.anulado && "opacity-60 bg-muted/40"
     )}>
       {/* Fila única de contenido: al tocarla se despliegan los datos del movimiento */}
@@ -425,8 +436,13 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           {!m.comprobante_url && admiteComprobante && (
             <span className="t-meta text-muted-foreground">Sin comprobante adjunto.</span>
           )}
-          {((admiteComprobante && m.comprobante_url) || (puedeAnularse && !confirmando)) && (
+          {((admiteComprobante && m.comprobante_url) || (puedeAnularse && !confirmando) || puedeMarcarSinComprobante) && (
             <div className="self-end flex items-center gap-2">
+              {puedeMarcarSinComprobante && (
+                <Button type="button" variant="ghost" onClick={handleAlternarSinComprobante} disabled={uploading} className="gap-1.5 text-muted-foreground hover:text-foreground">
+                  {m.sin_comprobante ? 'Requiere comprobante' : 'No requiere comprobante'}
+                </Button>
+              )}
               {puedeAnularse && !confirmando && (
                 <Button type="button" variant="ghost" onClick={() => setConfirmando(true)} title="Anular movimiento" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10">
                   <Prohibit size={16} weight="bold" /> Anular

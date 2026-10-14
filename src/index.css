@@ -73,6 +73,8 @@
   --warning-foreground: oklch(0.57 0.16 48);
   --info: oklch(0.54 0.12 225);
   --info-soft: oklch(0.95 0.027 225);
+  /* Fondo suave del verde de marca (origen Mesa): --primary al 10 % sobre el gris de la página salía grisáceo. */
+  --primary-soft: oklch(0.925 0.042 160);
   --info-foreground: oklch(0.47 0.11 229);
   --special: oklch(0.52 0.19 300);
   --special-soft: oklch(0.95 0.03 300);
@@ -146,6 +148,7 @@
   --warning-foreground: oklch(0.8 0.14 80);
   --info: oklch(0.72 0.11 225);
   --info-soft: oklch(0.3 0.047 228);
+  --primary-soft: oklch(0.3 0.04 160);
   --info-foreground: oklch(0.82 0.095 225);
   --special: oklch(0.7 0.15 300);
   --special-soft: oklch(0.3 0.06 300);
@@ -223,6 +226,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-primary-soft: var(--primary-soft);
   --color-info-foreground: var(--info-foreground);
   --color-special: var(--special);
   --color-special-soft: var(--special-soft);
