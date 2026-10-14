@@ -1,7 +1,7 @@
 {
   "name": "pos-food-app",
   "private": true,
-  "version": "3.1.1",
+  "version": "3.2.0",
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
@@ -19,6 +19,7 @@
     "date-fns": "^4.4.0",
     "dayjs": "^1.11.20",
     "dexie": "^4.4.2",
+    "html-to-image": "^1.11.13",
     "papaparse": "^5.6.0",
     "radix-ui": "^1.6.7",
     "react": "^19.2.0",
@@ -52,7 +53,6 @@
     "postcss": "^8.5.6",
     "postcss-simple-vars": "^7.0.1",
     "sonner": "^2.0.7",
-    "supabase": "^2.75.5",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",

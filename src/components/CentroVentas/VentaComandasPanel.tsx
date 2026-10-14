@@ -28,7 +28,7 @@ interface VentaComandasPanelProps {
 // Comandas ligadas a una venta: la comanda de la venta y las que se cerraron
 // contra ella (checkout de habitación con varias, subcomandas que usaron el
 // anticipo). Antes solo se veían como números sueltos en el título.
-export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelProps) {
+export function useComandasDeVenta(venta: RxVenta, movimientos: RxVentaMovimiento[]) {
   const { comandas } = useRxComandas() as { comandas: any[] };
 
   // Folios mencionados en la referencia ("Mesa 3 · #12", "Comandas #12, #13") y en
@@ -49,6 +49,11 @@ export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelPro
       .sort((a, b) => Number(a.folio) - Number(b.folio)),
     [comandas, folios, venta.comanda_id]
   );
+  return relacionadas;
+}
+
+export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelProps) {
+  const relacionadas = useComandasDeVenta(venta, movimientos);
 
   const { setCheckoutView, setConfigView, setReservaView, setSelectedReservaId, setSelectedMesaId, setViewingComandaId } = useUI();
 

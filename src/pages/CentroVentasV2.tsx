@@ -1,6 +1,7 @@
 import { useRef, useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { Plus, Receipt as ReceiptEmpty, CreditCard, Money, ArrowLeft, ChatText, Check, X as XIcon, CaretRight } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
+import { jornadaDe } from '../lib/jornada';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -106,6 +107,8 @@ const toggleSet = <T,>(set: Set<T>, value: T, setter: (s: Set<T>) => void) => {
 export default function CentroVentasV2() {
   const [searchQuery, setSearchQuery] = useState('');
   const [tipoFilter, setTipoFilter] = useState<VentaTipo | null>(null);
+  // Solo ventas con comentarios: suelen ser novedades de caja.
+  const [soloComentarios, setSoloComentarios] = useState(false);
   const [origenFilters, setOrigenFilters] = useState<Set<VentaOrigen>>(new Set());
   const [estadoFilters, setEstadoFilters] = useState<Set<EstadoFiltro>>(new Set());
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
@@ -125,7 +128,7 @@ export default function CentroVentasV2() {
       // Llegada desde la actividad de hoy: abre el cierre de turno de hoy.
       if (sessionStorage.getItem('pos_cierre_a_abrir')) {
         sessionStorage.removeItem('pos_cierre_a_abrir');
-        setSelectedDate(dayjs().format('DD MMM YYYY'));
+        setSelectedDate(jornadaDe().format('DD MMM YYYY'));
       }
       const id = sessionStorage.getItem('pos_venta_a_abrir');
       if (id) {
@@ -192,6 +195,7 @@ export default function CentroVentasV2() {
 
     return items.filter(item => {
       if (tipoFilter && item.venta.tipo !== tipoFilter) return false;
+      if (soloComentarios && !item.textoComentarios) return false;
       if (origenFilters.size > 0 && !origenFilters.has(item.venta.origen)) return false;
       if (estadoFilters.size > 0 && ![...estadoFilters].every(f => cumpleEstado(item, f))) return false;
 
@@ -211,7 +215,7 @@ export default function CentroVentasV2() {
 
       return true;
     });
-  }, [items, tipoFilter, origenFilters, estadoFilters, dateRange, terminos, indiceBusqueda]);
+  }, [items, tipoFilter, soloComentarios, origenFilters, estadoFilters, dateRange, terminos, indiceBusqueda]);
 
   // Resetear el límite al aplicar filtros o escribir en el buscador
   useEffect(() => {
@@ -227,7 +231,7 @@ export default function CentroVentasV2() {
   const groupedByDay = useMemo(() => {
     const groups: { label: string; items: VentaConMovimientos[] }[] = [];
     for (const item of visibleItems) {
-      const label = dayjs(item.fechaUltimoMovimiento).format('DD MMM YYYY');
+      const label = jornadaDe(item.fechaUltimoMovimiento).format('DD MMM YYYY');
       const last = groups[groups.length - 1];
       if (last && last.label === label) last.items.push(item);
       else groups.push({ label, items: [item] });
@@ -294,6 +298,7 @@ export default function CentroVentasV2() {
 
               <FiltroChip activo={tipoFilter === 'directa'} onClick={() => setTipoFilter(t => t === 'directa' ? null : 'directa')}><Money size={14} weight="bold" /> Directo</FiltroChip>
               <FiltroChip activo={tipoFilter === 'credito'} onClick={() => setTipoFilter(t => t === 'credito' ? null : 'credito')}><CreditCard size={14} weight="bold" /> Crédito</FiltroChip>
+              <FiltroChip activo={soloComentarios} onClick={() => setSoloComentarios(v => !v)} title="Solo ventas con comentarios" aria-label="Solo ventas con comentarios"><ChatText size={14} weight="bold" /></FiltroChip>
 
               <FiltroMultiple
                 etiqueta="Estado"
@@ -350,8 +355,8 @@ export default function CentroVentasV2() {
                 </PopoverContent>
               </Popover>
 
-              {(dateRange[0] || origenFilters.size > 0 || estadoFilters.size > 0 || tipoFilter || ventanaDias !== 30) && (
-                <FiltroLimpiarTodo onClick={() => { setDateRange([null, null]); setOrigenFilters(new Set()); setEstadoFilters(new Set()); setTipoFilter(null); setVentanaDias(30); }} />
+              {(dateRange[0] || origenFilters.size > 0 || estadoFilters.size > 0 || tipoFilter || soloComentarios || ventanaDias !== 30) && (
+                <FiltroLimpiarTodo onClick={() => { setDateRange([null, null]); setOrigenFilters(new Set()); setEstadoFilters(new Set()); setTipoFilter(null); setSoloComentarios(false); setVentanaDias(30); }} />
               )}
             </div>
           </div>
@@ -370,7 +375,7 @@ export default function CentroVentasV2() {
                   {(() => {
                     // Hoy se cierra; los días pasados solo muestran el historial de sus cierres.
                     const fechaGrupo = dayjs(group.label, 'DD MMM YYYY');
-                    const esHoy = !fechaGrupo.isValid() || fechaGrupo.isSame(dayjs(), 'day');
+                    const esHoy = !fechaGrupo.isValid() || fechaGrupo.isSame(jornadaDe(), 'day');
                     return (
                       <button
                         type="button"
@@ -381,7 +386,7 @@ export default function CentroVentasV2() {
                           diaActivo ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:bg-muted hover:text-foreground"
                         )}
                       >
-                        <span>{new Date(group.items[0].fechaUltimoMovimiento).toLocaleDateString('es-ES', { weekday: 'long' })} · {group.label}</span>
+                        <span>{jornadaDe(group.items[0].fechaUltimoMovimiento).toDate().toLocaleDateString('es-ES', { weekday: 'long' })} · {group.label}</span>
                         <span className={cn("flex items-center gap-1 shrink-0 t-meta normal-case tracking-normal", diaActivo ? "text-primary-foreground" : "text-muted-foreground")}>
                           {esHoy ? 'Cierre' : 'Historial'} <CaretRight size={14} />
                         </span>
@@ -410,7 +415,7 @@ export default function CentroVentasV2() {
                         )}
                       >
                         {/* Dos columnas y tres filas alineadas (sin cuadrícula visible): cliente | total, detalle (mesa o referencia y comanda) | indicadores
-                            (comentario, comprobante y factura. ✓ completo, ✗ falta; efectivo no requiere comprobante), origen | estado. */}
+                            (comprobante y factura. ✓ completo, ✗ falta; efectivo no requiere comprobante), origen | estado. */}
                         <div className={cn("flex-1 min-w-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-4", isAnulada && "opacity-50")}>
                           <span className={cn("t-titulo uppercase truncate", isAnulada ? "text-muted-foreground" : "text-secondary-foreground")}>
                               {item.venta.cliente_nombre || 'Sin cliente'}
@@ -425,14 +430,6 @@ export default function CentroVentasV2() {
                             </span></span>
                           {detalleVenta ? <span className="t-meta leading-relaxed text-muted-foreground truncate">{detalleVenta}</span> : <span />}
                           <div className="justify-self-end"><div className="flex items-center gap-1.5">
-                              {item.textoComentarios && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className={cn("flex", isAnulada ? "text-muted-foreground" : "text-info-foreground")}><ChatText size={16} weight="fill" /></span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{`Comentario: ${item.textoComentarios}`}</TooltipContent>
-                                </Tooltip>
-                              )}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className={cn("size-5 rounded-full flex items-center justify-center border",
@@ -456,7 +453,17 @@ export default function CentroVentasV2() {
                                 </TooltipContent>
                               </Tooltip>
                             </div></div>
-                          <OrigenBadge origen={item.venta.origen} apagado={isAnulada} activo={active} className="justify-self-start" />
+                          <div className="justify-self-start flex items-center gap-2 min-w-0">
+                            <OrigenBadge origen={item.venta.origen} apagado={isAnulada} activo={active} />
+                            {item.textoComentarios && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className={cn("flex shrink-0", isAnulada ? "text-muted-foreground" : "text-info-foreground")}><ChatText size={20} weight="fill" /></span>
+                                </TooltipTrigger>
+                                <TooltipContent>{`Comentarios: ${item.cantidadComentarios}`}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                           <span className="justify-self-end"><EstadoBadge tono={ESTADO_PRINCIPAL_BADGE[estado].tono}>
                               {ESTADO_PRINCIPAL_LABEL[estado]}
                             </EstadoBadge></span>

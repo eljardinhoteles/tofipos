@@ -12,6 +12,7 @@ export function useIvaActivo() {
     let sub: { unsubscribe: () => void } | null = null;
     (async () => {
       const rxDb = await initVerticalRxDb();
+      if (!alive) return;
       const query = rxDb.ajustes_iva.find({ selector: { activo: true, _deleted: { $ne: true } } });
       sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return;

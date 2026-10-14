@@ -14,6 +14,7 @@ import {
 } from'@/components/ui/drawer';
 import { Button } from'@/components/ui/button';
 import { NAV_ACCENT } from'../../lib/navAccent';
+import { usePermisos, rutaPermitida, ROL_LABELS } from'../../hooks/usePermisos';
 import { MENU_EN_CAPAS, toggleMenuMovil, setMenuMovilAbierto, useMenuMovilAbierto } from'../../lib/menuMovil';
 import {
  Pulse,
@@ -93,7 +94,8 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  }, [menuOpen]);
 
  const userName = currentMesero?.nombre || adminUser?.email ||'Usuario';
- const userRole = currentMesero ?'Mesero':'Administrador';
+ const permisos = usePermisos();
+ const userRole = ROL_LABELS[permisos.rol];
 
  const handleLogout = () => {
  setMenuOpen(false);
@@ -226,7 +228,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
 
  {/* Secciones: mismos colores de activo y barra izquierda que el sidebar de PC (aquí con la etiqueta siempre visible) */}
  <nav className="flex-1 overflow-y-auto pb-2 flex flex-col">
- {navItemsMobile.map((item) => {
+ {navItemsMobile.filter(item => rutaPermitida(permisos, item.to)).map((item) => {
  const Icon = item.icon;
  if ('soloPc' in item && item.soloPc) {
  return (
@@ -306,7 +308,8 @@ export function MenuCapaMovil() {
   const { setActividadOpen, openConfirm } = useUI();
   const orgNombre = localStorage.getItem('pos_org_name_cached') || 'Organización';
   const userName = currentMesero?.nombre || adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || 'Usuario';
-  const userRole = currentMesero ? 'Mesero' : 'Administrador';
+  const permisos = usePermisos();
+  const userRole = ROL_LABELS[permisos.rol];
 
   // Estado de la impresora: solo se consulta con el menú abierto.
   useEffect(() => {
@@ -341,7 +344,7 @@ export function MenuCapaMovil() {
       </div>
 
       <nav aria-label="Secciones" className="grid grid-cols-2 auto-rows-[4rem] gap-3">
-        {navItemsMobile.map((item) => {
+        {navItemsMobile.filter(item => rutaPermitida(permisos, item.to)).map((item) => {
           const Icon = item.icon;
           if ('soloPc' in item && item.soloPc) {
             return (

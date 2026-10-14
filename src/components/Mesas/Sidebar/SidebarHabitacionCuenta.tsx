@@ -21,6 +21,7 @@ export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabita
     let sub: { unsubscribe: () => void } | null = null
     ;(async () => {
       const rxDb = await initVerticalRxDb()
+      if (!alive) return
       const orgId = localStorage.getItem('pos_active_org_id') || ''
       const query = rxDb.habitacion_cuentas.find({
         selector: { mesa_id: selectedMesa.id, estado: 'activa', organization_id: orgId, _deleted: { $ne: true } }

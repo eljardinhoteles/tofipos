@@ -98,6 +98,7 @@ export function useComandaLive(activeComandaProp: any) {
         setComandasOperativasMesa(comandasMesa.filter((x: any) => isOperativeComanda(x)).map((x: any) => x.id));
       };
       await refresh();
+      if (!alive) return;
       if (activeComandaProp?.id) {
         subs.push(rxDb.comandas.findOne(activeComandaProp.id).$.subscribe(() => refresh()));
         subs.push(rxDb.pagos.find({ selector: { comanda_id: activeComandaProp.id, _deleted: { $ne: true } } }).$.subscribe(() => refresh()));

@@ -4,6 +4,7 @@
 // guardan la hora de creación y de envío a cocina; el resto de sus cambios usa la
 // última actualización.
 
+import { inicioJornadaActual } from './jornada';
 import { folioLabel } from './folio'
 
 import { parseReparto } from './reparto';
@@ -216,8 +217,7 @@ export function construirActividad(d: Datos): ActividadEvento[] {
   return out.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0)).slice(0, 400);
 }
 
+/** Inicio de la jornada de caja en curso (no la medianoche): ver lib/jornada.ts. */
 export function inicioDelDia(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return inicioJornadaActual().toISOString();
 }

@@ -22,6 +22,7 @@ import {
 import { CATEGORY_ICONS, getCategoryIcon } from '@/lib/categoryIcons';
 import { SidebarMenuProduct } from '@/components/Menu/SidebarMenuProduct';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermisos } from '@/hooks/usePermisos';
 
 export default function MenuV2() {
  const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +31,8 @@ export default function MenuV2() {
  const [newCategoryName, setNewCategoryName] = useState('');
  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
  const { openConfirm, menuView, setMenuView, setSelectedMenuProductId, selectedMenuProductId } = useUI();
+ // Meseros y cajeros ven el menú, pero solo el administrador lo edita.
+ const puedeEditar = usePermisos().editarProductos;
  const isMobile = useIsMobile();
 
  const { menuItems: safeMenuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
@@ -99,14 +102,14 @@ export default function MenuV2() {
  title="Productos"
  subtitle={`${activosCount} ${activosCount === 1 ? 'activo' : 'activos'}`}
  search={<HeaderSearch value={searchQuery} onChange={setSearchQuery} placeholder="Buscar productos..." />}
- actions={
+ actions={puedeEditar && (
  <>
  <button type="button" onClick={() => { setSelectedMenuProductId(null); setMenuView('producto'); }} title="Nuevo producto" aria-label="Nuevo producto" className={headerPrimaryButtonClass}>
  <Plus size={18} weight="bold" />
    <span className="hidden 2xl:inline">Nuevo producto</span>
  </button>
  </>
- }
+ )}
  />
 
  <PageContent>
@@ -121,9 +124,9 @@ export default function MenuV2() {
  {cat.nombre}
  </button>
  ))}
- <button type="button" onClick={() => setIsManageCategoriesOpen(true)} aria-label="Gestionar categorías" className="size-8 pointer-coarse:size-11 rounded-full border border-dashed border-border text-muted-foreground flex items-center justify-center shrink-0 cursor-pointer">
+ {puedeEditar && <button type="button" onClick={() => setIsManageCategoriesOpen(true)} aria-label="Gestionar categorías" className="size-8 pointer-coarse:size-11 rounded-full border border-dashed border-border text-muted-foreground flex items-center justify-center shrink-0 cursor-pointer">
  <Gear size={14} weight="bold" />
- </button>
+ </button>}
  </PageToolbar>
  </div>
 
@@ -132,10 +135,12 @@ export default function MenuV2() {
  <aside aria-label="Categorías" className="hidden md:flex w-64 shrink-0 border-r border-border bg-card flex-col overflow-y-auto p-3 gap-1">
  <div className="flex items-center justify-between pl-3 pb-1">
  <h2 className="t-etiqueta text-muted-foreground">Categorías</h2>
+ {puedeEditar && (
  <Button type="button" variant="outline" size="sm" title="Gestionar categorías" aria-label="Gestionar categorías"
  onClick={() => setIsManageCategoriesOpen(true)} className="h-8 gap-1.5 px-2.5 t-dato text-foreground">
  <Gear size={14} weight="bold" /> Gestionar
  </Button>
+ )}
  </div>
  <nav className="flex flex-col gap-1">
  {[
@@ -186,15 +191,15 @@ export default function MenuV2() {
  product={product}
  CategoriaIcon={iconoPorCategoria.get(product.categoria_nombre) ?? null}
  isSelected={selectedMenuProductId === product.id}
- onEdit={() => handleEditClick(product)}
- onToggleActivo={async (activo: boolean) => {
+ onEdit={puedeEditar ? () => handleEditClick(product) : undefined}
+ onToggleActivo={puedeEditar ? async (activo: boolean) => {
  try {
  await updateRxMenuItem(product.id, { activo });
  } catch (error) {
  console.error('Error al actualizar disponibilidad:', error);
  showToast.error('No se pudo actualizar la disponibilidad');
  }
- }}
+ } : undefined}
  />
  ))}
  </div>
@@ -206,7 +211,7 @@ export default function MenuV2() {
 
  {/* Editor de producto: panel flotante (no desplaza la pantalla). En celular lo muestra la hoja global. */}
  {!isMobile && (
- <Sheet open={menuView === 'producto'} onOpenChange={(o) => { if (!o) { setMenuView('none'); setSelectedMenuProductId(null); } }}>
+ <Sheet open={puedeEditar && menuView === 'producto'} onOpenChange={(o) => { if (!o) { setMenuView('none'); setSelectedMenuProductId(null); } }}>
  <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
  className="data-[side=right]:w-full data-[side=right]:sm:max-w-[462px] flex flex-col gap-0 p-0 !border-0 shadow-none outline-none">
  <SheetTitle className="sr-only">Producto</SheetTitle>
@@ -217,7 +222,7 @@ export default function MenuV2() {
  )}
 
  {/* Drawer: Gestionar Categorías — pantalla 1: lista; pantalla 2: editar una categoría */}
- <Sheet open={isManageCategoriesOpen} onOpenChange={(o) => { setIsManageCategoriesOpen(o); if (!o) setEditingCategory(null); }}>
+ <Sheet open={puedeEditar && isManageCategoriesOpen} onOpenChange={(o) => { setIsManageCategoriesOpen(o); if (!o) setEditingCategory(null); }}>
  <SheetContent showCloseButton={false} className="w-full sm:max-w-md flex flex-col gap-0 p-0 data-[side=right]:border-l-0">
  {editingCategory ? (() => {
  const ed = editingCategory;
@@ -397,7 +402,8 @@ function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, Catego
   return (
     <div
       onClick={onEdit}
-      className={cn("group min-w-0 rounded-2xl p-3 md:p-4 border flex flex-col gap-3 min-h-36 cursor-pointer select-none active:scale-98",
+      className={cn("group min-w-0 rounded-2xl p-3 md:p-4 border flex flex-col gap-3 min-h-36 select-none",
+        onEdit && "cursor-pointer active:scale-98",
         isInactivo ? "bg-muted/40 border-border" : "bg-card border-border",
         isSelected && "border-primary ring-2 ring-primary/30 shadow-md")}
     >

@@ -21,6 +21,7 @@ import { setSheetMovilListo } from '../../lib/sheetMovil';
 import { useUI } from '../../context/UIContext';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { usePermisos, rutaPermitida } from '../../hooks/usePermisos';
 import { useKeyboardCloseReset, useOtherDialogOpen } from '../../hooks/useKeyboardCloseReset';
 import { useIvaActivo } from '../../hooks/useIvaActivo';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
@@ -99,6 +100,7 @@ function SheetSkeleton() {
 export function AppLayoutV2() {
   const location = useLocation();
   const navigate = useNavigate();
+  const permisos = usePermisos();
   const {
     isPinned,
     selectedMesaId, setSelectedMesaId,
@@ -198,6 +200,7 @@ export function AppLayoutV2() {
         return;
       }
       const rxDb = await initVerticalRxDb();
+      if (!alive) return;
       const orgId = localStorage.getItem('pos_active_org_id') || '';
       subs.push(
         rxDb.comandas
@@ -236,6 +239,7 @@ export function AppLayoutV2() {
         return;
       }
       const rxDb = await initVerticalRxDb();
+      if (!alive) return;
       const estabilizar = crearEstabilizador<any>();
       sub = rxDb.comanda_items
         .find({ selector: { comanda_id: cartComanda.id, _deleted: { $ne: true } } })
@@ -263,6 +267,11 @@ export function AppLayoutV2() {
       mantenerVacio: esSub,
     };
   }, [cartComanda, cartItems, selectedMesa, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva]);
+
+  // Módulos sin permiso para el rol (Métricas, Ajustes): si se llega por URL, vuelve a Mesas.
+  useEffect(() => {
+    if (!rutaPermitida(permisos, currentPath)) navigate('/v2/mesas', { replace: true });
+  }, [permisos, currentPath, navigate]);
 
   // Centro de Ventas es solo de PC: si se llega por URL en el celular, vuelve a Mesas.
   useEffect(() => {

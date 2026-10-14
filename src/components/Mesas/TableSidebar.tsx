@@ -131,7 +131,8 @@ export function TableSidebar({
           .sort((a, b) => a.folio - b.folio);
 
         const currentDocs = await query.exec();
-        if (alive) setMesaOperativas(toOperativas(currentDocs));
+        if (!alive) return;
+        setMesaOperativas(toOperativas(currentDocs));
 
         comandasSub = query.$.subscribe((docs: any[]) => {
           if (!alive) return;
@@ -142,7 +143,8 @@ export function TableSidebar({
           selector: { mesa_id: selectedMesa.id, estado: 'activa', organization_id: orgId, _deleted: { $ne: true } }
         });
         const cuentaDocs = await cuentaQuery.exec();
-        if (alive) setActiveCuentaHabitacion(cuentaDocs[0] ? cuentaDocs[0].toJSON() : null);
+        if (!alive) return;
+        setActiveCuentaHabitacion(cuentaDocs[0] ? cuentaDocs[0].toJSON() : null);
         cuentaSub = cuentaQuery.$.subscribe((docs: any[]) => {
           if (!alive) return;
           setActiveCuentaHabitacion(docs[0] ? docs[0].toJSON() : null);
@@ -223,6 +225,7 @@ export function TableSidebar({
   
   useEffect(() => {
     let alive = true;
+    let sub: { unsubscribe: () => void } | null = null;
 
     (async () => {
       if (!activeComanda?.id) {
@@ -235,15 +238,15 @@ export function TableSidebar({
         selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
       });
       const estabilizar = crearEstabilizador<any>();
-      const sub = query.$.subscribe((docs: any[]) => {
+      sub = query.$.subscribe((docs: any[]) => {
         if (!alive) return;
         setLiveComandaItems(estabilizar(docs.map((doc: any) => doc.toJSON())));
       });
-      return () => sub.unsubscribe();
     })().catch(err => console.warn('Error cargando items RxDB del sidebar:', err));
 
     return () => {
       alive = false;
+      sub?.unsubscribe();
     };
   }, [activeComanda?.id]);
 

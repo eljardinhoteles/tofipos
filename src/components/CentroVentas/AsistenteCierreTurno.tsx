@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
+import { jornadaDe, esDeJornada } from '../../lib/jornada';
 import 'dayjs/locale/es';
 import { CheckCircle, ArrowRight, ClockCounterClockwise, LockKey, Plus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -104,8 +105,8 @@ function TodoEnOrden({ texto }: { texto: string }) {
  */
 export function AsistenteCierreTurno(props: AsistenteCierreTurnoProps) {
   const fecha = dayjs(props.date, 'DD MMM YYYY');
-  // Solo el día en curso se cierra; los demás días solo muestran el historial de sus cierres.
-  if (fecha.isValid() && !fecha.isSame(dayjs(), 'day')) {
+  // Solo la jornada en curso se cierra (hasta la hora de corte, no la medianoche); las demás solo muestran su historial.
+  if (fecha.isValid() && !fecha.isSame(jornadaDe(), 'day')) {
     return <HistorialCierresDia fechaLarga={fecha.locale('es').format('dddd, D [de] MMMM - YYYY')} fechaDia={fecha.format('YYYY-MM-DD')} />;
   }
   return <CierreDelDia {...props} />;
@@ -204,7 +205,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
   // "Crear cierre" se habilita si hay algún cobro abierto hoy, sin importar los orígenes que se elijan después.
   // Ventas de hoy (no a crédito) que todavía no tienen ningún pago registrado: no entran al cierre y hay que avisarlo.
   const ventasSinPagoHoy = useMemo(() => items.filter(i =>
-    !i.anulado && i.venta.tipo !== 'credito' && i.totalPagado <= 0 && i.movimientos.some(m => !m.anulado && dayjs(m.fecha).isSame(fechaParsed, 'day'))
+    !i.anulado && i.venta.tipo !== 'credito' && i.totalPagado <= 0 && i.movimientos.some(m => !m.anulado && esDeJornada(m.fecha, fechaParsed))
   ), [items, fechaParsed]);
   const hayCobrosHoy = useMemo(() => calcularResumenCierre(items, fechaParsed).movimientosIncluidos.length > 0, [items, fechaParsed]);
   const pedirCierre = () => {

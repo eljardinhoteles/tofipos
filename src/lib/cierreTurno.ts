@@ -1,6 +1,7 @@
-import dayjs, { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import type { DatosTicketCierre } from '../services/printTemplateEngine';
 import type { VentaConMovimientos } from '../hooks/useVentasConMovimientos';
+import { esDeJornada } from './jornada';
 
 export type OrigenCierre = 'mesa' | 'reserva_restaurante' | 'reserva_hotel' | 'habitacion';
 
@@ -42,7 +43,7 @@ export interface ResumenCierre {
 const grupoVacio = (): GrupoCobros => ({ total: 0, efectivo: 0, tarjeta: 0, transferencia: 0, otros: 0, redes: {}, bancos: {} });
 
 /**
- * Resumen de cobros de un día para el asistente de cierre de turno. Se calcula con los movimientos
+ * Resumen de cobros de una jornada de caja (ver lib/jornada.ts) para el asistente de cierre de turno. Se calcula con los movimientos
  * de ese día (por la fecha de cada pago o reembolso), no con las ventas agrupadas por su último
  * movimiento: una venta a crédito creada el lunes y pagada el viernes solo suma al viernes lo
  * cobrado el viernes. Los movimientos anulados y los ya incluidos en un cierre (`cierre_id`) no cuentan,
@@ -72,7 +73,7 @@ export function calcularResumenCierre(items: VentaConMovimientos[], dia: Dayjs):
     // Una venta a crédito entra también por su monto (ajustes) o por haberse marcado como crédito: es la constancia del crédito.
     const esCredito = item.venta.tipo === 'credito';
     const delDia = item.movimientos.filter(m => {
-      if (m.anulado || m.cierre_id || !dayjs(m.fecha).isSame(dia, 'day')) return false;
+      if (m.anulado || m.cierre_id || !esDeJornada(m.fecha, dia)) return false;
       if (m.tipo === 'pago' || m.tipo === 'reembolso') return !!m.monto;
       return esCredito && (m.tipo === 'ajuste' || m.tipo === 'marcar_credito');
     });

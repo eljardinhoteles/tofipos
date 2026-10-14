@@ -6,6 +6,7 @@ import { NavegacionPlan } from '../components/Planificacion/NavegacionPlan';
 import { ConfirmarDiaDialog } from '../components/Planificacion/ConfirmarDiaDialog';
 import type { ProductoPlan } from '../components/Planificacion/SidebarSeleccionProductos';
 import { useAuth } from '../context/AuthContext';
+import { usePermisos } from '../hooks/usePermisos';
 import { useRxMenuCatalog } from '../hooks/useRxMenuCatalog';
 import { showToast } from '@/lib/toast';
 import { fechaLocal } from '../lib/fechaLocal';
@@ -29,6 +30,8 @@ export default function PlanificacionV2() {
   const { etiquetas, celdas, confirmaciones } = usePlanificacion();
   const { currentMesero, adminUser } = useAuth();
   const usuario = currentMesero?.nombre ?? adminUser?.email ?? 'Administrador';
+  // El mesero ve el plan, pero no elige productos ni confirma días.
+  const soloLectura = !usePermisos().editarPlanificador;
   const [inicio, setInicio] = useState(inicioPorDefecto);
   // Fecha cuyo menú se está por firmar (abre el modal de resumen).
   const [confirmando, setConfirmando] = useState<string | null>(null);
@@ -118,6 +121,7 @@ export default function PlanificacionV2() {
                   minAncho={minAncho(f)}
                   onConfirmar={setConfirmando}
                   onVerConfirmado={verConfirmado}
+                  soloLectura={soloLectura}
                 />
               );
             })}
@@ -139,6 +143,7 @@ export default function PlanificacionV2() {
                     minAncho={minAncho(f)}
                     refElegida={celdaElegidaRef}
                     onAbrir={abrirCelda}
+                    soloLectura={soloLectura}
                   />
                 ))}
               </Fragment>

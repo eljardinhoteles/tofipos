@@ -1,3 +1,4 @@
+import { usePermisos, ROL_DESCRIPCION } from '../../hooks/usePermisos';
 import { useState } from'react';
 import { Pencil, Plus, Trash, UserCircle } from'@phosphor-icons/react';
 import { useAuth } from'../../context/AuthContext';
@@ -41,7 +42,8 @@ export default function AjustesUsuarios() {
  const [saving, setSaving] = useState(false);
 
  const orgId = currentMesero?.organization_id || localStorage.getItem('pos_active_org_id') ||'';
- const canManage = !!adminUser || currentMesero?.rol ==='admin';
+ // El rol sale del usuario con PIN, no de la sesión del dispositivo (siempre es del admin).
+ const canManage = usePermisos().esAdmin;
  const isSelfUser = (user: any) => user.id === currentMesero?.id || user.user_id === adminUser?.id;
 
  const invokeManageUsers = async (body: Record<string, unknown>) => {
@@ -245,6 +247,10 @@ export default function AjustesUsuarios() {
                   ))}
                 </SelectContent>
               </Select>
+              <div className="flex flex-col gap-1 rounded-2xl bg-muted/60 px-3 py-2.5 t-meta">
+                <span className="text-foreground">{ROL_DESCRIPCION[formRol].puede}</span>
+                {ROL_DESCRIPCION[formRol].noPuede && <span className="text-muted-foreground">{ROL_DESCRIPCION[formRol].noPuede}</span>}
+              </div>
             </div>
 
             <div className="flex flex-col gap-2">

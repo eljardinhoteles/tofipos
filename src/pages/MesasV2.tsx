@@ -137,17 +137,24 @@ export default function MesasV2() {
         [allCuentas]
     );
 
+    // Sin habitaciones creadas no se muestra el botón Hotel (se activa desde la
+    // configuración de zonas, que también crea las habitaciones).
+    const hayHabitaciones = useMemo(
+        () => allMesas.some(m => m.piso?.toLowerCase() === 'habitaciones'),
+        [allMesas]
+    );
+
     // Lista ordenada de pisos para navegación por gestos (Hotel/Habitaciones siempre al inicio)
     const allSelectablePisos = useMemo(() => {
         const list = dbPisos.map(p => p.nombre);
-        const hasHotel = list.some(p => p.toLowerCase() === 'habitaciones');
+        const hasHotel = hayHabitaciones && list.some(p => p.toLowerCase() === 'habitaciones');
         const filtered = list.filter(p => p.toLowerCase() !== 'habitaciones');
         if (hasHotel) {
             const hotelPisoName = list.find(p => p.toLowerCase() === 'habitaciones')!;
             return [hotelPisoName, ...filtered];
         }
         return filtered;
-    }, [dbPisos]);
+    }, [dbPisos, hayHabitaciones]);
 
     // Gesto swipe horizontal nativo
     const touchStartX = useRef(0);
@@ -428,43 +435,47 @@ export default function MesasV2() {
                             ref={scrollContainerRef}
                             className="h-13 px-6 flex items-center shrink-0 z-10 overflow-x-auto hide-scrollbar">
                             <div className="flex items-center gap-3 min-w-max w-full">
-                                <button
-                                    type="button" ref={(el) => { chipsRefs.current['Habitaciones'] = el; }}
-                                    onClick={() => {
-                                        const habitacionesPiso = availablePisos.find(p => p.toLowerCase() === 'habitaciones');
-                                        if (habitacionesPiso) {
-                                            setSelectedPiso(habitacionesPiso);
-                                        } else {
-                                            initVerticalRxDb().then(rxDb =>
-                                                rxDb.pisos.insert({
-                                                    id: crypto.randomUUID(),
-                                                    nombre: 'Habitaciones',
-                                                    orden: dbPisos.length,
-                                                    organization_id: localStorage.getItem('pos_active_org_id') || '',
-                                                    _deleted: false,
-                                                    _modified: new Date().toISOString(),
-                                                })
-                                            ).then(() => setSelectedPiso('Habitaciones'))
-                                                .catch(err => console.warn('Error creando Habitaciones:', err));
-                                        }
-                                    }}
-                                    className={cn("px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
-                                        selectedPiso.toLowerCase() === 'habitaciones' ? "bg-info text-white font-extrabold shadow-xs" : "bg-transparent text-foreground font-extrabold hover:text-info-foreground")}
-                                >
-                                    {habitacionesActivasCount > 0 && (
-                                        <span
-                                            title={`${habitacionesActivasCount} habitación${habitacionesActivasCount === 1 ? '' : 'es'} con cuenta activa`}
-                                            className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center t-dato leading-none",
-                                                selectedPiso.toLowerCase() === 'habitaciones' ? "bg-white text-info-foreground shadow-xs" : "bg-info text-white")}
-                                        >
-                                            {habitacionesActivasCount}
-                                        </span>
-                                    )}
-                                    <Bed size={18} weight="bold" />
-                                    HOTEL
-                                </button>
+                                {hayHabitaciones && (
+                                    <>
+                                    <button
+                                        type="button" ref={(el) => { chipsRefs.current['Habitaciones'] = el; }}
+                                        onClick={() => {
+                                            const habitacionesPiso = availablePisos.find(p => p.toLowerCase() === 'habitaciones');
+                                            if (habitacionesPiso) {
+                                                setSelectedPiso(habitacionesPiso);
+                                            } else {
+                                                initVerticalRxDb().then(rxDb =>
+                                                    rxDb.pisos.insert({
+                                                        id: crypto.randomUUID(),
+                                                        nombre: 'Habitaciones',
+                                                        orden: dbPisos.length,
+                                                        organization_id: localStorage.getItem('pos_active_org_id') || '',
+                                                        _deleted: false,
+                                                        _modified: new Date().toISOString(),
+                                                    })
+                                                ).then(() => setSelectedPiso('Habitaciones'))
+                                                    .catch(err => console.warn('Error creando Habitaciones:', err));
+                                            }
+                                        }}
+                                        className={cn("px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
+                                            selectedPiso.toLowerCase() === 'habitaciones' ? "bg-info text-white font-extrabold shadow-xs" : "bg-transparent text-foreground font-extrabold hover:text-info-foreground")}
+                                    >
+                                        {habitacionesActivasCount > 0 && (
+                                            <span
+                                                title={`${habitacionesActivasCount} habitación${habitacionesActivasCount === 1 ? '' : 'es'} con cuenta activa`}
+                                                className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center t-dato leading-none",
+                                                    selectedPiso.toLowerCase() === 'habitaciones' ? "bg-white text-info-foreground shadow-xs" : "bg-info text-white")}
+                                            >
+                                                {habitacionesActivasCount}
+                                            </span>
+                                        )}
+                                        <Bed size={18} weight="bold" />
+                                        HOTEL
+                                    </button>
 
-                                <div className="w-[1px] h-6 bg-border shrink-0" />
+                                    <div className="w-[1px] h-6 bg-border shrink-0" />
+                                    </>
+                                )}
 
                                 <div className="flex items-center gap-2 min-w-max flex-1">
                                     {availablePisos.filter(p => p.toLowerCase() !== 'habitaciones').map(piso => {

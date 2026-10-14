@@ -28,6 +28,7 @@ export interface VentaConMovimientos {
   // Todos los comentarios concatenados — permite buscar la venta por
   // contenido de comentario desde la lista, sin abrir el detalle.
   textoComentarios: string
+  cantidadComentarios: number
   fechaUltimoMovimiento: string
   motivoAnulacion: string | null
 }
@@ -82,7 +83,8 @@ function calcular(venta: RxVenta): VentaConMovimientos {
       anulado = true
       if (m.motivo) motivoAnulacion = m.motivo
     }
-    else if (m.tipo === 'comentario' && m.motivo) comentarios.push(m.motivo)
+    // Un documento adjuntado sin texto se guarda como 'comentario' con el nombre del archivo: no es una novedad.
+    else if (m.tipo === 'comentario' && m.motivo && !(m.comprobante_url && NOMBRE_DE_ARCHIVO.test(m.motivo))) comentarios.push(m.motivo)
     
     if (m.comprobante_url && !urlsVistas.has(m.comprobante_url)) {
       urlsVistas.add(m.comprobante_url)
@@ -90,7 +92,7 @@ function calcular(venta: RxVenta): VentaConMovimientos {
       documentosAdjuntos.push({
         id: m.id,
         url: m.comprobante_url,
-        nombre: m.motivo || `Comprobante ${m.tipo}`,
+        nombre: nombreComprobante(m),
         origen: m.tipo
       })
     }
@@ -120,6 +122,7 @@ function calcular(venta: RxVenta): VentaConMovimientos {
     documentosAdjuntos,
     motivoAnulacion,
     textoComentarios: comentarios.join(' '),
+    cantidadComentarios: comentarios.length,
     fechaUltimoMovimiento: ordenados[ordenados.length - 1]?.fecha ?? venta.created_at,
   }
 }
@@ -130,6 +133,23 @@ function calcular(venta: RxVenta): VentaConMovimientos {
  * saldo y estado (anclado/facturado/anulado), nunca son campos propios,
  * siempre se recalculan sumando/inspeccionando el array.
  */
+const NOMBRE_DE_ARCHIVO = /\.(pdf|png|jpe?g|webp|heic|gif)$/i
+
+// Nombre legible del comprobante de un movimiento. El archivo original no guarda su nombre (se comprime y se sube con
+// un identificador), así que se arma con los datos del movimiento: factura, pago con su método, etc.
+function nombreComprobante(m: { tipo: string; monto?: number; metodo_pago?: string; numero_factura?: string; motivo?: string }): string {
+  const monto = m.monto ? ` $${m.monto.toFixed(2)}` : ''
+  switch (m.tipo) {
+    case 'anclar': return m.numero_factura || 'Factura'
+    case 'pago': return `Pago${m.metodo_pago ? ` ${m.metodo_pago}` : ''}${monto}`
+    case 'reembolso': return `Reembolso${monto}`
+    case 'ajuste': return `Ajuste${monto}`
+    // Con documento sin texto, el motivo es el nombre del archivo; con texto, el motivo es el comentario (no un nombre).
+    case 'comentario': return m.motivo && NOMBRE_DE_ARCHIVO.test(m.motivo) ? m.motivo : 'Documento adjunto'
+    default: return m.motivo || `Comprobante ${m.tipo}`
+  }
+}
+
 export function useVentasConMovimientos(opciones: { desde?: string | null } = {}) {
   const { ventas } = useRxVentas(opciones)
 

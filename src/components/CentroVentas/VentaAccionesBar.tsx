@@ -37,7 +37,7 @@ type AccionId = 'pago' | 'ajuste' | 'anclar' | 'reembolsar' | 'marcar_credito' |
 // Acciones que mueven/afectan dinero admiten adjuntar su propio comprobante
 // al confirmar — cada pago/ajuste/reembolso lleva su respaldo individual,
 // distinto del documento de venta (factura/confirmación) a nivel de venta.
-const ACCIONES_CON_COMPROBANTE: AccionId[] = ['pago', 'ajuste', 'reembolsar', 'anclar'];
+const ACCIONES_CON_COMPROBANTE: AccionId[] = ['pago', 'ajuste', 'reembolsar', 'anclar', 'comentario'];
 
 // Orden fijo del menú de píldoras (Pago, la más usada, primero; Anular, la más grave, siempre al final).
 const ACCIONES_MENU: AccionId[] = ['pago', 'anclar', 'reembolsar', 'ajuste', 'marcar_credito', 'comentario', 'anular'];
@@ -48,7 +48,7 @@ const ACCION_LABEL: Record<AccionId, string> = {
   anclar: 'Facturar',
   reembolsar: 'Reembolsar',
   marcar_credito: 'Crédito',
-  comentario: 'Comentar',
+  comentario: 'Comentar / Adjuntar',
   anular: 'Anular',
 };
 
@@ -277,9 +277,13 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   };
 
   const handleComentario = async () => {
-    if (!textoComentario.trim()) { showToast.error('Escribe un comentario'); return; }
-    if (await registrar({ tipo: 'comentario', motivo: textoComentario.trim(), usuario_id: getUsuarioId() })) {
-      showToast.success('Comentario agregado');
+    // Comentario, documento o ambos. Con documento y sin texto, el nombre del archivo queda como texto del movimiento.
+    const texto = textoComentario.trim();
+    if (!texto && !comprobanteFile) { showToast.error('Escribe un comentario o adjunta un documento'); return; }
+    const conArchivo = !!comprobanteFile;
+    const motivo = texto || comprobanteFile!.name;
+    if (await registrar({ tipo: 'comentario', motivo, usuario_id: getUsuarioId() })) {
+      showToast.success(texto && conArchivo ? 'Comentario y documento agregados' : conArchivo ? 'Documento adjuntado' : 'Comentario agregado');
       setTextoComentario('');
     }
   };
@@ -529,7 +533,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
             {accionActiva === 'comentario' && (
               <div className="flex flex-col gap-1">
-                <Label className="t-etiqueta! text-muted-foreground">Comentario</Label>
+                <Label className="t-etiqueta! text-muted-foreground">Comentario (opcional si adjuntas un documento)</Label>
                 <Textarea
                   placeholder="Escribe una observación..." value={textoComentario}
                   onChange={(e) => setTextoComentario(e.target.value)}
@@ -557,7 +561,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                 onChange={setComprobanteFile}
                 disabled={comprobanteDeshabilitado}
                 title={comprobanteDeshabilitado ? 'Un pago en efectivo no requiere comprobante' : undefined}
-                placeholder="Adjuntar comprobante (opcional)"
+                placeholder={accionActiva === 'comentario' ? 'Adjuntar documento (opcional)' : 'Adjuntar comprobante (opcional)'}
               />
             )}
           </div>

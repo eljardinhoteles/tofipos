@@ -20,9 +20,6 @@ import { initVerticalRxDb } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
-import { showToast } from'@/lib/toast';
-import { useUI } from'../../../context/UIContext';
-import { useAuth } from '../../../context/AuthContext';
 
 interface SidebarReceiptViewerProps {
  selectedMesa: Mesa;
@@ -51,9 +48,6 @@ export function SidebarReceiptViewer({
  const [ventasMesa, setVentasMesa] = useState<any[]>([]);
  const [habitacionCuenta, setHabitacionCuenta] = useState<any | null>(null);
  const [habitacionMesa, setHabitacionMesa] = useState<any | null>(null);
- const { openConfirm } = useUI();
- const { currentMesero, adminUser } = useAuth();
- const esAdmin = !!adminUser || currentMesero?.rol === 'admin';
 
  useEffect(() => {
  let alive = true;
@@ -80,27 +74,6 @@ export function SidebarReceiptViewer({
  };
  }, [activeComanda?.habitacion_cuenta_id]);
 
- const handleDeleteVenta = async () => {
-   openConfirm(
-     'Borrar Comanda',
-     '¿Estás seguro de que deseas borrar permanentemente esta comanda? Esta acción no se puede deshacer.',
-     async () => {
-       try {
-         const rxDb = await initVerticalRxDb();
-         const doc = await rxDb.comandas.findOne(activeComanda.id).exec();
-         if (doc) {
-           await doc.update({ $set: { _deleted: true, _modified: new Date().toISOString() } } as any);
-           showToast.success('Comanda borrada permanentemente');
-           onClose();
-         }
-       } catch (e) {
-         console.error(e);
-         showToast.error('Error al borrar la comanda');
-       }
-     }
-   );
- };
-
  useEffect(() => {
  let alive = true;
  let sub: { unsubscribe: () => void } | null = null;
@@ -114,7 +87,7 @@ export function SidebarReceiptViewer({
  const rxDb = await initVerticalRxDb();
  if (!alive) return;
  const query = rxDb.pagos.find({
- selector: { comanda_id: activeComanda.id }
+ selector: { comanda_id: activeComanda.id, _deleted: { $ne: true } }
  });
  sub = query.$.subscribe((docs: any[]) => {
  if (!alive) return;
@@ -202,6 +175,8 @@ export function SidebarReceiptViewer({
  () => (activeComanda?.folio != null ? liquidacionComanda(ventasMesa, folioLabel(activeComanda)) : null),
  [ventasMesa, activeComanda]
  );
+ // El recibo muestra el consumo, no lo pagado: los pagos se registran en Centro de Ventas y uno solo puede
+ // cubrir varias comandas (checkout de habitación). `todosPagos` solo alimenta el ticket que se reimprime.
  // Con anticipo, los pagos de la venta son de la reserva (no de esta cuenta):
  // el recibo muestra lo que de verdad pagó esta comanda.
  const todosPagos = useMemo(() => {
@@ -213,7 +188,6 @@ export function SidebarReceiptViewer({
  if (liquidacion.porCobrar > 0.005) res.push({ id: 'por-cobrar', comanda_id: activeComanda?.id, monto: liquidacion.porCobrar, fecha, organization_id: orgId });
  return res;
  }, [pagos, pagosDeVentas, liquidacion, activeComanda?.id, activeComanda?.updated_at, activeComanda?.organization_id]);
- const totalPagado = useMemo(() => todosPagos.reduce((acc, p) => acc + p.monto, 0), [todosPagos]);
 
 // Venta donde se maneja el cobro: la que guarda las marcas de anticipo de
  // esta cuenta, o la propia de la comanda.
@@ -303,8 +277,8 @@ export function SidebarReceiptViewer({
  subtotal={subtotal}
  iva={ivaCalculado}
  ivaPorcentaje={ivaPorcentaje}
- total={liquidacion ? liquidacion.consumo : totalPagado}
- etiquetaTotal={liquidacion ? 'Total cuenta' : 'Total Pagado'}
+ total={liquidacion ? liquidacion.consumo : totales.total}
+ etiquetaTotal={liquidacion ? 'Total cuenta' : 'Total'}
  />
  {liquidacion && <ComandaLiquidacion liquidacion={liquidacion} />}
  <ComandaDividida partes={partesDivididas} />
@@ -363,15 +337,6 @@ export function SidebarReceiptViewer({
  <CurrencyDollar size={18} weight="bold" className="mr-1.5" /> Ver en C. de Ventas
  </Button>
  )}
- {isAnulada && esAdmin && (
-    <Button
-      variant="destructive"
-      className="w-full h-10 font-bold"
-      onClick={handleDeleteVenta}
-    >
-      Borrar permanentemente
-    </Button>
-  )}
  </div>
  </footer>
 

@@ -7,6 +7,7 @@ import AjustesImpresion from './Ajustes/AjustesImpresion';
 import AjustesMetodosPago from './Ajustes/AjustesMetodosPago';
 import AjustesIva from './Ajustes/AjustesIva';
 import AjustesPlanificador from './Ajustes/AjustesPlanificador';
+import { usePermisos, puedeVerSeccion, ROL_LABELS } from '../hooks/usePermisos';
 import { useAuth } from'../context/AuthContext';
 import { PageFrame, PageHeader, PageContent, PageToolbar, toolbarChipClass } from'../components/Common/PageHeader';
 
@@ -38,13 +39,21 @@ export default function AjustesV2() {
     || adminUser?.user_metadata?.full_name
     || adminUser?.email?.split('@')[0]
     || 'Usuario';
-  const rolUsuario = currentMesero ? ((currentMesero as any).rol === 'admin' ? 'Administrador' : 'Mesero') : 'Administrador';
-  const [activeSection, setActiveSection] = useState<SectionKey>(() => sectionFromPath(window.location.pathname) ?? 'organizacion');
+  const permisos = usePermisos();
+  const rolUsuario = ROL_LABELS[permisos.rol];
+  // Secciones que el rol puede ver (el cajero, solo Impresión).
+  const secciones = SECTIONS.filter((sec) => puedeVerSeccion(permisos, sec.value));
+  const permitida = (sec: SectionKey | null): sec is SectionKey => !!sec && puedeVerSeccion(permisos, sec);
+  const [activeSection, setActiveSection] = useState<SectionKey>(() => {
+    const desdeUrl = sectionFromPath(window.location.pathname);
+    return permitida(desdeUrl) ? desdeUrl : (secciones[0]?.value ?? 'organizacion');
+  });
 
   // Enlaces directos (p. ej. el aviso de IVA → /v2/ajustes/iva) cambian de sección.
   useEffect(() => {
     const next = sectionFromPath(location.pathname);
-    if (next) setActiveSection(next);
+    if (permitida(next)) setActiveSection(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const goToSection = (section: SectionKey) => {
@@ -75,7 +84,7 @@ export default function AjustesV2() {
       <PageContent>
         {/* Celular: chips arriba. PC/iPad: columna de secciones a la izquierda. */}
         <PageToolbar className="md:hidden">
-          {SECTIONS.map((sec) => (
+          {secciones.map((sec) => (
             <button key={sec.value} type="button" onClick={() => goToSection(sec.value)} className={toolbarChipClass(activeSection === sec.value)}>
               {sec.label}
             </button>
@@ -84,7 +93,7 @@ export default function AjustesV2() {
 
         <div className="flex-1 min-h-0 flex">
           <nav aria-label="Secciones de ajustes" className="hidden md:flex w-64 shrink-0 flex-col gap-1 border-r border-border p-3 overflow-y-auto">
-            {SECTIONS.map(({ value, label, icon: Icono }) => {
+            {secciones.map(({ value, label, icon: Icono }) => {
               const activa = activeSection === value;
               return (
                 <button key={value} type="button" onClick={() => goToSection(value)} aria-current={activa ? 'page' : undefined}
@@ -99,11 +108,15 @@ export default function AjustesV2() {
 
           <main className="flex-1 min-w-0 overflow-y-auto px-3 py-4 sm:px-6 sm:py-8">
             <div className="max-w-3xl w-full mx-auto">
-              {activeSection === 'organizacion' && <AjustesOrganizacion />}
-              {activeSection === 'metodos-pago' && <AjustesMetodosPago />}
-              {activeSection === 'impresion' && <AjustesImpresion />}
-              {activeSection === 'iva' && <AjustesIva />}
-              {activeSection === 'planificador' && <AjustesPlanificador />}
+              {permitida(activeSection) && (
+                <>
+                  {activeSection === 'organizacion' && <AjustesOrganizacion />}
+                  {activeSection === 'metodos-pago' && <AjustesMetodosPago />}
+                  {activeSection === 'impresion' && <AjustesImpresion />}
+                  {activeSection === 'iva' && <AjustesIva />}
+                  {activeSection === 'planificador' && <AjustesPlanificador />}
+                </>
+              )}
             </div>
           </main>
         </div>

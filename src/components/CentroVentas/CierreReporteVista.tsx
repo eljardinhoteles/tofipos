@@ -1,11 +1,15 @@
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Printer, Receipt } from '@phosphor-icons/react';
+import { toBlob } from 'html-to-image';
+import { ArrowLeft, DownloadSimple, Printer, Receipt } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { imprimirConAviso } from '@/lib/imprimir';
 import { showToast } from '@/lib/toast';
 import { queueRawReceiptPrint } from '@/lib/printServerClient';
 import { generarTicketCierreTurno, type DatosTicketCierre } from '../../services/printTemplateEngine';
 import type { CierreTurno } from '../../lib/cierreTurno';
+
+const esperar = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 const dinero = (n: number) => `$${n.toFixed(2)}`;
 
@@ -131,6 +135,61 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
     if (!datos) return;
     void imprimirConAviso(() => queueRawReceiptPrint(generarTicketCierreTurno(datos, true), 'Cierre de turno'), 'Ticket de cierre de turno');
   };
+  // Imagen del reporte para compartir (WhatsApp entre cajero y supervisor). En celular y tablet abre el menú de
+  // compartir del sistema con la imagen adjunta; donde no se puede (PC), la descarga como PNG.
+  const contenidoRef = useRef<HTMLDivElement>(null);
+  const [generandoImagen, setGenerandoImagen] = useState(false);
+  const compartirImagen = async () => {
+    const nodo = contenidoRef.current;
+    if (!nodo || !datos) return;
+    setGenerandoImagen(true);
+    // El reporte vive dentro de un área con scroll: capturarlo ahí lo recorta. Se copia a un contenedor fuera de
+    // pantalla, de ancho fijo y alto libre, y se espera a las fuentes para que el alto medido sea el real.
+    const ANCHO = 768;
+    const aparte = document.createElement('div');
+    aparte.style.cssText = `position:fixed;left:-10000px;top:0;width:${ANCHO}px;overflow:visible;pointer-events:none;`;
+    const copia = nodo.cloneNode(true) as HTMLElement;
+    copia.style.width = `${ANCHO}px`;
+    copia.style.maxWidth = 'none';
+    copia.style.height = 'auto';
+    aparte.appendChild(copia);
+    document.body.appendChild(aparte);
+    try {
+      // Sin esperas que puedan quedarse colgadas: si las fuentes no responden, se sigue igual.
+      await Promise.race([document.fonts?.ready, esperar(1500)]);
+      await esperar(60);
+      const fondo = getComputedStyle(document.body).backgroundColor;
+      const blob = await Promise.race([
+        toBlob(copia, { pixelRatio: 2, backgroundColor: fondo, width: ANCHO, height: copia.scrollHeight + 8 }),
+        esperar(20000).then(() => { throw new Error('tiempo agotado generando la imagen'); }),
+      ]);
+      if (!blob) throw new Error('sin imagen');
+      const nombre = `cierre-caja-${cierre.fecha_dia}.png`;
+      const archivo = new File([blob], nombre, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [archivo] })) {
+        try {
+          await navigator.share({ files: [archivo], title: `Cierre de caja ${cierre.fecha_dia}` });
+          return;
+        } catch (e) {
+          if ((e as DOMException)?.name === 'AbortError') return; // el usuario cerró el menú
+          // Cualquier otro fallo del menú de compartir: se descarga igual.
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast.success('Imagen descargada', 'Ya puedes enviarla por WhatsApp.');
+    } catch (e) {
+      console.error('No se pudo generar la imagen del cierre:', e);
+      showToast.error('No se pudo generar la imagen');
+    } finally {
+      aparte.remove();
+      setGenerandoImagen(false);
+    }
+  };
   const imprimirA4 = () => {
     window.print();
     showToast.success('Imprimiendo', 'Enviado a la impresora A4.');
@@ -147,8 +206,11 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
           <Button type="button" variant="outline" onClick={onVolver}>
             <ArrowLeft size={18} weight="bold" /> Historial
           </Button>
+          <Button type="button" variant="outline" onClick={() => void compartirImagen()} disabled={!datos || generandoImagen}>
+            <DownloadSimple size={18} weight="bold" /> {generandoImagen ? 'Generando…' : 'Compartir imagen'}
+          </Button>
           <Button type="button" variant="outline" onClick={imprimirTicket} disabled={!datos}>
-            <Receipt size={18} weight="bold" /> Imprimir ticket
+            <Receipt size={18} weight="bold" /> Ticket
           </Button>
           <Button type="button" onClick={imprimirA4} disabled={!datos}>
             <Printer size={18} weight="bold" /> Imprimir A4
@@ -157,7 +219,15 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar print:hidden">
-        <div className="mx-auto w-full max-w-3xl p-6 flex flex-col gap-4">
+        <div ref={contenidoRef} className="mx-auto w-full max-w-3xl p-6 flex flex-col gap-4 bg-background">
+          {datos && (
+            <div className="flex flex-col gap-0.5">
+              <h3 className="t-titulo text-foreground">Cierre de caja · {datos.fecha}</h3>
+              <span className="t-meta text-muted-foreground">
+                Cerrado por {cierre.usuario_nombre} · {new Date(cierre.fecha_cierre).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' })}
+              </span>
+            </div>
+          )}
           {!datos ? (
             <p className="t-meta text-muted-foreground text-center py-12">Este cierre no guardó el detalle para el reporte.</p>
           ) : (

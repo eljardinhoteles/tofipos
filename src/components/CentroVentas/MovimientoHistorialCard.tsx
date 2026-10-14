@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText, CaretDown } from '@phosphor-icons/react';
+import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText, CaretDown, CloudCheck } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,12 @@ interface MovimientoHistorialCardProps {
  * excluye de los cálculos derivados (ver useVentasConMovimientos).
  * Único movimiento que no admite anularse a sí mismo es 'anular' (la anulación de la venta completa).
  */
+// Columnas fijas a la derecha de todas las filas del historial (tarjeta, ajuste y comentario): acción (Adjuntar,
+// nube o Anulado) | final (flecha del detalle o botón de anular). La fecha va siempre al inicio de la segunda
+// línea de texto, en el mismo lugar en cualquier tipo de movimiento.
+const COL_ACCION = 'w-28 flex items-center justify-end';
+const COL_FINAL = 'w-9 flex items-center justify-center';
+
 export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos, icon: Icon, label, colorClasses }: MovimientoHistorialCardProps) {
   const { currentMesero, adminUser } = useAuth();
   const { usuarios } = useRxUsuarios();
@@ -176,7 +182,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tipo === 'ajuste') {
     return (
       <div className={cn(
-        "group relative flex items-center justify-between py-1.5 px-2 transition-all rounded-2xl",
+        "group relative flex items-center justify-between py-1.5 px-2.5 border border-transparent transition-all rounded-2xl",
         m.anulado ? "opacity-60 bg-muted/40" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -197,6 +203,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
                 </span>
               )}
             </div>
+            <span className="t-meta text-muted-foreground tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
             {m.anulado && m.anulado_motivo && (
               <span className="t-meta text-destructive italic truncate">
                 Anulado: {m.anulado_motivo}
@@ -206,13 +213,12 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="t-meta text-muted-foreground">
-            {dayjs(m.fecha).format('DD MMM, HH:mm')}
-          </span>
 
-          {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
+          <div className={COL_ACCION}>
+            {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
+          </div>
 
-          {botonAnular('Anular este ajuste')}
+          <span className={COL_FINAL}>{botonAnular('Anular este ajuste')}</span>
         </div>
 
         {confirmando && (
@@ -227,7 +233,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   if (m.tipo === 'comentario') {
     return (
       <div className={cn(
-        "group relative rounded-2xl p-2.5 flex flex-col gap-2 transition-all",
+        "group relative rounded-2xl border border-transparent p-2.5 flex flex-col gap-2 transition-all",
         m.anulado ? "opacity-60" : "hover:bg-muted/60"
       )}>
         <div className="flex items-center justify-between gap-2.5">
@@ -243,23 +249,23 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               <p className={cn("t-cuerpo italic truncate", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
                 "{m.motivo || 'Sin texto'}"
               </p>
-              {autorNombre && (
-                <span className="t-meta text-muted-foreground truncate opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                  por {autorNombre}
-                </span>
-              )}
+              <span className="t-meta text-muted-foreground truncate">
+                <span className="tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
+                {autorNombre && (
+                  <span className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"> · por {autorNombre}</span>
+                )}
+              </span>
             </div>
           </div>
 
           {/* Derecha: Fecha/Hora + Icono de anular */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="t-meta text-muted-foreground">
-              {dayjs(m.fecha).format('DD MMM, HH:mm')}
-            </span>
 
-            {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
+            <div className={COL_ACCION}>
+              {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
+            </div>
 
-            {botonAnular('Anular este comentario')}
+            <span className={COL_FINAL}>{botonAnular('Anular este comentario')}</span>
           </div>
         </div>
 
@@ -342,7 +348,8 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
             )}
           </div>
           <span className="t-meta text-muted-foreground truncate flex items-center gap-1.5">
-            <span className="truncate">
+            <span className="shrink-0 tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
+            <span className="truncate border-l border-border pl-1.5">
               {m.motivo || m.numero_factura || (m.metodo_pago ? `Método: ${m.metodo_pago}` : 'Movimiento de venta')}
             </span>
             {montoAsociado > 0 && (
@@ -358,34 +365,22 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
 
         {/* Bloque derecho: fecha, nube/local, anular y flecha del detalle */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="t-meta text-muted-foreground hidden sm:inline">
-            {dayjs(m.fecha).format('DD MMM, HH:mm')}
-          </span>
 
+          <div className={COL_ACCION}>
           {admiteComprobante && m.comprobante_url && (
             <div className="flex items-center gap-1.5">
               {isOffline ? (
                 <EstadoBadge tono="warning" title="Aún no se sube a la nube">Local</EstadoBadge>
               ) : (
-                <EstadoBadge tono="success" title="Comprobante guardado en la nube">Nube</EstadoBadge>
+                <EstadoBadge tono="info" title="Subido"><CloudCheck size={16} weight="bold" aria-label="Subido" /></EstadoBadge>
               )}
-
-              <Button
-                type="button" variant="ghost" size="icon"
-                onClick={(e) => { e.stopPropagation(); setDialogDeleteOpen(true); }}
-                disabled={uploading}
-                title="Eliminar comprobante" aria-label="Eliminar comprobante"
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              >
-                <Trash size={16} weight="bold" />
-              </Button>
             </div>
           )}
 
           {/* Botón rápido para adjuntar cuando no hay comprobante */}
           {admiteComprobante && !m.comprobante_url && (
             <label onClick={(e) => e.stopPropagation()} className={cn(
-              "min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 border border-dashed border-border t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation",
+              "min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation",
               uploading && "opacity-50 pointer-events-none"
             )}>
               <UploadSimple size={14} weight="bold" />
@@ -399,8 +394,11 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
               />
             </label>
           )}
+          </div>
 
-          <CaretDown size={14} weight="bold" className={cn('text-muted-foreground transition-transform', detalleAbierto && 'rotate-180')} />
+          <span className={COL_FINAL}>
+            <CaretDown size={14} weight="bold" className={cn('text-muted-foreground transition-transform', detalleAbierto && 'rotate-180')} />
+          </span>
         </div>
       </div>
 
@@ -427,10 +425,19 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           {!m.comprobante_url && admiteComprobante && (
             <span className="t-meta text-muted-foreground">Sin comprobante adjunto.</span>
           )}
-          {puedeAnularse && !confirmando && (
-            <Button type="button" variant="outline" onClick={() => setConfirmando(true)} className="self-end gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10">
-              <Prohibit size={16} weight="bold" /> Anular movimiento
-            </Button>
+          {((admiteComprobante && m.comprobante_url) || (puedeAnularse && !confirmando)) && (
+            <div className="self-end flex items-center gap-2">
+              {puedeAnularse && !confirmando && (
+                <Button type="button" variant="ghost" onClick={() => setConfirmando(true)} title="Anular movimiento" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Prohibit size={16} weight="bold" /> Anular
+                </Button>
+              )}
+              {admiteComprobante && m.comprobante_url && (
+                <Button type="button" variant="destructive" onClick={() => setDialogDeleteOpen(true)} disabled={uploading} title="Eliminar comprobante" className="gap-1.5">
+                  <Trash size={16} weight="bold" /> Eliminar
+                </Button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -447,7 +454,9 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
         </div>
       )}
 
-      {/* Dialog de confirmación de eliminación del comprobante */}
+      {/* Dialog de confirmación de eliminación del comprobante. Va en un portal, pero los eventos de React suben
+          por el árbol de componentes hasta la tarjeta (que abre/cierra el detalle al tocarla): se cortan aquí. */}
+      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <Dialog open={dialogDeleteOpen} onOpenChange={setDialogDeleteOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -478,6 +487,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useUI } from '../../context/UIContext';
 import { NAV_ACCENT } from '../../lib/navAccent';
+import { usePermisos, rutaPermitida, ROL_LABELS } from '../../hooks/usePermisos';
 
 // Cada módulo tiene su propio color de activo (claro, pensado para el fondo oscuro
 // de la barra). Es identidad de navegación: no sustituye a los colores semánticos.
@@ -45,11 +46,6 @@ const settingsItem = { label: 'Ajustes', to: '/v2/ajustes', icon: Gear, accent: 
 
 // Módulos ocultos del sidebar para roles operativos (mesero/cajero) —
 // solo visuales, no impide navegar ahí directamente por URL.
-const RESTRICTED_LABELS_BY_ROLE: Record<string, string[]> = {
-  mesero: ['Reservas', 'Métricas', 'Planificador'],
-  cajero: ['Reservas', 'Métricas', 'Planificador'],
-};
-
 type NavItem = typeof settingsItem;
 
 // Micro-animación de los iconos al pasar el cursor (se desactiva con "reducir movimiento").
@@ -102,10 +98,8 @@ export function MainSidebarV2() {
   const { currentMesero, adminUser, logoutAdmin, logoutMesero } = useAuth();
   const { setActividadOpen } = useUI();
   const location = useLocation();
-  const restrictedLabels = currentMesero?.rol ? RESTRICTED_LABELS_BY_ROLE[currentMesero.rol] : undefined;
-  const visibleNavItems = restrictedLabels
-    ? navItemsV2.filter(item => !restrictedLabels.includes(item.label))
-    : navItemsV2;
+  const permisos = usePermisos();
+  const visibleNavItems = navItemsV2.filter(item => rutaPermitida(permisos, item.to));
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     online: navigator.onLine,
     supabaseOk: null,
@@ -119,7 +113,7 @@ export function MainSidebarV2() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const userName = currentMesero?.nombre || adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || 'Admin';
-  const userRole = currentMesero ? ((currentMesero as any).rol === 'admin' ? 'Administrador' : 'Mesero') : 'Administrador';
+  const userRole = ROL_LABELS[permisos.rol];
   const userEmail: string | undefined = currentMesero ? undefined : adminUser?.email;
   const orgNombre = localStorage.getItem('pos_org_name_cached') || '';
   const userIniciales = userName.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join('') || 'U';
@@ -175,13 +169,15 @@ export function MainSidebarV2() {
           </Button>
         </UtilTooltip>
 
-        <UtilTooltip label={settingsItem.label}>
-          <Button asChild variant="ghost" size="icon" className={cn(utilButtonClass, settingsActive && 'text-nav-foreground bg-nav-foreground/10')}>
-            <NavLink to={settingsItem.to} aria-label={settingsItem.label}>
-              <Gear size={24} weight={settingsActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:rotate-90')} />
-            </NavLink>
-          </Button>
-        </UtilTooltip>
+        {permisos.verAjustes && (
+          <UtilTooltip label={settingsItem.label}>
+            <Button asChild variant="ghost" size="icon" className={cn(utilButtonClass, settingsActive && 'text-nav-foreground bg-nav-foreground/10')}>
+              <NavLink to={settingsItem.to} aria-label={settingsItem.label}>
+                <Gear size={24} weight={settingsActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:rotate-90')} />
+              </NavLink>
+            </Button>
+          </UtilTooltip>
+        )}
 
         <UtilTooltip label={`Sincronización: ${syncLabel}`}>
           <Button

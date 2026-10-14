@@ -752,9 +752,11 @@ export function generarTicketPago(
   t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
   t += p(POS.BOLD_OFF);
 
-  // ── Desglose de pagos ───────────────────────────────────────────
-  t += `${'-'.repeat(W)}\n`;
-  t += `DESGLOSE DE PAGO:\n`;
+  // ── Desglose de pagos (solo si hay pagos registrados) ───────────
+  if (pagos.length > 0) {
+    t += `${'-'.repeat(W)}\n`;
+    t += `DESGLOSE DE PAGO:\n`;
+  }
   let totalPagado = 0;
   pagos.forEach(pago => {
     // metodo_pago puede venir null: el checkout ya no elige método al

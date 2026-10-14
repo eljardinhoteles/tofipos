@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import dayjs from 'dayjs';
 import { limpiarReferencia } from '../../lib/nombreMesa';
 import {
-  Receipt, Prohibit, Paperclip, Trash, Plus,
+  Receipt, Prohibit, Paperclip, Trash,
   CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
   CloudCheck, CloudWarning, ArrowsClockwise,
 } from '@phosphor-icons/react';
@@ -14,21 +15,18 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardTitle } from '@/components/ui/card';
 import { CaretDown } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
-import { useAuth } from '../../context/AuthContext';
 import { useRxClientes } from '../../hooks/useRxClientes';
 import { documentoCliente } from '../../lib/documentoCliente';
 import { EstadoBadge } from '../Common/EstadoBadge';
-import { agregarVentaMovimiento, updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
-import { subirComprobante, eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
+import { updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
+import { eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
-import { VentaComandasPanel } from './VentaComandasPanel';
+import { VentaComandasPanel, useComandasDeVenta } from './VentaComandasPanel';
 import { OrigenBadge } from '../Common/OrigenBadge';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
 import type { VentaMovimientoTipo } from '../../db/rxdb';
@@ -82,21 +80,17 @@ const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
  * nunca edita el historial existente.
  */
 export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
-  const { currentMesero, adminUser } = useAuth();
-  const getUsuarioId = () => currentMesero?.id || adminUser?.id;
-  const esAdmin = !!adminUser || currentMesero?.rol === 'admin';
   
   const { venta, movimientos } = item;
 
   const [uploadingDocumento, setUploadingDocumento] = useState(false);
   const [docToDelete, setDocToDelete] = useState<{ id: string; url: string; nombre: string; origen: string } | null>(null);
-  const [confirmDeleteVenta, setConfirmDeleteVenta] = useState(false);
   const [clienteAbierto, setClienteAbierto] = useState(false);
   const { clientes } = useRxClientes();
   const clienteVenta = venta.cliente_id ? clientes.find((c: any) => c.id === venta.cliente_id) : undefined;
-  const [saving, setSaving] = useState(false);
   // Pestaña del detalle: movimientos de la venta o las comandas vinculadas.
-  const [pestana, setPestana] = useState<'historial' | 'comandas'>('historial');
+  const [pestana, setPestana] = useState<'historial' | 'archivos' | 'comandas'>('historial');
+  const cantidadComandas = useComandasDeVenta(venta, movimientos).length;
   const [checkingSync, setCheckingSync] = useState(false);
   const [syncResult, setSyncResult] = useState<'ok' | 'reintentado' | 'error' | null>(null);
 
@@ -130,45 +124,6 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     }
   };
 
-  const handleDeleteVenta = async () => {
-    setSaving(true);
-    try {
-      const rxDb = await import('../../db/rxdb').then(m => m.initVerticalRxDb());
-      const doc = await rxDb.ventas.findOne(venta.id).exec();
-      if (doc) {
-        await doc.update({ $set: { _deleted: true, _modified: new Date().toISOString() } } as any);
-        showToast.success('Venta borrada permanentemente');
-        setConfirmDeleteVenta(false);
-      }
-    } catch (e) {
-      console.error(e);
-      showToast.error('Error al borrar la venta');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUploadDocumento = async (file: File) => {
-    const orgId = localStorage.getItem('pos_active_org_id') || '';
-    setUploadingDocumento(true);
-    try {
-      const url = await subirComprobante(file, orgId, venta.id);
-      await agregarVentaMovimiento({
-        venta_id: venta.id,
-        tipo: 'comentario',
-        motivo: file.name,
-        comprobante_url: url,
-        usuario_id: getUsuarioId(),
-      });
-      showToast.success('Documento adjuntado');
-    } catch (e) {
-      console.error(e);
-      showToast.error('No se pudo subir el documento');
-    } finally {
-      setUploadingDocumento(false);
-    }
-  };
-
   const handleQuitarDocumento = async (doc: { id: string; url: string; origen: string }) => {
     setUploadingDocumento(true);
     try {
@@ -192,8 +147,8 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       {/* Header fijo, del mismo alto que la fila de filtros: el cliente de la venta, con un botón para ver sus datos. */}
       <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
         <div className="min-w-0 mr-auto flex flex-col">
-          <span className="t-titulo uppercase text-secondary-foreground truncate">{venta.cliente_nombre || 'Sin cliente'}</span>
-          <span className="t-meta text-muted-foreground truncate">{(clienteVenta && documentoCliente(clienteVenta)) || 'Sin documento'}</span>
+          <span className="t-titulo uppercase text-secondary-foreground truncate select-text">{venta.cliente_nombre || 'Sin cliente'}</span>
+          <span className="t-meta text-muted-foreground truncate select-text">{(clienteVenta && documentoCliente(clienteVenta)) || 'Sin documento'}</span>
         </div>
         <EstadoBadge tono={venta.tipo === 'credito' ? 'destructive' : 'success'}>{venta.tipo === 'credito' ? 'Crédito' : 'Directa'}</EstadoBadge>
         <Button type="button" variant="outline" size="icon" aria-expanded={clienteAbierto} aria-label={clienteAbierto ? 'Ocultar datos del cliente' : 'Ver datos del cliente'}
@@ -208,129 +163,49 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
-        {/* Card de resumen del Header de Venta */}
-        <Card className="gap-0 py-0 overflow-visible">
-          {/* Bloque 1: Identidad — referencia con el badge de origen a su derecha; el estado Anulado, si aplica, debajo */}
-          <div className="flex flex-col gap-1.5 px-5 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="t-cuerpo-fuerte line-clamp-2 min-w-0">{limpiarReferencia(venta.referencia) || '—'}</CardTitle>
-              <OrigenBadge origen={venta.origen} size="md" className="shrink-0" />
+        {/* Resumen de la venta en una franja de ancho completo más clara que el fondo de la página (sin tarjeta, borde ni
+            sombra): el título con todo el ancho; debajo, el origen a la izquierda y monto y saldo a la derecha. Los archivos viven en su
+            propia pestaña. */}
+        <div className="flex flex-col gap-3 bg-card/60 -mx-6 -mt-6 px-6 py-5">
+          <h3 className="t-titulo text-foreground line-clamp-2 select-text">{limpiarReferencia(venta.referencia) || '—'}</h3>
+
+          {/* Dos filas. Título con todo el ancho; debajo, a la izquierda el badge de origen con la fecha de última actualización y a la
+              derecha el resumen de importes como una sola pieza —monto | saldo— con las cifras del mismo tamaño. Las
+              cifras solo se tiñen cuando hay algo que atender (saldo pendiente o excedente); en cero se apagan. */}
+          <div className="flex items-center justify-between gap-x-6 gap-y-3 flex-wrap">
+            <div className="flex flex-col items-start gap-1.5">
+              <OrigenBadge origen={venta.origen} size="md" />
+              <span className="t-meta text-muted-foreground">Última actualización · {dayjs(item.fechaUltimoMovimiento).format('DD MMM, HH:mm')}</span>
             </div>
 
-            {item.anulado && (
-              <div className="flex items-center gap-1 bg-destructive/10 rounded-full pr-0.5 w-fit self-end">
-                <Badge variant="destructive" className="font-bold border-0"><Prohibit size={12} weight="fill" /> Anulado</Badge>
-                {esAdmin && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-5 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => setConfirmDeleteVenta(true)}
-                    title="Borrar definitivamente"
-                  >
-                    <Trash size={13} weight="bold" />
-                  </Button>
+            <div className="flex items-stretch rounded-2xl bg-background/80 divide-x divide-border/70">
+              <div className="flex flex-col gap-0.5 px-5 py-2.5">
+                <span className="t-etiqueta text-muted-foreground">Monto</span>
+                <span className="t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex flex-col gap-0.5 px-5 py-2.5">
+                <span className="t-etiqueta text-muted-foreground">Saldo</span>
+                {item.saldo > 0.01 ? (
+                  <span className="t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
+                ) : item.saldo < -0.01 ? (
+                  <span className="t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
+                ) : (
+                  <span className="t-valor text-foreground/35 tabular-nums">$0.00</span>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Bloque 2: Montos — monto de venta y saldo, dato financiero clave, con más peso visual */}
-          <div className="flex items-center justify-between gap-4 px-5 py-4 bg-muted/40">
-            <div className="flex flex-col gap-0.5">
-              <span className="t-etiqueta text-muted-foreground">Monto de Venta</span>
-              <span className="t-cifra text-foreground tracking-tight">${item.montoTotal.toFixed(2)}</span>
-            </div>
-
-            <div className="flex flex-col items-end gap-0.5">
-              <span className="t-etiqueta text-muted-foreground">Saldo</span>
-              {item.saldo > 0.01 ? (
-                <span className="t-cuerpo-fuerte text-warning-foreground">
-                  ${item.saldo.toFixed(2)}
-                </span>
-              ) : item.saldo < -0.01 ? (
-                <span className="t-cuerpo-fuerte text-info-foreground">
-                  Excedente ${Math.abs(item.saldo).toFixed(2)}
-                </span>
-              ) : (
-                <span className="t-cuerpo-fuerte text-foreground">
-                  Saldado ($0.00)
-                </span>
-              )}
             </div>
           </div>
 
-          {/* Motivo de Anulación: crítico cuando aplica, pegado al bloque financiero */}
-          {item.anulado && item.motivoAnulacion && (
-            <div className="flex flex-col gap-1.5 px-5 py-3 bg-destructive/10 border-t border-destructive/15 ">
-              <div className="flex items-center gap-1.5 text-destructive ">
-                <Prohibit size={14} weight="bold" />
-                <span className="t-etiqueta">Motivo de Anulación</span>
+          {item.anulado && (
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-destructive/10 px-4 py-3">
+              <div className="flex items-center gap-1.5 text-destructive">
+                <Prohibit size={14} weight="fill" />
+                <span className="t-etiqueta">Anulado</span>
               </div>
-              <p className="t-meta text-destructive leading-relaxed">
-                {item.motivoAnulacion}
-              </p>
+              {item.motivoAnulacion && <p className="t-meta text-destructive leading-relaxed">{item.motivoAnulacion}</p>}
             </div>
           )}
-
-          {/* Bloque 4: Archivos, minimalista — solo lista + link añadir, sin grid de tarjetas */}
-          <div className="flex flex-col gap-2 px-5 py-4 border-t border-border">
-
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {item.documentosAdjuntos.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="group relative flex items-center gap-1.5 p-2 rounded-2xl bg-muted/40 hover:bg-muted transition-colors"
-                >
-                  <a
-                    href={resolverComprobanteUrl(doc.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={doc.nombre}
-                    className="flex items-center gap-1.5 min-w-0 flex-1 text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <Paperclip size={13} className="shrink-0" />
-                    <span className="truncate t-dato">{doc.nombre}</span>
-                  </a>
-
-                  {!item.anulado && (
-                    <button
-                      type="button"
-                      onClick={() => setDocToDelete(doc)}
-                      disabled={uploadingDocumento}
-                      title="Eliminar archivo"
-                      className="shrink-0 p-0.5 rounded-md text-muted-foreground/50 hover:text-destructive hover:bg-background transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              {!item.anulado && (
-                <label className={cn(
-                  "flex items-center justify-center gap-1.5 p-2 rounded-2xl border border-dashed border-border text-muted-foreground cursor-pointer hover:bg-muted/40 hover:text-primary hover:border-primary/50 transition-colors",
-                  uploadingDocumento && "opacity-50 pointer-events-none"
-                )}>
-                  <Plus size={13} />
-                  <span className="t-dato">
-                    {uploadingDocumento ? 'Subiendo...' : 'Añadir'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUploadDocumento(file);
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-        </Card>
+        </div>
 
         {/* Dialog de confirmación para eliminar documento */}
         <Dialog open={!!docToDelete} onOpenChange={(open) => { if (!open) setDocToDelete(null); }}>
@@ -374,29 +249,11 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmación para borrar Venta definitivamente */}
-        <Dialog open={confirmDeleteVenta} onOpenChange={setConfirmDeleteVenta}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Borrar Venta</DialogTitle>
-              <DialogDescription>
-                ¿Estás seguro de que deseas borrar permanentemente esta venta y ocultarla de la lista? Esta acción no se puede deshacer.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setConfirmDeleteVenta(false)}>Cancelar</Button>
-              <Button type="button" variant="destructive" disabled={saving} onClick={handleDeleteVenta}>
-                {saving ? 'Borrando...' : 'Borrar definitivamente'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         {/* Pestañas: historial de movimientos / comandas de la venta */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 p-1 rounded-2xl bg-muted w-fit">
-              {([['historial', 'Historial'], ['comandas', 'Comandas']] as const).map(([id, label]) => (
+            <div className="flex items-center gap-1 w-fit">
+              {([['historial', 'Historial'], ['archivos', 'Archivos'], ['comandas', 'Comandas']] as const).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -405,9 +262,16 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                     pestana === id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
                 >
                   {label}
+                  {(id === 'comandas' ? cantidadComandas : id === 'archivos' ? item.documentosAdjuntos.length : 0) > 0 && (
+                    <span className={cn('ml-1.5 inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full t-dato tabular-nums',
+                      pestana === id ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20 text-muted-foreground')}>
+                      {id === 'comandas' ? cantidadComandas : item.documentosAdjuntos.length}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-1 shrink-0">
             <Button
               type="button"
               variant="ghost"
@@ -439,7 +303,40 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                       ? 'Error de sync'
                       : 'Sincronizar'}
             </Button>
+            </div>
           </div>
+          {pestana === 'archivos' && (
+            item.documentosAdjuntos.length === 0 ? (
+              <p className="t-meta text-muted-foreground py-2">Esta venta no tiene archivos. Adjunta uno desde «Comentar / Adjuntar».</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {item.documentosAdjuntos.map((doc) => (
+                  <div key={doc.id} className="group flex items-center gap-3 rounded-2xl bg-card border border-border px-4 py-3">
+                    <a
+                      href={resolverComprobanteUrl(doc.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Abrir archivo"
+                      className="flex items-center gap-3 min-w-0 flex-1 text-foreground hover:text-primary transition-colors"
+                    >
+                      <Paperclip size={18} className="shrink-0 text-muted-foreground" />
+                      <span className="flex flex-col min-w-0">
+                        <span className="t-cuerpo-fuerte truncate" title={doc.nombre}>{doc.nombre}</span>
+                        <span className="t-meta text-muted-foreground">{doc.origen === 'Venta' ? 'Documento de la venta' : MOVIMIENTO_LABEL[doc.origen as VentaMovimientoTipo] ?? doc.origen}</span>
+                      </span>
+                    </a>
+                    {!item.anulado && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => setDocToDelete(doc)} disabled={uploadingDocumento}
+                        title="Eliminar archivo" aria-label={`Eliminar ${doc.nombre}`}
+                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                        <Trash size={16} weight="bold" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
           {pestana === 'comandas' && <VentaComandasPanel venta={venta} movimientos={movimientos} />}
           {pestana === 'historial' && [...movimientos].reverse().map(m => (
             <MovimientoHistorialCard

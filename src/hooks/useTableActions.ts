@@ -211,25 +211,49 @@ export function useTableActions() {
         }
       );
     } else if (action === 'cerrar_vacia') {
-      // Mesa abierta sin pedido (el cliente se fue): cierra sin motivo. El
-      // botón solo se ofrece cuando no hay ningún ítem en la mesa.
+      // Mesa abierta sin pedido (el cliente se fue): no hay nada que anular. La
+      // comanda vacía se borra en lugar de quedar como anulada, para que no se
+      // acumulen comandas vacías en los listados. El botón solo se ofrece
+      // cuando no hay ningún ítem vivo; si quedan ítems anulados, esa
+      // historia se conserva y la comanda se anula con motivo.
       const rxDb = await getVerticalRxDb();
       const comandas = await findMesaComandas(mesa.id);
-      const items = comandas.length > 0
-        ? await rxDb.comanda_items.find({
-            selector: { comanda_id: { $in: comandas.map((c: any) => c.id) }, _deleted: { $ne: true } }
-          }).exec()
-        : [];
-      if (items.some((i: any) => !i.anulado && (i.cantidad || 0) > 0)) {
-        showToast.error('No se puede cerrar', 'La mesa ya tiene productos; usa Anular.');
+      const ids = comandas.map((c: any) => c.id);
+      const [items, pagos, ventas] = ids.length > 0
+        ? await Promise.all([
+            rxDb.comanda_items.find({ selector: { comanda_id: { $in: ids }, _deleted: { $ne: true } } }).exec(),
+            rxDb.pagos.find({ selector: { comanda_id: { $in: ids }, _deleted: { $ne: true } } }).exec(),
+            rxDb.ventas.find({ selector: { comanda_id: { $in: ids }, _deleted: { $ne: true } } }).exec(),
+          ])
+        : [[], [], []];
+      if (items.some((i: any) => !i.anulado && (i.cantidad || 0) > 0) || pagos.length > 0 || ventas.length > 0) {
+        showToast.error('No se puede cerrar', 'La mesa tiene productos o cobros; usa Anular.');
         return;
       }
-      for (const comanda of comandas) {
-        await updateRxComanda((comanda as any).id, {
-          estado: 'anulada',
-          mesa_nombre: (comanda as any).mesa_nombre || mesa.nombre,
-          motivo_anulacion: 'Mesa cerrada sin pedido',
+      if (items.length > 0) {
+        openPrompt({
+          title: `Cerrar ${mesa.nombre}`,
+          label: 'Motivo de la anulación',
+          placeholder: 'Escriba el motivo aquí (ej: se anularon todos los productos...)',
+          required: true,
+          onConfirm: async (motivo) => {
+            for (const comanda of comandas) {
+              await updateRxComanda((comanda as any).id, {
+                estado: 'anulada',
+                mesa_nombre: (comanda as any).mesa_nombre || mesa.nombre,
+                motivo_anulacion: motivo.trim(),
+              });
+            }
+            await updateRxMesa(mesa.id, { estado: 'libre' });
+            onComplete?.('mapa');
+            showToast.success('Mesa cerrada', `${mesa.nombre} quedó libre.`);
+          }
         });
+        return;
+      }
+      const now = new Date().toISOString();
+      for (const comanda of comandas) {
+        await (comanda as any).update({ $set: { _deleted: true, updated_at: now, _modified: now } });
       }
       await updateRxMesa(mesa.id, { estado: 'libre' });
       onComplete?.('mapa');
@@ -247,17 +271,11 @@ export function useTableActions() {
       // sigue abierta mientras queden otras.
       if (esMesaMultiple(activeComandas as any[])) {
         const sub = pickComandaActiva(activeComandas as any[], activeSubcomandaId) as any;
-        const rxDb = await getVerticalRxDb();
-        const itemsSub = await rxDb.comanda_items.find({
-          selector: { comanda_id: sub.id, _deleted: { $ne: true } }
-        }).exec();
-        const vacia = !itemsSub.some((i: any) => !i.anulado && (i.cantidad || 0) > 0);
-
         const anularSub = async (motivo: string) => {
           await updateRxComanda(sub.id, {
             estado: 'anulada',
             mesa_nombre: sub.mesa_nombre || mesa.nombre,
-            motivo_anulacion: motivo,
+            motivo_anulacion: motivo.trim(),
           });
           await liberarMesaSiSinOperativas(mesa.id);
           const quedan = await findMesaComandas(mesa.id);
@@ -266,8 +284,7 @@ export function useTableActions() {
           showToast.error('Subcomanda anulada', `Se anuló "${sub.subcomanda_nombre}".`);
         };
 
-        if (vacia) await anularSub('Subcomanda vacía');
-        else openPrompt({
+        openPrompt({
           title: `Anular "${sub.subcomanda_nombre}"`,
           label: 'Motivo de la anulación',
           placeholder: 'Escriba el motivo aquí (ej: error en pedido, cliente se retiró...)',
@@ -287,7 +304,7 @@ export function useTableActions() {
             await updateRxComanda((comanda as any).id, {
               estado: 'anulada',
               mesa_nombre: (comanda as any).mesa_nombre || mesa.nombre,
-              motivo_anulacion: motivo,
+              motivo_anulacion: motivo.trim(),
             });
           }
           await updateRxMesa(mesa.id, { estado: 'libre' });
