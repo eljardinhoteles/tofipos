@@ -155,7 +155,26 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
   const fechaParsed = useMemo(() => dayjs(date, 'DD MMM YYYY'), [date]);
   // Solo las ventas de los orígenes incluidos entran al cierre.
   const itemsCierre = useMemo(() => items.filter(i => origenes.has(i.venta.origen)), [items, origenes]);
-  const resumen = useMemo(() => calcularResumenCierre(itemsCierre, fechaParsed), [itemsCierre, fechaParsed]);
+  // Un cierre solo incluye los pagos que registró el usuario actual (con dos cajas, cada una cierra lo suyo; los de otra
+  // persona quedan abiertos para su propio cierre). Un movimiento guarda el id de quien lo registró: el de su
+  // membresía (usuario con PIN) o el de su cuenta (el administrador de la sesión), así que se aceptan los dos.
+  const cobradorIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (currentMesero) { ids.add(currentMesero.id); if (currentMesero.user_id) ids.add(currentMesero.user_id); }
+    else if (adminUser) ids.add(adminUser.id);
+    return ids;
+  }, [currentMesero, adminUser]);
+  // Pagos abiertos de la jornada que NO son del usuario actual (se avisan, no se pueden cerrar desde esta sesión).
+  const pagosDeOtros = useMemo(() => {
+    let otros = 0;
+    let sinUsuario = 0;
+    for (const i of items) for (const m of i.movimientos) {
+      if (m.anulado || m.cierre_id || !esDeJornada(m.fecha, fechaParsed) || (m.tipo !== 'pago' && m.tipo !== 'reembolso')) continue;
+      if (!m.usuario_id) sinUsuario++; else if (!cobradorIds.has(m.usuario_id)) otros++;
+    }
+    return { otros, sinUsuario };
+  }, [items, fechaParsed, cobradorIds]);
+  const resumen = useMemo(() => calcularResumenCierre(itemsCierre, fechaParsed, cobradorIds), [itemsCierre, fechaParsed, cobradorIds]);
   const omitidos = TODOS_ORIGENES.filter(o => !origenes.has(o));
   const alternarOrigen = (o: OrigenCierre) => setOrigenes(prev => {
     const next = new Set(prev);
@@ -172,6 +191,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
     responsable: responsable.trim(),
     origenes: TODOS_ORIGENES.filter(o => origenes.has(o)).map(o => ORIGEN_CIERRE_TITULO[o]),
     omitidos: omitidos.map(o => ORIGEN_CIERRE_TITULO[o]),
+    cobrosDe: nombreSesion,
     totalCobrado: resumen.totalCobrado,
     totalReembolsado: resumen.totalReembolsado,
     saldoPendiente: resumen.saldoPendiente,
@@ -212,7 +232,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
     setIntentado(true);
     if (falta) { showToast.error('Escribe el nombre de quien hace el cierre'); return; }
     if (faltaNovedades) { showToast.error('Escribe las novedades de caja (si no hubo, escribe "Sin novedades")'); return; }
-    if (!hayCobros) { showToast.error('No hay cobros abiertos que cerrar con estos orígenes'); return; }
+    if (!hayCobros) { showToast.error('No hay cobros abiertos tuyos que cerrar con estos orígenes'); return; }
     setConfirmarCierre(true);
   };
 
@@ -310,6 +330,12 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
             <span className="t-etiqueta text-muted-foreground">
               {enHistorial ? 'Cierres de hoy' : `Paso ${paso + 1} de ${PASOS.length} · ${PASOS[paso]}`}
             </span>
+            {/* Siempre a la vista durante el cierre: de quién son los pagos que se están cerrando. */}
+            {!enHistorial && (
+              <span className="t-dato text-foreground bg-muted rounded-full px-3 py-1 truncate">
+                Cerrando pagos de <strong>{nombreSesion || 'usuario actual'}</strong> (usuario actual)
+              </span>
+            )}
           </div>
 
           {!enHistorial && paso === 0 && (
@@ -328,6 +354,12 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
                   );
                 })}
               </div>
+
+              <p className="t-meta text-muted-foreground pt-3 border-t border-border/60">
+                Solo se cierran los pagos registrados por el usuario actual. Los de otra persona quedan abiertos para su propio cierre.
+                {pagosDeOtros.otros > 0 && <> Hay {pagosDeOtros.otros} {pagosDeOtros.otros === 1 ? 'pago de otro usuario' : 'pagos de otros usuarios'} hoy.</>}
+                {pagosDeOtros.sinUsuario > 0 && <> {pagosDeOtros.sinUsuario} {pagosDeOtros.sinUsuario === 1 ? 'pago no tiene' : 'pagos no tienen'} usuario registrado y no se pueden cerrar desde aquí.</>}
+              </p>
             </section>
           )}
 
@@ -453,6 +485,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
               <section className={seccion}>
                 <h4 className={tituloSeccion}>Resumen del turno</h4>
                 <div className="flex flex-col gap-1">
+                  <FilaDato label="Pagos de" value={nombreSesion || 'Usuario actual'} />
                   <FilaDato label="Orígenes incluidos" value={TODOS_ORIGENES.filter(o => origenes.has(o)).map(o => ORIGEN_CIERRE_TITULO[o]).join(', ')} />
                   <FilaDato label="Total cobrado" value={dinero(resumen.totalCobrado)} destacado />
                   <FilaDato label="Ventas" value={`${resumen.ventasValidas}${resumen.anuladas > 0 ? ` (+${resumen.anuladas} anuladas)` : ''}`} />

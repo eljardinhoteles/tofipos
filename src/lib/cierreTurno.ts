@@ -43,14 +43,15 @@ export interface ResumenCierre {
 const grupoVacio = (): GrupoCobros => ({ total: 0, efectivo: 0, tarjeta: 0, transferencia: 0, otros: 0, redes: {}, bancos: {} });
 
 /**
- * Resumen de cobros de una jornada de caja (ver lib/jornada.ts) para el asistente de cierre de turno. Se calcula con los movimientos
+ * Resumen de cobros de una jornada de caja (ver lib/jornada.ts)
+ * —de todos o solo de un cobrador, según quién registró cada pago— para el asistente de cierre de turno. Se calcula con los movimientos
  * de ese día (por la fecha de cada pago o reembolso), no con las ventas agrupadas por su último
  * movimiento: una venta a crédito creada el lunes y pagada el viernes solo suma al viernes lo
  * cobrado el viernes. Los movimientos anulados y los ya incluidos en un cierre (`cierre_id`) no cuentan,
  * así cada turno solo ve lo que sigue abierto; el efectivo no exige comprobante;
  * "sin factura" son las ventas con dinero cobrado ese día cuya factura falta o no cubre el último pago.
  */
-export function calcularResumenCierre(items: VentaConMovimientos[], dia: Dayjs): ResumenCierre {
+export function calcularResumenCierre(items: VentaConMovimientos[], dia: Dayjs, cobrador: ReadonlySet<string> | null = null): ResumenCierre {
   const pagos = { efectivo: 0, tarjeta: 0, transferencia: 0, otros: 0 };
   const cobrosPorOrigen: Record<OrigenCierre, GrupoCobros> = {
     mesa: grupoVacio(), reserva_restaurante: grupoVacio(), reserva_hotel: grupoVacio(), habitacion: grupoVacio(),
@@ -74,6 +75,8 @@ export function calcularResumenCierre(items: VentaConMovimientos[], dia: Dayjs):
     const esCredito = item.venta.tipo === 'credito';
     const delDia = item.movimientos.filter(m => {
       if (m.anulado || m.cierre_id || !esDeJornada(m.fecha, dia)) return false;
+      // Con un cobrador elegido, solo entran los movimientos que registró esa persona (dos cajas, cada una con lo suyo).
+      if (cobrador && !(m.usuario_id && cobrador.has(m.usuario_id))) return false;
       if (m.tipo === 'pago' || m.tipo === 'reembolso') return !!m.monto;
       return esCredito && (m.tipo === 'ajuste' || m.tipo === 'marcar_credito');
     });

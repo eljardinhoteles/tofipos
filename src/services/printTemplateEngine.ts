@@ -1062,6 +1062,8 @@ export interface DatosTicketCierre {
     responsable: string;
     origenes: string[];
     omitidos: string[];
+    /** Quién cobró lo que cubre este cierre: el nombre de la persona, o «Todos» (ausente en cierres anteriores). */
+    cobrosDe?: string;
     totalCobrado: number;
     totalReembolsado: number;
     saldoPendiente: number;
@@ -1101,6 +1103,7 @@ export function generarTicketCierreTurno(
   t += `${'-'.repeat(W)}\n`;
   t += `${datos.fecha}\n`;
   t += `Cierre por: ${datos.responsable}\n`;
+  if (datos.cobrosDe) t += `Cobros de: ${datos.cobrosDe}\n`;
   t += `Origenes: ${datos.origenes.join(', ')}\n`;
   if (datos.omitidos.length > 0) t += `Omitidos: ${datos.omitidos.join(', ')}\n`;
   t += `${'-'.repeat(W)}\n`;

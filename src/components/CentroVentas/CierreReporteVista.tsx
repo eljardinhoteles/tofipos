@@ -22,7 +22,7 @@ function ReporteDocumento({ datos }: { datos: DatosTicketCierre }) {
         <h1>Cierre de turno</h1>
         <span>{datos.fecha}</span>
       </div>
-      <p className="cierre-origenes">Cierre realizado por: <strong>{datos.responsable}</strong></p>
+      <p className="cierre-origenes">Cierre realizado por: <strong>{datos.responsable}</strong>{datos.cobrosDe && <> · Cobros de: <strong>{datos.cobrosDe}</strong></>}</p>
       <p className="cierre-origenes">
         Orígenes incluidos: <strong>{datos.origenes.join(', ')}</strong>
         {datos.omitidos.length > 0 && <> · Omitidos: {datos.omitidos.join(', ')}</>}
@@ -236,6 +236,7 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
                 <h4 className={tituloSeccion}>Resumen del turno</h4>
                 <span className="t-meta text-muted-foreground capitalize -mt-2">{datos.fecha}</span>
                 <div className="flex flex-col gap-1">
+                  {datos.cobrosDe && <Fila label="Cobros de" value={datos.cobrosDe} />}
                   <Fila label="Orígenes incluidos" value={datos.origenes.join(', ')} />
                   {datos.omitidos.length > 0 && <Fila label="Omitidos" value={datos.omitidos.join(', ')} />}
                   <Fila label="Total cobrado" value={dinero(datos.totalCobrado)} destacado />
