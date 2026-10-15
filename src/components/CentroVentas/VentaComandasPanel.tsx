@@ -1,12 +1,9 @@
-import { useMemo } from 'react';
 import { folioLabel } from '../../lib/folio';
 import { CaretRight, ForkKnife } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
 import { cn } from '@/lib/utils';
-import { useRxComandas } from '../../hooks/useRxComandas';
 import { useUI } from '../../context/UIContext';
 import { showToast } from '@/lib/toast';
-import type { RxVenta, RxVentaMovimiento } from '../../db/rxdb';
 
 const ESTADO: Record<string, { label: string; cls: string }> = {
   pendiente: { label: 'Pendiente', cls: 'bg-primary/10 text-primary' },
@@ -21,40 +18,11 @@ const ESTADO: Record<string, { label: string; cls: string }> = {
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 interface VentaComandasPanelProps {
-  venta: RxVenta;
-  movimientos: RxVentaMovimiento[];
+  /** Comandas de la venta (las calcula el detalle una sola vez con useComandasDeVenta: la pestaña también muestra su cantidad). */
+  relacionadas: any[];
 }
 
-// Comandas ligadas a una venta: la comanda de la venta y las que se cerraron
-// contra ella (checkout de habitación con varias, subcomandas que usaron el
-// anticipo). Antes solo se veían como números sueltos en el título.
-export function useComandasDeVenta(venta: RxVenta, movimientos: RxVentaMovimiento[]) {
-  const { comandas } = useRxComandas() as { comandas: any[] };
-
-  // Folios mencionados en la referencia ("Mesa 3 · #12", "Comandas #12, #13") y en
-  // las marcas de anticipo / cuenta cerrada de los movimientos.
-  const folios = useMemo(() => {
-    const set = new Set<string>();
-    const leer = (texto?: string | null) => {
-      for (const m of (texto ?? '').matchAll(/#(\d+(?:-\d+)?)/g)) set.add(m[1]);
-    };
-    leer(venta.referencia);
-    for (const m of movimientos) if (m.tipo === 'comentario') leer(m.motivo);
-    return set;
-  }, [venta.referencia, movimientos]);
-
-  const relacionadas = useMemo(
-    () => comandas
-      .filter(c => c.id === venta.comanda_id || folios.has(folioLabel(c)))
-      .sort((a, b) => Number(a.folio) - Number(b.folio)),
-    [comandas, folios, venta.comanda_id]
-  );
-  return relacionadas;
-}
-
-export function VentaComandasPanel({ venta, movimientos }: VentaComandasPanelProps) {
-  const relacionadas = useComandasDeVenta(venta, movimientos);
-
+export function VentaComandasPanel({ relacionadas }: VentaComandasPanelProps) {
   const { setCheckoutView, setConfigView, setReservaView, setSelectedReservaId, setSelectedMesaId, setViewingComandaId } = useUI();
 
   // Abre la comanda en el sidebar de solo lectura (el mismo de Órdenes).

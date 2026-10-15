@@ -35,6 +35,8 @@
 
   /* Superficies y texto */
   --background: oklch(0.955 0.003 247.839);
+  /* Fondo hundido: un escalón más oscuro que la página, para paneles de trabajo donde las tarjetas deben resaltar (detalle de una venta). */
+  --background-sunken: oklch(0.925 0.004 247.839);
   --foreground: oklch(0.13 0.004 228.8);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.148 0.004 228.8);
@@ -62,7 +64,7 @@
        <estado>-foreground  texto e iconos legibles sobre -soft y sobre blanco
      Special (morado): acciones fiscales/especiales (facturar, anclar, dividir cuenta).
      Pasos de un flujo: pendiente=warning · en curso=info · hecho=success · fallido=destructive */
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.54 0.245 27.325); /* 0.577 daba 4.1:1 como texto sobre destructive-soft; 0.54 cumple AA (4.6:1) */
   --destructive-soft: oklch(0.96 0.03 27);
   --destructive-foreground: oklch(0.985 0 0);
   --success: oklch(0.54 0.15 145);
@@ -70,7 +72,7 @@
   --success-foreground: oklch(0.45 0.13 145);
   --warning: oklch(0.75 0.15 85);
   --warning-soft: oklch(0.96 0.04 85);
-  --warning-foreground: oklch(0.57 0.16 48);
+  --warning-foreground: oklch(0.55 0.16 48); /* 0.57 daba 4.2:1 sobre warning-soft; 0.55 cumple AA (4.6:1) */
   --info: oklch(0.54 0.12 225);
   --info-soft: oklch(0.95 0.027 225);
   /* Fondo suave del verde de marca (origen Mesa): --primary al 10 % sobre el gris de la página salía grisáceo. */
@@ -118,6 +120,7 @@
 /* ── 2. Tema oscuro ───────────────────────────────────────── */
 .dark {
   --background: oklch(0.148 0.004 228.8);
+  --background-sunken: oklch(0.12 0.004 228.8);
   --foreground: oklch(0.987 0.002 197.1);
   --card: oklch(0.218 0.008 223.9);
   --card-foreground: oklch(0.987 0.002 197.1);
@@ -226,6 +229,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-background-sunken: var(--background-sunken);
   --color-primary-soft: var(--primary-soft);
   --color-info-foreground: var(--info-foreground);
   --color-special: var(--special);

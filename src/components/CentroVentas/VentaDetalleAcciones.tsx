@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { limpiarReferencia } from '../../lib/nombreMesa';
 import {
   Receipt, Prohibit, Paperclip, Trash,
@@ -25,7 +25,8 @@ import { eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes'
 import { VentaClienteCard } from './VentaClienteCard';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
-import { VentaComandasPanel, useComandasDeVenta } from './VentaComandasPanel';
+import { VentaComandasPanel } from './VentaComandasPanel';
+import { useComandasDeVenta } from '../../hooks/useComandasDeVenta';
 import { ORIGEN_BORDE, ORIGEN_FONDO, ORIGEN_ICON, ORIGEN_LABEL, ORIGEN_TEXTO } from '../Common/OrigenBadge';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
 import type { VentaMovimientoTipo } from '../../db/rxdb';
@@ -89,15 +90,12 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const clienteVenta = venta.cliente_id ? clientes.find((c: any) => c.id === venta.cliente_id) : undefined;
   // Pestaña del detalle: movimientos de la venta o las comandas vinculadas.
   const [pestana, setPestana] = useState<'historial' | 'archivos' | 'comandas'>('historial');
-  const cantidadComandas = useComandasDeVenta(venta, movimientos).length;
+  const comandasDeVenta = useComandasDeVenta(venta, movimientos);
+  const cantidadComandas = comandasDeVenta.length;
   const [checkingSync, setCheckingSync] = useState(false);
   const [syncResult, setSyncResult] = useState<'ok' | 'reintentado' | 'error' | null>(null);
 
   
-
-  useEffect(() => {
-    setSyncResult(null);
-  }, [venta.id]);
 
   const handleVerificarSync = async () => {
     setCheckingSync(true);
@@ -142,7 +140,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[color-mix(in_oklab,var(--background),var(--foreground)_4%)]">
+    <div className="flex flex-col h-full min-h-0 bg-background-sunken">
       {/* Header fijo, del mismo alto que la fila de filtros: el cliente de la venta, con un botón para ver sus datos. */}
       <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
         <div className="min-w-0 mr-auto flex flex-col">
@@ -185,7 +183,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               ) : item.saldo < -0.01 ? (
                 <span className="t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
               ) : (
-                <span className="t-valor text-foreground/50 tabular-nums">$0.00</span>
+                <span className="t-valor text-muted-foreground tabular-nums">$0.00</span>
               )}
             </div>
           </div>
@@ -274,7 +272,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               disabled={checkingSync}
               title="Verificar si esta venta está sincronizada en Supabase"
               className={cn(
-                "shrink-0 gap-1.5 t-meta text-muted-foreground/80 hover:text-foreground",
+                "shrink-0 gap-1.5 t-meta text-muted-foreground hover:text-foreground",
                 syncResult === 'reintentado' && "text-warning-foreground hover:text-warning-foreground",
                 syncResult === 'error' && "text-destructive hover:text-destructive"
               )}
@@ -332,7 +330,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               </div>
             )
           )}
-          {pestana === 'comandas' && <VentaComandasPanel venta={venta} movimientos={movimientos} />}
+          {pestana === 'comandas' && <VentaComandasPanel relacionadas={comandasDeVenta} />}
           {pestana === 'historial' && [...movimientos].reverse().map(m => (
             <MovimientoHistorialCard
               key={m.id}

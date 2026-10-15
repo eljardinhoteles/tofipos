@@ -396,20 +396,11 @@ export default function MesasV2() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                                 <button
-                                    type="button" title="Ver Productos" onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMesaView('productos');
-                                    }}
-                                    className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground active:scale-95 text-nav flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
-                                    <Basket size={18} weight="bold" />
-                                </button>
-
-                                <button
                                     type="button" title="Solicitud de Datos de Facturación" onClick={(e) => {
                                         e.stopPropagation();
                                         handleImprimirSolicitudFacturacion();
                                     }}
-                                    className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer">
+                                    className="size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer">
                                     <Receipt size={18} weight="bold" />
                                 </button>
 
@@ -420,6 +411,15 @@ export default function MesasV2() {
                                     }}
                                     className="hidden sm:flex size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground items-center justify-center transition-all shrink-0 cursor-pointer">
                                     <ClipboardText size={18} weight="bold" />
+                                </button>
+
+                                <button
+                                    type="button" title="Ver Productos" onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMesaView('productos');
+                                    }}
+                                    className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground active:scale-95 text-nav flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
+                                    <Basket size={18} weight="bold" />
                                 </button>
                             </div>
                         </header>

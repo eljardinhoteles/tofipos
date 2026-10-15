@@ -41,8 +41,8 @@ const ESTADO_FILTERS: { value: EstadoFiltro; label: string }[] = [
   { value: 'pagado', label: 'Pagado' },
   { value: 'facturado', label: 'Facturado' },
   { value: 'anulado', label: 'Anulado' },
-  { value: 'incompleta', label: 'Incompleta (sin factura/comprobante)' },
-  { value: 'completa', label: 'Completa (cobrada, con comprobante y factura)' },
+  { value: 'incompleta', label: 'Incompleta' },
+  { value: 'completa', label: 'Completa' },
 ];
 
 function cumpleEstado(item: VentaConMovimientos, filtro: EstadoFiltro) {
@@ -127,8 +127,15 @@ export default function CentroVentasV2() {
   const listaRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 30;
 
+  // Ventana de datos: solo se piden a la base local las ventas tocadas en los últimos N días (30 por defecto).
+  // "Cargar más" la amplía (90, 365 días y, al final, todo el historial). Al escribir en el buscador se busca en
+  // todo el historial, y al elegir un rango de fechas manda ese rango.
+  const [ventanaDias, setVentanaDias] = useState<number | null>(30);
+
   // Llegada desde otra pantalla (p. ej. "Ver en Centro de Ventas" de una
-  // comanda cobrada): abre esa venta directamente.
+  // comanda cobrada): abre esa venta directamente. Lee y borra marcas de sessionStorage (sistema externo) una sola vez al
+  // montar, así que va en un efecto y no en un inicializador de estado (que React ejecuta dos veces en desarrollo).
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
       // Llegada desde la actividad de hoy: abre el cierre de turno de hoy.
@@ -144,11 +151,7 @@ export default function CentroVentasV2() {
       }
     } catch { /* sin storage */ }
   }, []);
-
-  // Ventana de datos: solo se piden a la base local las ventas tocadas en los últimos N días (30 por defecto).
-  // "Cargar más" la amplía (90, 365 días y, al final, todo el historial). Al escribir en el buscador se busca en
-  // todo el historial, y al elegir un rango de fechas manda ese rango.
-  const [ventanaDias, setVentanaDias] = useState<number | null>(30);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // El buscador espera a que termines de escribir antes de recorrer la lista.
   const busquedaDiferida = useDeferredValue(searchQuery);
@@ -223,10 +226,18 @@ export default function CentroVentasV2() {
     });
   }, [items, tipoFilter, soloComentarios, origenFilters, estadoFilters, dateRange, terminos, indiceBusqueda]);
 
-  // Resetear el límite al aplicar filtros o escribir en el buscador
-  useEffect(() => {
+  // Volver a la primera página al cambiar cualquier filtro, el período o el texto de búsqueda. Se ajusta durante el
+  // render (patrón de React para estado derivado de otro estado) y no en un efecto, que mostraría un instante la
+  // página vieja. Todo filtro nuevo debe entrar en esta firma.
+  const firmaFiltros = JSON.stringify([
+    busquedaDiferida, tipoFilter, soloComentarios, [...origenFilters].sort(), [...estadoFilters].sort(),
+    dateRange[0]?.getTime() ?? null, dateRange[1]?.getTime() ?? null, ventanaDias,
+  ]);
+  const [firmaPrevia, setFirmaPrevia] = useState(firmaFiltros);
+  if (firmaPrevia !== firmaFiltros) {
+    setFirmaPrevia(firmaFiltros);
     setPage(1);
-  }, [busquedaDiferida, tipoFilter, origenFilters, estadoFilters, dateRange, ventanaDias]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const paginaActual = Math.min(page, totalPages);
@@ -245,10 +256,13 @@ export default function CentroVentasV2() {
     return groups;
   }, [visibleItems]);
 
+  // La venta abierta se descarta si ya no existe (p. ej. se borró). Con la lista aún vacía (cargando) no se descarta:
+  // puede venir preseleccionada. Solo cuando están cargadas todas las ventas: con la ventana de días, una venta antigua
+  // abierta desde el buscador sigue siendo válida aunque ya no esté en la lista.
+  // Efecto (no ajuste durante el render): reacciona a datos que llegan de la base local, y así no pisa una selección
+  // que otro camino acaba de fijar en el mismo render.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    // Con la lista aún vacía (cargando) no se descarta: puede venir preseleccionada.
-    // Solo se descarta cuando están cargadas todas las ventas: con la ventana de días, una venta antigua abierta
-    // desde el buscador sigue siendo válida aunque ya no esté en la lista.
     if (desde === null && selectedVentaId && items.length > 0 && !items.some(i => i.venta.id === selectedVentaId)) {
       setSelectedVentaId(null);
     }
@@ -451,7 +465,7 @@ export default function CentroVentasV2() {
                             {item.textoComentarios && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className={cn("flex shrink-0", isAnulada ? "text-muted-foreground" : "text-info-foreground")}><ChatText size={20} weight="fill" /></span>
+                                  <span role="img" aria-label={`Comentarios: ${item.cantidadComentarios}`} className={cn("flex shrink-0", isAnulada ? "text-muted-foreground" : "text-info-foreground")}><ChatText size={20} weight="fill" aria-hidden="true" /></span>
                                 </TooltipTrigger>
                                 <TooltipContent>{`Comentarios: ${item.cantidadComentarios}`}</TooltipContent>
                               </Tooltip>
@@ -506,7 +520,8 @@ export default function CentroVentasV2() {
                 <span className="t-cuerpo">Volver a la lista</span>
               </button>
             </div>
-            <VentaDetalleAcciones item={selected} />
+            {/* key: al cambiar de venta el detalle se remonta con su estado limpio (pestaña, acción abierta, sincronización). */}
+            <VentaDetalleAcciones key={selected.venta.id} item={selected} />
           </main>
         ) : selectedDate ? (
           <main className="w-full md:w-3/5 shrink-0 flex flex-col min-h-0 relative">

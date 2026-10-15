@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useId, useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise,
   CurrencyDollar, ArrowUp, CreditCard, ChatText,
@@ -92,11 +92,16 @@ interface VentaAccionesBarProps {
 }
 
 /**
+ * Requiere montarse con `key={venta.id}` (lo hace VentaDetalleAcciones desde Centro de Ventas): así, al cambiar de venta,
+ * el formulario abierto, el archivo pendiente y los montos escritos no pasan a otra venta.
+ *
  * Barra de acciones fija abajo del detalle de venta: menú de píldoras y, al elegir una,
  * su formulario con Cancelar / Confirmar. Cada acción agrega un movimiento nuevo,
  * nunca edita el historial existente.
  */
 export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
+  // Prefijo único para asociar cada etiqueta con su campo.
+  const uid = useId();
   const { currentMesero, adminUser } = useAuth();
   const getUsuarioId = () => currentMesero?.id || adminUser?.id;
   const { bancos, redesTarjeta } = useMetodosPagoConfig();
@@ -146,12 +151,6 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   // Sin acción elegida se muestra el menú de tarjetas; al elegir una se abre su formulario.
   const accionActiva = accion && accionesDisponibles.includes(accion) ? accion : null;
-
-  useEffect(() => {
-    setAccion(null);
-    setComprobanteFile(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venta.id]);
 
   useEffect(() => {
     setComprobanteFile(null);
@@ -317,13 +316,12 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
         <div className={cn("shrink-0 p-4 flex flex-col gap-3", accionActiva && "bg-card shadow-[0_-4px_12px_-6px_oklch(0_0_0/0.12)]")}>
           {!accionActiva ? (
             <div className="flex flex-wrap justify-center gap-2 animate-in fade-in-0 duration-200 motion-reduce:animate-none">
-              {/* Píldoras flotantes: siempre las mismas 7 en el mismo orden; las que no aplican a esta venta quedan inactivas. Se acomodan en las filas que el ancho permita. */}
-              {ACCIONES_MENU.map(a => {
+              {/* Píldoras flotantes en un orden fijo; solo se muestran las que aplican a esta venta (sin pagos no hay
+                  Reembolsar; una venta a crédito no ofrece Crédito), para no ocupar espacio con botones apagados. */}
+              {ACCIONES_MENU.filter(a => accionesDisponibles.includes(a)).map(a => {
                 const Icon = ACCION_ICON[a];
-                const disponible = accionesDisponibles.includes(a);
-                const motivo = a === 'reembolsar' ? 'Aún no hay pagos que reembolsar' : a === 'marcar_credito' ? 'La venta ya es a crédito' : undefined;
                 return (
-                  <Button key={a} type="button" variant="outline" disabled={!disponible} title={!disponible ? motivo : undefined}
+                  <Button key={a} type="button" variant="outline"
                     onClick={() => setAccion(a)}
                     className={cn("rounded-full h-11 gap-2.5 px-5 shadow-md transition-colors", ACCION_HOVER[a].boton)}>
                     <Icon size={20} className={cn("shrink-0", ACCION_HOVER[a].icono)} />
@@ -366,9 +364,9 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             {accionActiva === 'pago' && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Monto</Label>
+                  <Label htmlFor={`${uid}-1`} className="t-etiqueta! text-muted-foreground">Monto</Label>
                   <div className="flex items-center gap-1.5">
-                    <Input
+                    <Input id={`${uid}-1`}
                       type="number" placeholder="0.00" value={montoPago}
                       onChange={(e) => setMontoPago(e.target.value)}
                       className="h-12 text-base"
@@ -383,9 +381,9 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Método de pago</Label>
+                  <Label htmlFor={`${uid}-2`} className="t-etiqueta! text-muted-foreground">Método de pago</Label>
                   <Select value={metodoPago} onValueChange={(v) => setMetodoPago(v as typeof metodoPago)}>
-                    <SelectTrigger className="w-full data-[size=default]:h-12 px-2.5 text-base">
+                    <SelectTrigger id={`${uid}-2`} className="w-full data-[size=default]:h-12 px-2.5 text-base">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -399,9 +397,9 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                 {metodoPago === 'transferencia' && (
                   <>
                     <div className="flex flex-col gap-1">
-                      <Label className="t-etiqueta! text-muted-foreground">Banco</Label>
+                      <Label htmlFor={`${uid}-3`} className="t-etiqueta! text-muted-foreground">Banco</Label>
                       <Select value={bancoDestino || undefined} onValueChange={setBancoDestino}>
-                        <SelectTrigger className="w-full data-[size=default]:h-12 px-2.5 text-base">
+                        <SelectTrigger id={`${uid}-3`} className="w-full data-[size=default]:h-12 px-2.5 text-base">
                           <SelectValue placeholder={bancos.length ? 'Selecciona' : 'Sin bancos'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -412,8 +410,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                       </Select>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label className="t-etiqueta! text-muted-foreground">N.º Comprobante</Label>
-                      <Input
+                      <Label htmlFor={`${uid}-4`} className="t-etiqueta! text-muted-foreground">N.º Comprobante</Label>
+                      <Input id={`${uid}-4`}
                         type="text" placeholder="Ej. 000123456" value={numeroComprobanteTransf}
                         onChange={(e) => setNumeroComprobanteTransf(e.target.value)}
                         className="h-12 text-base"
@@ -434,16 +432,16 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             {accionActiva === 'ajuste' && (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Monto (+ aumentar, - reducir)</Label>
-                  <Input
+                  <Label htmlFor={`${uid}-5`} className="t-etiqueta! text-muted-foreground">Monto (+ aumentar, - reducir)</Label>
+                  <Input id={`${uid}-5`}
                     type="number" placeholder="0.00" value={montoAjuste}
                     onChange={(e) => setMontoAjuste(e.target.value)}
                     className="h-12 text-base"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
-                  <Textarea
+                  <Label htmlFor={`${uid}-6`} className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
+                  <Textarea id={`${uid}-6`}
                     placeholder="Describe el motivo del ajuste..." value={motivoAjuste}
                     onChange={(e) => setMotivoAjuste(e.target.value)}
                     className="min-h-12 text-base resize-none"
@@ -455,8 +453,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             {accionActiva === 'anclar' && (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Número de factura</Label>
-                  <Input
+                  <Label htmlFor={`${uid}-7`} className="t-etiqueta! text-muted-foreground">Número de factura</Label>
+                  <Input id={`${uid}-7`}
                     type="text" placeholder="Ej. F-001-00023" value={numeroFactura}
                     onChange={(e) => setNumeroFactura(e.target.value)}
                     className="h-12 text-base"
@@ -491,16 +489,16 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             {accionActiva === 'reembolsar' && (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Monto a reembolsar</Label>
-                  <Input
+                  <Label htmlFor={`${uid}-8`} className="t-etiqueta! text-muted-foreground">Monto a reembolsar</Label>
+                  <Input id={`${uid}-8`}
                     type="number" placeholder="0.00" value={montoReembolso}
                     onChange={(e) => setMontoReembolso(e.target.value)}
                     className="h-12 text-base"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
-                  <Textarea
+                  <Label htmlFor={`${uid}-9`} className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
+                  <Textarea id={`${uid}-9`}
                     placeholder="Describe el motivo..." value={motivoReembolso}
                     onChange={(e) => setMotivoReembolso(e.target.value)}
                     className="min-h-12 text-base resize-none"
@@ -512,8 +510,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             {accionActiva === 'marcar_credito' && (
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1">
-                  <Label className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
-                  <Input
+                  <Label htmlFor={`${uid}-10`} className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
+                  <Input id={`${uid}-10`}
                     type="text" placeholder="Ej. acuerdo de crédito" value={motivoCredito}
                     onChange={(e) => setMotivoCredito(e.target.value)}
                     className="h-12 text-base"
@@ -524,8 +522,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
             {accionActiva === 'comentario' && (
               <div className="flex flex-col gap-1">
-                <Label className="t-etiqueta! text-muted-foreground">Comentario (opcional si adjuntas un documento)</Label>
-                <Textarea
+                <Label htmlFor={`${uid}-11`} className="t-etiqueta! text-muted-foreground">Comentario (opcional si adjuntas un documento)</Label>
+                <Textarea id={`${uid}-11`}
                   placeholder="Escribe una observación..." value={textoComentario}
                   onChange={(e) => setTextoComentario(e.target.value)}
                   className="min-h-14 text-base resize-none"
@@ -535,8 +533,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
             {accionActiva === 'anular' && (
               <div className="flex flex-col gap-1">
-                <Label className="t-etiqueta! text-muted-foreground">Motivo de anulación</Label>
-                <Input
+                <Label htmlFor={`${uid}-12`} className="t-etiqueta! text-muted-foreground">Motivo de anulación</Label>
+                <Input id={`${uid}-12`}
                   type="text" placeholder="Ej. error en cobro" value={motivoAnulacion}
                   onChange={(e) => setMotivoAnulacion(e.target.value)}
                   className="h-12 text-base"
@@ -566,8 +564,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                 </div>
                 {ajustarVentaPago && (
                   <div className="flex flex-col gap-1 mt-1">
-                    <Label className="t-etiqueta! text-muted-foreground">Motivo del ajuste</Label>
-                    <Input
+                    <Label htmlFor={`${uid}-13`} className="t-etiqueta! text-muted-foreground">Motivo del ajuste</Label>
+                    <Input id={`${uid}-13`}
                       type="text" placeholder="Ej. Propina, recargo adicional..." value={motivoAjustePago}
                       onChange={(e) => setMotivoAjustePago(e.target.value)}
                       className="h-12 text-base"

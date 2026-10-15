@@ -14,9 +14,11 @@ const COLOR: Record<'cobro' | 'comprobante' | 'factura', { lleno: string; icono:
 };
 
 const ESTADO: Record<Exclude<EstadoSeguimiento, 'completo'>, string> = {
-  parcial: 'bg-warning-soft border-warning-foreground text-warning-foreground',
-  falta: 'bg-card border-border text-muted-foreground/60',
-  na: 'border-transparent text-muted-foreground/30',
+  // Parcial lleva el borde punteado: se distingue de «falta» por la forma y no solo por el color.
+  parcial: 'bg-warning-soft border-warning-foreground border-dashed text-warning-foreground',
+  // Falta: contorno y icono con contraste de componente (≥ 3:1); el relleno vacío es lo que lo distingue de «completo».
+  falta: 'bg-card border-muted-foreground/70 text-muted-foreground',
+  na: 'border-transparent text-muted-foreground/40',
 };
 
 function Indicador({ tipo, estado, titulo }: { tipo: keyof typeof COLOR; estado: EstadoSeguimiento; titulo: string }) {
@@ -24,8 +26,8 @@ function Indicador({ tipo, estado, titulo }: { tipo: keyof typeof COLOR; estado:
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span aria-label={titulo} className={cn('size-6 rounded-full border flex items-center justify-center shrink-0', estado === 'completo' ? lleno : ESTADO[estado])}>
-          <Icono size={13} weight="bold" />
+        <span role="img" aria-label={titulo} className={cn('size-6 rounded-full border flex items-center justify-center shrink-0', estado === 'completo' ? lleno : ESTADO[estado])}>
+          <Icono size={13} weight="bold" aria-hidden="true" />
         </span>
       </TooltipTrigger>
       <TooltipContent>{titulo}</TooltipContent>

@@ -116,13 +116,15 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
   const { currentMesero, adminUser } = useAuth();
   // Quien cierra: por defecto el usuario con sesión, editable por si otra persona hace el cierre en ese equipo.
   const nombreSesion = currentMesero?.nombre || adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || '';
+  // Lo que la persona escribió en «Cierre realizado por»; vacío = usa el nombre de la sesión (que puede cargarse después).
   const [responsable, setResponsable] = useState('');
+  const responsableFinal = (responsable.trim() || nombreSesion).trim();
   const [intentado, setIntentado] = useState(false);
   const claveBorrador = `cierre-borrador:${date}`;
   const [paso, setPaso] = useState(0);
   const [novedades, setNovedades] = useState('');
   // Orígenes que cubre este cierre: quien cierra solo lo suyo omite el resto.
-  const [origenes, setOrigenes] = useState<Set<OrigenCierre>>(new Set(TODOS_ORIGENES));
+  const [origenes, setOrigenes] = useState<Set<OrigenCierre>>(() => new Set(TODOS_ORIGENES));
   // La página abre en el historial de cierres de hoy; "Crear cierre" inicia uno nuevo desde el paso 1.
   const [enHistorial, setEnHistorial] = useState(true);
   const [reporte, setReporte] = useState<CierreTurno | null>(null);
@@ -142,10 +144,10 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
       setEnHistorial(!b?.enCurso);
       setPaso(typeof b?.paso === 'number' ? Math.min(Math.max(b.paso, 0), PASOS.length - 1) : 0);
       setNovedades(typeof b?.novedades === 'string' ? b.novedades : '');
-      setResponsable(typeof b?.responsable === 'string' && b.responsable ? b.responsable : nombreSesion);
+      setResponsable(typeof b?.responsable === 'string' ? b.responsable : '');
       const guardados = Array.isArray(b?.origenes) ? TODOS_ORIGENES.filter(o => b.origenes.includes(o)) : [];
       setOrigenes(new Set(guardados.length > 0 ? guardados : TODOS_ORIGENES));
-    } catch { setEnHistorial(true); setPaso(0); setNovedades(''); setResponsable(nombreSesion); setOrigenes(new Set(TODOS_ORIGENES)); }
+    } catch { setEnHistorial(true); setPaso(0); setNovedades(''); setResponsable(''); setOrigenes(new Set(TODOS_ORIGENES)); }
   }, [claveBorrador]);
 
   useEffect(() => {
@@ -184,11 +186,11 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
 
   const fechaLarga = fechaParsed.isValid() ? fechaParsed.locale('es').format('dddd, D [de] MMMM - YYYY') : date;
   const ultimo = paso === PASOS.length - 1;
-  const falta = !responsable.trim();
+  const falta = !responsableFinal;
   const faltaNovedades = !novedades.trim();
   const armarDatos = (): DatosTicketCierre => ({
     fecha: fechaLarga,
-    responsable: responsable.trim(),
+    responsable: responsableFinal,
     origenes: TODOS_ORIGENES.filter(o => origenes.has(o)).map(o => ORIGEN_CIERRE_TITULO[o]),
     omitidos: omitidos.map(o => ORIGEN_CIERRE_TITULO[o]),
     cobrosDe: nombreSesion,
@@ -246,7 +248,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
           id,
           fechaDia: fechaParsed.format('YYYY-MM-DD'),
           usuarioId: currentMesero?.id || adminUser?.id,
-          usuarioNombre: responsable.trim(),
+          usuarioNombre: responsableFinal,
           origenes: TODOS_ORIGENES.filter(o => origenes.has(o)),
           totalCobrado: resumen.totalCobrado,
           totalReembolsado: resumen.totalReembolsado,
@@ -499,7 +501,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
               <section className={seccion}>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cierre-responsable" className="t-etiqueta! text-muted-foreground">Cierre realizado por *</Label>
-                  <Input id="cierre-responsable" type="text" value={responsable} onChange={(e) => setResponsable(e.target.value)}
+                  <Input id="cierre-responsable" type="text" value={responsable || nombreSesion} onChange={(e) => setResponsable(e.target.value)}
                     placeholder="Nombre de quien hace el cierre" aria-invalid={intentado && falta} className="h-12 text-base" />
                   {intentado && falta && <p className="t-meta text-destructive">Escribe el nombre de quien hace el cierre</p>}
                 </div>

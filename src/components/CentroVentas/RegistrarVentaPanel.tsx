@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ORIGEN_ICON, ORIGEN_CLASSES } from '../Common/OrigenBadge';
 import { BedIcon, ForkKnife, Door, CheckCircle, CreditCard, UserPlus, FloppyDisk } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,8 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
 }
 
 export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanelProps) {
+  // Prefijo único para asociar cada etiqueta con su campo (dos paneles a la vez no chocan).
+  const uid = useId();
   const { clientes } = useRxClientes();
   const { currentMesero } = useAuth();
   const { bancos, redesTarjeta } = useMetodosPagoConfig();
@@ -277,8 +279,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
             />
             {esCredito && !clienteId && <p className="t-meta text-destructive">Selecciona un cliente o agencia para la venta a crédito</p>}
             <div className="flex flex-col gap-1.5">
-              <Label className={etiqueta}>{esCredito ? 'Nombre de referencia (opcional)' : 'Nombre (si no está registrado)'}</Label>
-              <Input type="text" placeholder="Ej. Juan Pérez" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-12 text-base" />
+              <Label htmlFor={`${uid}-1`} className={etiqueta}>{esCredito ? 'Nombre de referencia (opcional)' : 'Nombre (si no está registrado)'}</Label>
+              <Input id={`${uid}-1`} type="text" placeholder="Ej. Juan Pérez" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-12 text-base" />
             </div>
           </section>
 
@@ -342,9 +344,9 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
               </div>
               {!esCredito && (
                 <div className="flex flex-col gap-1.5">
-                  <Label className={etiqueta}>Método de pago</Label>
+                  <Label htmlFor={`${uid}-2`} className={etiqueta}>Método de pago</Label>
                   <Select value={metodo} onValueChange={(v) => setMetodo(v as typeof METODOS[number])}>
-                    <SelectTrigger className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
+                    <SelectTrigger id={`${uid}-2`} className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -360,9 +362,9 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
             {!esCredito && metodo === 'transferencia' && (
               <div className="grid grid-cols-1 @md:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label className={etiqueta}>Banco destino</Label>
+                  <Label htmlFor={`${uid}-3`} className={etiqueta}>Banco destino</Label>
                   <Select value={bancoDestino || undefined} onValueChange={setBancoDestino}>
-                    <SelectTrigger className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
+                    <SelectTrigger id={`${uid}-3`} className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
                       <SelectValue placeholder={bancos.length ? 'Selecciona' : 'Sin bancos configurados'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -371,8 +373,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label className={etiqueta}>N.º de comprobante *</Label>
-                  <Input type="text" placeholder="Ej. 000123456" value={numeroComprobanteTransf}
+                  <Label htmlFor={`${uid}-4`} className={etiqueta}>N.º de comprobante *</Label>
+                  <Input id={`${uid}-4`} type="text" placeholder="Ej. 000123456" value={numeroComprobanteTransf}
                     onChange={(e) => setNumeroComprobanteTransf(e.target.value)} aria-invalid={intentado && falta.numero} className="h-12 text-base" />
                   {intentado && falta.numero && <p className="t-meta text-destructive">Ingresa el número de comprobante</p>}
                 </div>
@@ -398,8 +400,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
           {/* Detalle */}
           <section className={seccion}>
             <div className="flex flex-col gap-1.5">
-              <Label className={etiqueta}>Descripción / referencia (opcional)</Label>
-              <Textarea placeholder="Ej. reserva del 12 al 15 de agosto" value={descripcion}
+              <Label htmlFor={`${uid}-5`} className={etiqueta}>Descripción / referencia (opcional)</Label>
+              <Textarea id={`${uid}-5`} placeholder="Ej. reserva del 12 al 15 de agosto" value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)} className="min-h-24 text-base" />
             </div>
           </section>

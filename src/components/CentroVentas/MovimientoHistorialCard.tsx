@@ -178,7 +178,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   const confirmarAnulacion = (
     <>
       <Input
-        type="text" placeholder="Motivo de anulación" value={motivo}
+        type="text" placeholder="Motivo de anulación" aria-label="Motivo de anulación" value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
         className="h-12 text-base flex-1 min-w-40 bg-background"
       />
