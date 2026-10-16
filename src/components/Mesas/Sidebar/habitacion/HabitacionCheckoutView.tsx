@@ -266,6 +266,8 @@ export function HabitacionCheckoutView({
       false,
       soloConsumo,
       etiquetaSubcuenta || undefined,
+      cuenta.huesped,
+      subcuentas.length > 0 ? { lista: subcuentas, principalNombre: cuenta.principal_nombre || 'Principal' } : undefined,
     );
     setPreviewContent(content);
     setPreviewOpened(true);

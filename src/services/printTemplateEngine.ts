@@ -477,6 +477,11 @@ export function generarPrecuentaConsolidadaHabitacion(
   // Subcuenta de la habitación que se está cobrando (p. ej. una de las 2
   // familias de una villa). Solo se pasa si el cobro es de una sola subcuenta.
   subcuentaNombre?: string,
+  // Huésped titular de la cuenta de la habitación.
+  huesped?: string,
+  // Subcuentas de la habitación: si lo que se imprime abarca más de una (cobro de «todas»), las comandas se agrupan por subcuenta,
+  // cada grupo con su subtotal. `principalNombre` es el nombre de la cuenta principal (comandas sin subcuenta).
+  subcuentas?: { lista: Array<{ id: string; nombre: string }>; principalNombre: string },
 ): string {
   const p = (cmd: string) => forPrinter ? cmd : '';
   const W = 48;
@@ -494,8 +499,12 @@ export function generarPrecuentaConsolidadaHabitacion(
 
   t += justifyBetween(soloConsumo ? 'CONSUMOS (SIN INCLUIDOS)' : 'PRECUENTA CONSOLIDADA', new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
-  if (habitacionNombre) {
+  // La habitación solo se repite si viene con un nombre distinto al del encabezado (el checkout pasa el mismo nombre dos veces).
+  if (habitacionNombre && cleanHabitacionName(habitacionNombre).toUpperCase() !== cleanHabitacionName(mesaNombre).toUpperCase()) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
+  }
+  if (huesped?.trim()) {
+    t += p(POS.BOLD_ON) + `Huesped: ${huesped.trim()}` + p(POS.BOLD_OFF) + '\n';
   }
   if (subcuentaNombre) {
     t += p(POS.BOLD_ON) + `Subcuenta: ${subcuentaNombre}` + p(POS.BOLD_OFF) + '\n';
@@ -507,11 +516,13 @@ export function generarPrecuentaConsolidadaHabitacion(
   // Subtotal por tasa de IVA: cada comanda usa su propio IVA (snapshot o el
   // aplicado en el checkout); si no tiene, la tasa general recibida.
   const subtotalPorTasa = new Map<number, number>();
-  comandas.forEach(({ comanda, items }) => {
+  // Imprime una comanda y devuelve lo que sumó al subtotal (0 si no tenía nada que mostrar).
+  const imprimirComanda = ({ comanda, items }: { comanda: Comanda; items: PrintableItem[] }): number => {
+    let subtotalComanda = 0;
     const itemsVisibles = items
       .filter(item => !item.anulado)
       .filter(item => !soloConsumo || item.precio > 0);
-    if (itemsVisibles.length === 0) return;
+    if (itemsVisibles.length === 0) return 0;
     const tasaComanda = comanda.iva_porcentaje ?? ivaPercent;
 
     const fechaComanda = comanda.created_at ? new Date(comanda.created_at).toLocaleDateString('es-ES') : '';
@@ -524,6 +535,7 @@ export function generarPrecuentaConsolidadaHabitacion(
     itemsVisibles.forEach(item => {
       const itemTotal = item.precio * item.cantidad;
       granSubtotal += itemTotal;
+      subtotalComanda += itemTotal;
       subtotalPorTasa.set(tasaComanda, (subtotalPorTasa.get(tasaComanda) ?? 0) + itemTotal);
       t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
       if (item.modificadores && item.modificadores.length > 0) {
@@ -536,7 +548,28 @@ export function generarPrecuentaConsolidadaHabitacion(
       }
     });
     t += '\n';
-  });
+    return subtotalComanda;
+  };
+
+  // Con más de una subcuenta en lo que se imprime, las comandas van agrupadas por subcuenta (la principal primero), cada grupo con su subtotal.
+  const claveSub = (c: Comanda) => c.habitacion_subcuenta_id ?? null;
+  const clavesPresentes = new Set(comandas.map(({ comanda }) => claveSub(comanda)));
+  if (subcuentas && clavesPresentes.size > 1) {
+    const orden: Array<string | null> = [null, ...subcuentas.lista.map(x => x.id)].filter(k => clavesPresentes.has(k));
+    for (const clave of orden) {
+      const nombre = clave === null ? subcuentas.principalNombre : subcuentas.lista.find(x => x.id === clave)?.nombre || 'Subcuenta';
+      const delGrupo = comandas.filter(({ comanda }) => claveSub(comanda) === clave);
+      const antesDelGrupo = t.length;
+      t += p(POS.BOLD_ON) + `SUBCUENTA: ${nombre.toUpperCase()}` + p(POS.BOLD_OFF) + '\n';
+      const trasTitulo = t.length;
+      const sumaGrupo = delGrupo.reduce((acc, c) => acc + imprimirComanda(c), 0);
+      // Un grupo sin nada que mostrar (todo en cortesía o anulado) no deja ni su título.
+      if (t.length === trasTitulo) { t = t.slice(0, antesDelGrupo); continue; }
+      t += justifyBetween(`Subtotal ${nombre}:`, `$${sumaGrupo.toFixed(2)}`, W) + '\n\n';
+    }
+  } else {
+    comandas.forEach(c => { imprimirComanda(c); });
+  }
 
   // ── Totales ─────────────────────────────────────────────────────
   // Una línea de IVA por cada tasa presente (un checkout puede mezclar 15% y 8%).
