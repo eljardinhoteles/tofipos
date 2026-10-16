@@ -1,6 +1,6 @@
 import { memo } from'react';
 import type { Mesa, Comanda } from'../../db/database';
-import { User, Receipt, ForkKnife, Bed, Stack } from'@phosphor-icons/react';
+import { User, Receipt, ForkKnife, Bed, Door, Stack } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 
 interface TableNodeProps {
@@ -14,6 +14,8 @@ interface TableNodeProps {
  roomBadge?: string;
  // Mesa Múltiple: cantidad de subcomandas abiertas (0/undefined = mesa normal).
  subcomandasCount?: number;
+ // Habitación: el huésped sale hoy o ya debió salir (check-out previsto). Solo se marca si está ocupada.
+ salida?: 'hoy' | 'vencida' | null;
 }
 
 export const TableNode = memo(function TableNode({
@@ -25,7 +27,8 @@ export const TableNode = memo(function TableNode({
  isHabitacion,
  activeComanda,
  roomBadge,
- subcomandasCount = 0
+ subcomandasCount = 0,
+ salida = null
 }: TableNodeProps) {
  const isFree = mesa.estado ==='libre'&& !activeComanda;
 
@@ -36,6 +39,8 @@ export const TableNode = memo(function TableNode({
  : mesa.estado;
 
  const roomNumber = isHabitacion ? (mesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || mesa.nombre) : mesa.nombre;
+ // Aviso de salida: solo en una habitación ocupada sin cuenta pedida (la cuenta ya tiene su propio color).
+ const avisoSalida = isHabitacion && !isFree && activeComanda?.estado !== 'cuenta' ? salida : null;
  const roomType = isHabitacion ? (mesa.nombre.match(/\(([^)]+)\)/)?.[1] ||'Sin nombre') :'';
 
  if (isHabitacion) {
@@ -49,24 +54,30 @@ export const TableNode = memo(function TableNode({
  // Libre: blanca neutra, borde blanco (sin acento) — igual que una
  // mesa libre, la diferenciación vive en ocupada/seleccionada.
  ?"bg-card border-white text-muted-foreground": activeComanda?.estado ==='cuenta'?"bg-warning-soft border-warning text-warning-foreground":
+ // Sale hoy / salida vencida: rosa sutil, para que el cajero note que ese huésped se va.
+ avisoSalida ?"bg-rose-soft border-rose/50 text-rose-foreground dark:bg-rose/20 dark:border-rose":
  // Ocupada sin seleccionar: azul sutil (fondo/borde tenues), no
  // sólido — el sólido queda reservado para cuando está seleccionada.
  "bg-info/10 border-info/40 text-info-foreground dark:bg-info/30 dark:border-info")}
  >
- <div className="flex items-center justify-between">
- <span className="t-etiqueta">
- {isFree ?'Libre': activeComanda?.estado ==='cuenta'?'Cuenta':'Ocupada'}
+ <div className="flex items-center justify-between gap-1">
+ <span className="t-etiqueta truncate min-w-0">
+ {isFree ?'Libre': activeComanda?.estado ==='cuenta'?'Cuenta': avisoSalida === 'hoy' ?'Sale hoy': avisoSalida === 'vencida' ?'Salida vencida':'Ocupada'}
  </span>
- <Bed
+ {/* Con aviso de salida la cama pasa a puerta: el huésped se va. */}
+ {(() => {
+ const IconoHab = avisoSalida ? Door : Bed;
+ return <IconoHab
  size={18}
  weight={isFree && !isSelected ?'regular':'fill'}
- className={cn(isFree && !isSelected ?"opacity-40":"opacity-90")}
- />
+ className={cn("shrink-0", isFree && !isSelected ?"opacity-40":"opacity-90")}
+ />;
+ })()}
  </div>
 
  {/* Número = dato principal; el tipo lo acompaña como secundario. */}
  <div className="flex flex-col items-center justify-center text-center my-auto w-full min-w-0">
- <span className={cn("t-cifra leading-none truncate max-w-full", isFree && !isSelected && "text-foreground")}>
+ <span className={cn("font-redonda t-cifra leading-none truncate max-w-full", isFree && !isSelected && "text-foreground")}>
  {roomNumber}
  </span>
  <span className="t-meta capitalize truncate max-w-full mt-1">
@@ -139,7 +150,7 @@ export const TableNode = memo(function TableNode({
  </div>
 
  <div className="flex flex-col items-center justify-center gap-1 text-center my-auto relative z-10 w-full min-w-0">
- <span className={cn("t-valor leading-tight truncate max-w-full",
+ <span className={cn("font-redonda t-valor leading-tight truncate max-w-full",
  effectiveState ==='libre'&& !isSelected ?"text-foreground":"text-inherit")}>
  {mesa.nombre}
  </span>

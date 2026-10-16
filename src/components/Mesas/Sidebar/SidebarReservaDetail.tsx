@@ -435,7 +435,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
  <ReservaHeader
  badge={<CalendarCheck size={22} weight="bold" />}
- titulo={reserva.nombre}
+ titulo={reserva.nombre} tituloEsCliente
  subtitulo={`${numeroReserva ? `Reserva #${numeroReserva}` : 'Reserva'} · ${STATUS_LABEL[reserva.estado as keyof typeof STATUS_LABEL] ?? reserva.estado}${zonaNombre ? ` · ${zonaNombre}` : ''}`}
  cerrada={reserva.estado === 'completada'}
  tono={reserva.estado === 'confirmada' ? 'success' : reserva.estado === 'cancelada' ? 'destructive' : 'reserva'}

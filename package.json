@@ -1,7 +1,7 @@
 {
   "name": "pos-food-app",
   "private": true,
-  "version": "3.2.4",
+  "version": "3.2.5",
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
@@ -12,6 +12,7 @@
     "print-server:run": "node print-server/server.js"
   },
   "dependencies": {
+    "@fontsource-variable/nunito": "^5.3.0",
     "@fontsource-variable/nunito-sans": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.95.1",

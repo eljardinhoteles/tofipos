@@ -39,6 +39,13 @@ export function useAbrirActividad() {
       return;
     }
 
+    if (destino.tipo === 'planificador') {
+      if (isMobile) { showToast.info('El planificador se ve en la versión de escritorio', 'Disponible en PC o iPad.'); return; }
+      setActividadOpen(false);
+      navigate('/v2/planificacion');
+      return;
+    }
+
     if (destino.tipo === 'venta') {
       if (isMobile) { showToast.info('Esta venta se ve en Centro de Ventas', 'Disponible en la versión de escritorio.'); return; }
       try { sessionStorage.setItem('pos_venta_a_abrir', destino.ventaId); } catch { /* sin storage */ }

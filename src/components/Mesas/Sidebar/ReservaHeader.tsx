@@ -8,6 +8,9 @@ interface ReservaHeaderProps {
   badge?: ReactNode;
   titulo: string;
   subtitulo: string;
+  /** El título o el subtítulo es el nombre de un cliente: se muestra con la fuente redonda. */
+  tituloEsCliente?: boolean;
+  subtituloEsCliente?: boolean;
   /** Reserva ya atendida o cancelada: el header pasa a gris. */
   cerrada?: boolean;
   /** Color del header en escritorio: naranja de reserva (por defecto), el de marca, o 'neutro' (blanco, para pantallas de configuración). */
@@ -25,7 +28,7 @@ interface ReservaHeaderProps {
 // cuadrado + título + subtítulo). En escritorio el fondo completo toma el color
 // de reserva (naranja, como su etiqueta en Centro de Ventas; gris si ya se
 // atendió o canceló); en móvil queda neutro y solo el badge lleva el color.
-export function ReservaHeader({ badge, titulo, subtitulo, cerrada = false, tono = 'reserva', onBack, acciones, onClose, solido = false }: ReservaHeaderProps) {
+export function ReservaHeader({ badge, titulo, subtitulo, tituloEsCliente = false, subtituloEsCliente = false, cerrada = false, tono = 'reserva', onBack, acciones, onClose, solido = false }: ReservaHeaderProps) {
   const neutro = tono === 'neutro' && !cerrada;
   const bgHeader = neutro ? 'border-b border-border' : cerrada ? 'md:bg-muted-foreground' : tono === 'primary' ? 'md:bg-primary' : tono === 'info' ? 'md:bg-info' : tono === 'special' ? 'md:bg-special' : tono === 'success' ? 'md:bg-success' : tono === 'destructive' ? 'md:bg-destructive' : tono === 'rose' ? 'md:bg-rose' : tono === 'teal' ? 'md:bg-teal' : tono === 'slate' ? 'md:bg-slate' : 'md:bg-warning-foreground';
   const bgBadge = neutro ? 'bg-muted' : cerrada ? 'bg-muted-foreground' : tono === 'primary' ? 'bg-primary' : tono === 'info' ? 'bg-info' : tono === 'special' ? 'bg-special' : tono === 'success' ? 'bg-success' : tono === 'destructive' ? 'bg-destructive' : tono === 'rose' ? 'bg-rose' : tono === 'teal' ? 'bg-teal' : tono === 'slate' ? 'bg-slate' : 'bg-warning-foreground';
@@ -50,8 +53,8 @@ export function ReservaHeader({ badge, titulo, subtitulo, cerrada = false, tono 
           </div>
         )}
         <div className="flex flex-col min-w-0">
-          <h3 className={cn('t-titulo leading-tight truncate', textoMd)}>{titulo}</h3>
-          <span className={cn('t-etiqueta text-muted-foreground truncate', !neutro && 'md:text-white/70')}>{subtitulo}</span>
+          <h3 className={cn('t-titulo leading-tight truncate', tituloEsCliente && 'font-redonda', textoMd)}>{titulo}</h3>
+          <span className={cn('t-etiqueta text-muted-foreground truncate', subtituloEsCliente && 'font-redonda', !neutro && 'md:text-white/70')}>{subtitulo}</span>
         </div>
       </div>
 

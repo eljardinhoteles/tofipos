@@ -45,7 +45,7 @@ export function PageHeader({ title, badge, subtitle, search, actions }: PageHead
     )}>
       <div className="flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <h1 className="t-titulo text-nav-foreground truncate max-w-[240px]">{title}</h1>
+          <h1 className="font-redonda t-titulo text-nav-foreground truncate max-w-[240px]">{title}</h1>
           {badge}
         </div>
         {subtitle && <span className="t-dato leading-tight text-nav-foreground/70 truncate">{subtitle}</span>}

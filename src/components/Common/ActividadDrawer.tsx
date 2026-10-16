@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ForkKnife, ChefHat, Receipt, CurrencyDollar, Bed, XCircle, Gift, ArrowUUpLeft,
   SignIn, SignOut, FileText, UsersThree, Pulse, ArrowsClockwise, X, CaretRight,
-  LockKey, CreditCard, ArrowDown, ChatText,
+  LockKey, CreditCard, ArrowDown, ChatText, CalendarStar,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ const ICONOS: Record<ActividadTipo, React.ElementType> = {
   credito: CreditCard,
   ajuste: ArrowDown,
   comentario: ChatText,
+  planificador: CalendarStar,
 };
 
 const TONOS: Record<ActividadTono, string> = {

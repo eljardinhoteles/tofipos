@@ -251,12 +251,12 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
             "max-w-[min(32rem,85%)] min-w-0 rounded-2xl rounded-br-md px-3.5 py-2.5 flex flex-col gap-1 bg-warning-soft",
             m.anulado && "opacity-60"
           )}>
-            <p className={cn("t-cuerpo whitespace-pre-wrap break-words", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
+            <p className={cn("t-cuerpo-fuerte whitespace-pre-wrap break-words", m.anulado ? "text-muted-foreground line-through" : "text-foreground")}>
               {m.motivo || 'Sin texto'}
             </p>
-            <span className="t-meta text-muted-foreground flex items-center justify-end gap-1.5">
+            <span className="t-meta text-muted-foreground flex items-center justify-end gap-1.5 whitespace-nowrap">
               <ChatText size={14} weight="bold" className="shrink-0" />
-              <span className="tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
+              <span className="tabular-nums shrink-0">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
               {autorNombre && <span>· por {autorNombre}</span>}
             </span>
             {m.anulado && (

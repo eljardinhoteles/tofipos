@@ -184,7 +184,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  <ReservaHeader
  badge={<CalendarPlus size={22} weight="bold" />}
  titulo={isEditMode ? 'Editar reserva' : 'Nueva reserva'}
- subtitulo={nombre.trim() || 'Cliente sin asignar'}
+ subtitulo={nombre.trim() || 'Cliente sin asignar'} subtituloEsCliente={!!nombre.trim()}
  onClose={onBack}
  />
 

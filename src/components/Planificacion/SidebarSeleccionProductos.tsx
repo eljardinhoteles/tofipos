@@ -128,10 +128,6 @@ export function SidebarSeleccionProductos({ etiqueta, diaTexto, productos, categ
                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                       <span className="flex items-center gap-2">
                         <span className="min-w-0 truncate t-fila text-foreground">{p.nombre}</span>
-                        {p.activo === false && (
-                          <span title="Inactivo: solo estará disponible en las fechas planificadas"
-                            className="shrink-0 px-1.5 py-0.5 rounded-md bg-muted t-dato text-muted-foreground">Solo con plan</span>
-                        )}
                       </span>
                       <span className="t-cuerpo text-muted-foreground truncate">
                         {buscando ? `${p.categoria_nombre || SIN_CATEGORIA} · ` : ''}${p.precio.toFixed(2)}
@@ -170,6 +166,8 @@ export function SidebarPlanificacion() {
     () => [...menuItems].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base', numeric: true })),
     [menuItems],
   );
+  // Solo se planifican productos activos: desactivar uno en el módulo Menú lo saca de esta lista.
+  const elegibles = useMemo(() => productos.filter((p) => p.activo !== false), [productos]);
   const etiqueta = etiquetas.find((e) => e.id === destino?.etiqueta_id);
   if (!destino || !etiqueta) return null;
   // Día confirmado: resumen + datos de la firma (editar rompe la confirmación, los productos se conservan).
@@ -192,7 +190,7 @@ export function SidebarPlanificacion() {
     <SidebarSeleccionProductos
       etiqueta={etiqueta}
       diaTexto={destino.diaTexto}
-      productos={productos}
+      productos={elegibles}
       categorias={categorias}
       celdas={celdas.filter((c) => c.etiqueta_id === destino.etiqueta_id && c.fecha === destino.fecha)}
       onAgregar={(pid) => agregarCelda(pid, destino.fecha, destino.etiqueta_id)}

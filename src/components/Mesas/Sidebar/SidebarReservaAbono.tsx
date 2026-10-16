@@ -74,7 +74,7 @@ export function SidebarReservaAbono({ nombre, saldoPendiente, pagos, onBack, onC
 
   return (
     <div className="h-full w-full bg-card flex flex-col overflow-hidden shadow-xl">
-      <ReservaHeader badge={null} titulo="Registrar abono" subtitulo={nombre} onBack={saving ? undefined : onBack} onClose={onClose} />
+      <ReservaHeader badge={null} titulo="Registrar abono" subtitulo={nombre} subtituloEsCliente onBack={saving ? undefined : onBack} onClose={onClose} />
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         <div className="rounded-2xl bg-muted/40 p-4 flex items-center justify-between">

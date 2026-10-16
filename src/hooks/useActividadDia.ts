@@ -6,6 +6,7 @@ import { showToast } from '../lib/toast';
 import dayjs from 'dayjs';
 import { listarCierresDelDia } from '../lib/cierresTurnoApi';
 import type { CierreTurno } from '../lib/cierreTurno';
+import { usePlanificacion } from '../lib/planificacion';
 
 type Colecciones = Record<'comandas' | 'items' | 'pagos' | 'ventas' | 'habitaciones' | 'mesas' | 'usuarios', any[]>;
 const VACIO: Colecciones = { comandas: [], items: [], pagos: [], ventas: [], habitaciones: [], mesas: [], usuarios: [] };
@@ -18,6 +19,8 @@ export function useActividadDia(activo: boolean) {
   const [datos, setDatos] = useState<Colecciones>(VACIO);
   const [cargando, setCargando] = useState(true);
   const dbEpoch = useDbEpoch();
+  // El plan vive en Supabase y se mantiene en memoria (lib/planificacion): se lee de ahí, sin consultas propias.
+  const { confirmaciones: planConfirmaciones, celdas: planCeldas } = usePlanificacion();
   // Cada "Actualizar" reinicia las consultas y recalcula "hoy".
   const [tick, setTick] = useState(0);
   const [refrescando, setRefrescando] = useState(false);
@@ -86,6 +89,6 @@ export function useActividadDia(activo: boolean) {
     }, 1200);
   }, []);
 
-  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio, cierres }) : []), [activo, datos, inicio, cierres]);
+  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio, cierres, planConfirmaciones, planCeldas }) : []), [activo, datos, inicio, cierres, planConfirmaciones, planCeldas]);
   return { eventos, cargando, refrescar, refrescando, actualizadoA };
 }

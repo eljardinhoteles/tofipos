@@ -406,7 +406,7 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
             <>
               <section className={seccion}>
                 <h4 className={tituloSeccion}>Total cobrado</h4>
-                <span className="t-hero tabular-nums text-foreground">{dinero(resumen.totalCobrado)}</span>
+                <span className="font-redonda t-hero tabular-nums text-foreground">{dinero(resumen.totalCobrado)}</span>
                 <div className="flex flex-col gap-1">
                   {(['efectivo', 'tarjeta', 'transferencia'] as const).map(m => <FilaDato key={m} label={METODO_TITULO[m]} value={dinero(resumen.pagos[m])} />)}
                   {resumen.pagos.otros > 0 && <FilaDato label="Otros" value={dinero(resumen.pagos.otros)} />}

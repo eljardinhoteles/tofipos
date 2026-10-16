@@ -17,6 +17,7 @@ import { limpiarReferencia } from '../lib/nombreMesa';
 import { OrigenBadge, ORIGEN_BARRA_ACTIVA, ORIGEN_LABEL, ORIGEN_ICON } from '../components/Common/OrigenBadge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FiltroChip, FiltroLimpiarTodo, FiltroMultiple } from '../components/Common/FiltroChip';
+import { FilaDeslizable } from '../components/Common/FilaDeslizable';
 import { EstadoBadge, type TonoEstado } from '../components/Common/EstadoBadge';
 import { PageFrame, PageHeader, PageContent, HeaderSearch, headerPrimaryButtonClass } from '../components/Common/PageHeader';
 import { AsistenteCierreTurno } from '../components/CentroVentas/AsistenteCierreTurno';
@@ -306,7 +307,7 @@ export default function CentroVentasV2() {
         <aside className={cn("shrink-0 border-r border-border flex flex-col min-h-0 min-w-0 bg-card", (selected || registrando || selectedDate) ? "hidden md:flex md:w-2/5" : "flex-1")}>
           <div className={cn("h-[63px] px-3 shrink-0 flex items-center", claseAtenuar)}>
             {/* Filtros: un chip por criterio, todos con el mismo componente (FiltroChip / FiltroMultiple) */}
-            <div className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto hide-scrollbar">
+            <FilaDeslizable etiqueta="filtros" className="flex items-center gap-2">
               <FiltroMultiple
                 etiqueta="Origen"
                 opciones={ORIGEN_FILTERS.map(o => ({ value: o, label: ORIGEN_FILTER_LABEL[o], icono: ORIGEN_ICON[o] }))}
@@ -378,7 +379,7 @@ export default function CentroVentasV2() {
               {(dateRange[0] || origenFilters.size > 0 || estadoFilters.size > 0 || tipoFilter || soloComentarios || ventanaDias !== 30) && (
                 <FiltroLimpiarTodo onClick={() => { setDateRange([null, null]); setOrigenFilters(new Set()); setEstadoFilters(new Set()); setTipoFilter(null); setSoloComentarios(false); setVentanaDias(30); }} />
               )}
-            </div>
+            </FilaDeslizable>
           </div>
 
           <div ref={listaRef} className="flex-1 overflow-y-auto hide-scrollbar">
@@ -437,7 +438,7 @@ export default function CentroVentasV2() {
                         {/* Dos columnas y tres filas alineadas (sin cuadrícula visible): cliente | valor, detalle (mesa o referencia y
                             comanda) | estado, origen | tres indicadores (cobro, comprobante y factura). */}
                         <div className={cn("flex-1 min-w-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-4", isAnulada && "opacity-50")}>
-                          <span className={cn("t-titulo uppercase truncate", isAnulada ? "text-muted-foreground" : "text-secondary-foreground")}>
+                          <span className={cn("font-redonda t-titulo uppercase truncate", isAnulada ? "text-muted-foreground" : "text-secondary-foreground")}>
                               {item.venta.cliente_nombre || 'Sin cliente'}
                             </span>
                           <span className="justify-self-end"><span className="flex items-baseline gap-1.5">
@@ -449,7 +450,7 @@ export default function CentroVentasV2() {
                               {excedente && (
                                 <span role="img" aria-label="Con excedente" title="Con excedente" className="size-2 rounded-full bg-info self-center shrink-0" />
                               )}
-                              <span className={cn("t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : excedente ? "text-info-foreground" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
+                              <span className={cn("font-redonda t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : excedente ? "text-info-foreground" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
                                 ${item.montoTotal.toFixed(2)}
                               </span>
                             </span></span>

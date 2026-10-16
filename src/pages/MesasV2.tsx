@@ -24,6 +24,7 @@ import { generarSolicitudDatosFacturacion } from '../services/printTemplateEngin
 import { queueSolicitudFacturacionPrint, getPrintServerStatus } from '../lib/printServerClient';
 import { showToast } from '@/lib/toast';
 import { useTableActions } from '../hooks/useTableActions';
+import { fechaLocal } from '../lib/fechaLocal';
 import { esMesaBarra, obtenerOCrearMesaBarra, NOMBRE_MESA_BARRA, PISO_BARRA } from '../lib/mesaBarra';
 
 export default function MesasV2() {
@@ -277,6 +278,7 @@ export default function MesasV2() {
             isHabitacion: boolean;
             habitacionAsociada: string;
             subcomandasCount: number;
+            salida: 'hoy' | 'vencida' | null;
         };
         signature: string;
     }>());
@@ -325,6 +327,11 @@ export default function MesasV2() {
                 ? (mesaCuenta ? 'ocupada' : 'libre')
                 : (mesaComanda ? (mesaComanda.estado === 'cuenta' ? 'cuenta' : 'ocupada') : 'libre');
 
+            // Habitación cuyo huésped sale hoy (o ya debió salir): según el check-out previsto al abrir la cuenta.
+            const hoyLocal = fechaLocal();
+            const checkOut = isHabitacionPiso ? mesaCuenta?.check_out : undefined;
+            const salida: 'hoy' | 'vencida' | null = checkOut ? (checkOut < hoyLocal ? 'vencida' : checkOut === hoyLocal ? 'hoy' : null) : null;
+
             let habitacionAsociada = '';
             if (!isHabitacionPiso && mesaComanda?.habitacion_cuenta_id) {
                 const cuenta = cuentaById.get(mesaComanda.habitacion_cuenta_id);
@@ -338,7 +345,7 @@ export default function MesasV2() {
             const signature = JSON.stringify([
                 mesa.nombre, mesa.estado, mesa.capacidad, estadoVisual,
                 clienteNombre, isHabitacionPiso, habitacionAsociada,
-                mesaComanda?.id, mesaComanda?.estado, mesaComanda?.habitacion_cuenta_id, subcomandasCount,
+                mesaComanda?.id, mesaComanda?.estado, mesaComanda?.habitacion_cuenta_id, subcomandasCount, salida,
             ]);
 
             const cached = cache.get(mesa.id);
@@ -351,6 +358,7 @@ export default function MesasV2() {
                     isHabitacion: isHabitacionPiso,
                     habitacionAsociada,
                     subcomandasCount,
+                    salida,
                 };
 
             nextCache.set(mesa.id, { entry, signature });
@@ -419,7 +427,7 @@ export default function MesasV2() {
                 {vistaFondo === 'mapa' && (
                         <header className="h-16 md:h-[72px] px-6 bg-nav border-b-0 flex items-center justify-between shrink-0">
                             <div className="flex flex-col justify-center min-w-0">
-                                <h1 className="t-titulo text-nav-foreground truncate max-w-[240px]">
+                                <h1 className="font-redonda t-titulo text-nav-foreground truncate max-w-[240px]">
                                     {localStorage.getItem('pos_org_name_cached') || 'POS'}
                                 </h1>
                                 <span
@@ -494,7 +502,7 @@ export default function MesasV2() {
                                                     .catch(err => console.warn('Error creando Habitaciones:', err));
                                             }
                                         }}
-                                        className={cn("px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
+                                        className={cn("font-redonda px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
                                             selectedPiso.toLowerCase() === 'habitaciones' ? "bg-info text-white font-extrabold shadow-xs" : "bg-transparent text-foreground font-extrabold hover:text-info-foreground")}
                                     >
                                         {habitacionesActivasCount > 0 && (
@@ -634,7 +642,7 @@ export default function MesasV2() {
                                                 {mesas.map((mesa) => {
                                                     const derived = mesaDerivedData.get(mesa.id);
                                                     if (!derived) return null;
-                                                    const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
+                                                    const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount, salida } = derived;
 
                                                     return (
                                                         <div key={mesa.id} className="min-w-0 overflow-visible">
@@ -646,6 +654,7 @@ export default function MesasV2() {
                                                                 activeComanda={mesaComanda}
                                                                 roomBadge={habitacionAsociada}
                                                                 subcomandasCount={subcomandasCount}
+                                                    salida={salida}
                                                                 onSelect={handleSelectMesa}
                                                             />
                                                         </div>
@@ -660,7 +669,7 @@ export default function MesasV2() {
                                     {mesasToShow.map((mesa) => {
                                         const derived = mesaDerivedData.get(mesa.id);
                                         if (!derived) return null;
-                                        const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount } = derived;
+                                        const { mesaConEstado, mesaComanda, clienteNombre, isHabitacion, habitacionAsociada, subcomandasCount, salida } = derived;
 
                                         return (
                                             <div key={mesa.id} className="min-w-0 overflow-visible">
@@ -672,6 +681,7 @@ export default function MesasV2() {
                                                     activeComanda={mesaComanda}
                                                     roomBadge={habitacionAsociada}
                                                     subcomandasCount={subcomandasCount}
+                                                    salida={salida}
                                                     onSelect={handleSelectMesa}
                                                 />
                                             </div>

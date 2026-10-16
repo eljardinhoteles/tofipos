@@ -41,7 +41,7 @@ export function ComandaHeader({ mesaNombre, esBarra, titulo, subtitulo, enCuenta
  {esBarra ? <Storefront size={20} weight="bold"/> : mesaNombre.replace(/^Mesa\s*/i,'')}
  </button>
  <div className="flex flex-col">
- <h3 className={cn("t-titulo leading-tight", enCuenta?"md:text-white":"md:text-primary-foreground")}>
+ <h3 className={cn("font-redonda t-titulo leading-tight", enCuenta?"md:text-white":"md:text-primary-foreground")}>
  {titulo}
  </h3>
  <div className="flex items-center gap-1.5">

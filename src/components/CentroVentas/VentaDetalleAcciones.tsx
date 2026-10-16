@@ -147,7 +147,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       {/* Header fijo, del mismo alto que la fila de filtros: el cliente de la venta, con un botón para ver sus datos. */}
       <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
         <div className="min-w-0 mr-auto flex flex-col">
-          <span className="t-titulo uppercase text-secondary-foreground truncate select-text">{venta.cliente_nombre || 'Sin cliente'}</span>
+          <span className="font-redonda t-titulo uppercase text-secondary-foreground truncate select-text">{venta.cliente_nombre || 'Sin cliente'}</span>
           <span className="t-meta text-muted-foreground truncate select-text">{(clienteVenta && documentoCliente(clienteVenta)) || 'Sin documento'}</span>
         </div>
         <EstadoBadge tono={venta.tipo === 'credito' ? 'destructive' : 'success'}>{venta.tipo === 'credito' ? 'Crédito' : 'Directa'}</EstadoBadge>
@@ -177,16 +177,16 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           <div className="flex items-stretch rounded-2xl bg-card/70 divide-x divide-border/70 shrink-0">
             <div className="flex flex-col gap-0.5 px-5 py-2.5">
               <span className="t-etiqueta text-muted-foreground">Monto</span>
-              <span className="t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
+              <span className="font-redonda t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
             </div>
             <div className="flex flex-col gap-0.5 px-5 py-2.5">
               <span className="t-etiqueta text-muted-foreground">Saldo</span>
               {item.saldo > 0.01 ? (
-                <span className="t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
+                <span className="font-redonda t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
               ) : item.saldo < -0.01 ? (
-                <span className="t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
+                <span className="font-redonda t-valor text-info-foreground tabular-nums">+${Math.abs(item.saldo).toFixed(2)}</span>
               ) : (
-                <span className="t-valor text-muted-foreground tabular-nums">$0.00</span>
+                <span className="font-redonda t-valor text-muted-foreground tabular-nums">$0.00</span>
               )}
             </div>
           </div>

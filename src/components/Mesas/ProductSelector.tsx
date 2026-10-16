@@ -1,7 +1,7 @@
 import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise, Tag } from'@phosphor-icons/react';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise, Tag, CalendarStar } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersModal } from'../Products/ProductModifiersModal';
@@ -12,6 +12,8 @@ import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
+import { usePermisos } from '../../hooks/usePermisos';
 import { usePlanHoy, TONOS_ETIQUETA, type EtiquetaPlan } from '../../lib/planificacion';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,8 @@ interface ProductSelectorProps {
 
 export function ProductSelector({ activeComanda, onBack, hideBackButton = false }: ProductSelectorProps) {
   const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
+  const navigate = useNavigate();
+  const permisos = usePermisos();
   const [searchQueryInput, setSearchQueryInput] = useState('');
   const [searchQueryDebounced, setSearchQueryDebounced] = useState('');
   const [navbarSlot, setNavbarSlot] = useState<HTMLElement | null>(null);
@@ -149,6 +153,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const esGrupoPlan = (id: string | null | undefined) => !!id && id.startsWith('plan:');
  const grupoPlanDe = (id: string | null | undefined) => (esGrupoPlan(id) ? gruposPlan.find(g => `plan:${g.etiqueta.id}` === id) : undefined);
 
+ // Productos de las categorías «incluida en plan»: quedan activos en el catálogo todo el tiempo y solo se pueden pedir
+ // cuando el menú de hoy está confirmado en el Planificador y los incluye (así no hay que activarlos y desactivarlos a diario).
+ const idsPlanHoy = useMemo(() => new Set(gruposPlan.flatMap(g => Array.from(g.productoIds))), [gruposPlan]);
+ const disponible = useCallback(
+   (it: MenuItem) => it.activo !== false && (!planCategoryNames.has(it.categoria_nombre || 'Sin Categoría') || idsPlanHoy.has(it.id)),
+   [planCategoryNames, idsPlanHoy]
+ );
+
  // Nombre de categoría -> ícono elegido por el admin (ver categoryIcons.ts),
  // para reemplazar el texto plano por algo reconocible de un vistazo.
  const categoryIconByName = useMemo(
@@ -164,14 +176,16 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const byId = new Map(safeMenuItems.map(i => [i.id, i]));
  return recentProductIds
  .map(id => byId.get(id))
- .filter((i): i is MenuItem => !!i && i.activo !== false);
- }, [recentProductIds, safeMenuItems]);
+ .filter((i): i is MenuItem => !!i && disponible(i));
+ }, [recentProductIds, safeMenuItems, disponible]);
 
  const categories = useMemo(() => {
  // Igual que filteredItems: si ningún producto de una categoría está
  // activo hoy (ej. menú de huésped sin platos habilitados), el chip no
  // debe aparecer vacío en la lista.
- const cats = new Set(safeMenuItems.filter(i => i.activo !== false).map(i => i.categoria_nombre || 'Sin Categoría'));
+ const cats = new Set(safeMenuItems.filter(i => disponible(i)).map(i => i.categoria_nombre || 'Sin Categoría'));
+ // Las categorías del plan se muestran siempre: vacías, explican cómo llenarlas (ver PlanSinConfirmar).
+ for (const c of planCategoryNames) cats.add(c);
  const orderMap = new Map(safeDbCategorias.map((c, idx) => [c.nombre, idx]));
  
  return Array.from(cats).sort((a, b) => {
@@ -180,14 +194,14 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  if (orderA !== orderB) return orderA - orderB;
  return a.localeCompare(b);
  });
- }, [safeMenuItems, safeDbCategorias]);
+ }, [safeMenuItems, safeDbCategorias, disponible, planCategoryNames]);
 
  const filteredItems = useMemo(() => {
  // Un producto inactivo (ej. plato del menú de huésped que hoy no está
  // disponible) nunca debe poder pedirse — activo es el flag que ya existía
  // en el catálogo, pero hasta ahora no bloqueaba nada acá.
  const items = safeMenuItems.filter(item => {
- if (item.activo === false) return false;
+ if (!disponible(item)) return false;
 
  const matchesSearch = !searchQueryDebounced ||
  item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
@@ -224,7 +238,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  
  return a.nombre.localeCompare(b.nombre);
  });
- }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile, gruposPlan]);
+ }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile, gruposPlan, disponible]);
 
  const groupedItems = useMemo(() => {
  const groups: { category: string; items: typeof filteredItems }[] = [];
@@ -248,23 +262,23 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const conteoPorCategoria = useMemo(() => {
  const map = new Map<string, number>();
  for (const it of safeMenuItems) {
- if (it.activo === false) continue;
+ if (!disponible(it)) continue;
  const cat = it.categoria_nombre || 'Sin Categoría';
  map.set(cat, (map.get(cat) ?? 0) + 1);
  }
  return map;
- }, [safeMenuItems]);
+ }, [safeMenuItems, disponible]);
  const itemsPC = useMemo(() => {
  if (categoriaPC === 'Recientes') return recentItems;
  const grupoPlan = grupoPlanDe(categoriaPC);
- if (grupoPlan) return safeMenuItems.filter(it => it.activo !== false && grupoPlan.productoIds.has(it.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
+ if (grupoPlan) return safeMenuItems.filter(it => disponible(it) && grupoPlan.productoIds.has(it.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
  return safeMenuItems
- .filter(it => it.activo !== false && (categoriaPC === 'Favoritos'
+ .filter(it => disponible(it) && (categoriaPC === 'Favoritos'
  ? it.favorito
  : (it.categoria_nombre || 'Sin Categoría') === categoriaPC))
  .sort((a, b) => a.nombre.localeCompare(b.nombre));
- }, [safeMenuItems, categoriaPC, recentItems, gruposPlan]);
- const favoritosCount = useMemo(() => safeMenuItems.filter(it => it.activo !== false && it.favorito).length, [safeMenuItems]);
+ }, [safeMenuItems, categoriaPC, recentItems, gruposPlan, disponible]);
+ const favoritosCount = useMemo(() => safeMenuItems.filter(it => disponible(it) && it.favorito).length, [safeMenuItems, disponible]);
 
  const performAddToCart = useCallback(async (item: MenuItem, selectedModifiers: string[] = []) => {
  if (!activeComanda) return;
@@ -431,7 +445,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
         {/* Columna de productos de la categoría elegida */}
         <section className="@container flex-1 min-w-0 overflow-y-auto p-4">
-          {itemsPC.length === 0 ? (
+          {itemsPC.length === 0 && planCategoryNames.has(categoriaPC) ? (
+            <PlanSinConfirmar puedeEditar={permisos.editarPlanificador} onIr={() => navigate('/v2/planificacion')} />
+          ) : itemsPC.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
               <div className="w-20 h-20 flex items-center justify-center">
                 <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
@@ -532,7 +548,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         </div>
       ) : (
         /* GRID DE PRODUCTOS */
-        filteredItems.length === 0 ? (
+        filteredItems.length === 0 && !searchQueryDebounced && !!selectedCategory && planCategoryNames.has(selectedCategory) ? (
+          <PlanSinConfirmar puedeEditar={permisos.editarPlanificador} onIr={() => navigate('/v2/planificacion')} />
+        ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
             <div className="w-20 h-20 flex items-center justify-center">
               <img src="/no_resultado.webp" alt="" aria-hidden="true" className="w-full h-full object-contain" />
@@ -767,7 +785,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <span className={cn("t-titulo leading-snug line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
+        <span className={cn("font-redonda t-titulo leading-snug line-clamp-2", isSelected ? "text-primary-foreground" : "text-foreground")}>
           {item.nombre}
         </span>
         {etiquetas && etiquetas.length > 0 && (
@@ -779,10 +797,10 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
         )}
       </div>
 
-      <span className={cn("shrink-0 t-cuerpo-fuerte tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+      <span className={cn("font-redonda shrink-0 t-cuerpo-fuerte tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
 
       <div className="hidden @md:flex items-end justify-between gap-2">
-        <span className={cn("t-valor leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+        <span className={cn("font-redonda t-valor leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
         {isSelected && (
           <span className="min-w-7 h-7 px-2 rounded-full bg-primary-foreground text-primary t-cuerpo-fuerte flex items-center justify-center tabular-nums">
             {currentQty}
@@ -792,3 +810,25 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
     </div>
   );
 });
+
+// Categoría del plan sin productos: el menú de hoy aún no se confirmó en el Planificador (o no incluye nada de aquí).
+function PlanSinConfirmar({ puedeEditar, onIr }: { puedeEditar: boolean; onIr: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-4">
+      <span className="size-16 rounded-full bg-info-soft text-info-foreground flex items-center justify-center">
+        <CalendarStar size={32} weight="duotone" />
+      </span>
+      <h3 className="t-titulo text-foreground">El menú de hoy no está confirmado</h3>
+      <p className="text-muted-foreground t-meta max-w-xs">
+        {puedeEditar
+          ? 'Los productos del plan aparecen aquí cuando cargas y confirmas el menú del día en el Planificador.'
+          : 'Los productos del plan aparecen aquí cuando se confirma el menú del día en el Planificador. Pide a un administrador que lo confirme.'}
+      </p>
+      {puedeEditar && (
+        <Button type="button" onClick={onIr} className="mt-1">
+          <CalendarStar size={18} weight="bold" /> Ir al Planificador
+        </Button>
+      )}
+    </div>
+  );
+}

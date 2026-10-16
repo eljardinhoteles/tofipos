@@ -169,7 +169,7 @@ export function CuentaView({
 
   return (
     <div className="h-full w-full bg-card flex flex-col justify-between overflow-hidden shadow-xl">
-      <ReservaHeader tono="info" badge={<span className="t-titulo">{roomNum}</span>} titulo={cuenta.huesped}
+      <ReservaHeader tono="info" badge={<span className="t-titulo">{roomNum}</span>} titulo={cuenta.huesped} tituloEsCliente
         subtitulo={`${roomType} · ${selectedMesa.nombre}`} onClose={onClose} />
 
       {/* Subcuentas: p. ej. las 2 familias de una villa que llevan sus consumos por separado */}

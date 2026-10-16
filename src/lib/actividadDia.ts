@@ -9,13 +9,14 @@ import { folioLabel } from './folio'
 
 import { parseReparto } from './reparto';
 import { ORIGEN_CIERRE_TITULO, type CierreTurno } from './cierreTurno';
+import type { CeldaPlan, ConfirmacionPlan } from './planificacion';
 
 export type ActividadTono = 'primary' | 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export type ActividadTipo =
   | 'mesa_abierta' | 'cocina' | 'cuenta' | 'cobrada' | 'habitacion' | 'cobro'
   | 'anulacion' | 'cortesia' | 'reembolso' | 'checkin' | 'checkout' | 'venta' | 'reparto'
-  | 'cierre' | 'credito' | 'ajuste' | 'comentario';
+  | 'cierre' | 'credito' | 'ajuste' | 'comentario' | 'planificador';
 
 /** A dónde lleva tocar el evento. */
 export type ActividadDestino =
@@ -23,7 +24,9 @@ export type ActividadDestino =
   | { tipo: 'habitacion'; mesaId: string }
   | { tipo: 'venta'; ventaId: string }
   /** Cierre de turno de hoy: abre su historial en Centro de Ventas. */
-  | { tipo: 'cierre' };
+  | { tipo: 'cierre' }
+  /** Menú del día en el Planificador. */
+  | { tipo: 'planificador' };
 
 export interface ActividadEvento {
   id: string;
@@ -51,6 +54,9 @@ interface Datos {
   inicio: string;
   /** Cierres de turno guardados hoy (viven en Supabase, no en la base local). */
   cierres?: CierreTurno[];
+  /** Firmas del menú de cada día en el Planificador (viven en Supabase) y sus productos, para contar cuántos incluía. */
+  planConfirmaciones?: ConfirmacionPlan[];
+  planCeldas?: CeldaPlan[];
 }
 
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -137,6 +143,21 @@ export function construirActividad(d: Datos): ActividadEvento[] {
     push({ destino: { tipo: 'cierre' }, id: `cierre-${c.id}`, ts: c.fecha_cierre, tipo: 'cierre', tono: 'primary', titulo: 'Turno cerrado',
       detalle: [c.origenes.map(o => ORIGEN_CIERRE_TITULO[o] ?? o).join(', '), money(c.total_cobrado)].filter(Boolean).join(' · '),
       actor: c.usuario_nombre });
+  }
+
+  // Planificador: menú de un día confirmado o confirmación anulada hoy (la fecha del menú puede ser otra).
+  const diaPlan = (fecha: string) => new Date(`${fecha}T00:00:00`).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' });
+  for (const c of d.planConfirmaciones ?? []) {
+    const productos = (d.planCeldas ?? []).filter(x => x.fecha === c.fecha).length;
+    if (esHoy(c.confirmado_at)) {
+      push({ destino: { tipo: 'planificador' }, id: `plan-ok-${c.id}`, ts: c.confirmado_at, tipo: 'planificador', tono: 'success', titulo: 'Menú confirmado',
+        detalle: [`Menú del ${diaPlan(c.fecha)}`, productos > 0 ? `${productos} ${productos === 1 ? 'producto' : 'productos'}` : ''].filter(Boolean).join(' · '),
+        actor: c.confirmado_por });
+    }
+    if (c.anulada_at && esHoy(c.anulada_at)) {
+      push({ destino: { tipo: 'planificador' }, id: `plan-anulada-${c.id}`, ts: c.anulada_at, tipo: 'planificador', tono: 'warning', titulo: 'Confirmación del menú anulada',
+        detalle: `Menú del ${diaPlan(c.fecha)} · hay que volver a firmarlo`, actor: c.anulada_por ?? undefined, alerta: true });
+    }
   }
 
   // Movimientos de ventas: lo que toca dinero fuera del cobro normal de mesas.

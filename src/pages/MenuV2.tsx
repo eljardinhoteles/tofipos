@@ -413,7 +413,7 @@ function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, Catego
       </span>
 
       <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-        <h3 className={cn("t-titulo leading-snug line-clamp-2 break-words", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+        <h3 className={cn("font-redonda t-titulo leading-snug line-clamp-2 break-words", isInactivo ? "text-muted-foreground" : "text-foreground")}>
           {product.name}
         </h3>
         {nAdicionales > 0 && (
@@ -426,9 +426,9 @@ function MenuProductCardV2({ product, onEdit, isSelected, onToggleActivo, Catego
 
       <div className="flex items-end justify-between gap-2">
         {product.precio_variable ? (
-          <span className="t-cuerpo-fuerte text-foreground">Precio variable</span>
+          <span className="font-redonda t-cuerpo-fuerte text-foreground">Precio variable</span>
         ) : (
-          <span className={cn("t-valor tabular-nums leading-none", isInactivo ? "text-muted-foreground" : "text-foreground")}>
+          <span className={cn("font-redonda t-valor tabular-nums leading-none", isInactivo ? "text-muted-foreground" : "text-foreground")}>
             ${product.price.toFixed(2)}
           </span>
         )}
