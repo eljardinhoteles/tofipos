@@ -108,10 +108,10 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       const resultado = await verificarSyncVenta(venta.id);
       if (resultado.enSupabase) {
         setSyncResult('ok');
-        showToast.success('La venta está sincronizada en Supabase');
+        showToast.success('Venta sincronizada','Ya está guardada en la nube.');
       } else if (resultado.reintentado) {
         setSyncResult('reintentado');
-        showToast.success('La venta no estaba sincronizada. Se reenvió, esperando confirmación...');
+        showToast.info('Venta reenviada','No estaba sincronizada; se espera la confirmación.');
       } else {
         setSyncResult('error');
         showToast.error(resultado.error || 'No se pudo verificar la sincronización');
@@ -119,7 +119,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
     } catch (e) {
       console.error(e);
       setSyncResult('error');
-      showToast.error('No se pudo verificar la sincronización');
+      showToast.fallo('verificar la sincronización', e);
     } finally {
       setCheckingSync(false);
     }
@@ -137,7 +137,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
       showToast.success('Documento eliminado');
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo eliminar el documento');
+      showToast.fallo('eliminar el documento', e);
     } finally {
       setUploadingDocumento(false);
     }

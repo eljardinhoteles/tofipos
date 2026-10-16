@@ -184,7 +184,7 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
       showToast.success('Imagen descargada', 'Ya puedes enviarla por WhatsApp.');
     } catch (e) {
       console.error('No se pudo generar la imagen del cierre:', e);
-      showToast.error('No se pudo generar la imagen');
+      showToast.fallo('generar la imagen', e);
     } finally {
       aparte.remove();
       setGenerandoImagen(false);

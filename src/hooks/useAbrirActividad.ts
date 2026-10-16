@@ -40,7 +40,7 @@ export function useAbrirActividad() {
     }
 
     if (destino.tipo === 'planificador') {
-      if (isMobile) { showToast.info('El planificador se ve en la versión de escritorio', 'Disponible en PC o iPad.'); return; }
+      if (isMobile) { showToast.info('El planificador es solo de escritorio', 'Disponible en PC o iPad.'); return; }
       setActividadOpen(false);
       navigate('/v2/planificacion');
       return;
@@ -82,7 +82,7 @@ export function useAbrirActividad() {
         setViewingComandaId(c.id);
       }
     } catch (e) {
-      showToast.error('No se pudo abrir', e instanceof Error ? e.message : undefined);
+      showToast.fallo('abrir la comanda', e);
     }
   }, [navigate, isMobile, setActividadOpen, setSelectedMesaId, setViewingComandaId, setActiveSubcomandaId, setCheckoutView, setConfigView, setReservaView, setSelectedReservaId, setSelectedMesaEsHabitacion, setMesaView]);
 }

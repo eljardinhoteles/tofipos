@@ -88,15 +88,15 @@ export default function AjustesUsuarios() {
 
  const saveUser = async () => {
  if (!orgId) {
- showToast.error('Sin organización activa','Vincula un hotel antes de guardar usuarios.');
+ showToast.warning('No hay organización activa', 'Vincula un hotel antes de guardar usuarios.');
  return;
  }
- if (!formNombre.trim()) return showToast.error('Ingresa un nombre');
+ if (!formNombre.trim()) return showToast.warning('Escribe un nombre');
  if (!formEmail.trim() || !formEmail.includes('@')) {
- return showToast.error('Correo inválido');
+ return showToast.warning('Escribe un correo válido');
  }
  if (!editingUser && (!formPassword.trim() || formPassword.length < 6)) {
- return showToast.error('Contraseña muy corta','Debe tener al menos 6 caracteres.');
+ return showToast.warning('Contraseña muy corta','Debe tener al menos 6 caracteres.');
  }
 
  setSaving(true);
@@ -113,7 +113,7 @@ export default function AjustesUsuarios() {
  ...(formPassword ? { password: formPassword } : {}),
  },
  });
- showToast.success('Usuario actualizado exitosamente');
+ showToast.success('Usuario actualizado');
  } else {
  await invokeManageUsers({
  action:'create',
@@ -125,12 +125,12 @@ export default function AjustesUsuarios() {
  activo: formActivo,
  },
  });
- showToast.success('Usuario creado exitosamente');
+ showToast.success('Usuario creado');
  }
  setUserModalOpen(false);
  } catch (error: any) {
  console.error(error);
- showToast.error('Error al guardar usuario', error.message);
+ showToast.fallo('guardar el usuario', error);
  } finally {
  setSaving(false);
  }
@@ -138,7 +138,7 @@ export default function AjustesUsuarios() {
 
  const deleteUser = (user: any) => {
  if (isSelfUser(user)) {
- showToast.error('No permitido','No puedes eliminar tu propia cuenta.');
+ showToast.warning('No puedes eliminar tu propia cuenta');
  return;
  }
  openConfirm('Eliminar Colaborador',`¿Estás seguro de eliminar a ${user.nombre}?`,
@@ -149,7 +149,7 @@ export default function AjustesUsuarios() {
  showToast.success('Usuario eliminado');
  } catch (error: any) {
  console.error(error);
- showToast.error('Error al eliminar usuario', error.message);
+ showToast.fallo('eliminar el usuario', error);
  }
  }
  );

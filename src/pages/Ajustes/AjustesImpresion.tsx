@@ -96,8 +96,7 @@ export default function AjustesImpresion() {
  }
  } catch (err) {
  if (opts?.silent) throw err;
- const message = err instanceof Error ? err.message :'No se pudo cargar el catálogo de impresoras';
- showToast.error('Error', message);
+ showToast.fallo('cargar el catálogo de impresoras', err);
  } finally {
  setLoadingCatalog(false);
  }
@@ -142,7 +141,7 @@ export default function AjustesImpresion() {
  try {
  setPairing(await createPrintPairing());
  } catch (err) {
- showToast.error('No se pudo generar el paquete', err instanceof Error ? err.message : 'Error desconocido');
+ showToast.fallo('generar el paquete', err);
  } finally {
  setPairingBusy(false);
  }
@@ -154,7 +153,7 @@ export default function AjustesImpresion() {
  await navigator.clipboard.writeText(pairing.package);
  showToast.success('Paquete copiado');
  } catch {
- showToast.error('No se pudo copiar', 'El navegador bloqueó el portapapeles. Vuelve a pulsar "Copiar paquete" o genera uno nuevo.');
+ showToast.error('No se pudo copiar', 'El navegador bloqueó el portapapeles. Vuelve a pulsar «Copiar paquete».');
  }
  };
 
@@ -169,7 +168,7 @@ export default function AjustesImpresion() {
  showToast.success('Servidor desvinculado', 'Las impresiones vuelven a usar la conexión local.');
  await refreshStatus();
  } catch (err) {
- showToast.error('No se pudo desvincular', err instanceof Error ? err.message : 'Error desconocido');
+ showToast.fallo('desvincular el servidor', err);
  }
  };
 
@@ -189,8 +188,7 @@ export default function AjustesImpresion() {
  await refreshStatus();
  showToast.success('Ajustes guardados','Este dispositivo ahora apunta a ese print server.');
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo conectar con el print server';
- showToast.error('Error', message);
+ showToast.fallo('conectar con el print server', err);
  }
  };
 
@@ -204,8 +202,7 @@ export default function AjustesImpresion() {
  showToast.success('Impresora conectada',`${name} ya está disponible. Asígnale un rol para recibir tickets.`);
  await refreshStatus();
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo conectar la impresora';
- showToast.error('Error', message);
+ showToast.fallo('conectar la impresora', err);
  } finally {
  setConnectingName(null);
  }
@@ -218,8 +215,7 @@ export default function AjustesImpresion() {
  showToast.success('Impresora desconectada');
  await refreshStatus();
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo desconectar la impresora';
- showToast.error('Error', message);
+ showToast.fallo('desconectar la impresora', err);
  }
  };
 
@@ -230,8 +226,7 @@ export default function AjustesImpresion() {
  const { printer: updated } = await updateConfiguredPrinter(printer.id, { roles });
  setConfiguredPrinters(prev => prev.map(p => p.id === printer.id ? updated : p));
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo actualizar el rol';
- showToast.error('Error', message);
+ showToast.fallo('actualizar el rol', err);
  }
  };
 
@@ -240,8 +235,7 @@ export default function AjustesImpresion() {
  const { printer: updated } = await updateConfiguredPrinter(printer.id, { active });
  setConfiguredPrinters(prev => prev.map(p => p.id === printer.id ? updated : p));
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo actualizar el estado';
- showToast.error('Error', message);
+ showToast.fallo('actualizar el estado', err);
  }
  };
 
@@ -252,8 +246,7 @@ export default function AjustesImpresion() {
  showToast.success('Prueba enviada',`${printer.name} recibió la orden de prueba.`);
  await refreshStatus();
  } catch (err) {
- const message = err instanceof Error ? err.message :'No se pudo enviar la prueba de impresión';
- showToast.error('Error', message);
+ showToast.fallo('enviar la prueba de impresión', err);
  } finally {
  setTestingId(null);
  }

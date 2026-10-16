@@ -93,7 +93,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
   const esReservaHotel = origen === 'reserva_hotel';
 
   const continuar = () => {
-    if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
+    if (esCredito && !clienteId) { showToast.warning('Selecciona el cliente o agencia', 'Es obligatorio en una venta a crédito.'); return; }
     setPaso(2);
   };
 
@@ -107,17 +107,17 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
 
   const revisar = () => {
     setIntentado(true);
-    if (falta.monto || falta.red || falta.numero || falta.llegada || falta.salida) { showToast.error('Completa los campos marcados en rojo'); return; }
+    if (falta.monto || falta.red || falta.numero || falta.llegada || falta.salida) { showToast.warning('Completa los campos marcados en rojo'); return; }
     setPaso(3);
   };
 
 
   const handleSubmit = async () => {
     const montoNum = parseFloat(monto);
-    if (!montoNum || montoNum <= 0) { showToast.error('Ingresa un monto válido'); return; }
-    if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
-    if (!esCredito && metodo === 'tarjeta' && !redTarjeta) { showToast.error('Selecciona la red de cobro de la tarjeta'); return; }
-    if (!esCredito && metodo === 'transferencia' && !numeroComprobanteTransf.trim()) { showToast.error('Ingresa el número de comprobante de la transferencia'); return; }
+    if (!montoNum || montoNum <= 0) { showToast.warning('Ingresa un monto válido'); return; }
+    if (esCredito && !clienteId) { showToast.warning('Selecciona el cliente o agencia', 'Es obligatorio en una venta a crédito.'); return; }
+    if (!esCredito && metodo === 'tarjeta' && !redTarjeta) { showToast.warning('Selecciona la red de cobro de la tarjeta'); return; }
+    if (!esCredito && metodo === 'transferencia' && !numeroComprobanteTransf.trim()) { showToast.warning('Ingresa el n.º de comprobante', 'Es obligatorio en una transferencia.'); return; }
 
     setSaving(true);
     try {
@@ -165,7 +165,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
       onSuccess(venta.id);
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo registrar la venta');
+      showToast.fallo('registrar la venta', e);
     } finally {
       setSaving(false);
     }

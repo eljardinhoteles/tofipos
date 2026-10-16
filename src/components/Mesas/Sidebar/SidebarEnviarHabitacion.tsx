@@ -69,7 +69,7 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  showToast.success('Cargo enviado a habitación');
  onSuccess();
  } catch {
- showToast.error('Error al enviar cargo');
+ showToast.error('No se pudo enviar el cargo');
  } finally {
  setIsProcessing(false);
  }

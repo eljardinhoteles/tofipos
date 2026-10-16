@@ -224,7 +224,7 @@ Reglas:
 - `dato` (12px, 700) es para estado y elementos con fondo: badges, chips, contadores. `meta` (12px, 500) es para datos secundarios sin fondo: hora, cliente, ayudas.
 - En componentes que ya traen tipografía propia (`Label`), el rol se marca como prioritario: `t-dato!`.
 - El tamaño solo se sale de la escala con una razón de producto (p. ej. ticket impreso) y se documenta aquí.
-- Exentos de estas reglas por ser papel: el ticket térmico (48 columnas, motor `printTemplateEngine`) y el reporte A4 de cocina y de cierre (hoja con estilos propios, Arial).
+- Exentos de estas reglas por ser papel: el ticket térmico (48 columnas, motor `printTemplateEngine`) y el reporte A4 de cocina (se imprime con el diálogo nativo del navegador desde un iframe oculto, `src/lib/imprimirReporteA4.ts`) y el de cierre (hoja con estilos propios, Arial).
 
 ## Shapes
 
@@ -263,6 +263,15 @@ Reglas:
 - Selección de una opción entre pocas (red de cobro de tarjeta): `RedCobroRadios` (`src/components/Common/RedCobroRadios.tsx`), filas tipo radio de al menos 44px que se acomodan en una sola fila si hay ancho y bajan de fila si no. Adjuntar foto o PDF: `ComprobanteAdjunto` (recuadro punteado; con archivo, una fila con el nombre y una X de 44px para quitarlo). Casilla de fila (marcar pagos, ajustar excedente): caja `size-5 rounded-md` verde al marcarla, zona táctil de 44px.
 - Un control que solo aparece al pasar el cursor (anular, autor) lleva además `pointer-coarse:opacity-100`: en táctil no existe el hover.
 - Para tamaños táctiles en componentes propios, usar `min-h-*` / `pointer-coarse:` y no `h-*` con breakpoints, para no pisar tamaños explícitos de quien lo use.
+
+## Avisos (toasts)
+
+Un solo sistema: el `Toaster` de Sonner del UI kit (`src/components/ui/sonner.tsx`) y la función `showToast` (`src/lib/toast.ts`). **Nadie importa `sonner` directo ni usa `alert()`**; incluso el aviso de impresión (`imprimirConAviso`) pasa por `showToast`.
+
+- **Aspecto**: una superficie más del UI kit, igual que el popover y el menú del `Select`: `bg-popover`, `border-border`, `rounded-2xl`, `shadow-xl`, relleno `px-4 py-3`. Icono de 20px a la izquierda (Phosphor, relleno) que es lo único que lleva el color del tipo (`success-foreground`, `destructive`, `warning-foreground`, `info-foreground`; cargando, spinner neutro); título en `t-cuerpo-fuerte`; detalle opcional en `t-meta` neutro; botón de acción (Reintentar, Deshacer) como un botón primario pequeño a la derecha. Todo con clases y tokens, **sin estilos en línea**. Un solo diseño en escritorio y móvil (360px de ancho en escritorio; en móvil, a todo el ancho, de a uno y arriba). Se descartan deslizándolos.
+- **Cuándo usar cada tipo**: `success` = lo que se hizo; `error` = falló el sistema (red, base de datos); `warning` = falta algo o no se puede hacer (validaciones y bloqueos, nunca en rojo); `info` = neutro (sin conexión, disponible solo en escritorio). Una anulación o eliminación que salió bien es `success`.
+- **Cómo escribirlos**: el título dice qué pasó, en una frase corta y sin punto final; el detalle dice por qué o qué hacer. Nunca un título genérico («Error», «Aviso», «No permitido»). Los fallos son «No se pudo …» (`showToast.fallo('registrar el pago', error)` arma el título, traduce el motivo a palabras llanas y manda el error técnico a la consola). Las validaciones usan el verbo de la acción («Ingresa un monto válido», «Selecciona la red de cobro»); los bloqueos, «No se puede …» + el motivo.
+- **Duración**: éxito 3,5 s, info 4,5 s, aviso 6,5 s, error 8 s (en móvil, menos). Dos avisos idénticos seguidos se refrescan en lugar de apilarse; un aviso con `id` se actualiza («Enviando…» → «Enviado»).
 
 ## Tablas y listas
 

@@ -263,7 +263,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  showToast.success('Reserva anulada');
  } catch (e) {
  console.error(e);
- showToast.error('No se pudo anular la reserva');
+ showToast.fallo('anular la reserva', e);
  }
  }
  );
@@ -326,7 +326,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  }, `reserva-${reserva.nombre.trim().replace(/\s+/g, '_')}`);
  } catch (e) {
  console.error(e);
- showToast.error('No se pudo generar la imagen del ticket');
+ showToast.fallo('generar la imagen del ticket', e);
  } finally {
  setIsDownloadingImage(false);
  }
@@ -356,7 +356,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  comprobanteFile?: File | null;
  }) => {
  if (data.monto > saldoPendiente + 0.005) {
- showToast.error('Abono mayor al saldo', `El abono no puede superar el saldo pendiente ($${saldoPendiente.toFixed(2)}).`);
+ showToast.warning('Abono mayor al saldo', `El saldo pendiente es $${saldoPendiente.toFixed(2)}.`);
  return;
  }
  try {
@@ -405,7 +405,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  showToast.success('Abono registrado', `Se registró un abono de $${data.monto.toFixed(2)}.`);
  } catch (e) {
  console.error(e);
- showToast.error('No se pudo registrar el abono');
+ showToast.fallo('registrar el abono', e);
  }
  };
 

@@ -207,7 +207,7 @@ export function HabitacionCheckoutView({
       showToast.success('IVA actualizado', `Se aplicó el ${ivaPorcentaje}% a ${ivaPendientes.length} comanda${ivaPendientes.length === 1 ? '' : 's'}.`);
     } catch (err) {
       console.error(err);
-      showToast.error('No se pudo aplicar el IVA');
+      showToast.fallo('aplicar el IVA', err);
     } finally {
       setAplicandoIva(false);
     }
@@ -282,7 +282,7 @@ export function HabitacionCheckoutView({
       for (const item of items) {
         const draft = cortesiaDrafts[item.id];
         if (draft && draft.cantidad > 0 && !draft.motivo.trim()) {
-          showToast.error('Falta motivo','Indica el motivo de la cortesía en'+` "${item.nombre}".`);
+          showToast.warning('Falta motivo','Indica el motivo de la cortesía en'+` "${item.nombre}".`);
           return;
         }
       }
@@ -347,7 +347,7 @@ export function HabitacionCheckoutView({
       showToast.success('Checkout completado');
       onSuccess();
     } catch {
-      showToast.error('Error al procesar checkout');
+      showToast.error('No se pudo procesar el checkout');
     } finally {
       setIsProcessing(false);
     }

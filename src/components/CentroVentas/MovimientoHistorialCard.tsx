@@ -98,7 +98,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       showToast.success('Comprobante adjuntado');
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo adjuntar el comprobante');
+      showToast.fallo('adjuntar el comprobante', e);
     } finally {
       setUploading(false);
     }
@@ -114,14 +114,14 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       showToast.success('Comprobante eliminado');
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo eliminar el comprobante');
+      showToast.fallo('eliminar el comprobante', e);
     } finally {
       setUploading(false);
     }
   };
 
   const handleAnular = async () => {
-    if (!motivo.trim()) { showToast.error('Ingresa el motivo de anulación'); return; }
+    if (!motivo.trim()) { showToast.warning('Ingresa el motivo de anulación'); return; }
     setSaving(true);
     try {
       await anularVentaMovimiento(ventaId, m.id, motivo.trim(), currentMesero?.id);
@@ -130,7 +130,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       setMotivo('');
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo anular el movimiento');
+      showToast.fallo('anular el movimiento', e);
     } finally {
       setSaving(false);
     }
@@ -163,7 +163,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
       await marcarSinComprobanteMovimiento(ventaId, m.id, !m.sin_comprobante);
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo actualizar el pago');
+      showToast.fallo('actualizar el pago', e);
     }
   };
 

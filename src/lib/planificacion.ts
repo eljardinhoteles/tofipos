@@ -157,7 +157,7 @@ function escribir(que: string, op: () => PromiseLike<{ error: { message: string 
     .then(({ error }) => { if (error) throw new Error(error.message); })
     .catch((e) => {
       console.error('[planificador]', que, e);
-      showToast.error(`No se guardó: ${que}`, navigator.onLine ? 'Intenta de nuevo.' : 'Sin conexión: el plan se guarda con internet.');
+      showToast.error(`No se pudo guardar ${que}`, navigator.onLine ? 'Intenta de nuevo.' : 'Sin conexión: el plan se guarda con internet.');
     })
     .finally(() => { escrituras--; if (escrituras === 0) pedirLectura(0); });
 }

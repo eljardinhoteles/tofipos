@@ -196,7 +196,7 @@ export default function MenuV2() {
  await updateRxMenuItem(product.id, { activo });
  } catch (error) {
  console.error('Error al actualizar disponibilidad:', error);
- showToast.error('No se pudo actualizar la disponibilidad');
+ showToast.fallo('actualizar la disponibilidad', error);
  }
  } : undefined}
  />
@@ -228,7 +228,7 @@ export default function MenuV2() {
  const cat = safeDbCategorias.find(c => c.id === ed.id);
  const nProductos = cat ? (conteoPorCategoria.get(cat.nombre) ?? 0) : 0;
  const guardar = async () => {
- if (!ed.nombre.trim()) { showToast.error('Escribe el nombre de la categoría'); return; }
+ if (!ed.nombre.trim()) { showToast.warning('Escribe el nombre de la categoría'); return; }
  await updateRxCategoria(ed.id, {
  nombre: ed.nombre.trim(),
  icono: ed.icono,

@@ -25,7 +25,7 @@ function ListaEditable({
     const valor = nuevo.trim();
     if (!valor) return;
     if (items.some(i => i.toLowerCase() === valor.toLowerCase())) {
-      showToast.error('Ya existe en la lista');
+      showToast.warning('Ya existe en la lista');
       return;
     }
     setSaving(true);
@@ -34,7 +34,7 @@ function ListaEditable({
       setNuevo('');
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo guardar');
+      showToast.fallo('actualizar la lista', e);
     } finally {
       setSaving(false);
     }
@@ -46,7 +46,7 @@ function ListaEditable({
       await onGuardar(items.filter(i => i !== valor));
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo eliminar');
+      showToast.fallo('actualizar la lista', e);
     } finally {
       setSaving(false);
     }

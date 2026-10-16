@@ -21,6 +21,7 @@ import { useTableActions } from '../../hooks/useTableActions';
 import { getMesaEstadoEfectivo, isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
 import { useRxMesas } from '../../hooks/useRxMesas';
+import { showToast } from '@/lib/toast';
 import { esMesaBarra } from '../../lib/mesaBarra';
 import { useRxPisos } from '../../hooks/useRxPisos';
 import { useRxComandas } from '../../hooks/useRxComandas';
@@ -315,7 +316,7 @@ export function TableSidebar({
 
   const handleDeletePiso = async (id: string, nombre: string) => {
     if (allMesas.some(m => m.piso === nombre)) {
-      alert('No puedes borrar un piso con mesas');
+      showToast.warning('No se puede borrar la zona', 'Todavía tiene mesas; elimínalas o muévelas primero.');
       return;
     }
     await updateRxPiso(id, { _deleted: true });
@@ -352,7 +353,7 @@ export function TableSidebar({
       });
 
       if (exists) {
-        alert(isHabitacionPiso ? 'Este número de habitación ya existe' : 'Este número de mesa ya existe');
+        showToast.warning(isHabitacionPiso ? 'Ese número de habitación ya existe' : 'Ese número de mesa ya existe');
         return;
       }
 

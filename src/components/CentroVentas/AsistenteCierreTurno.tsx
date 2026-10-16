@@ -232,9 +232,9 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
   const hayCobrosHoy = useMemo(() => calcularResumenCierre(items, fechaParsed).movimientosIncluidos.length > 0, [items, fechaParsed]);
   const pedirCierre = () => {
     setIntentado(true);
-    if (falta) { showToast.error('Escribe el nombre de quien hace el cierre'); return; }
-    if (faltaNovedades) { showToast.error('Escribe las novedades de caja (si no hubo, escribe "Sin novedades")'); return; }
-    if (!hayCobros) { showToast.error('No hay cobros abiertos tuyos que cerrar con estos orígenes'); return; }
+    if (falta) { showToast.warning('Escribe el nombre de quien hace el cierre'); return; }
+    if (faltaNovedades) { showToast.warning('Escribe las novedades de caja', 'Si no hubo, escribe "Sin novedades".'); return; }
+    if (!hayCobros) { showToast.warning('No hay cobros por cerrar', 'No tienes cobros abiertos con estos orígenes.'); return; }
     setConfirmarCierre(true);
   };
 
@@ -267,7 +267,9 @@ function CierreDelDia({ date, items, onSelectVenta }: AsistenteCierreTurnoProps)
     } catch (e) {
       console.error(e);
       // El cierre ya está guardado pero faltó marcar algún cobro: se puede reintentar sin duplicarlo.
-      showToast.error(guardadoEnNubeRef.current ? 'El cierre se guardó, pero no se marcaron todos los cobros. Intenta de nuevo.' : 'No se pudo guardar el cierre. Revisa tu conexión e intenta de nuevo.');
+      guardadoEnNubeRef.current
+        ? showToast.warning('Cierre guardado, faltan cobros por marcar', 'Intenta de nuevo; no se duplicará.')
+        : showToast.error('No se pudo guardar el cierre', 'Revisa tu conexión e intenta de nuevo.');
     } finally {
       setGuardando(false);
     }

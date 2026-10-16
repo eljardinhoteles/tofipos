@@ -94,7 +94,7 @@ export function CuentaView({
       nombre.toLowerCase() === otroPrincipal ||
       (!esPrincipal && nombre.toLowerCase() === 'principal')
     ) {
-      showToast.error('Ese nombre ya existe');
+      showToast.warning('Ya existe una subcuenta con ese nombre');
       return;
     }
     try {
@@ -119,7 +119,7 @@ export function CuentaView({
   const handleEliminarSub = async () => {
     if (!renombrandoId || renombrandoId === PRINCIPAL_ID) return;
     if (comandasTodas.some(c => c.habitacion_subcuenta_id === renombrandoId)) {
-      showToast.error('No se puede eliminar', 'Esta subcuenta ya tiene comandas cargadas.');
+      showToast.warning('No se puede eliminar la subcuenta', 'Ya tiene comandas cargadas.');
       return;
     }
     try {
@@ -128,7 +128,7 @@ export function CuentaView({
       cerrarEditorSub();
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo eliminar la subcuenta');
+      showToast.fallo('eliminar la subcuenta', e);
     }
   };
 
@@ -139,7 +139,7 @@ export function CuentaView({
 
   const handleAnular = () => {
     if (!puedeAnular) {
-      showToast.error('No se puede anular: esta cuenta ya tiene comandas cargadas.');
+      showToast.warning('No se puede anular la cuenta', 'Ya tiene comandas cargadas.');
       return;
     }
     openPrompt({
@@ -159,7 +159,7 @@ export function CuentaView({
           onClose();
         } catch (e) {
           console.error(e);
-          showToast.error('No se pudo anular la cuenta');
+          showToast.fallo('anular la cuenta', e);
         } finally {
           setAnulando(false);
         }

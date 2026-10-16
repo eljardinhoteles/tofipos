@@ -63,7 +63,7 @@ export default function ClientesV2() {
 
  const handleOpenEdit = (cliente: Cliente) => {
  if (cliente.id ==='99999999999') {
- showToast.error('Acción no permitida','El cliente Consumidor Final no puede ser editado.');
+ showToast.warning('No se puede editar este cliente', 'Consumidor Final es un cliente del sistema.');
  return;
  }
  setEditingCliente(cliente);
@@ -87,7 +87,7 @@ export default function ClientesV2() {
 
  const handleDelete = (id: string) => {
  if (id ==='99999999999') {
- showToast.error('Acción no permitida','El cliente Consumidor Final no puede ser eliminado.');
+ showToast.warning('No se puede eliminar este cliente', 'Consumidor Final es un cliente del sistema.');
  return;
  }
  openConfirm('¿Eliminar Cliente?','¿Estás seguro de eliminar este cliente de la base de datos? Esta acción no se puede deshacer.',
@@ -95,7 +95,7 @@ export default function ClientesV2() {
  const rxDb = await initVerticalRxDb();
  const doc = await rxDb.clientes.findOne(id).exec();
  if (doc) await doc.remove();
- showToast.error('Cliente eliminado');
+ showToast.success('Cliente eliminado');
  }
  );
  };

@@ -25,8 +25,8 @@ export function VentaEstadiaCard({ venta }: { venta: RxVenta }) {
   const empezar = () => { setLlegada(venta.llegada ?? ''); setSalida(venta.salida ?? ''); setEditando(true); };
 
   const guardar = async () => {
-    if (!llegada) { showToast.error('Indica la fecha de llegada'); return; }
-    if (salidaInvalida) { showToast.error('La salida no puede ser antes de la llegada'); return; }
+    if (!llegada) { showToast.warning('Indica la fecha de llegada'); return; }
+    if (salidaInvalida) { showToast.warning('La salida no puede ser antes de la llegada'); return; }
     setSaving(true);
     try {
       await updateRxVenta(venta.id, { llegada, salida: salida || undefined });
@@ -34,7 +34,7 @@ export function VentaEstadiaCard({ venta }: { venta: RxVenta }) {
       setEditando(false);
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo actualizar la estadía');
+      showToast.fallo('actualizar la estadía', e);
     } finally {
       setSaving(false);
     }

@@ -134,7 +134,7 @@ export default function App() {
       if (error) throw error;
     } catch (error) {
       console.error('Login admin falló:', error);
-      showToast.error('Error', 'Credenciales inválidas.');
+      showToast.warning('Credenciales incorrectas', 'Revisa tus datos e intenta de nuevo.');
     } finally {
       setIsAdminSubmitting(false);
     }
@@ -158,7 +158,7 @@ export default function App() {
       setIsSyncingInitial(false);
     } catch (error) {
       console.error('Error al vincular organización:', error);
-      showToast.error('Error', 'No se pudo vincular la organización.');
+      showToast.error('No se pudo vincular la organización');
       setIsSyncingInitial(false);
     } finally {
       setIsAdminSubmitting(false);
@@ -193,7 +193,7 @@ export default function App() {
       setIsSyncingInitial(false);
     } catch (error) {
       console.error('Error al crear organización:', error);
-      showToast.error('Error', 'No se pudo crear la organización.');
+      showToast.error('No se pudo crear la organización');
       setIsSyncingInitial(false);
     } finally {
       setIsAdminSubmitting(false);

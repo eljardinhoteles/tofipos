@@ -32,7 +32,7 @@ function FormEtiqueta({ etiqueta, tonoInicial, onClose, onEliminar }: FormProps)
 
   const guardar = () => {
     const r = etiqueta ? editarEtiqueta(etiqueta.id, { nombre, tono }) : crearEtiqueta(nombre, tono);
-    if (!r.ok) { showToast.error(etiqueta ? 'No se pudo guardar' : 'No se pudo crear', r.motivo); return; }
+    if (!r.ok) { showToast.warning(r.motivo); return; }
     onClose();
   };
 
@@ -104,7 +104,7 @@ export default function AjustesPlanificador() {
   const confirmarEliminar = () => {
     if (!porEliminar) return;
     const r = eliminarEtiqueta(porEliminar.id);
-    if (!r.ok) showToast.error('No se pudo eliminar', r.motivo);
+    if (!r.ok) showToast.warning('No se puede eliminar la etiqueta', r.motivo);
     else setFormulario(undefined);
     setPorEliminar(null);
   };

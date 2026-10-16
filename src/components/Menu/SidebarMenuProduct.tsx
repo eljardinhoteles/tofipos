@@ -97,7 +97,7 @@ export function SidebarMenuProduct() {
  const applyModifierTemplate = (template: (typeof MODIFIER_TEMPLATES)[number]) => {
  const yaExiste = modificadores.some(g => g.nombre.trim().toLowerCase() === template.nombre.toLowerCase());
  if (yaExiste) {
- showToast.error(`"${template.nombre}"ya fue añadido a este producto`);
+ showToast.warning(`"${template.nombre}" ya fue añadido a este producto`);
  return;
  }
  setModificadores(prev => [

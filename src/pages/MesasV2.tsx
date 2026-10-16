@@ -129,7 +129,7 @@ export default function MesasV2() {
     const handleImprimirSolicitudFacturacion = useCallback(() => {
         const texto = generarSolicitudDatosFacturacion(true);
         imprimirConAviso(() => queueSolicitudFacturacionPrint(texto), 'Solicitud de facturación');
-        showToast.success('Enviado a Impresora', 'Solicitud de datos de facturación enviada.');
+        showToast.success('Enviado a impresora', 'Solicitud de datos de facturación enviada.');
     }, []);
 
     // Lista de nombres de pisos disponibles
@@ -401,7 +401,7 @@ export default function MesasV2() {
                 );
             }
         } catch (error) {
-            showToast.error('No se pudo abrir la venta directa', error instanceof Error ? error.message : undefined);
+            showToast.fallo('abrir la venta directa', error);
         }
     }, [allComandas, handleTableAction, setSelectedMesaEsHabitacion, setSelectedMesaId, setViewingComandaId, setConfigView, setMesaView]);
 

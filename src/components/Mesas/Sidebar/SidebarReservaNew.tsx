@@ -126,7 +126,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  const today = toISO(new Date());
 
  if (fecha < today) {
- showToast.error('Fecha inválida','No puedes crear reservas en fechas pasadas.');
+ showToast.warning('Fecha inválida','No puedes crear reservas en fechas pasadas.');
  setIsProcessing(false);
  return;
  }
@@ -170,7 +170,7 @@ export function SidebarReservaNew({ onBack, onSuccess }: SidebarReservaNewProps)
  onSuccess(reservaId);
  } catch (e) {
  console.error(e);
- showToast.error(isEditMode ?'Error al actualizar':'Error al crear la reserva');
+ showToast.error(isEditMode ? 'No se pudo actualizar la reserva' : 'No se pudo crear la reserva');
  } finally {
  setIsProcessing(false);
  }

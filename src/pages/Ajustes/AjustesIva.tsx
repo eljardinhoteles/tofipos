@@ -52,11 +52,11 @@ export default function AjustesIva() {
  const handleGuardarIva = async () => {
  if (esTemporal) {
  if (!vigenteDesde || !vigenteHasta) {
- showToast.error('Faltan fechas','Indica desde y hasta cuándo rige la tasa temporal.');
+ showToast.warning('Faltan fechas','Indica desde y hasta cuándo rige la tasa temporal.');
  return;
  }
  if (vigenteHasta < vigenteDesde) {
- showToast.error('Fechas inválidas','La fecha final no puede ser anterior a la inicial.');
+ showToast.warning('Fechas inválidas','La fecha final no puede ser anterior a la inicial.');
  return;
  }
  }
@@ -64,7 +64,7 @@ export default function AjustesIva() {
  try {
  const orgId = localStorage.getItem('pos_active_org_id') ||'';
  if (!orgId) {
- showToast.error('Sin organización','Por favor vincula una organización primero.');
+ showToast.warning('No hay organización activa', 'Vincula una organización primero.');
  return;
  }
 
@@ -92,7 +92,7 @@ export default function AjustesIva() {
  resetModal();
  } catch (err) {
  console.error(err);
- showToast.error(editingId ?'Error al actualizar IVA':'Error al crear IVA');
+ showToast.error(editingId ? 'No se pudo actualizar la tasa de IVA' : 'No se pudo crear la tasa de IVA');
  } finally {
  setCreating(false);
  }
@@ -112,13 +112,13 @@ export default function AjustesIva() {
  showToast.success('Tasa de IVA activada','La tasa seleccionada ya se aplica en las comandas.');
  } catch (err) {
  console.error(err);
- showToast.error('Error al activar IVA');
+ showToast.error('No se pudo activar la tasa de IVA');
  }
  };
 
  const handleEliminarIva = async (ivaId: string, isActive: boolean) => {
  if (isActive) {
- showToast.error('No permitido','No puedes eliminar la tasa de IVA que está activa actualmente.');
+ showToast.warning('No se puede eliminar esta tasa', 'Es la tasa de IVA que está activa.');
  return;
  }
  try {
@@ -126,7 +126,7 @@ export default function AjustesIva() {
  showToast.success('Tasa de IVA eliminada');
  } catch (err) {
  console.error(err);
- showToast.error('Error al eliminar IVA');
+ showToast.error('No se pudo eliminar la tasa de IVA');
  }
  };
 

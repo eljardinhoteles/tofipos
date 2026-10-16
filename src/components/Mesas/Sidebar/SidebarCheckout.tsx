@@ -238,7 +238,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  }
  } catch (ventaError) {
  console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
- showToast.error('Aviso','La mesa se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
+ showToast.warning('Mesa cerrada, falta registrar el saldo', 'No se registró en Centro de Ventas. Revísalo manualmente.');
  }
 
  await updateRxComanda(activeComanda.id, {
@@ -247,7 +247,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  });
  await liberarMesaSiSinOperativas(selectedMesa.id);
 
- showToast.success('Venta Finalizada',`La mesa ${selectedMesa.nombre} ha sido cobrada exitosamente.`);
+ showToast.success('Venta finalizada',`La mesa ${selectedMesa.nombre} quedó cobrada.`);
 
  const content = generarTicketPago(
  activeComanda,
@@ -271,7 +271,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  setPreviewOpened(true);
 
  } catch (error) {
- showToast.error('Error al procesar el cobro');
+ showToast.error('No se pudo procesar el cobro');
  } finally {
  setIsProcessing(false);
  }

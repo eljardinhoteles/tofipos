@@ -181,7 +181,7 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  organization_id: activeComanda.organization_id || localStorage.getItem('pos_active_org_id') ||'',
  }, monto);
 
- showToast.success('Pago y Ticket',`Cobro registrado por $${monto.toFixed(2)}.`);
+ showToast.success('Cobro registrado',`$${monto.toFixed(2)} cobrados.`);
 
  const labelText = nameOfPayer?.trim() || label ||'Parte';
  const ticketText = generarPrecuentaDividida(
@@ -241,12 +241,12 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  updated_at: new Date().toISOString()
  });
  await liberarMesaSiSinOperativas(selectedMesa.id);
- showToast.success('Cuenta Pagada','El saldo pendiente ha sido cubierto en su totalidad.');
+ showToast.success('Cuenta pagada','El saldo pendiente quedó cubierto.');
  onSuccess();
  }
  } catch (error) {
  console.error(error);
- showToast.error('Error al registrar el pago');
+ showToast.error('No se pudo registrar el pago');
  }
  };
 

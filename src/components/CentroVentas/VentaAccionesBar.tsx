@@ -218,7 +218,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       return creados[creados.length - 1]?.id ?? true;
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo registrar el movimiento');
+      showToast.fallo('registrar el movimiento', e);
       return false;
     } finally {
       setSaving(false);
@@ -227,14 +227,14 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   const handlePago = async () => {
     const monto = parseFloat(montoPago);
-    if (!monto || monto <= 0) { showToast.error('Ingresa un monto válido'); return; }
-    if (metodoPago === 'tarjeta' && !redTarjeta) { showToast.error('Selecciona la red de cobro de la tarjeta'); return; }
+    if (!monto || monto <= 0) { showToast.warning('Ingresa un monto válido'); return; }
+    if (metodoPago === 'tarjeta' && !redTarjeta) { showToast.warning('Selecciona la red de cobro de la tarjeta'); return; }
 
     let montoAjuste = 0;
     if (ajustarVentaPago) {
       montoAjuste = monto - Math.max(0, item.saldo);
       if (montoAjuste > 0 && !motivoAjustePago.trim()) {
-        showToast.error('Ingresa el motivo del ajuste');
+        showToast.warning('Ingresa el motivo del ajuste');
         return;
       }
     }
@@ -267,7 +267,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
           });
         } catch (e) {
           console.error('Error al vincular el pago con la factura', e);
-          showToast.error('El pago se registró, pero no se pudo vincular a la factura');
+          showToast.warning('Pago registrado, sin vincular a la factura', 'Vincúlalo desde «Facturar».');
         }
       }
       if (montoAjuste > 0) {
@@ -298,7 +298,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   const handleAjuste = async () => {
     const monto = parseFloat(montoAjuste);
-    if (!monto) { showToast.error('Ingresa un monto (positivo para aumentar, negativo para reducir)'); return; }
+    if (!monto) { showToast.warning('Ingresa un monto', 'Positivo para aumentar, negativo para reducir.'); return; }
     if (await registrar({ tipo: 'ajuste', monto, motivo: motivoAjuste.trim() || undefined, usuario_id: getUsuarioId() })) {
       showToast.success('Ajuste registrado');
       setMontoAjuste('');
@@ -307,7 +307,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   };
 
   const handleFacturar = async () => {
-    if (!numeroFactura.trim()) { showToast.error('Ingresa el número de factura'); return; }
+    if (!numeroFactura.trim()) { showToast.warning('Ingresa el número de factura'); return; }
     if (await registrar({ 
       tipo: 'anclar', 
       numero_factura: numeroFactura.trim(), 
@@ -322,8 +322,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   const handleRetencion = async () => {
     const monto = parseFloat(montoRetencion);
-    if (!monto || monto <= 0) { showToast.error('Ingresa el monto retenido'); return; }
-    if (monto > item.saldo + 0.01) { showToast.error('La retención no puede ser mayor al saldo pendiente'); return; }
+    if (!monto || monto <= 0) { showToast.warning('Ingresa el monto retenido'); return; }
+    if (monto > item.saldo + 0.01) { showToast.warning('La retención supera el saldo', 'Debe ser igual o menor al saldo pendiente.'); return; }
     const detalle = detalleRetencion.trim();
     if (await registrar({
       tipo: 'retencion',
@@ -341,7 +341,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   const handleReembolsar = async () => {
     const monto = parseFloat(montoReembolso);
     if (!monto || monto <= 0 || monto > item.totalPagado - item.totalReembolsado) {
-      showToast.error('Ingresa un monto de reembolso válido');
+      showToast.warning('Ingresa un monto de reembolso válido');
       return;
     }
     if (await registrar({ tipo: 'reembolso', monto, motivo: motivoReembolso.trim() || undefined, usuario_id: getUsuarioId() })) {
@@ -361,7 +361,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   const handleComentario = async () => {
     // Comentario, documento o ambos. Con documento y sin texto, el nombre del archivo queda como texto del movimiento.
     const texto = textoComentario.trim();
-    if (!texto && !comprobanteFile) { showToast.error('Escribe un comentario o adjunta un documento'); return; }
+    if (!texto && !comprobanteFile) { showToast.warning('Escribe un comentario o adjunta un documento'); return; }
     const conArchivo = !!comprobanteFile;
     const motivo = texto || comprobanteFile!.name;
     if (await registrar({ tipo: 'comentario', motivo, usuario_id: getUsuarioId() })) {
@@ -371,7 +371,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   };
 
   const handleAnular = async () => {
-    if (!motivoAnulacion.trim()) { showToast.error('Ingresa el motivo de anulación'); return; }
+    if (!motivoAnulacion.trim()) { showToast.warning('Ingresa el motivo de anulación'); return; }
     if (await registrar({ tipo: 'anular', motivo: motivoAnulacion.trim(), usuario_id: getUsuarioId() })) {
       showToast.success('Venta anulada');
       setMotivoAnulacion('');

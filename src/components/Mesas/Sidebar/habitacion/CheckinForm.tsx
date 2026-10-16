@@ -28,7 +28,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
  if (!huesped.trim()) {
- showToast.error('Ingresa el nombre del huésped');
+ showToast.warning('Ingresa el nombre del huésped');
  return;
  }
 
@@ -45,7 +45,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  }).exec();
  if (existente) {
  await updateRxMesa(selectedMesa.id, { estado:'ocupada'});
- showToast.error('La habitación ya tiene una cuenta abierta');
+ showToast.warning('La habitación ya tiene una cuenta abierta');
  onClose();
  return;
  }
@@ -73,7 +73,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  onClose();
  } catch (error) {
  console.error('Error al abrir cuenta:', error);
- showToast.error('Error al abrir cuenta', error instanceof Error ? error.message :'Error desconocido');
+ showToast.fallo('abrir la cuenta', error);
  } finally {
  setIsLoading(false);
  }

@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { showToast, motivoDeError } from './toast';
 
 // Envío a imprimir con aviso REAL del resultado: "Enviado" solo si el servidor lo
 // aceptó, y un error visible (con "Reintentar") si no. Antes los fallos solo iban
@@ -6,24 +6,28 @@ import { toast } from 'sonner';
 
 const DURACION_ERROR_MS = 15_000;
 
+// Un fallo de red al imprimir es del servidor de impresión, no de internet en general.
+function motivoImpresion(err: unknown) {
+  const crudo = err instanceof Error ? err.message : '';
+  return /failed to fetch|networkerror|network request failed|load failed/i.test(crudo)
+    ? 'Servidor de impresión sin conexión.'
+    : motivoDeError(err);
+}
+
 export async function imprimirConAviso(enviar: () => Promise<unknown>, que: string): Promise<boolean> {
   // Un solo aviso que cambia de "Enviando…" a "Enviado" o al error (mismo id).
-  const id = toast.loading('Enviando a impresora…', { description: que });
+  const id = showToast.loading('Enviando a impresora…', que);
   try {
     await enviar();
-    toast.success('Enviado a impresora', { id, description: que, duration: 2500 });
-    setTimeout(() => toast.dismiss(id), 3100);
+    showToast.success('Enviado a impresora', que, { id, duracion: 2500 });
     return true;
   } catch (err) {
-    const motivo = err instanceof Error ? err.message : 'Error desconocido';
-    toast.error(`No se imprimió: ${que}`, {
+    console.error(`[No se imprimió: ${que}]`, err);
+    showToast.error('No se imprimió', `${que}. ${motivoImpresion(err) ?? ''}`.trim(), {
       id,
-      description: motivo,
-      duration: DURACION_ERROR_MS,
-      action: { label: 'Reintentar', onClick: () => { void imprimirConAviso(enviar, que); } },
+      duracion: DURACION_ERROR_MS,
+      accion: { etiqueta: 'Reintentar', onClick: () => { void imprimirConAviso(enviar, que); } },
     });
-    // Mismo respaldo que showToast: en móvil sonner a veces no reanuda el temporizador.
-    setTimeout(() => toast.dismiss(id), DURACION_ERROR_MS + 600);
     return false;
   }
 }
@@ -31,10 +35,8 @@ export async function imprimirConAviso(enviar: () => Promise<unknown>, que: stri
 /** Aviso cuando un ticket que debía salir no se mandó (p. ej. se cerró la vista previa). */
 /** `imprimir` ya muestra su propio resultado (usa imprimirConAviso), aquí solo se dispara. */
 export function avisarSinImprimir(que: string, imprimir: () => void) {
-  const id = toast.warning(`${que} no se imprimió`, {
-    description: 'Se cerró la vista previa sin enviarla a la impresora.',
-    duration: DURACION_ERROR_MS,
-    action: { label: 'Imprimir', onClick: () => imprimir() },
+  showToast.warning('No se imprimió', `${que}: se cerró la vista previa sin enviarla.`, {
+    duracion: DURACION_ERROR_MS,
+    accion: { etiqueta: 'Imprimir', onClick: () => imprimir() },
   });
-  setTimeout(() => toast.dismiss(id), DURACION_ERROR_MS + 600);
 }

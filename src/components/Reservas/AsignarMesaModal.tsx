@@ -57,7 +57,7 @@ export function AsignarMesaModal({ reserva, mesas, comandas, onClose }: AsignarM
       onClose();
     } catch (e) {
       console.error(e);
-      showToast.error('Error', 'No se pudo asignar la mesa.');
+      showToast.error('No se pudo asignar la mesa');
     } finally {
       setIsAssigning(false);
     }

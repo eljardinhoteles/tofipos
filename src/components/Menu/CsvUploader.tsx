@@ -34,11 +34,11 @@ export function CsvUploader() {
       complete: async (results) => {
         try {
           await processCsvData(results.data);
-          showToast.success('Importación exitosa', `Se importaron ${results.data.length} productos.`);
+          showToast.success('Importación completada', `Se importaron ${results.data.length} productos.`);
           setOpen(false); // Cerrar modal al terminar exitosamente
         } catch (error) {
           console.error('Error importing CSV:', error);
-          showToast.error('Error en importación', 'Ocurrió un error procesando el archivo.');
+          showToast.error('No se pudo importar el archivo', 'Ocurrió un error procesando el archivo.');
         } finally {
           setIsProcessing(false);
           if (fileInputRef.current) {
@@ -48,7 +48,7 @@ export function CsvUploader() {
       },
       error: (error) => {
         console.error('CSV Parse Error:', error);
-        showToast.error('Error al leer CSV');
+        showToast.error('No se pudo leer el CSV');
         setIsProcessing(false);
       }
     });

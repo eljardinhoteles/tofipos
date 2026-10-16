@@ -71,11 +71,11 @@ export default function AjustesOrganizacion() {
 
   const handleSave = async () => {
     if (!orgId) {
-      showToast.error('Sin organización', 'Primero vincula o crea una organización.');
+      showToast.warning('No hay organización activa', 'Vincula o crea una organización primero.');
       return;
     }
     if (!form.nombre.trim()) {
-      showToast.error('Nombre requerido');
+      showToast.warning('Escribe el nombre de la organización');
       return;
     }
 
@@ -101,7 +101,7 @@ export default function AjustesOrganizacion() {
       showToast.success('Organización actualizada');
     } catch (error) {
       console.error('Error al guardar organización:', error);
-      showToast.error('Error al guardar', 'Revisa que la tabla organizaciones tenga ruc, telefono y direccion.');
+      showToast.error('No se pudo guardar la organización', 'Intenta de nuevo o avisa al administrador.');
     } finally {
       setSaving(false);
     }

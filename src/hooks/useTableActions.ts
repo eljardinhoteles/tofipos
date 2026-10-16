@@ -4,6 +4,7 @@ import { useUI } from '../context/UIContext';
 import { createRxComanda, updateRxComanda, updateRxMesa, getVerticalRxDb, liberarMesaSiSinOperativas, siguienteFolio } from '../db/rxdb';
 import { isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../db/comandaState';
 import { useAuth } from '../context/AuthContext';
+import { nombreMesaCompleto } from '../lib/nombreMesa';
 
 export function useTableActions() {
   const { openConfirm, openPrompt, activeSubcomandaId, setActiveSubcomandaId } = useUI();
@@ -85,7 +86,7 @@ export function useTableActions() {
     } else if (action.startsWith('abrir:')) {
       const orgId = getOrgId();
       if (!orgId) {
-        showToast.error('Sin organización activa', 'No se pudo abrir la mesa porque no hay hotel vinculado.');
+        showToast.warning('No hay organización activa', 'Vincula un hotel para abrir mesas.');
         return;
       }
       const existingComandas = await findMesaComandas(mesa.id);
@@ -159,13 +160,13 @@ export function useTableActions() {
         }, 50);
       } catch (error) {
         console.error('Error al abrir mesa:', error);
-        showToast.error('No se pudo abrir la mesa', error instanceof Error ? error.message : 'Revisa la consola.');
+        showToast.fallo('abrir la mesa', error);
       }
     } else if (action === 'cuenta') {
       const activeComanda = await findComandaActiva(mesa.id);
 
       if (!activeComanda) {
-        showToast.error('No se pudo pedir la cuenta', `No hay una comanda activa en ${mesa.nombre}.`);
+        showToast.warning('No hay comanda activa', `${mesa.nombre} no tiene una comanda para pedir la cuenta.`);
         return;
       }
 
@@ -173,7 +174,7 @@ export function useTableActions() {
         estado: 'cuenta',
         confirmada: true,
       });
-      showToast.success('Cuenta solicitada', `Se ha marcado la ${mesa.nombre} para pago.`);
+      showToast.success('Cuenta solicitada', `${mesa.nombre} quedó marcada para cobro.`);
     } else if (action === 'reabrir') {
       const comandaCuenta = await findComandaActiva(mesa.id, 'cuenta');
 
@@ -190,7 +191,7 @@ export function useTableActions() {
           const activeComanda = await findComandaActiva(mesa.id);
 
           if (!activeComanda) {
-            showToast.error('No hay comanda activa para cerrar');
+            showToast.warning('No hay comanda activa para cerrar');
             return;
           }
 
@@ -227,7 +228,7 @@ export function useTableActions() {
           ])
         : [[], [], []];
       if (items.some((i: any) => !i.anulado && (i.cantidad || 0) > 0) || pagos.length > 0 || ventas.length > 0) {
-        showToast.error('No se puede cerrar', 'La mesa tiene productos o cobros; usa Anular.');
+        showToast.warning('No se puede cerrar la mesa', 'Tiene productos o cobros; usa «Anular».');
         return;
       }
       if (items.length > 0) {
@@ -263,7 +264,7 @@ export function useTableActions() {
 
       if (activeComandas.length === 0) {
         onComplete?.('mapa');
-        showToast.success('Mesa liberada', `La ${mesa.nombre} ha sido liberada (no tenía comanda activa).`);
+        showToast.success('Mesa liberada', `${mesa.nombre} se liberó (no tenía comanda activa).`);
         return;
       }
 
@@ -281,7 +282,7 @@ export function useTableActions() {
           const quedan = await findMesaComandas(mesa.id);
           if (quedan.length === 0) onComplete?.('mapa');
           else setActiveSubcomandaId((quedan[0] as any).id);
-          showToast.error('Subcomanda anulada', `Se anuló "${sub.subcomanda_nombre}".`);
+          showToast.success('Subcomanda anulada', `Se anuló "${sub.subcomanda_nombre}".`);
         };
 
         openPrompt({
@@ -310,7 +311,7 @@ export function useTableActions() {
           await updateRxMesa(mesa.id, { estado: 'libre' });
           onComplete?.('mapa');
 
-          showToast.error('Mesa anulada', `La ${mesa.nombre} ha sido liberada y la orden marcada como anulada.`);
+          showToast.success('Mesa anulada', `${nombreMesaCompleto(mesa.nombre)} quedó libre; la orden se anuló.`);
         }
       });
     }

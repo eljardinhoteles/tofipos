@@ -127,7 +127,7 @@ export default function ReservasV2() {
  // pasa por el botón — así que la regla "solo el día del servicio" se
  // valida acá también.
  if (r.fecha !== toISO(new Date())) {
- showToast.error('No se puede asignar mesa todavía','Esta reserva es para otro día. Podrás asignar mesa el día del servicio.');
+ showToast.warning('Aún no se puede asignar mesa', 'Esta reserva es para otro día. Podrás asignarla el día del servicio.');
  return;
  }
  setReservaToAssign(r);

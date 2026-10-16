@@ -145,7 +145,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  }
 
  if (editingCliente?.id ==='99999999999'|| editingCliente?.nombre ==='Consumidor Final') {
- showToast.error('Acción no permitida','El cliente Consumidor Final no puede ser modificado.');
+ showToast.warning('No se puede modificar este cliente', 'Consumidor Final es un cliente del sistema.');
  onClose();
  return;
  }
@@ -168,13 +168,13 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  const duplicadoDoc = existentes.find((c: any) =>
  docsNuevos.some(d => d === norm(c.dni) || d === norm(c.numero_doc)));
  if (duplicadoDoc) {
- showToast.error('Documento ya registrado', `Ese documento ya pertenece a ${duplicadoDoc.nombre}.`);
+ showToast.warning('Documento ya registrado', `Ese documento ya pertenece a ${duplicadoDoc.nombre}.`);
  return;
  }
  const mismoNombre = existentes.find((c: any) => (c.nombre ?? '').trim().toLowerCase() === form.nombre.trim().toLowerCase());
  const cambioNombre = !editingCliente || (editingCliente.nombre ?? '').trim().toLowerCase() !== form.nombre.trim().toLowerCase();
  if (mismoNombre && docsNuevos.length === 0 && cambioNombre) {
- showToast.error('Ya existe un cliente con ese nombre', 'Agrega su cédula o pasaporte para distinguirlos.');
+ showToast.warning('Ya existe un cliente con ese nombre', 'Agrega su cédula o pasaporte para distinguirlos.');
  return;
  }
 
@@ -193,7 +193,7 @@ export function ClienteFormModal({ opened, onClose, editingCliente, initialNombr
  onCreatedGoToCuenta(clienteId);
  }
  } catch (err) {
- showToast.error('Error al guardar', err instanceof Error ? err.message :'Intenta nuevamente.');
+ showToast.fallo('guardar el cliente', err);
  } finally {
  setSaving(false);
  }

@@ -343,7 +343,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  const handleAddProduct = useCallback(async (item: MenuItem) => {
  if (!activeComanda) {
- showToast.error('Vista de solo lectura','Debes seleccionar o abrir una mesa para añadir productos.');
+ showToast.warning('Primero abre una mesa', 'Selecciona o abre una mesa para añadir productos.');
  return;
  }
 
@@ -714,7 +714,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  if (item) {
  performAddToCart(item, selected).catch(err => {
  console.error('[ProductSelector] error añadiendo item con modificadores:', err);
- showToast.error('Error al añadir', err?.message ?? String(err));
+ showToast.fallo('añadir el producto', err);
  });
  }
  }}

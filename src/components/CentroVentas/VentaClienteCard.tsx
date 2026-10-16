@@ -88,7 +88,7 @@ export function VentaClienteCard({ venta }: VentaClienteCardProps) {
       setEditing(false);
     } catch (e) {
       console.error(e);
-      showToast.error('No se pudo actualizar el cliente');
+      showToast.fallo('actualizar el cliente', e);
     } finally {
       setSaving(false);
     }

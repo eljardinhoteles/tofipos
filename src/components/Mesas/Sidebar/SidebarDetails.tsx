@@ -128,7 +128,7 @@ export function SidebarDetails({
  setEditingItem(null);
  showToast.success('Producto movido');
  } catch (e) {
- showToast.error('No se pudo mover', e instanceof Error ? e.message : undefined);
+ showToast.fallo('mover el producto', e);
  }
  };
  const handleRepartirItem = async (destIds: string[], cantidad: number) => {
@@ -138,7 +138,7 @@ export function SidebarDetails({
  setEditingItem(null);
  showToast.success('Valor repartido', `Entre ${destIds.length} cuenta${destIds.length === 1 ? '' : 's'}.`);
  } catch (e) {
- showToast.error('No se pudo repartir', e instanceof Error ? e.message : undefined);
+ showToast.fallo('repartir el valor', e);
  }
  };
  const handleDeshacerReparto = async () => {
@@ -148,7 +148,7 @@ export function SidebarDetails({
  setEditingItem(null);
  showToast.success('Reparto deshecho');
  } catch (e) {
- showToast.error('No se pudo deshacer', e instanceof Error ? e.message : undefined);
+ showToast.fallo('deshacer el reparto', e);
  }
  };
  const { currentMesero } = useAuth();
@@ -222,12 +222,12 @@ export function SidebarDetails({
  const enviadaEdit = enviadaDe(editingItem);
  const soloNuevas = esItemBloqueado(editingItem) && enviadaEdit < editingItem.cantidad && cantidad >= enviadaEdit && cantidad < editingItem.cantidad;
  if (esItemBloqueado(editingItem) && !soloNuevas) {
- showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.warning('No se puede modificar un ítem confirmado', 'Usa «Anular ítem» si ya no está disponible.');
  setEditingItem(null);
  return;
  }
  if (editingItem.pagado_cantidad && editingItem.pagado_cantidad > 0) {
- showToast.error('Error','No se puede modificar un producto con unidades pagadas.');
+ showToast.warning('No se puede modificar el producto', 'Ya tiene unidades pagadas.');
  setEditingItem(null);
  return;
  }
@@ -242,12 +242,12 @@ export function SidebarDetails({
  const handleDeleteItem = async () => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
- showToast.error('Error','Este ítem ya fue confirmado y no puede eliminarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.warning('No se puede eliminar un ítem confirmado', 'Usa «Anular ítem» si ya no está disponible.');
  setEditingItem(null);
  return;
  }
  if (editingItem.pagado_cantidad && editingItem.pagado_cantidad > 0) {
- showToast.error('Error','No se puede eliminar un producto con unidades pagadas.');
+ showToast.warning('No se puede eliminar el producto', 'Ya tiene unidades pagadas.');
  setEditingItem(null);
  return;
  }
@@ -270,7 +270,7 @@ export function SidebarDetails({
  try {
  await aplicarCortesiaItem(editingItem.id, motivo, porcentaje, cantidad);
  } catch (e) {
- showToast.error('No se pudo aplicar la cortesía', e instanceof Error ? e.message : undefined);
+ showToast.fallo('aplicar la cortesía', e);
  return;
  }
  setEditingItem(null);
@@ -278,7 +278,7 @@ export function SidebarDetails({
 
  const handleConfirmDividir = async () => {
  setActivandoMultiple(true);
- try { await onActivarMultiple?.(); setConfirmDividir(false); } catch { showToast.error('No se pudo activar mesa múltiple'); } finally { setActivandoMultiple(false); }
+ try { await onActivarMultiple?.(); setConfirmDividir(false); } catch (e) { showToast.fallo('activar mesa múltiple', e); } finally { setActivandoMultiple(false); }
  };
 
  const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
@@ -294,7 +294,7 @@ export function SidebarDetails({
  const handleUpdateModifiers = async (selected: string[]) => {
  if (!editingItem) return;
  if (esItemBloqueado(editingItem)) {
- showToast.error('Error','Este ítem ya fue confirmado y no puede modificarse. Use "Anular ítem" si ya no está disponible.');
+ showToast.warning('No se puede modificar un ítem confirmado', 'Usa «Anular ítem» si ya no está disponible.');
  setEditingModifiers(false);
  setEditingItem(null);
  return;
@@ -623,7 +623,7 @@ export function SidebarDetails({
  }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
- if (!reimprimir) showToast.success(esAdicional ?'Adicional enviado':'Orden Confirmada','Un solo ticket de cocina para toda la mesa.');
+ if (!reimprimir) showToast.success(esAdicional ?'Adicional enviado':'Orden confirmada','Un solo ticket de cocina para toda la mesa.');
  };
 
  const handlePrintPrecuenta = () => {
@@ -683,7 +683,7 @@ export function SidebarDetails({
  }), 'Comanda de cocina');
  });
  setPreviewOpened(true);
- showToast.success('Orden Confirmada','La comanda fue enviada a cocina.');
+ showToast.success('Orden confirmada','La comanda fue enviada a cocina.');
  } else if (hayItemsNuevos) {
  const content = generarComandaCocina(
  activeComanda,
@@ -788,11 +788,11 @@ export function SidebarDetails({
  });
  await liberarMesaSiSinOperativas(activeComanda.mesa_id);
  setShowRoomChargeModal(false);
- showToast.success('Transferencia exitosa','La comanda fue asignada a la habitación.');
+ showToast.success('Comanda transferida','Quedó asignada a la habitación.');
  onResuelta();
  } catch (error) {
  console.error(error);
- showToast.error('Error','No se pudo transferir la comanda a la habitación.');
+ showToast.error('No se pudo transferir la comanda');
  } finally {
  enCursoRef.current = false;
  setProcesandoHab(false);
@@ -825,7 +825,7 @@ export function SidebarDetails({
  showToast.success('Cuenta vinculada', 'Esta cuenta quedó asociada a la habitación.');
  } catch (error) {
  console.error(error);
- showToast.error('Error', 'No se pudo vincular la cuenta a la habitación.');
+ showToast.error('No se pudo vincular la cuenta');
  } finally {
  enCursoRef.current = false;
  setProcesandoHab(false);
@@ -846,7 +846,7 @@ export function SidebarDetails({
  showToast.success('Vínculo quitado', 'La cuenta vuelve a ser de mesa.');
  } catch (error) {
  console.error(error);
- showToast.error('Error', 'No se pudo quitar el vínculo.');
+ showToast.error('No se pudo quitar el vínculo');
  } finally {
  enCursoRef.current = false;
  setProcesandoHab(false);
@@ -958,7 +958,7 @@ export function SidebarDetails({
  }
  } catch (ventaError) {
  console.error('No se pudo registrar el saldo en la venta, se continúa cerrando la cuenta:', ventaError);
- showToast.error('Aviso','La cuenta se cerró, pero no se pudo registrar el saldo en Centro de Ventas. Revísalo manualmente.');
+ showToast.warning('Cuenta cerrada, falta registrar el saldo', 'No se registró en Centro de Ventas. Revísalo manualmente.');
  }
  }
 
@@ -1001,7 +1001,7 @@ export function SidebarDetails({
  onResuelta();
  } catch (error) {
  console.error(error);
- showToast.error('Error','Hubo un error al cerrar la cuenta.');
+ showToast.error('No se pudo cerrar la cuenta');
  } finally {
  enCursoRef.current = false;
  setProcesandoCierre(false);
@@ -1066,7 +1066,7 @@ export function SidebarDetails({
  puedeVincularHabitacion={!vistaTodas && !!activeComanda && (activeRoomAccounts.length > 0 || !!activeComanda.habitacion_cuenta_id)}
  onVincularHabitacion={() => {
  if (activeRoomAccounts.length === 0 && !activeComanda?.habitacion_cuenta_id) {
- showToast.error('Aviso','No hay habitaciones activas para vincular.');
+ showToast.warning('No hay habitaciones activas', 'No hay cuentas de habitación a las que vincular.');
  return;
  }
  setShowVincularHab(true);
@@ -1182,7 +1182,7 @@ export function SidebarDetails({
  onPedirCuenta={handlePedirCuenta}
  onCargarHabitacion={() => {
  if (activeRoomAccounts.length === 0) {
- showToast.error('Aviso','No hay habitaciones activas para cargar.');
+ showToast.warning('No hay habitaciones activas', 'No hay cuentas de habitación a las que cargar.');
  return;
  }
  setShowRoomChargeModal(true);
