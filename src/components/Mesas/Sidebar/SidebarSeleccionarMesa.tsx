@@ -1,3 +1,4 @@
+import { esMesaBarra } from '../../../lib/mesaBarra';
 import { useEffect, useState } from'react';
 import type { Mesa } from'../../../db/database';
 import { ReservaHeader } from'./ReservaHeader';
@@ -18,7 +19,7 @@ export function SidebarSeleccionarMesa({ onSelectMesa, onClose }: SidebarSelecci
  if (!alive) return;
  const docs = await rxDb.mesas.find({ selector: { estado:'libre', _deleted: { $ne: true } } }).exec();
  if (!alive) return;
- setMesasLibres(docs.map((doc: any) => doc.toJSON()).filter((mesa: Mesa) => mesa.piso?.toLowerCase() !=='habitaciones'));
+ setMesasLibres(docs.map((doc: any) => doc.toJSON()).filter((mesa: Mesa) => mesa.piso?.toLowerCase() !=='habitaciones' && !esMesaBarra(mesa)));
  };
  run().catch(console.error);
  return () => { alive = false; };

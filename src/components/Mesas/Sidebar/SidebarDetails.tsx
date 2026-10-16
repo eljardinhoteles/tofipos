@@ -1,3 +1,4 @@
+import { esMesaBarra } from '../../../lib/mesaBarra';
 import { imprimirConAviso } from '../../../lib/imprimir';
 import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
@@ -579,7 +580,7 @@ export function SidebarDetails({
  const hayConfirmadaCocina = kitchenGrupo ? kitchenGrupo.algunaConfirmada : confirmadaEfectiva;
  const sinItemsCocina = kitchenGrupo ? kitchenGrupo.vivos.length === 0 : itemsCocina.length === 0;
  // Sin ningún ítem en toda la mesa (en mesa múltiple, en ninguna subcomanda):
- // "Anular" pasa a ser "Cerrar mesa", sin motivo.
+ // "Anular" pasa a ser "Cancelar", sin motivo.
  const mesaSinItems = kitchenGrupo
  ? kitchenGrupo.vivos.length === 0
  : !itemsCocina.some((i: any) => !i.anulado);
@@ -1055,6 +1056,7 @@ export function SidebarDetails({
  un header sólido se veía mal dentro del bottom-sheet redondeado. */}
  <ComandaHeader
  mesaNombre={selectedMesa.nombre}
+ esBarra={esMesaBarra(selectedMesa)}
  titulo={vistaTodas ?'Toda la mesa': (activeComanda?.cliente ||'Público General')}
  subtitulo={vistaTodas ? `${gruposTodas.length} subcomandas` : `COMANDA #${folioLabel(activeComanda)}`}
  enCuenta={activeComanda?.estado ==='cuenta'}

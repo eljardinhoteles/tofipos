@@ -1,3 +1,5 @@
+import { esMesaBarra } from '../../../lib/mesaBarra';
+import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { imprimirConAviso } from '../../../lib/imprimir';
 import { ComandaTotales } from'./ComandaTotales';
 import { ReservaHeader } from './ReservaHeader';
@@ -6,7 +8,7 @@ import { ComandaLiquidacion } from'./ComandaLiquidacion';
 import { ComandaDividida, type ParteDividida } from'./ComandaDividida';
 import { liquidacionComanda } from'../../../lib/anticipoMesa';
 import { useEffect, useState, useMemo } from'react';
-import { Printer, User, Bed, ForkKnife } from'@phosphor-icons/react';
+import { Printer, User, Bed, ForkKnife, Storefront } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { ComandaItemRow } from'./ComandaItemRow';
 import { useIvaActivo } from'../../../hooks/useIvaActivo';
@@ -218,7 +220,7 @@ export function SidebarReceiptViewer({
  desktop según el estado de la comanda. */}
  <ReservaHeader
  tono={esComandaEnHabitacionActiva ? 'info' : isAnulada ? 'destructive' : 'primary'}
- badge={<span className="t-titulo">{badgeNum}</span>}
+ badge={esMesaBarra(selectedMesa) ? <Storefront size={20} weight="bold"/> : <span className="t-titulo">{badgeNum}</span>}
  titulo={`Comanda #${folioLabel(activeComanda)}`}
  subtitulo={[
  activeComanda?.created_at && `${new Date(activeComanda.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric'})} · ${new Date(activeComanda.created_at).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit'})}`,
@@ -247,8 +249,7 @@ export function SidebarReceiptViewer({
  return`${prefix}${roomName}`;
  }
  const name = selectedMesa?.nombre || activeComanda?.mesa_nombre ||'Desconocida';
- const prefix = name.toLowerCase().startsWith('mesa') || name.toLowerCase().startsWith('hab') ?'':'Mesa';
- return`${prefix}${name}`;
+ return name.toLowerCase().startsWith('hab') ? name : nombreMesaCompleto(name);
  })()}
  </span>
  </div>

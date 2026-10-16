@@ -78,6 +78,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
   const [bancoDestino, setBancoDestino] = useState('');
   const [numeroComprobanteTransf, setNumeroComprobanteTransf] = useState('');
   const [redTarjeta, setRedTarjeta] = useState('');
+  const [numeroComprobanteTarjeta, setNumeroComprobanteTarjeta] = useState('');
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [descripcion, setDescripcion] = useState('');
   const [nuevoClienteOpen, setNuevoClienteOpen] = useState(false);
@@ -141,7 +142,10 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
           monto: montoNum,
           metodo_pago: metodo,
           transferencia_banco: metodo === 'transferencia' ? (bancoDestino || undefined) : undefined,
-          transferencia_referencia: metodo === 'transferencia' ? (numeroComprobanteTransf.trim() || undefined) : undefined,
+          // El n.º de comprobante de tarjeta (opcional) comparte campo con el de transferencia: el método del movimiento los distingue.
+          transferencia_referencia: metodo === 'transferencia'
+            ? (numeroComprobanteTransf.trim() || undefined)
+            : metodo === 'tarjeta' ? (numeroComprobanteTarjeta.trim() || undefined) : undefined,
           tarjeta_red: metodo === 'tarjeta' ? (redTarjeta || undefined) : undefined,
           comprobante_url,
           usuario_id: currentMesero?.id,
@@ -246,6 +250,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                   {!esCredito && metodo === 'transferencia' && bancoDestino && <Dato etiqueta="Banco destino" valor={bancoDestino} />}
                   {!esCredito && metodo === 'transferencia' && <Dato etiqueta="N.º de comprobante" valor={numeroComprobanteTransf.trim()} />}
                   {!esCredito && metodo === 'tarjeta' && <Dato etiqueta="Red de cobro" valor={redTarjeta} />}
+                  {!esCredito && metodo === 'tarjeta' && numeroComprobanteTarjeta.trim() && <Dato etiqueta="N.º de comprobante" valor={numeroComprobanteTarjeta.trim()} />}
                   {!esCredito && comprobanteFile && <Dato etiqueta="Comprobante" valor={comprobanteFile.name} />}
                   {esCredito && <Dato etiqueta="Saldo" valor="Queda pendiente de cobro" />}
                 </div>
@@ -386,6 +391,9 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                 <Label className={etiqueta}>Red de cobro *</Label>
                 <RedCobroRadios redes={redesTarjeta} value={redTarjeta} onChange={setRedTarjeta} invalido={intentado && falta.red} />
                 {intentado && falta.red && <p className="t-meta text-destructive">Selecciona la red de cobro</p>}
+                <Label htmlFor={`${uid}-5`} className={etiqueta}>N.º de comprobante (opcional)</Label>
+                <Input id={`${uid}-5`} type="text" placeholder="Ej. 000123456" value={numeroComprobanteTarjeta}
+                  onChange={(e) => setNumeroComprobanteTarjeta(e.target.value)} className="h-12 text-base" />
               </div>
             )}
 

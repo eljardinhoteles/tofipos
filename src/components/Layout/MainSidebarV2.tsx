@@ -8,14 +8,14 @@ import {
   SquaresFour,
   Receipt,
   CalendarCheck,
-  Bag,
+  ShoppingCart,
   Gear,
   Users,
   User,
   SignOut,
   ArrowsClockwise,
-  ChartBar,
-  CurrencyDollar,
+  PresentationChart,
+  CurrencyCircleDollar,
   Pulse,
   Buildings,
   CalendarStar,
@@ -28,6 +28,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { useUI } from '../../context/UIContext';
 import { NAV_ACCENT } from '../../lib/navAccent';
 import { usePermisos, rutaPermitida, ROL_LABELS } from '../../hooks/usePermisos';
+import { useActividadDia } from '../../hooks/useActividadDia';
 
 // Cada módulo tiene su propio color de activo (claro, pensado para el fondo oscuro
 // de la barra). Es identidad de navegación: no sustituye a los colores semánticos.
@@ -35,11 +36,11 @@ const navItemsV2 = [
   { label: 'Mesas', to: '/v2/mesas', icon: SquaresFour, accent: NAV_ACCENT['/v2/mesas'] },
   { label: 'Órdenes', to: '/v2/ordenes', icon: Receipt, accent: NAV_ACCENT['/v2/ordenes'] },
   { label: 'Reservas', to: '/v2/reservas', icon: CalendarCheck, accent: NAV_ACCENT['/v2/reservas'] },
-  { label: 'Productos', to: '/v2/menu', icon: Bag, accent: NAV_ACCENT['/v2/menu'] },
+  { label: 'Productos', to: '/v2/menu', icon: ShoppingCart, accent: NAV_ACCENT['/v2/menu'] },
   { label: 'Planificador', to: '/v2/planificacion', icon: CalendarStar, accent: NAV_ACCENT['/v2/planificacion'] },
   { label: 'Clientes', to: '/v2/clientes', icon: Users, accent: NAV_ACCENT['/v2/clientes'] },
-  { label: 'Ventas', to: '/v2/centro-ventas', icon: CurrencyDollar, accent: NAV_ACCENT['/v2/centro-ventas'] },
-  { label: 'Métricas', to: '/v2/metricas', icon: ChartBar, accent: NAV_ACCENT['/v2/metricas'] },
+  { label: 'Ventas', to: '/v2/centro-ventas', icon: CurrencyCircleDollar, accent: NAV_ACCENT['/v2/centro-ventas'] },
+  { label: 'Métricas', to: '/v2/metricas', icon: PresentationChart, accent: NAV_ACCENT['/v2/metricas'] },
 ];
 
 const settingsItem = { label: 'Ajustes', to: '/v2/ajustes', icon: Gear, accent: NAV_ACCENT['/v2/ajustes'] };
@@ -70,7 +71,7 @@ function ModuleLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
           : 'border-transparent text-nav-foreground/90 hover:text-nav-foreground'
       )}
     >
-      <Icon size={24} weight={isActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/mod:scale-110 group-hover/mod:-translate-y-0.5')} />
+      <Icon size={24} weight={isActive ? 'duotone' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/mod:scale-110 group-hover/mod:-translate-y-0.5')} />
       {isActive && (
         <span className="w-full px-1 text-center t-dato leading-tight truncate">
           {item.label}
@@ -97,6 +98,9 @@ function UtilTooltip({ label, children }: { label: string; children: React.React
 export function MainSidebarV2() {
   const { currentMesero, adminUser, logoutAdmin, logoutMesero } = useAuth();
   const { setActividadOpen } = useUI();
+  // Recuento de la actividad de hoy para el badge del botón (el drawer abre su propia vista, con filtros).
+  const { eventos: eventosHoy } = useActividadDia(true);
+  const totalActividad = eventosHoy.length;
   const location = useLocation();
   const permisos = usePermisos();
   const visibleNavItems = navItemsV2.filter(item => rutaPermitida(permisos, item.to));
@@ -148,27 +152,36 @@ export function MainSidebarV2() {
         <AguacateEgg className="w-8 h-8" />
       </div>
 
-      <nav aria-label="Principal" className="flex-1 min-h-0 w-full overflow-y-auto hide-scrollbar flex flex-col items-center pb-2">
+      <nav aria-label="Principal" className="flex-1 min-h-0 w-full overflow-y-auto hide-scrollbar flex flex-col items-center pb-6">
         {visibleNavItems.map(item => (
           <ModuleLink key={item.label} item={item} isActive={isActivePath(item.to)} />
         ))}
       </nav>
 
-      <Separator className="bg-nav-foreground/10" />
-
-      <div className="flex flex-col items-center gap-1 py-4">
+      {/* Actividad de hoy: sobre el separador, con fondo sólido (la línea pasa por detrás). */}
+      <div className="relative w-full flex items-center justify-center">
+        <Separator className="bg-nav-foreground/10" />
         <UtilTooltip label="Actividad de hoy">
           <Button
             variant="ghost"
             size="icon"
-            className={utilButtonClass}
+            className={cn(
+              // Base opaca (bg-nav) para que la línea del separador no se transparente; el tinte va en una capa encima.
+              "absolute left-1/2 top-1/2 z-10 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-0 bg-nav hover:bg-nav focus-visible:ring-nav-foreground/60 before:absolute before:inset-0 before:rounded-full before:content-[''] before:transition-colors",
+              // Con actividad hoy el fondo y el ícono toman el acento de la navegación; sin actividad, el fondo neutro.
+              totalActividad > 0
+                ? 'text-nav-accent before:bg-nav-accent/30 hover:before:bg-nav-accent/40'
+                : 'text-nav-foreground before:bg-nav-foreground/15 hover:before:bg-nav-foreground/25'
+            )}
             onClick={() => setActividadOpen(true)}
-            aria-label="Abrir actividad de hoy"
+            aria-label={totalActividad > 0 ? 'Abrir actividad de hoy (hay actividad)' : 'Abrir actividad de hoy'}
           >
-            <Pulse size={24} className={cn(ICONO_ANIM, 'group-hover/button:scale-110')} />
+            <Pulse size={24} weight="bold" className={cn('relative', ICONO_ANIM, 'group-hover/button:scale-110')} />
           </Button>
         </UtilTooltip>
+      </div>
 
+      <div className="flex flex-col items-center gap-1 pt-8 pb-4">
         {permisos.verAjustes && (
           <UtilTooltip label={settingsItem.label}>
             <Button asChild variant="ghost" size="icon" className={cn(utilButtonClass, settingsActive && 'text-nav-foreground bg-nav-foreground/10')}>

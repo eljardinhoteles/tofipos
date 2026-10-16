@@ -57,9 +57,9 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
         </Button>
         {p.mesaSinItems ? (
           // Mesa abierta sin ningún pedido (el cliente se fue): se cierra
-          // directo y la comanda vacía se borra (useTableActions › cerrar_vacia).
+          // directo y la comanda vacía se borra (botón "Cancelar": no guarda ni anula nada) (useTableActions › cerrar_vacia).
           <Button variant="destructive" className="w-full h-10 font-bold" onClick={p.onCerrarVacia}>
-            Cerrar mesa
+            Cancelar
           </Button>
         ) : (
           <Button variant="dangerGhost" className="w-full h-10 font-bold" onClick={p.onAnular}>

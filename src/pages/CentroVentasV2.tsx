@@ -421,6 +421,7 @@ export default function CentroVentasV2() {
                     // atención con las ventas activas al escanear la lista.
                     const isAnulada = estado === 'anulado';
                     // Saldo solo cuando hubo un cobro parcial; si está todo pendiente, el total ya lo dice.
+                    const excedente = !isAnulada && item.saldo < -0.01;
                     const parcial = item.saldo > 0.01 && item.saldo < item.montoTotal - 0.01;
                     const detalleVenta = [limpiarReferencia(item.venta.referencia) || null, parcial && !isAnulada ? `Saldo $${item.saldo.toFixed(2)}` : null].filter(Boolean).join(' · ');
                     return (
@@ -444,7 +445,11 @@ export default function CentroVentasV2() {
                               {item.venta.tipo === 'credito' && estado !== 'completa' && (
                                 <span className={cn("t-meta", isAnulada ? "text-muted-foreground" : "text-destructive")}>Crédito</span>
                               )}
-                              <span className={cn("t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
+                              {/* Excedente: se cobró de más que el monto de la venta (saldo negativo), igual que en el detalle. */}
+                              {excedente && (
+                                <span role="img" aria-label="Con excedente" title="Con excedente" className="size-2 rounded-full bg-info self-center shrink-0" />
+                              )}
+                              <span className={cn("t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : excedente ? "text-info-foreground" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
                                 ${item.montoTotal.toFixed(2)}
                               </span>
                             </span></span>

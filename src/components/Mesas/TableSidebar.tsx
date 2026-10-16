@@ -21,6 +21,7 @@ import { useTableActions } from '../../hooks/useTableActions';
 import { getMesaEstadoEfectivo, isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
 import { useRxMesas } from '../../hooks/useRxMesas';
+import { esMesaBarra } from '../../lib/mesaBarra';
 import { useRxPisos } from '../../hooks/useRxPisos';
 import { useRxComandas } from '../../hooks/useRxComandas';
 
@@ -71,7 +72,7 @@ export function TableSidebar({
   const { comandas: allComandasRaw } = useRxComandas();
 
   const allMesas = useMemo(
-    () => [...allMesasUnsorted].sort((a, b) =>
+    () => allMesasUnsorted.filter(m => !esMesaBarra(m)).sort((a, b) =>
       (a.piso || '').localeCompare(b.piso || '') || a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
     ),
     [allMesasUnsorted]
@@ -656,6 +657,8 @@ export function TableSidebar({
                 guestCount,
                 clientId: resolvedId,
                 habitacionCuentaId,
+                // La venta directa siempre nace como Mesa Múltiple: varias ventas a la vez.
+                mesaMultiple: esMesaBarra(selectedMesaEffective),
               }));
               onAction(selectedMesaEffective, `abrir:${payload}`);
             }}

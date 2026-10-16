@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { limpiarReferencia } from '../../lib/nombreMesa';
 import {
   Receipt, Prohibit, Paperclip, Trash,
-  CurrencyDollar, ArrowUp, ArrowDown, FileText, XCircle, CreditCard, ChatText,
+  CurrencyDollar, ArrowUp, ArrowDown, Percent, FileText, XCircle, CreditCard, ChatText,
   CloudCheck, CloudWarning, ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ const MOVIMIENTO_ICON: Record<VentaMovimientoTipo, typeof Receipt> = {
   ajuste: ArrowUp,
   pago: CurrencyDollar,
   reembolso: ArrowDown,
+  retencion: Percent,
   anclar: Receipt,
   facturar: FileText,
   anular: XCircle,
@@ -50,6 +51,7 @@ const MOVIMIENTO_LABEL: Record<VentaMovimientoTipo, string> = {
   ajuste: 'Ajuste',
   pago: 'Pago',
   reembolso: 'Reembolso',
+  retencion: 'Retención',
   anclar: 'Facturado',
   facturar: 'Facturado',
   anular: 'Anulado',
@@ -64,6 +66,7 @@ const MOVIMIENTO_LABEL: Record<VentaMovimientoTipo, string> = {
 const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
   pago: 'bg-muted text-muted-foreground',
   reembolso: 'bg-warning-soft text-warning-foreground',
+  retencion: 'bg-info/15 text-info-foreground',
   ajuste: 'bg-info/15 text-info-foreground',
   anclar: 'bg-special-soft text-special-foreground',
   facturar: 'bg-special-soft text-special-foreground',

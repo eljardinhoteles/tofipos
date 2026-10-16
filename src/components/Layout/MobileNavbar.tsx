@@ -22,11 +22,11 @@ import {
  SquaresFour,
  Receipt,
  CalendarCheck,
- Bag,
+ ShoppingCart,
  Gear,
  Users,
- ChartBar,
- CurrencyDollar,
+ PresentationChart,
+ CurrencyCircleDollar,
  ArrowsClockwise,
  UserGear,
  SignOut,
@@ -51,10 +51,10 @@ const navItemsMobile = [
  { label:'Órdenes', to:'/v2/ordenes', icon: Receipt },
  { label:'Reservas', to:'/v2/reservas', icon: CalendarCheck },
  // Centro de Ventas se usa en PC: en el celular queda visible pero inactivo.
- { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyDollar, soloPc: true },
+ { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyCircleDollar, soloPc: true },
  { label:'Clientes', to:'/v2/clientes', icon: Users },
- { label:'Productos', to:'/v2/menu', icon: Bag },
- { label:'Métricas', to:'/v2/metricas', icon: ChartBar },
+ { label:'Productos', to:'/v2/menu', icon: ShoppingCart },
+ { label:'Métricas', to:'/v2/metricas', icon: PresentationChart },
  { label:'Ajustes', to:'/v2/ajustes', icon: Gear },
 ];
 

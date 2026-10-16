@@ -10,7 +10,10 @@ export interface VentaConMovimientos {
   montoTotal: number   // suma de movimientos tipo 'ajuste'
   totalPagado: number  // suma de movimientos tipo 'pago'
   totalReembolsado: number // suma de movimientos tipo 'reembolso'
-  saldo: number         // montoTotal - totalPagado + totalReembolsado
+  // Retenciones / comisiones que el cliente descontó al pagar: bajan el saldo pero no son dinero recibido
+  // (no entran al cierre de caja) y el monto de la venta, y por tanto la factura, sigue siendo el total.
+  totalRetenido: number
+  saldo: number         // montoTotal - totalPagado - totalRetenido + totalReembolsado
   // 'anclar' y 'facturar' se fusionaron en una sola acción (vincular
   // número de factura) — facturado es true si existe cualquiera de los dos
   // con numero_factura, para leer también historiales previos a la fusión.
@@ -45,6 +48,7 @@ function nombreComprobante(m: { tipo: string; monto?: number; metodo_pago?: stri
     case 'anclar': return m.numero_factura || 'Factura'
     case 'pago': return `Pago${m.metodo_pago ? ` ${m.metodo_pago}` : ''}${monto}`
     case 'reembolso': return `Reembolso${monto}`
+    case 'retencion': return `Retención${monto}`
     case 'ajuste': return `Ajuste${monto}`
     // Con documento sin texto, el motivo es el nombre del archivo; con texto, el motivo es el comentario (no un nombre).
     case 'comentario': return m.motivo && NOMBRE_DE_ARCHIVO.test(m.motivo) ? m.motivo : 'Documento adjunto'
@@ -60,6 +64,7 @@ export function calcularVenta(venta: RxVenta): VentaConMovimientos {
   let montoTotal = 0
   let totalPagado = 0
   let totalReembolsado = 0
+  let totalRetenido = 0
   let facturado = false
   let anulado = false
   let ultimaFechaFactura: string | null = null
@@ -98,6 +103,7 @@ export function calcularVenta(venta: RxVenta): VentaConMovimientos {
     if (m.tipo === 'ajuste') montoTotal += m.monto ?? 0
     else if (m.tipo === 'pago') { totalPagado += m.monto ?? 0; metodoPago = m.metodo_pago ?? metodoPago; ultimaFechaPago = m.fecha }
     else if (m.tipo === 'reembolso') totalReembolsado += m.monto ?? 0
+    else if (m.tipo === 'retencion') totalRetenido += m.monto ?? 0
     else if (m.tipo === 'anclar' || m.tipo === 'facturar') {
       if (m.numero_factura) {
         facturado = true;
@@ -138,7 +144,8 @@ export function calcularVenta(venta: RxVenta): VentaConMovimientos {
     montoTotal,
     totalPagado,
     totalReembolsado,
-    saldo: montoTotal - totalPagado + totalReembolsado,
+    totalRetenido,
+    saldo: montoTotal - totalPagado - totalRetenido + totalReembolsado,
     facturado,
     facturaAlDia,
     anulado,

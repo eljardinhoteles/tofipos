@@ -13,14 +13,18 @@ import { useRxMesas } from '../hooks/useRxMesas';
 import { ReservasDelDia } from '../components/Mesas/ReservasDelDia';
 import { useRxPisos } from '../hooks/useRxPisos';
 import { useRxComandas } from '../hooks/useRxComandas';
-import { Plus, Basket, Bed, ClipboardText, Receipt } from '@phosphor-icons/react';
+import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront } from '@phosphor-icons/react';
 import { useUI } from '../context/UIContext';
 import { useSearchParams } from 'react-router-dom';
 import { SidebarKitchenReport } from '../components/Mesas/Sidebar/SidebarKitchenReport';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { generarSolicitudDatosFacturacion } from '../services/printTemplateEngine';
 import { queueSolicitudFacturacionPrint, getPrintServerStatus } from '../lib/printServerClient';
 import { showToast } from '@/lib/toast';
+import { useTableActions } from '../hooks/useTableActions';
+import { esMesaBarra, obtenerOCrearMesaBarra, NOMBRE_MESA_BARRA, PISO_BARRA } from '../lib/mesaBarra';
 
 export default function MesasV2() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -92,9 +96,11 @@ export default function MesasV2() {
     }, [handleOpenConfig, searchParams, setSearchParams]);
 
     const { pisos: dbPisos } = useRxPisos() as { pisos: Piso[] };
-    const { mesas: allMesas } = useRxMesas() as {
+    const { mesas: mesasConBarra } = useRxMesas() as {
         mesas: Array<{ id: string; nombre: string; estado: 'libre' | 'ocupada' | 'cuenta'; piso: string; capacidad?: number }>
     };
+    // La mesa virtual de venta directa no se pinta en el mapa.
+    const allMesas = useMemo(() => mesasConBarra.filter(m => !esMesaBarra(m)), [mesasConBarra]);
     const { comandas: allComandas } = useRxComandas() as { comandas: Comanda[] };
     const [allCuentas, setAllCuentas] = useState<HabitacionCuenta[]>([]);
     const [reportSidebarOpen, setReportSidebarOpen] = useState(false);
@@ -364,6 +370,37 @@ export default function MesasV2() {
         setConfigView('none');
     }, [isHabitacionesSeleccionado, setSelectedMesaEsHabitacion, setSelectedMesaId, setViewingComandaId, setConfigView]);
 
+    const { handleTableAction } = useTableActions();
+    const handleVentaDirecta = useCallback(async () => {
+        try {
+            const mesaId = await obtenerOCrearMesaBarra();
+            setSelectedMesaEsHabitacion(false);
+            setSelectedMesaId(mesaId);
+            setViewingComandaId(null);
+            setConfigView('none');
+            // Sin ventas abiertas se abre la barra de una vez (sin formulario de apertura)
+            // y se entra directo a productos; con ventas abiertas se muestran para elegir o agregar otra.
+            const hayAbiertas = allComandas.some(c => c.mesa_id === mesaId && isOperativeComanda(c));
+            if (!hayAbiertas) {
+                const payload = btoa(JSON.stringify({ customerName: '', guestCount: 1, clientId: '', habitacionCuentaId: '', mesaMultiple: true }));
+                await handleTableAction(
+                    { id: mesaId, nombre: NOMBRE_MESA_BARRA, estado: 'libre', piso: PISO_BARRA } as any,
+                    `abrir:${payload}`,
+                    (res) => { if (res === 'productos') setMesaView('productos'); }
+                );
+            }
+        } catch (error) {
+            showToast.error('No se pudo abrir la venta directa', error instanceof Error ? error.message : undefined);
+        }
+    }, [allComandas, handleTableAction, setSelectedMesaEsHabitacion, setSelectedMesaId, setViewingComandaId, setConfigView, setMesaView]);
+
+    // Ventas abiertas en la barra (subcomandas operativas), para el contador del botón.
+    const ventasDirectasAbiertas = useMemo(() => {
+        const barraIds = new Set(mesasConBarra.filter(esMesaBarra).map(m => m.id));
+        if (barraIds.size === 0) return 0;
+        return allComandas.filter(c => barraIds.has(c.mesa_id) && isOperativeComanda(c)).length;
+    }, [mesasConBarra, allComandas]);
+
     useEffect(() => {
         if (dbPisos.length === 0) return;
         if (selectedPiso && dbPisos.some(p => p.nombre === selectedPiso)) return;
@@ -410,7 +447,7 @@ export default function MesasV2() {
                                         setReportSidebarOpen(true);
                                     }}
                                     className="hidden sm:flex size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground/10 hover:bg-nav-foreground/15 active:scale-95 text-nav-foreground items-center justify-center transition-all shrink-0 cursor-pointer">
-                                    <ClipboardText size={18} weight="bold" />
+                                    <ListChecks size={18} weight="bold" />
                                 </button>
 
                                 <button
@@ -419,7 +456,7 @@ export default function MesasV2() {
                                         setMesaView('productos');
                                     }}
                                     className="size-9 pointer-coarse:size-11 rounded-2xl bg-nav-foreground active:scale-95 text-nav flex items-center justify-center transition-all shadow-xs shrink-0 cursor-pointer">
-                                    <Basket size={18} weight="bold" />
+                                    <ShoppingCart size={18} weight="bold" />
                                 </button>
                             </div>
                         </header>
@@ -655,6 +692,28 @@ export default function MesasV2() {
                 allComandas={allComandas}
                 allCuentas={allCuentas}
             />
+            {/* Venta directa (barra): solo escritorio y solo con el mapa a la vista */}
+            {!isMobile && vistaFondo === 'mapa' && (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                    <Button
+                        size="lg"
+                        // Con ventas abiertas el botón pasa a naranja (el de "cuenta pedida"); sin ventas, el verde primario.
+                        variant={ventasDirectasAbiertas > 0 ? 'warning' : 'default'}
+                        onClick={handleVentaDirecta}
+                        className="fixed bottom-6 right-6 z-30 h-10 font-bold shadow-lg">
+                        <Storefront size={18} weight="bold" />
+                        Venta directa
+                        {ventasDirectasAbiertas > 0 && (
+                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-white text-warning-foreground text-xs font-bold inline-flex items-center justify-center tabular-nums">
+                                {ventasDirectasAbiertas}
+                            </span>
+                        )}
+                    </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">Venta rápida sin abrir mesa.</TooltipContent>
+                </Tooltip>
+            )}
         </div>
     );
 }

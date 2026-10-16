@@ -1,9 +1,11 @@
-import { ArrowsLeftRight, Bed, X } from '@phosphor-icons/react';
+import { ArrowsLeftRight, Bed, Storefront, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 interface ComandaHeaderProps {
   mesaNombre: string;
+  /** Venta directa (barra): el badge muestra un ícono en vez del número de mesa. */
+  esBarra?: boolean;
   /** Línea principal: cliente de la comanda o "Toda la mesa". */
   titulo: string;
   /** Línea secundaria: "COMANDA #12" o "3 subcomandas". */
@@ -25,7 +27,7 @@ interface ComandaHeaderProps {
 // de estado (verde / naranja en cuenta pedida); en móvil queda neutro y solo el
 // badge de mesa lleva el color, porque un header sólido se veía mal dentro del
 // bottom-sheet redondeado.
-export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, puedeVincularHabitacion, onVincularHabitacion, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
+export function ComandaHeader({ mesaNombre, esBarra, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, puedeVincularHabitacion, onVincularHabitacion, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
   return (
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
  enCuenta?"md:bg-warning-foreground md:text-white":"md:bg-primary md:text-primary-foreground")}>
@@ -36,7 +38,7 @@ export function ComandaHeader({ mesaNombre, titulo, subtitulo, enCuenta, linkedM
  onClick={onCambiarMesa}
  className={cn("w-10 h-10 pointer-coarse:size-11 rounded-2xl t-titulo flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95",
  enCuenta?"bg-warning-foreground text-white md:bg-white/15":"bg-primary text-primary-foreground md:bg-primary-foreground/15")}>
- {mesaNombre.replace(/^Mesa\s*/i,'')}
+ {esBarra ? <Storefront size={20} weight="bold"/> : mesaNombre.replace(/^Mesa\s*/i,'')}
  </button>
  <div className="flex flex-col">
  <h3 className={cn("t-titulo leading-tight", enCuenta?"md:text-white":"md:text-primary-foreground")}>

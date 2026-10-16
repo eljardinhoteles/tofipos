@@ -1,3 +1,4 @@
+import { esMesaBarra } from '../lib/mesaBarra';
 import { useState, useEffect } from'react';
 import { type Reserva } from'../db/database';
 import { useUI } from'../context/UIContext';
@@ -78,7 +79,7 @@ export default function ReservasV2() {
  });
  mesasSub = mesasQuery.$.subscribe((docs: any[]) => {
  if (!alive) return;
- setMesas(docs.map((doc: any) => doc.toJSON()));
+ setMesas(docs.map((doc: any) => doc.toJSON()).filter((m: any) => !esMesaBarra(m)));
  });
  })().catch(() => {});
 

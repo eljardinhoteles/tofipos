@@ -422,7 +422,7 @@ export type VentaOrigen = 'mesa' | 'reserva_restaurante' | 'reserva_hotel' | 'ha
 // después contra una agencia/empresa corporativa).
 export type VentaTipo = 'directa' | 'credito'
 
-export type VentaMovimientoTipo = 'ajuste' | 'pago' | 'reembolso' | 'anclar' | 'facturar' | 'anular' | 'marcar_credito' | 'comentario'
+export type VentaMovimientoTipo = 'ajuste' | 'pago' | 'reembolso' | 'retencion' | 'anclar' | 'facturar' | 'anular' | 'marcar_credito' | 'comentario'
 
 // Un evento inmutable en el historial de una venta — nunca se edita, solo
 // se agregan más. 'ajuste' con monto positivo es cómo nace el monto total
@@ -897,7 +897,7 @@ const ventaMovimientoSubSchema = {
   type: 'object',
   properties: {
     id: { type: 'string', maxLength: 100 },
-    tipo: { type: 'string', enum: ['ajuste', 'pago', 'reembolso', 'anclar', 'facturar', 'anular', 'marcar_credito', 'comentario'] },
+    tipo: { type: 'string', enum: ['ajuste', 'pago', 'reembolso', 'retencion', 'anclar', 'facturar', 'anular', 'marcar_credito', 'comentario'] },
     monto: { type: ['number', 'null'] },
     metodo_pago: { type: ['string', 'null'], enum: ['efectivo', 'tarjeta', 'transferencia', 'credito_agencia', 'otros', null] },
     tarjeta_red: { type: ['string', 'null'] },
@@ -919,7 +919,7 @@ const ventaMovimientoSubSchema = {
 } as const
 
 const ventaSchema = {
-  version: 7,
+  version: 8,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -1237,6 +1237,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v6 → v7: sin_comprobante opcional en cada movimiento (pago de tarjeta cobrado en caja) — passthrough,
         // ningún movimiento existente lo usa todavía.
         7: (oldDoc: any) => oldDoc,
+        // v7 → v8: agrega 'retencion' al enum de movimientos[].tipo (retención o comisión bancaria que el
+        // cliente descuenta al pagar) — passthrough, ningún movimiento existente usa ese valor todavía.
+        8: (oldDoc: any) => oldDoc,
       },
     },
     ajustes_iva: {

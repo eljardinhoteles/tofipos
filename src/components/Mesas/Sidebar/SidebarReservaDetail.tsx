@@ -1,3 +1,4 @@
+import { esMesaBarra } from '../../../lib/mesaBarra';
 import { imprimirConAviso } from '../../../lib/imprimir';
 import { useEffect, useState, useMemo } from'react';
 import {
@@ -107,7 +108,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  if (alive) setZonas(docs.map((d: any) => d.toJSON()));
  }),
  rxDb.mesas.find({ selector: { organization_id: orgId, _deleted: { $ne: true } } }).$.subscribe((docs: any[]) => {
- if (alive) setMesas(docs.map((d: any) => d.toJSON()));
+ if (alive) setMesas(docs.map((d: any) => d.toJSON()).filter((m: any) => !esMesaBarra(m)));
  }),
  rxDb.reservas.findOne(reservaId).$.subscribe((reservaDoc: any) => {
  if (!alive) return;

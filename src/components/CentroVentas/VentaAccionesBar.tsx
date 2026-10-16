@@ -1,7 +1,7 @@
 import { useId, useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise,
-  CurrencyDollar, ArrowUp, CreditCard, ChatText,
+  CurrencyDollar, ArrowUp, CreditCard, ChatText, Percent,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,21 +32,25 @@ import type { RxVentaMovimiento } from '../../db/rxdb';
 // separado; se fusionaron en una sola acción que pide el número de factura
 // directo. El id se mantiene por compatibilidad con historiales previos a
 // la fusión (ver useVentasConMovimientos).
-type AccionId = 'pago' | 'ajuste' | 'anclar' | 'reembolsar' | 'marcar_credito' | 'comentario' | 'anular';
+type AccionId = 'pago' | 'ajuste' | 'anclar' | 'reembolsar' | 'retencion' | 'marcar_credito' | 'comentario' | 'anular';
 
 // Acciones que mueven/afectan dinero admiten adjuntar su propio comprobante
 // al confirmar — cada pago/ajuste/reembolso lleva su respaldo individual,
 // distinto del documento de venta (factura/confirmación) a nivel de venta.
-const ACCIONES_CON_COMPROBANTE: AccionId[] = ['pago', 'ajuste', 'reembolsar', 'anclar', 'comentario'];
+const ACCIONES_CON_COMPROBANTE: AccionId[] = ['pago', 'ajuste', 'reembolsar', 'retencion', 'anclar', 'comentario'];
 
 // Orden fijo del menú de píldoras (Pago, la más usada, primero; Anular, la más grave, siempre al final).
-const ACCIONES_MENU: AccionId[] = ['pago', 'anclar', 'reembolsar', 'ajuste', 'marcar_credito', 'comentario', 'anular'];
+const ACCIONES_MENU: AccionId[] = ['pago', 'retencion', 'anclar', 'reembolsar', 'ajuste', 'marcar_credito', 'comentario', 'anular'];
+
+// Lo que el cliente descuenta al pagar: la venta (y su factura) sigue siendo el total, y esto baja el saldo.
+const CONCEPTOS_RETENCION = ['Retención', 'Comisión bancaria', 'Otro'];
 
 const ACCION_LABEL: Record<AccionId, string> = {
   pago: 'Pago',
   ajuste: 'Ajustar',
   anclar: 'Facturar',
   reembolsar: 'Reembolsar',
+  retencion: 'Retención',
   marcar_credito: 'Crédito',
   comentario: 'Comentar / Adjuntar',
   anular: 'Anular',
@@ -57,6 +61,7 @@ const ACCION_ICON: Record<AccionId, typeof Receipt> = {
   ajuste: ArrowUp,
   anclar: Receipt,
   reembolsar: ArrowCounterClockwise,
+  retencion: Percent,
   marcar_credito: CreditCard,
   comentario: ChatText,
   anular: Prohibit,
@@ -68,6 +73,7 @@ const ACCION_ICON: Record<AccionId, typeof Receipt> = {
 const ACCION_COLOR: Record<AccionId, string> = {
   pago: 'bg-primary border-primary',
   reembolsar: 'bg-warning-foreground border-warning-foreground',
+  retencion: 'bg-info border-info',
   ajuste: 'bg-info border-info',
   anclar: 'bg-special border-special',
   marcar_credito: 'bg-destructive border-destructive',
@@ -79,6 +85,7 @@ const ACCION_COLOR: Record<AccionId, string> = {
 const ACCION_HOVER: Record<AccionId, { boton: string; icono: string }> = {
   pago: { boton: 'hover:bg-primary/10 hover:border-primary/30', icono: 'text-primary' },
   reembolsar: { boton: 'hover:bg-warning-soft hover:border-warning/40', icono: 'text-warning-foreground' },
+  retencion: { boton: 'hover:bg-info-soft hover:border-info/30', icono: 'text-info-foreground' },
   ajuste: { boton: 'hover:bg-info-soft hover:border-info/30', icono: 'text-info-foreground' },
   anclar: { boton: 'hover:bg-special-soft hover:border-special/30', icono: 'text-special-foreground' },
   marcar_credito: { boton: 'hover:bg-destructive-soft hover:border-destructive/30', icono: 'text-destructive' },
@@ -110,6 +117,9 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
   const [numeroFactura, setNumeroFactura] = useState('');
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [montoRetencion, setMontoRetencion] = useState('');
+  const [conceptoRetencion, setConceptoRetencion] = useState(CONCEPTOS_RETENCION[0]);
+  const [detalleRetencion, setDetalleRetencion] = useState('');
   const [montoReembolso, setMontoReembolso] = useState('');
   const [motivoReembolso, setMotivoReembolso] = useState('');
   const [montoAjuste, setMontoAjuste] = useState('');
@@ -119,12 +129,15 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   const [bancoDestino, setBancoDestino] = useState('');
   const [numeroComprobanteTransf, setNumeroComprobanteTransf] = useState('');
   const [redTarjeta, setRedTarjeta] = useState('');
+  const [numeroComprobanteTarjeta, setNumeroComprobanteTarjeta] = useState('');
   const [motivoCredito, setMotivoCredito] = useState('');
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [textoComentario, setTextoComentario] = useState('');
   const [ajustarVentaPago, setAjustarVentaPago] = useState(false);
   const [motivoAjustePago, setMotivoAjustePago] = useState('');
   const [pagosSeleccionados, setPagosSeleccionados] = useState<Set<string>>(new Set());
+  // Pago que ya cubre la factura emitida antes (venta a crédito: primero se factura, después se cobra).
+  const [cubiertoPorFactura, setCubiertoPorFactura] = useState(false);
   const [accion, setAccion] = useState<AccionId | null>(null);
   // Pago de tarjeta cobrado en caja: el voucher lo imprime el terminal, no lleva comprobante adjunto.
   const [sinComprobante, setSinComprobante] = useState(false);
@@ -139,6 +152,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
     // y emitir múltiples facturas en una misma venta (ej. factura dividida o parcial).
     list.push('pago');
     list.push('anclar');
+    // Retención / comisión: solo mientras quede saldo por cubrir.
+    if (item.saldo > 0.01) list.push('retencion');
     if (item.totalPagado > 0) list.push('reembolsar');
     // Grupo 2: cambios de estado/clasificación de la venta.
     list.push('ajuste');
@@ -152,9 +167,29 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   // Sin acción elegida se muestra el menú de tarjetas; al elegir una se abre su formulario.
   const accionActiva = accion && accionesDisponibles.includes(accion) ? accion : null;
 
+  // Fecha de la última factura de la venta: los pagos posteriores a ella son los que aún no están cubiertos.
+  const ultimaFactura = useMemo(() => {
+    const facturas = movimientos.filter(m => (m.tipo === 'anclar' || m.tipo === 'facturar') && !m.anulado && m.numero_factura);
+    return facturas.length > 0 ? facturas[facturas.length - 1] : null;
+  }, [movimientos]);
+
   useEffect(() => {
     setComprobanteFile(null);
     setSinComprobante(false);
+    setCubiertoPorFactura(false);
+    // Al facturar de nuevo una venta ya facturada (crédito: el pago llegó después de la factura), se
+    // propone el mismo número y los pagos que la factura aún no cubre, para vincularlos con un solo clic.
+    if (accionActiva === 'retencion') setMontoRetencion(item.saldo > 0.01 ? item.saldo.toFixed(2) : '');
+    if (accionActiva === 'anclar' && ultimaFactura) {
+      setNumeroFactura(ultimaFactura.numero_factura ?? '');
+      const desde = new Date(ultimaFactura.fecha).getTime();
+      setPagosSeleccionados(new Set(
+        movimientos
+          .filter(m => m.tipo === 'pago' && !m.anulado && m.monto && new Date(m.fecha).getTime() > desde)
+          .map(m => m.id)
+      ));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accionActiva]);
 
   // Un pago en efectivo no tiene comprobante que subir — se deshabilita en
@@ -175,10 +210,12 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
         const orgId = localStorage.getItem('pos_active_org_id') || '';
         comprobante_url = await subirComprobante(comprobanteFile, orgId, venta.id);
       }
-      await agregarVentaMovimiento({ venta_id: venta.id, ...input, comprobante_url });
+      const actualizada = await agregarVentaMovimiento({ venta_id: venta.id, ...input, comprobante_url });
       setComprobanteFile(null);
       setAccion(null);
-      return true;
+      // Devuelve el id del movimiento creado (siempre truthy) para poder vincularlo después.
+      const creados = actualizada?.toJSON?.().movimientos ?? [];
+      return creados[creados.length - 1]?.id ?? true;
     } catch (e) {
       console.error(e);
       showToast.error('No se pudo registrar el movimiento');
@@ -202,16 +239,37 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       }
     }
 
-    if (await registrar({
+    const pagoId = await registrar({
       tipo: 'pago',
       monto,
       metodo_pago: metodoPago,
       transferencia_banco: metodoPago === 'transferencia' ? (bancoDestino || undefined) : undefined,
-      transferencia_referencia: metodoPago === 'transferencia' ? (numeroComprobanteTransf.trim() || undefined) : undefined,
+      // El n.º de comprobante de tarjeta (opcional) comparte campo con el de transferencia: el método del movimiento los distingue.
+      transferencia_referencia: metodoPago === 'transferencia'
+        ? (numeroComprobanteTransf.trim() || undefined)
+        : metodoPago === 'tarjeta' ? (numeroComprobanteTarjeta.trim() || undefined) : undefined,
       tarjeta_red: metodoPago === 'tarjeta' ? (redTarjeta || undefined) : undefined,
       sin_comprobante: metodoPago === 'tarjeta' && sinComprobante ? true : undefined,
       usuario_id: getUsuarioId(),
-    })) {
+    });
+    if (pagoId) {
+      // El pago ya está cubierto por la factura emitida antes: se registra de nuevo ese mismo número
+      // vinculado a este pago, y así la factura queda al día sin pedir una factura nueva.
+      if (cubiertoPorFactura && ultimaFactura?.numero_factura && typeof pagoId === 'string') {
+        try {
+          await agregarVentaMovimiento({
+            venta_id: venta.id,
+            tipo: 'anclar',
+            numero_factura: ultimaFactura.numero_factura,
+            pagos_asociados: [pagoId],
+            motivo: 'Pago cubierto por factura existente',
+            usuario_id: getUsuarioId(),
+          });
+        } catch (e) {
+          console.error('Error al vincular el pago con la factura', e);
+          showToast.error('El pago se registró, pero no se pudo vincular a la factura');
+        }
+      }
       if (montoAjuste > 0) {
         try {
           await agregarVentaMovimiento({
@@ -229,9 +287,11 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       setMontoPago('');
       setBancoDestino('');
       setNumeroComprobanteTransf('');
+      setNumeroComprobanteTarjeta('');
       setRedTarjeta('');
       setSinComprobante(false);
       setAjustarVentaPago(false);
+      setCubiertoPorFactura(false);
       setMotivoAjustePago('');
     }
   };
@@ -257,6 +317,24 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
       showToast.success('Venta facturada');
       setNumeroFactura('');
       setPagosSeleccionados(new Set());
+    }
+  };
+
+  const handleRetencion = async () => {
+    const monto = parseFloat(montoRetencion);
+    if (!monto || monto <= 0) { showToast.error('Ingresa el monto retenido'); return; }
+    if (monto > item.saldo + 0.01) { showToast.error('La retención no puede ser mayor al saldo pendiente'); return; }
+    const detalle = detalleRetencion.trim();
+    if (await registrar({
+      tipo: 'retencion',
+      monto,
+      motivo: detalle ? `${conceptoRetencion}: ${detalle}` : conceptoRetencion,
+      usuario_id: getUsuarioId(),
+    })) {
+      showToast.success('Retención registrada');
+      setMontoRetencion('');
+      setDetalleRetencion('');
+      setConceptoRetencion(CONCEPTOS_RETENCION[0]);
     }
   };
 
@@ -304,6 +382,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
     if (accionActiva === 'pago') return handlePago();
     if (accionActiva === 'ajuste') return handleAjuste();
     if (accionActiva === 'anclar') return handleFacturar();
+    if (accionActiva === 'retencion') return handleRetencion();
     if (accionActiva === 'reembolsar') return handleReembolsar();
     if (accionActiva === 'marcar_credito') return handleMarcarCredito();
     if (accionActiva === 'comentario') return handleComentario();
@@ -423,7 +502,13 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                 {metodoPago === 'tarjeta' && (
                   <div className="col-span-2 flex flex-col gap-1">
                     <Label className="t-etiqueta! text-muted-foreground">Red de cobro *</Label>
-                    <RedCobroRadios redes={redesTarjeta} value={redTarjeta} onChange={setRedTarjeta} invalido={!redTarjeta} />
+                    <RedCobroRadios redes={redesTarjeta} value={redTarjeta} onChange={setRedTarjeta} />
+                    <Label htmlFor={`${uid}-5`} className="t-etiqueta! text-muted-foreground mt-2">N.º Comprobante (opcional)</Label>
+                    <Input id={`${uid}-5`}
+                      type="text" placeholder="Ej. 000123456" value={numeroComprobanteTarjeta}
+                      onChange={(e) => setNumeroComprobanteTarjeta(e.target.value)}
+                      className="h-12 text-base"
+                    />
                   </div>
                 )}
               </div>
@@ -483,6 +568,43 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                     </div>
                   );
                 })()}
+              </div>
+            )}
+
+            {accionActiva === 'retencion' && (
+              <div className="flex flex-col gap-2">
+                <p className="t-meta text-muted-foreground">
+                  Lo que el cliente descontó al pagar. La venta y la factura siguen por el total; esto solo baja el saldo y no cuenta como dinero cobrado.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`${uid}-14`} className="t-etiqueta! text-muted-foreground">Monto retenido</Label>
+                    <Input id={`${uid}-14`}
+                      type="number" placeholder="0.00" value={montoRetencion}
+                      onChange={(e) => setMontoRetencion(e.target.value)}
+                      className="h-12 text-base"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`${uid}-15`} className="t-etiqueta! text-muted-foreground">Concepto</Label>
+                    <Select value={conceptoRetencion} onValueChange={setConceptoRetencion}>
+                      <SelectTrigger id={`${uid}-15`} className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONCEPTOS_RETENCION.map(c => (<SelectItem key={c} value={c} className="t-cuerpo">{c}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor={`${uid}-16`} className="t-etiqueta! text-muted-foreground">Detalle (opcional)</Label>
+                  <Input id={`${uid}-16`}
+                    type="text" placeholder="Ej. Retención IVA 20 %, comisión del banco..." value={detalleRetencion}
+                    onChange={(e) => setDetalleRetencion(e.target.value)}
+                    className="h-12 text-base"
+                  />
+                </div>
               </div>
             )}
 
@@ -561,6 +683,11 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
                     <Casilla compacta checked={sinComprobante} onChange={setSinComprobante}>No requiere comprobante</Casilla>
                   )}
                   <Casilla compacta checked={ajustarVentaPago} onChange={setAjustarVentaPago}>Ajustar venta para evitar excedente</Casilla>
+                  {ultimaFactura && (
+                    <Casilla compacta checked={cubiertoPorFactura} onChange={setCubiertoPorFactura}>
+                      Ya cubierto por la factura {ultimaFactura.numero_factura}
+                    </Casilla>
+                  )}
                 </div>
                 {ajustarVentaPago && (
                   <div className="flex flex-col gap-1 mt-1">

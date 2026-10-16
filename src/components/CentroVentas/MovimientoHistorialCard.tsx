@@ -65,7 +65,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
     || (m.usuario_id ? 'Usuario' : '');
 
   const puedeAnularse = m.tipo !== 'anular' && !m.anulado;
-  const admiteComprobante = !m.anulado && ['pago', 'ajuste', 'reembolso', 'anclar'].includes(m.tipo);
+  const admiteComprobante = !m.anulado && ['pago', 'ajuste', 'reembolso', 'retencion', 'anclar'].includes(m.tipo);
 
   let montoAsociado = 0;
   if (m.pagos_asociados && m.pagos_asociados.length > 0 && allMovimientos) {
@@ -242,52 +242,36 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
   }
 
   if (m.tipo === 'comentario') {
+    // Burbuja de chat alineada a la derecha, en el tono suave de advertencia del tema (crema).
     return (
-      <div className={cn(
-        "group relative rounded-2xl p-2.5 flex flex-col gap-2 transition-all",
-        m.anulado ? "opacity-60" : "hover:bg-muted/60"
-      )}>
-        <div className="flex items-center justify-between gap-2.5">
-          {/* Izquierda: Icono + Texto del comentario + Autor */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className={cn(
-              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-              "text-muted-foreground"
-            )}>
-              <ChatText size={16} weight="bold" />
-            </div>
-            <div className="flex flex-col min-w-0 flex-1">
-              <p className={cn("t-cuerpo italic whitespace-pre-wrap break-words", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
-                "{m.motivo || 'Sin texto'}"
-              </p>
-              <span className="t-meta text-muted-foreground truncate">
-                <span className="tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
-                {autorNombre && (
-                  <span className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"> · por {autorNombre}</span>
-                )}
+      <div className="group relative flex flex-col items-end gap-1.5 py-1 px-2.5">
+        <div className="flex items-center justify-end gap-1.5 max-w-full">
+          <span className="shrink-0">{botonAnular('Anular este comentario')}</span>
+          <div className={cn(
+            "max-w-[min(32rem,85%)] min-w-0 rounded-2xl rounded-br-md px-3.5 py-2.5 flex flex-col gap-1 bg-warning-soft",
+            m.anulado && "opacity-60"
+          )}>
+            <p className={cn("t-cuerpo whitespace-pre-wrap break-words", m.anulado ? "text-muted-foreground line-through" : "text-secondary-foreground")}>
+              {m.motivo || 'Sin texto'}
+            </p>
+            <span className="t-meta text-muted-foreground flex items-center justify-end gap-1.5">
+              <ChatText size={14} weight="bold" className="shrink-0" />
+              <span className="tabular-nums">{dayjs(m.fecha).format('DD MMM, HH:mm')}</span>
+              {autorNombre && <span>· por {autorNombre}</span>}
+            </span>
+            {m.anulado && (
+              <span className="self-end"><EstadoBadge tono="destructive">Anulado</EstadoBadge></span>
+            )}
+            {m.anulado && m.anulado_motivo && (
+              <span className="t-meta text-destructive italic break-words text-right">
+                Anulado: {m.anulado_motivo}
               </span>
-            </div>
-          </div>
-
-          {/* Derecha: Fecha/Hora + Icono de anular */}
-          <div className="flex items-center gap-2 shrink-0">
-
-            <div className={COL_ACCION}>
-              {m.anulado && <EstadoBadge tono="destructive">Anulado</EstadoBadge>}
-            </div>
-
-            <span className={COL_FINAL}>{botonAnular('Anular este comentario')}</span>
+            )}
           </div>
         </div>
 
-        {m.anulado && m.anulado_motivo && (
-          <span className="t-meta text-destructive italic break-words pl-[46px]">
-            Anulado: {m.anulado_motivo}
-          </span>
-        )}
-
         {confirmando && (
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1 w-full">
             {confirmarAnulacion}
           </div>
         )}

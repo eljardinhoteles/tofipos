@@ -2,14 +2,16 @@ import { fechaLocal } from '../lib/fechaLocal';
 import { esParteRepartida, nombreBaseReparto } from '../lib/reparto';
 import { useCallback, useEffect, useMemo, useState } from'react';
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, CartesianGrid } from'recharts';
-import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, X } from'@phosphor-icons/react';
+import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, X, ListBullets } from'@phosphor-icons/react';
 import dayjs from'dayjs';
 import { initVerticalRxDb, forceSyncAll, pingSyncStatus } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
 import { useRxClientes } from'../hooks/useRxClientes';
 import { Card, CardContent, CardHeader } from'@/components/ui/card';
 import { FiltroLimpiarTodo, FiltroOpcion } from'../components/Common/FiltroChip';
+import { Button } from'@/components/ui/button';
 import { Badge } from'@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from'@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar as CalendarPicker } from'@/components/ui/calendar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from'@/components/ui/chart';
@@ -431,13 +433,17 @@ comandaItems.forEach((item) => {
  const leading = sorted.slice(0, 9);
  const leadingSum = leading.reduce((sum, item) => sum + item.total, 0);
  const remainder = Math.max(0, ventasActuales - leadingSum);
+ const unidadesRestantes = sorted.slice(9).reduce((sum, item) => sum + item.cantidad, 0);
 
  if (remainder > 0) {
- return [...leading, { nombre:'Otros', cantidad: 0, total: remainder, margen: null }];
+ return [...leading, { nombre:'Otros', cantidad: unidadesRestantes, total: remainder, margen: null }];
  }
 
  return leading.length > 0 ? leading : sorted;
  }, [topProductos, ventasActuales]);
+
+ const [topCompletoOpen, setTopCompletoOpen] = useState(false);
+ const sinProductos = ventasActuales - topProductos.reduce((sum, item) => sum + item.total, 0);
 
  const ventasPorDiaSemana = useMemo<WeekdayPoint[]>(() => {
  const map = new Map<number, { total: number; days: Set<string> }>();
@@ -725,8 +731,12 @@ comandaItems.forEach((item) => {
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
  {/* Top productos */}
  <Card>
- <CardHeader>
- <h3 className="t-titulo text-foreground">Top productos vendidos</h3>
+ <CardHeader className="relative">
+ <Button variant="outline" size="sm" onClick={() => setTopCompletoOpen(true)} className="absolute top-4 right-4">
+ <ListBullets size={16} weight="bold" />
+ Ver todo ({topProductos.length})
+ </Button>
+ <h3 className="t-titulo text-foreground pr-28">Top productos vendidos</h3>
  <p className="t-meta text-muted-foreground">Productos con mayor volumen de venta por unidades.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
@@ -755,6 +765,47 @@ comandaItems.forEach((item) => {
  })}
  </CardContent>
  </Card>
+
+ <Dialog open={topCompletoOpen} onOpenChange={setTopCompletoOpen}>
+ <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+ <DialogHeader>
+ <DialogTitle>Todos los productos vendidos</DialogTitle>
+ <DialogDescription>Ordenados por unidades en el periodo seleccionado.</DialogDescription>
+ </DialogHeader>
+ <div className="flex flex-col gap-3">
+ {topProductos.map((item, index) => {
+ const pct = ventasActuales > 0 ? (item.total / ventasActuales) * 100 : 0;
+ return (
+ <div key={item.nombre} className="flex items-center justify-between gap-3">
+ <div className="flex items-center gap-2.5 min-w-0 flex-1">
+ <RankBadge n={index + 1} />
+ <div className="min-w-0 flex-1">
+ <p className="t-cuerpo-fuerte text-foreground truncate">{item.nombre}</p>
+ <p className="t-meta text-muted-foreground">{item.cantidad} unidades</p>
+ </div>
+ </div>
+ <div className="flex flex-col items-end shrink-0">
+ <span className="t-cuerpo-fuerte text-foreground">{money(item.total)}</span>
+ <span className="t-meta text-muted-foreground">{pct.toFixed(1)}% de ventas</span>
+ </div>
+ </div>
+ );
+ })}
+ {sinProductos > 0.005 && (
+ <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+ <div className="min-w-0 flex-1">
+ <p className="t-cuerpo-fuerte text-foreground">Cobros sin productos asociados</p>
+ <p className="t-meta text-muted-foreground">Diferencia entre lo cobrado y lo facturado en productos (propinas, cargos, ajustes, cobros de otro periodo).</p>
+ </div>
+ <div className="flex flex-col items-end shrink-0">
+ <span className="t-cuerpo-fuerte text-foreground">{money(sinProductos)}</span>
+ <span className="t-meta text-muted-foreground">{ventasActuales > 0 ? ((sinProductos / ventasActuales) * 100).toFixed(1) : '0.0'}% de ventas</span>
+ </div>
+ </div>
+ )}
+ </div>
+ </DialogContent>
+ </Dialog>
 
  {/* Top categorías */}
  <Card>
