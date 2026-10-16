@@ -16,6 +16,8 @@ interface TableNodeProps {
  subcomandasCount?: number;
  // Habitación: el huésped sale hoy o ya debió salir (check-out previsto). Solo se marca si está ocupada.
  salida?: 'hoy' | 'vencida' | null;
+ // Hay una llegada elegida esperando habitación: las habitaciones ocupadas se atenúan y no se pueden tocar.
+ esperandoLlegada?: boolean;
 }
 
 export const TableNode = memo(function TableNode({
@@ -28,7 +30,8 @@ export const TableNode = memo(function TableNode({
  activeComanda,
  roomBadge,
  subcomandasCount = 0,
- salida = null
+ salida = null,
+ esperandoLlegada = false
 }: TableNodeProps) {
  const isFree = mesa.estado ==='libre'&& !activeComanda;
 
@@ -41,13 +44,16 @@ export const TableNode = memo(function TableNode({
  const roomNumber = isHabitacion ? (mesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || mesa.nombre) : mesa.nombre;
  // Aviso de salida: solo en una habitación ocupada sin cuenta pedida (la cuenta ya tiene su propio color).
  const avisoSalida = isHabitacion && !isFree && activeComanda?.estado !== 'cuenta' ? salida : null;
+ const bloqueada = esperandoLlegada && isHabitacion && !isFree;
  const roomType = isHabitacion ? (mesa.nombre.match(/\(([^)]+)\)/)?.[1] ||'Sin nombre') :'';
 
  if (isHabitacion) {
  return (
  <div
- onClick={(e) => { e.stopPropagation(); onSelect(mesa); }}
+ onClick={(e) => { e.stopPropagation(); if (!bloqueada) onSelect(mesa); }}
+ aria-disabled={bloqueada || undefined}
  className={cn("w-full min-w-0 min-h-0 aspect-square overflow-hidden rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
+ bloqueada && "opacity-40 pointer-events-none",
  isSelected
  // Seleccionada/sidebar abierto: azul (info) sólido, siempre (salvo cuenta).
  ? activeComanda?.estado ==='cuenta'?"bg-warning-foreground border-warning text-white":"bg-info border-info text-white": isFree

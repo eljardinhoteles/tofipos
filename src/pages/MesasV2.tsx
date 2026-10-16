@@ -11,6 +11,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useSheetMovilListo } from '../lib/sheetMovil';
 import { useRxMesas } from '../hooks/useRxMesas';
 import { ReservasDelDia } from '../components/Mesas/ReservasDelDia';
+import { LlegadasHotel } from '../components/Mesas/LlegadasHotel';
 import { useRxPisos } from '../hooks/useRxPisos';
 import { useRxComandas } from '../hooks/useRxComandas';
 import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront } from '@phosphor-icons/react';
@@ -38,6 +39,7 @@ export default function MesasV2() {
         mesaView, setMesaView,
         setViewingComandaId,
         setSelectedMesaEsHabitacion,
+        llegadaCheckin,
     } = useUI();
 
     // Vista que se pinta de fondo. Al volver de "Añadir productos" en el celular el
@@ -309,6 +311,7 @@ export default function MesasV2() {
             isHabitacion: boolean;
             habitacionAsociada: string;
             subcomandasCount: number;
+            salida: 'hoy' | 'vencida' | null;
         }>();
 
         const cache = derivedCacheRef.current;
@@ -573,6 +576,7 @@ export default function MesasV2() {
                         <div className="h-full overflow-y-auto p-5 pb-24">
                             {/* Reservas del día por atender, sobre la primera zona (no en la vista de habitaciones) */}
                             {!isHabitacionesSeleccionado && <ReservasDelDia mesas={allMesas as any} comandas={allComandas as any} />}
+                            {isHabitacionesSeleccionado && <LlegadasHotel />}
                             <MesasControls
                                 availablePisos={availablePisos}
                                 selectedPiso={selectedPiso}
@@ -655,6 +659,7 @@ export default function MesasV2() {
                                                                 roomBadge={habitacionAsociada}
                                                                 subcomandasCount={subcomandasCount}
                                                     salida={salida}
+                                                    esperandoLlegada={!!llegadaCheckin}
                                                                 onSelect={handleSelectMesa}
                                                             />
                                                         </div>
@@ -682,6 +687,7 @@ export default function MesasV2() {
                                                     roomBadge={habitacionAsociada}
                                                     subcomandasCount={subcomandasCount}
                                                     salida={salida}
+                                                    esperandoLlegada={!!llegadaCheckin}
                                                     onSelect={handleSelectMesa}
                                                 />
                                             </div>

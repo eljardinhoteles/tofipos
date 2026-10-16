@@ -9,6 +9,7 @@ import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
 import { DatePickerField } from'@/components/ui/date-picker-field';
+import { useUI } from'../../../../context/UIContext';
 import { ReservaHeader } from'../ReservaHeader';
 import { ClienteSelector } from'@/components/Common/ClienteSelector';
 
@@ -16,9 +17,11 @@ dayjs.locale('es');
 
 export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onClose: () => void }) {
  const [isLoading, setIsLoading] = useState(false);
- const [huesped, setHuesped] = useState('');
- const [checkIn, setCheckIn] = useState(() => dayjs().format('YYYY-MM-DD'));
- const [checkOut, setCheckOut] = useState('');
+ // Llegada elegida en las tarjetas de Mesas › Hotel: precarga huésped y fechas, y deja la cuenta ligada a esa venta.
+ const { llegadaCheckin, setLlegadaCheckin } = useUI();
+ const [huesped, setHuesped] = useState(llegadaCheckin?.huesped ?? '');
+ const [checkIn, setCheckIn] = useState(() => llegadaCheckin?.llegada ?? dayjs().format('YYYY-MM-DD'));
+ const [checkOut, setCheckOut] = useState(llegadaCheckin?.salida ?? '');
  const [notas, setNotas] = useState('');
  const [clienteSeleccionado, setClienteSeleccionado] = useState<RxCliente | null>(null);
 
@@ -53,7 +56,8 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  id: cuentaId,
  mesa_id: selectedMesa.id,
  huesped: huesped.trim(),
- cliente_id: clienteMatch?.id,
+ cliente_id: clienteMatch?.id ?? (llegadaCheckin && huesped.trim() === llegadaCheckin.huesped ? llegadaCheckin.clienteId : undefined),
+ venta_id: llegadaCheckin?.ventaId,
  check_in: checkIn,
  check_out: checkOut || undefined,
  estado:'activa',
@@ -64,6 +68,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  });
 
  await updateRxMesa(selectedMesa.id, { estado:'ocupada'});
+ setLlegadaCheckin(null);
  showToast.success('Cuenta abierta',`${selectedMesa.nombre} — ${huesped}`);
  onClose();
  } catch (error) {

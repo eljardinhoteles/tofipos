@@ -23,6 +23,7 @@ import { EstadoBadge } from '../Common/EstadoBadge';
 import { updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
 import { eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
+import { VentaEstadiaCard } from './VentaEstadiaCard';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
 import { VentaComandasPanel } from './VentaComandasPanel';
@@ -201,6 +202,8 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             </div>
           )}
         </div>
+
+        {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadiaCard key={`${venta.id}-${venta.llegada ?? ''}-${venta.salida ?? ''}`} venta={venta} />}
 
         {/* Dialog de confirmación para eliminar documento */}
         <Dialog open={!!docToDelete} onOpenChange={(open) => { if (!open) setDocToDelete(null); }}>

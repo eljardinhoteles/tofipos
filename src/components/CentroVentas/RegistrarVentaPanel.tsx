@@ -27,6 +27,8 @@ import { documentoCliente } from '../../lib/documentoCliente';
 import { ClienteBuscador } from '../Common/ClienteBuscador';
 import { ClienteFormModal } from '../Clientes/ClienteFormModal';
 import type { VentaOrigen, VentaTipo } from '../../db/rxdb';
+import { DatePickerField } from '@/components/ui/date-picker-field';
+import dayjs from 'dayjs';
 
 interface RegistrarVentaPanelProps {
   onCancel: () => void;
@@ -81,10 +83,14 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
   const [numeroComprobanteTarjeta, setNumeroComprobanteTarjeta] = useState('');
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [descripcion, setDescripcion] = useState('');
+  // Reserva de hotel: llegada (obligatoria) y salida (opcional), YYYY-MM-DD.
+  const [llegada, setLlegada] = useState('');
+  const [salida, setSalida] = useState('');
   const [nuevoClienteOpen, setNuevoClienteOpen] = useState(false);
 
   const cliente = clientes.find((c: any) => c.id === clienteId);
   const esCredito = tipo === 'credito';
+  const esReservaHotel = origen === 'reserva_hotel';
 
   const continuar = () => {
     if (esCredito && !clienteId) { showToast.error('Selecciona el cliente/agencia para la venta a crédito'); return; }
@@ -95,11 +101,13 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
     monto: !(parseFloat(monto) > 0),
     red: !esCredito && metodo === 'tarjeta' && !redTarjeta,
     numero: !esCredito && metodo === 'transferencia' && !numeroComprobanteTransf.trim(),
+    llegada: esReservaHotel && !llegada,
+    salida: esReservaHotel && !!llegada && !!salida && salida < llegada,
   };
 
   const revisar = () => {
     setIntentado(true);
-    if (falta.monto || falta.red || falta.numero) { showToast.error('Completa los campos marcados en rojo'); return; }
+    if (falta.monto || falta.red || falta.numero || falta.llegada || falta.salida) { showToast.error('Completa los campos marcados en rojo'); return; }
     setPaso(3);
   };
 
@@ -123,6 +131,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
         cliente_id: clienteId || undefined,
         cliente_nombre: nombre.trim() || cliente?.nombre || undefined,
         referencia,
+        ...(esReservaHotel ? { llegada, salida: salida || undefined } : {}),
         organization_id: orgId,
         usuario_id: currentMesero?.id,
       }, montoNum);
@@ -246,6 +255,8 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
                 <div className={datos}>
                   <Dato etiqueta="Monto" valor={<span className="t-valor">${(parseFloat(monto) || 0).toFixed(2)}</span>} />
                   <Dato etiqueta="Origen" valor={<OrigenBadge origen={origen} />} />
+                  {esReservaHotel && llegada && <Dato etiqueta="Llegada" valor={dayjs(llegada).format('DD/MM/YYYY')} />}
+                  {esReservaHotel && salida && <Dato etiqueta="Salida" valor={dayjs(salida).format('DD/MM/YYYY')} />}
                   {!esCredito && <Dato etiqueta="Método de pago" valor={metodo.charAt(0).toUpperCase() + metodo.slice(1)} />}
                   {!esCredito && metodo === 'transferencia' && bancoDestino && <Dato etiqueta="Banco destino" valor={bancoDestino} />}
                   {!esCredito && metodo === 'transferencia' && <Dato etiqueta="N.º de comprobante" valor={numeroComprobanteTransf.trim()} />}
@@ -334,6 +345,25 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
               ))}
             </div>
           </section>
+
+          {/* Reserva de hotel: la llegada alimenta las tarjetas de Mesas › Hotel para abrir la cuenta de la habitación. */}
+          {esReservaHotel && (
+            <section className={seccion}>
+              <h4 className={tituloSeccion}>Estadía</h4>
+              <div className="grid grid-cols-1 @md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className={etiqueta}>Fecha de llegada *</Label>
+                  <DatePickerField value={llegada} onChange={setLlegada} className={cn("h-12 text-base bg-card border-border", intentado && falta.llegada && "border-destructive")} />
+                  {intentado && falta.llegada && <p className="t-meta text-destructive">Indica la fecha de llegada</p>}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className={etiqueta}>Fecha de salida (opcional)</Label>
+                  <DatePickerField value={salida} onChange={setSalida} className={cn("h-12 text-base bg-card border-border", intentado && falta.salida && "border-destructive")} />
+                  {intentado && falta.salida && <p className="t-meta text-destructive">La salida no puede ser antes de la llegada</p>}
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Monto y pago */}
           <section className={seccion}>

@@ -9,7 +9,7 @@ import { CheckRedondo } from '../components/Common/CheckRedondo';
 import { ReservaHeader } from '@/components/Mesas/Sidebar/ReservaHeader';
 import { PageFrame, PageHeader, PageContent, PageToolbar, HeaderSearch, headerPrimaryButtonClass, toolbarChipClass } from '../components/Common/PageHeader';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { Casilla } from '../components/Common/Casilla';
 import { cn } from'@/lib/utils';
 import { Input } from '@/components/ui/input';
 import {
@@ -146,7 +146,7 @@ export default function MenuV2() {
  {[
  { id: 'all', nombre: 'Todos', icono: null as string | null | undefined, count: safeMenuItems.length, plan: false, primero: false },
  ...safeDbCategorias.map(c => ({ id: c.nombre, nombre: c.nombre, icono: c.icono, count: conteoPorCategoria.get(c.nombre) ?? 0, plan: !!c.es_comida_incluida, primero: !!c.imprimir_primero })),
- ].map((c, i) => {
+ ].map((c) => {
  const Icon = c.id === 'all' ? List : getCategoryIcon(c.icono) ?? SquaresFour;
  const activa = selectedCategory === c.id;
  return (
@@ -166,7 +166,6 @@ export default function MenuV2() {
  </span>
  <span className={cn("shrink-0 tabular-nums", activa ? "t-dato text-foreground" : "t-meta text-muted-foreground")}>{c.count}</span>
  </button>
- {i === 0 && <div role="separator" className="h-px bg-border my-1" />}
  </div>
  );
  })}
@@ -275,20 +274,18 @@ export default function MenuV2() {
  <div className="flex flex-col gap-2">
  <h4 className="t-etiqueta text-muted-foreground">Ajustes</h4>
  <div className="rounded-2xl border border-border bg-card shadow-xs divide-y divide-border">
- <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <Casilla checked={ed.es_comida_incluida} onChange={(v) => setEditingCategory(prev => prev && { ...prev, es_comida_incluida: v })} multilinea className="w-full p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
  <span className="t-cuerpo-fuerte text-foreground">Incluida en plan</span>
  <span className="t-meta text-muted-foreground leading-snug">La comida de esta categoría va incluida en el plan del huésped.</span>
  </div>
- <Switch checked={ed.es_comida_incluida} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, es_comida_incluida: v })} />
- </label>
- <label className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ </Casilla>
+ <Casilla checked={ed.imprimir_primero} onChange={(v) => setEditingCategory(prev => prev && { ...prev, imprimir_primero: v })} multilinea className="w-full p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
  <span className="t-cuerpo-fuerte text-foreground">Imprime primero</span>
  <span className="t-meta text-muted-foreground leading-snug">Sale primero en la comanda de cocina.</span>
  </div>
- <Switch checked={ed.imprimir_primero} onCheckedChange={(v) => setEditingCategory(prev => prev && { ...prev, imprimir_primero: v })} />
- </label>
+ </Casilla>
  </div>
  </div>
  </div>

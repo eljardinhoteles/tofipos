@@ -12,7 +12,7 @@ interface SidebarHabitacionCuentaProps {
 }
 
 export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabitacionCuentaProps) {
-  const { setViewingComandaId } = useUI()
+  const { setViewingComandaId, llegadaCheckin } = useUI()
   const [checkoutComanda, setCheckoutComanda] = useState<any>(null)
   const [cuentaActiva, setCuentaActiva] = useState<any | null>(null)
 
@@ -64,5 +64,6 @@ export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabita
     )
   }
 
-  return <CheckinForm selectedMesa={selectedMesa} onClose={onClose} />
+  // key: si se elige o suelta una llegada con el formulario abierto, se recarga con sus datos.
+  return <CheckinForm key={`${selectedMesa.id}-${llegadaCheckin?.ventaId ?? ''}`} selectedMesa={selectedMesa} onClose={onClose} />
 }

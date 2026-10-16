@@ -609,7 +609,7 @@ comandaItems.forEach((item) => {
  <CardContent className="flex flex-col justify-between gap-3">
  <div className="flex items-start justify-between">
  <div className="flex flex-col gap-1 min-w-0">
- <span className="t-cifra text-foreground">{card.value}</span>
+ <span className="font-redonda t-cifra text-foreground">{card.value}</span>
  <span className="t-etiqueta text-muted-foreground">{card.label}</span>
  <span className="t-meta text-muted-foreground leading-snug">{card.description}</span>
  </div>
@@ -642,7 +642,7 @@ comandaItems.forEach((item) => {
  <CardHeader>
  <div className="flex items-start justify-between gap-3">
  <div className="flex flex-col gap-0.5">
- <h3 className="t-titulo text-foreground">Evolución de ventas</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Evolución de ventas</h3>
  <p className="t-meta text-muted-foreground">Facturación dentro del periodo seleccionado.</p>
  </div>
  <button type="button" aria-pressed={compararAnterior} onClick={() => setCompararAnterior(v => !v)}
@@ -683,7 +683,7 @@ comandaItems.forEach((item) => {
  {/* Ventas por hora */}
  <Card>
  <CardHeader>
- <h3 className="t-titulo text-foreground">Ventas por hora y horas pico</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Ventas por hora y horas pico</h3>
  <p className="t-meta text-muted-foreground">La franja con más pedidos del día marca la hora pico operativa.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">
@@ -707,7 +707,7 @@ comandaItems.forEach((item) => {
  {/* Rentabilidad por día */}
  <Card>
  <CardHeader>
- <h3 className="t-titulo text-foreground">Rentabilidad promedio por día de semana</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Rentabilidad promedio por día de semana</h3>
  <p className="t-meta text-muted-foreground">Usa ventas promedio por día para detectar el día más fuerte del periodo.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">
@@ -736,7 +736,7 @@ comandaItems.forEach((item) => {
  <ListBullets size={16} weight="bold" />
  Ver todo ({topProductos.length})
  </Button>
- <h3 className="t-titulo text-foreground pr-28">Top productos vendidos</h3>
+ <h3 className="font-redonda t-titulo text-foreground pr-28">Top productos vendidos</h3>
  <p className="t-meta text-muted-foreground">Productos con mayor volumen de venta por unidades.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
@@ -810,7 +810,7 @@ comandaItems.forEach((item) => {
  {/* Top categorías */}
  <Card>
  <CardHeader>
- <h3 className="t-titulo text-foreground">Top categorías</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Top categorías</h3>
  <p className="t-meta text-muted-foreground">Distribución de facturación por categoría de producto.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
@@ -842,7 +842,7 @@ comandaItems.forEach((item) => {
  {/* Clientes más valiosos */}
  <Card>
  <CardHeader>
- <h3 className="t-titulo text-foreground">Clientes más valiosos</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Clientes más valiosos</h3>
  <p className="t-meta text-muted-foreground">Basado en visitas y gasto acumulado.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-2.5">
@@ -864,7 +864,7 @@ comandaItems.forEach((item) => {
  {/* Resumen de fidelización */}
  <Card>
  <CardHeader>
- <h3 className="t-titulo text-foreground">Resumen de fidelización</h3>
+ <h3 className="font-redonda t-titulo text-foreground">Resumen de fidelización</h3>
  <p className="t-meta text-muted-foreground">Clientes, recurrencia y consumo promedio.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-3">

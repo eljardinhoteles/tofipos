@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+/** Llegada de hotel elegida en Mesas › Hotel: la próxima habitación libre que se abra toma sus datos y queda ligada a la venta. */
+export interface LlegadaCheckin {
+  ventaId: string;
+  huesped: string;
+  clienteId?: string;
+  llegada: string;
+  salida?: string;
+}
+
 interface UIContextType {
+  llegadaCheckin: LlegadaCheckin | null;
+  setLlegadaCheckin: (l: LlegadaCheckin | null) => void;
   isPinned: boolean;
   setIsPinned: (val: boolean) => void;
   selectedMesaId: string | null;
@@ -68,6 +79,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [selectedConfigPiso, setSelectedConfigPiso] = useState<string | null>(null);
   const [mesaView, setMesaView] = useState<'mapa' | 'productos'>('mapa');
   const [actividadOpen, setActividadOpen] = useState(false);
+  const [llegadaCheckin, setLlegadaCheckin] = useState<LlegadaCheckin | null>(null);
   const [checkoutView, setCheckoutView] = useState(false);
   const [viewingComandaId, setViewingComandaId] = useState<string | null>(null);
   const [activeSubcomandaId, setActiveSubcomandaId] = useState<string | null>(null);
@@ -136,6 +148,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       mesaView,
       setMesaView,
       actividadOpen,
+      llegadaCheckin,
+      setLlegadaCheckin,
       setActividadOpen,
       confirmModal,
       openConfirm,
@@ -166,7 +180,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
       selectedMesaEsHabitacion,
       setSelectedMesaEsHabitacion,
   }), [
-      isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, actividadOpen, confirmModal,
+      isPinned, selectedMesaId, configView, selectedConfigPiso, mesaView, actividadOpen, llegadaCheckin, confirmModal,
       promptModal, checkoutView, viewingComandaId, activeSubcomandaId, reservaView, selectedReservaId,
       reservaProductosComandaId, nuevaReservaPreset, menuView, selectedMenuProductId,
       selectedMesaEsHabitacion

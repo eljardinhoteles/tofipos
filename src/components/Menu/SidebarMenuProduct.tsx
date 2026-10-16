@@ -12,7 +12,7 @@ import { ReservaHeader } from'../Mesas/Sidebar/ReservaHeader';
 import { CheckRedondo } from'../Common/CheckRedondo';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
-import { Switch } from'@/components/ui/switch';
+import { Casilla } from'../Common/Casilla';
 import { Button } from'@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CsvUploader } from '@/components/Menu/CsvUploader';
@@ -309,24 +309,22 @@ export function SidebarMenuProduct() {
  </div>
  </section>
 
- {/* Ajustes del producto: cada fila = qué es + interruptor a la derecha */}
+ {/* Ajustes del producto: cada fila = casilla + qué es. Se aplican al guardar, por eso son casillas y no interruptores. */}
  <section className="flex flex-col gap-2">
  <h4 className="t-etiqueta text-muted-foreground">Ajustes</h4>
  <div className="rounded-2xl border border-border divide-y divide-border">
- <label htmlFor="precioVariable" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ <Casilla checked={precioVariable} onChange={setPrecioVariable} multilinea className="w-full p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
  <span className="t-cuerpo-fuerte text-foreground">Precio variable</span>
  <span className="t-meta text-muted-foreground leading-snug">Se puede cambiar el precio al añadirlo a una comanda.</span>
  </div>
- <Switch id="precioVariable" checked={precioVariable} onCheckedChange={setPrecioVariable} />
- </label>
- <label htmlFor="esBebida" className="flex items-center justify-between gap-4 p-3.5 cursor-pointer">
+ </Casilla>
+ <Casilla checked={esBebida} onChange={setEsBebida} multilinea className="w-full p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
  <span className="t-cuerpo-fuerte text-foreground">Es bebida</span>
  <span className="t-meta text-muted-foreground leading-snug">Se imprime en barra.</span>
  </div>
- <Switch id="esBebida" checked={esBebida} onCheckedChange={setEsBebida} />
- </label>
+ </Casilla>
  <div className="flex items-center justify-between gap-4 p-3.5">
  <div className="flex flex-col gap-0.5 min-w-0">
  <span className="t-cuerpo-fuerte text-foreground">IVA</span>
@@ -416,20 +414,8 @@ export function SidebarMenuProduct() {
  </div>
 
  <div className="flex items-center gap-4">
- <label className="flex items-center gap-1.5 cursor-pointer">
- <Switch
- checked={group.obligatorio}
- onCheckedChange={v => updateModifierGroup(group.id, { obligatorio: v })}
- />
- <span className="t-meta text-muted-foreground">Obligatorio</span>
- </label>
- <label className="flex items-center gap-1.5 cursor-pointer">
- <Switch
- checked={group.multi}
- onCheckedChange={v => updateModifierGroup(group.id, { multi: v })}
- />
- <span className="t-meta text-muted-foreground">Selección múltiple</span>
- </label>
+ <Casilla compacta checked={group.obligatorio} onChange={v => updateModifierGroup(group.id, { obligatorio: v })}>Obligatorio</Casilla>
+ <Casilla compacta checked={group.multi} onChange={v => updateModifierGroup(group.id, { multi: v })}>Selección múltiple</Casilla>
  </div>
 
  <div className="flex flex-col gap-1.5">

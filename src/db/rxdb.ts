@@ -144,6 +144,8 @@ export interface RxHabitacionCuenta {
   subcuentas?: Array<{ id: string; nombre: string }>
   // Nombre de la subcuenta principal (null/undefined = "Principal").
   principal_nombre?: string | null
+  // Venta de reserva de hotel de la que viene esta cuenta (una venta abre una sola habitación).
+  venta_id?: string
   created_at: string
   updated_at: string
   organization_id: string
@@ -489,6 +491,9 @@ export interface RxVenta {
   referencia?: string
   // Vínculo opcional al origen real cuando existe (comanda_id de Mesas).
   comanda_id?: string
+  // Reserva de hotel: fechas de llegada y salida (YYYY-MM-DD). La llegada alimenta las tarjetas de «Llegadas» de Mesas › Hotel.
+  llegada?: string
+  salida?: string
   // Documento de la venta en sí (factura, confirmación de reserva, etc.) —
   // distinto del comprobante de cada movimiento (RxVentaMovimiento.comprobante_url,
   // que es el respaldo de un pago/ajuste/reembolso puntual).
@@ -637,7 +642,7 @@ const pisoSchema = {
 } as const
 
 const habitacionCuentaSchema = {
-  version: 2,
+  version: 3,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -658,6 +663,7 @@ const habitacionCuentaSchema = {
       }
     },
     principal_nombre: { type: ['string', 'null'] },
+    venta_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -919,7 +925,7 @@ const ventaMovimientoSubSchema = {
 } as const
 
 const ventaSchema = {
-  version: 8,
+  version: 9,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -932,6 +938,8 @@ const ventaSchema = {
     cliente_nombre: { type: ['string', 'null'] },
     referencia: { type: ['string', 'null'] },
     comanda_id: { type: ['string', 'null'] },
+    llegada: { type: ['string', 'null'] },
+    salida: { type: ['string', 'null'] },
     // Documento de la venta (factura, confirmación de reserva) — distinto
     // del comprobante por movimiento (ver ventaMovimientoSubSchema).
     documento_url: { type: ['string', 'null'] },
@@ -1137,7 +1145,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v0 → v1: subcuentas de habitación (vacío = solo cuenta principal).
         1: (oldDoc: any) => ({ ...oldDoc, subcuentas: [] }),
         // v1 → v2: nombre editable de la subcuenta principal.
-        2: (oldDoc: any) => ({ ...oldDoc, principal_nombre: null })
+        2: (oldDoc: any) => ({ ...oldDoc, principal_nombre: null }),
+        // v2 → v3: venta_id opcional (cuenta abierta desde una reserva de hotel) — passthrough.
+        3: (oldDoc: any) => oldDoc
       }
     },
     reservas: { schema: reservaSchema },
@@ -1240,6 +1250,8 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v7 → v8: agrega 'retencion' al enum de movimientos[].tipo (retención o comisión bancaria que el
         // cliente descuenta al pagar) — passthrough, ningún movimiento existente usa ese valor todavía.
         8: (oldDoc: any) => oldDoc,
+        // v8 → v9: llegada y salida opcionales (reserva de hotel) — passthrough, ninguna venta existente las tiene.
+        9: (oldDoc: any) => oldDoc,
       },
     },
     ajustes_iva: {
@@ -2628,7 +2640,7 @@ export async function createRxVenta(
 // de agregarVentaMovimiento: esto edita el documento directamente, no
 // agrega un evento al historial (el cambio de cliente no es un movimiento
 // de dinero, es una corrección de datos).
-export async function updateRxVenta(id: string, patch: Partial<Pick<RxVenta, 'documento_url' | 'documento_nombre' | 'cliente_id' | 'cliente_nombre'>>) {
+export async function updateRxVenta(id: string, patch: Partial<Pick<RxVenta, 'documento_url' | 'documento_nombre' | 'cliente_id' | 'cliente_nombre' | 'llegada' | 'salida'>>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.ventas.findOne(id).exec(true)
