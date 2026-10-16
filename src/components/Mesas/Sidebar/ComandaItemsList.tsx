@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useState, startTransition } from 'react';
-import { Basket } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ComandaItemRow } from './ComandaItemRow';
 import { esParteRepartida } from '@/lib/reparto';
@@ -62,7 +61,7 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items, selected
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
-        <Basket size={48} className="text-muted-foreground/60" />
+        <img src="/comanda.webp" alt="" aria-hidden="true" className="size-28 object-contain" />
         <span className="t-dato text-foreground">Comanda vacía</span>
         <span className="t-meta text-muted-foreground">Añade productos usando el menú.</span>
       </div>

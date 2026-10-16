@@ -54,6 +54,7 @@ export default defineConfig({
         'menu.webp',
         'no_resultado.webp',
         'ordenes.webp',
+        'planner.avif',
         'apple-touch-icon.png',
         'icon-192.png',
         'icon-512.png',
@@ -62,7 +63,7 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // Precachea todos los assets del build
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,woff,woff2}'],
         // Rutas que van directo a la red (Supabase / PowerSync)
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//, /^\/realtime\//],
@@ -78,7 +79,7 @@ export default defineConfig({
           },
           // Imágenes remotas: cache-first
           {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|avif|ico)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'images',

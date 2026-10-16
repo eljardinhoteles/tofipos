@@ -231,7 +231,7 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
       <div className="flex-1 min-h-0 overflow-y-auto @container">
         <div className="mx-auto w-full max-w-3xl p-6 flex flex-col gap-4">
           <span className="t-etiqueta text-muted-foreground">
-            Paso {paso} de 3 · {paso === 1 ? 'Cliente y tipo de cobro' : paso === 2 ? 'Tipo de venta y cobro' : 'Revisión'}
+            Paso {paso} de 3{paso === 3 ? '' : ` · ${paso === 1 ? 'Cliente y tipo de cobro' : 'Tipo de venta y cobro'}`}
           </span>
           {paso === 3 ? (
             <>
@@ -270,10 +270,10 @@ export function RegistrarVentaPanel({ onCancel, onSuccess }: RegistrarVentaPanel
               {descripcion.trim() && (
                 <section className={seccion}>
                   <div className="flex items-center justify-between">
-                    <h4 className={tituloSeccion}>Detalle</h4>
+                    <h4 className={tituloSeccion}>Descripción</h4>
                     <Button type="button" variant="outline" size="sm" onClick={() => setPaso(2)}>Editar</Button>
                   </div>
-                  <Dato etiqueta="Descripción" valor={descripcion.trim()} />
+                  <p className="t-fila text-foreground break-words">{descripcion.trim()}</p>
                 </section>
               )}
             </>

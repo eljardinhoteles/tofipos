@@ -32,7 +32,7 @@ export const CabeceraDia = memo(function CabeceraDia({
     <header className={cn('sticky top-0 z-10 flex items-center justify-between gap-2 pl-4 pr-2 py-2 border-b border-r border-border', minAncho,
       esHoy ? HOY_CABECERA : 'bg-card')}>
       {/* El atenuado de días pasados va solo en el texto: en toda la cabecera la volvería transparente. */}
-      <div className={cn('flex flex-col min-w-0', pasado && !confirmadoPor && 'opacity-60')}>
+      <div className={cn('flex flex-col min-w-0', pasado && !confirmadoPor && 'opacity-80')}>
         {relativo && <span className={cn('t-dato leading-tight', esHoy ? HOY_TEXTO : 'text-foreground')}>{relativo}</span>}
         <div className="flex items-baseline gap-1.5 min-w-0">
           <span className={cn('t-etiqueta truncate', esHoy ? HOY_TEXTO : 'text-muted-foreground')}>{diaSemana}</span>

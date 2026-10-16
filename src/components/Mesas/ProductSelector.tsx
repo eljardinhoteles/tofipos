@@ -152,6 +152,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const gruposPlan = planHoy.grupos;
  const esGrupoPlan = (id: string | null | undefined) => !!id && id.startsWith('plan:');
  const grupoPlanDe = (id: string | null | undefined) => (esGrupoPlan(id) ? gruposPlan.find(g => `plan:${g.etiqueta.id}` === id) : undefined);
+ // Las categorías «incluida en plan» no se listan: sus productos se ven solo en las categorías virtuales por etiqueta del menú de hoy confirmado.
+ // Sin menú confirmado queda un único chip «Plan del día» que explica cómo habilitarlo (ver PlanSinConfirmar).
+ const ID_PLAN_VACIO = 'Plan del día';
+ const hayPlanSinConfirmar = planCategoryNames.size > 0 && gruposPlan.length === 0;
 
  // Productos de las categorías «incluida en plan»: quedan activos en el catálogo todo el tiempo y solo se pueden pedir
  // cuando el menú de hoy está confirmado en el Planificador y los incluye (así no hay que activarlos y desactivarlos a diario).
@@ -183,9 +187,9 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  // Igual que filteredItems: si ningún producto de una categoría está
  // activo hoy (ej. menú de huésped sin platos habilitados), el chip no
  // debe aparecer vacío en la lista.
- const cats = new Set(safeMenuItems.filter(i => disponible(i)).map(i => i.categoria_nombre || 'Sin Categoría'));
- // Las categorías del plan se muestran siempre: vacías, explican cómo llenarlas (ver PlanSinConfirmar).
- for (const c of planCategoryNames) cats.add(c);
+ const cats = new Set(safeMenuItems
+   .filter(i => disponible(i) && !planCategoryNames.has(i.categoria_nombre || 'Sin Categoría'))
+   .map(i => i.categoria_nombre || 'Sin Categoría'));
  const orderMap = new Map(safeDbCategorias.map((c, idx) => [c.nombre, idx]));
  
  return Array.from(cats).sort((a, b) => {
@@ -415,6 +419,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
             { id: 'Favoritos', icon: Star, count: favoritosCount, plan: false, fav: true, etiqueta: undefined as EtiquetaPlan | undefined },
             ...(recentItems.length > 0 ? [{ id: 'Recientes', icon: ClockCounterClockwise, count: recentItems.length, plan: false, fav: false, etiqueta: undefined as EtiquetaPlan | undefined }] : []),
             ...gruposPlan.map(g => ({ id: `plan:${g.etiqueta.id}`, icon: Tag, count: g.productoIds.size, plan: false, fav: false, etiqueta: g.etiqueta as EtiquetaPlan | undefined })),
+            ...(hayPlanSinConfirmar ? [{ id: ID_PLAN_VACIO, icon: Tag, count: 0, plan: true, fav: false, etiqueta: undefined as EtiquetaPlan | undefined }] : []),
             ...categories.map(cat => ({ id: cat, icon: getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife, count: conteoPorCategoria.get(cat) ?? 0, plan: planCategoryNames.has(cat), fav: false, etiqueta: undefined as EtiquetaPlan | undefined })),
           ].map(c => {
             const Icon = c.icon;
@@ -445,7 +450,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
         {/* Columna de productos de la categoría elegida */}
         <section className="@container flex-1 min-w-0 overflow-y-auto p-4">
-          {itemsPC.length === 0 && planCategoryNames.has(categoriaPC) ? (
+          {itemsPC.length === 0 && categoriaPC === ID_PLAN_VACIO ? (
             <PlanSinConfirmar puedeEditar={permisos.editarPlanificador} onIr={() => navigate('/v2/planificacion')} />
           ) : itemsPC.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
@@ -526,6 +531,16 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                 <span className="truncate">{g.etiqueta.nombre}</span>
               </button>
             ))}
+            {hayPlanSinConfirmar && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory(ID_PLAN_VACIO)}
+                className="h-12 flex items-center gap-2 pl-3.5 pr-4 rounded-full t-cuerpo-fuerte transition-all active:scale-95 transform-gpu cursor-pointer bg-info/10 text-info-foreground"
+              >
+                <Tag size={20} weight="bold" className="shrink-0" />
+                <span className="truncate">{ID_PLAN_VACIO}</span>
+              </button>
+            )}
             {categories.map((cat) => {
               const CategoryIcon = getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife;
               const plan = planCategoryNames.has(cat);
@@ -548,7 +563,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         </div>
       ) : (
         /* GRID DE PRODUCTOS */
-        filteredItems.length === 0 && !searchQueryDebounced && !!selectedCategory && planCategoryNames.has(selectedCategory) ? (
+        filteredItems.length === 0 && !searchQueryDebounced && selectedCategory === ID_PLAN_VACIO ? (
           <PlanSinConfirmar puedeEditar={permisos.editarPlanificador} onIr={() => navigate('/v2/planificacion')} />
         ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
@@ -815,9 +830,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
 function PlanSinConfirmar({ puedeEditar, onIr }: { puedeEditar: boolean; onIr: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-4">
-      <span className="size-16 rounded-full bg-info-soft text-info-foreground flex items-center justify-center">
-        <CalendarStar size={32} weight="duotone" />
-      </span>
+      <img src="/planner.avif" alt="" aria-hidden="true" className="size-28 object-contain" />
       <h3 className="t-titulo text-foreground">El menú de hoy no está confirmado</h3>
       <p className="text-muted-foreground t-meta max-w-xs">
         {puedeEditar

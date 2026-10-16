@@ -55,7 +55,7 @@ export const CeldaDia = memo(function CeldaDia({
       onKeyDown={inerte ? undefined : alTeclear}
       className={cn('group/celda flex flex-col gap-2 px-3 py-2.5 min-h-20 border-b border-r border-border bg-background transition-colors outline-none touch-manipulation focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40',
         minAncho,
-        pasado && 'opacity-60',
+        pasado && 'opacity-80',
         esHoy && !elegida && HOY_CELDA,
         !inerte && !elegida && 'cursor-pointer hover:bg-muted/40 active:bg-muted/60',
         elegida && cn('cursor-pointer ring-2 ring-inset', tono.activa))}
