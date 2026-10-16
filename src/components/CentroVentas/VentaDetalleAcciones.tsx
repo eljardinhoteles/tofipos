@@ -23,7 +23,7 @@ import { EstadoBadge } from '../Common/EstadoBadge';
 import { updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
 import { eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
-import { VentaEstadiaCard } from './VentaEstadiaCard';
+import { VentaEstadia } from './VentaEstadia';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
 import { VentaComandasPanel } from './VentaComandasPanel';
@@ -173,14 +173,18 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
               {ORIGEN_LABEL[venta.origen]}
             </span>
+            {/* Reserva de hotel: la estadía va aquí, en la misma tarjeta, con un lápiz para editarla. */}
+            {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadia key={`${venta.id}-${venta.llegada ?? ''}-${venta.salida ?? ''}`} venta={venta} />}
           </div>
 
-          <div className="flex items-stretch rounded-2xl bg-card/70 divide-x divide-border/70 shrink-0">
-            <div className="flex flex-col gap-0.5 px-5 py-2.5">
+          {/* Monto y saldo siempre en dos filas (etiqueta a la izquierda, valor a la derecha): ocupan poco ancho y le dejan el espacio al
+              título y a la estadía. */}
+          <div className="flex flex-col rounded-2xl bg-card/70 divide-y divide-border/70 shrink-0 min-w-44">
+            <div className="flex items-baseline justify-between gap-4 px-4 py-2">
               <span className="t-etiqueta text-muted-foreground">Monto</span>
               <span className="font-redonda t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
             </div>
-            <div className="flex flex-col gap-0.5 px-5 py-2.5">
+            <div className="flex items-baseline justify-between gap-4 px-4 py-2">
               <span className="t-etiqueta text-muted-foreground">Saldo</span>
               {item.saldo > 0.01 ? (
                 <span className="font-redonda t-valor text-warning-foreground tabular-nums">${item.saldo.toFixed(2)}</span>
@@ -202,8 +206,6 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
             </div>
           )}
         </div>
-
-        {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadiaCard key={`${venta.id}-${venta.llegada ?? ''}-${venta.salida ?? ''}`} venta={venta} />}
 
         {/* Dialog de confirmación para eliminar documento */}
         <Dialog open={!!docToDelete} onOpenChange={(open) => { if (!open) setDocToDelete(null); }}>
