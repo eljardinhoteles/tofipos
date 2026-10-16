@@ -21,7 +21,7 @@ import { Button } from'@/components/ui/button';
 import { showToast } from'@/lib/toast';
 import { initVerticalRxDb } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
-import { A4ReportPreviewModal } from'../../Common/A4ReportPreviewModal';
+import { imprimirReporteA4 } from'../../../lib/imprimirReporteA4';
 import type { Comanda, HabitacionCuenta } from'../../../db/database';
 import { cn } from'@/lib/utils';
 import { useIsMobile } from'../../../hooks/useIsMobile';
@@ -46,8 +46,6 @@ export function SidebarKitchenReport({
  const { reservas } = useRxReservas();
  const [selectedReportMesas, setSelectedReportMesas] = useState<Set<string>>(new Set());
  const [selectedReservas, setSelectedReservas] = useState<Set<string>>(new Set());
- const [reportData, setReportData] = useState<Array<{ mesaNombre: string; habitacionNombre?: string; items: any[] }>>([]);
- const [a4PreviewOpened, setA4PreviewOpened] = useState(false);
  const [loading, setLoading] = useState(false);
 
  const mesaExtrasPorMesa = (mesaId: string) => {
@@ -102,7 +100,7 @@ export function SidebarKitchenReport({
 
  const handleGenerarReporte = async () => {
  if (selectedReportMesas.size === 0 && selectedReservas.size === 0) {
- showToast.error('Ninguna mesa o reserva seleccionada');
+ showToast.warning('Ninguna mesa o reserva seleccionada');
  return;
  }
  setLoading(true);
@@ -151,15 +149,15 @@ export function SidebarKitchenReport({
  }
 
  if (mesasData.length === 0 && selectedReservas.size === 0) {
- showToast.error('Las mesas y reservas seleccionadas no tienen productos');
+ showToast.warning('Sin productos para imprimir', 'Las mesas y reservas seleccionadas no tienen productos.');
  return;
  }
 
- setReportData(mesasData);
- setA4PreviewOpened(true);
+ // Abre el diálogo de impresión nativo del navegador (sin modal de vista previa).
+ imprimirReporteA4(mesasData);
  } catch (e) {
  console.error(e);
- showToast.error('Error generando reporte');
+ showToast.error('No se pudo generar el reporte');
  } finally {
  setLoading(false);
  }
@@ -280,12 +278,6 @@ export function SidebarKitchenReport({
  </SheetContent>
  </Sheet>
  )}
-
- <A4ReportPreviewModal
- opened={a4PreviewOpened}
- onClose={() => setA4PreviewOpened(false)}
- mesasData={reportData}
- />
  </>
  );
 }

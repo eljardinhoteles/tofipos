@@ -75,18 +75,18 @@ interface HeaderSearchProps {
 export function HeaderSearch({ value, onChange, placeholder }: HeaderSearchProps) {
   return (
     <div className="relative w-96 max-w-full min-w-0">
-      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-nav-foreground/60 pointer-events-none" />
+      <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-nav-foreground/80 pointer-events-none" />
       <input
         type="text"
         value={value}
         placeholder={placeholder}
         aria-label={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full rounded-2xl bg-nav-foreground/10 pl-9 pr-10 t-cuerpo text-nav-foreground placeholder:text-nav-foreground/55 outline-none transition-colors focus:bg-nav-foreground/15 focus-visible:ring-2 focus-visible:ring-nav-foreground/30"
+        className="h-9 w-full rounded-2xl bg-nav-foreground/15 ring-1 ring-nav-foreground/20 pl-9 pr-10 t-cuerpo text-nav-foreground placeholder:text-nav-foreground/75 outline-none transition-colors hover:bg-nav-foreground/20 focus:bg-nav-foreground/20 focus-visible:ring-2 focus-visible:ring-nav-foreground/50"
       />
       {value && (
         <button type="button" aria-label="Limpiar búsqueda" onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 size-9 pointer-coarse:size-11 flex items-center justify-center text-nav-foreground/60 hover:text-nav-foreground cursor-pointer">
+          className="absolute right-0 top-1/2 -translate-y-1/2 size-9 pointer-coarse:size-11 flex items-center justify-center text-nav-foreground/80 hover:text-nav-foreground cursor-pointer">
           <XCircle size={16} weight="fill" />
         </button>
       )}

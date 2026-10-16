@@ -63,15 +63,15 @@ function ModuleLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
       style={{ '--mod': item.accent } as React.CSSProperties}
       className={cn(
         // Alto fijo: solo el activo muestra el título, el resto es solo icono; así
-        // la lista no se mueve al cambiar de módulo.
-        'group/mod w-full h-[68px] flex flex-col items-center justify-center gap-1.5 border-l-[3px] outline-none transition-colors',
+        // la lista no se mueve al cambiar de módulo. El alto es fluido: reparte lo que queda de ventana entre 9 módulos (268 px = logo, actividad y utilidades), entre 48 y 68 px; bajo ~660 px de ventana la lista se desplaza.
+        'group/mod w-full shrink-0 h-[clamp(48px,calc((100dvh-268px)/9),68px)] flex flex-col items-center justify-center gap-1.5 border-l-[3px] outline-none transition-colors',
         'focus-visible:bg-nav-foreground/10',
         isActive
           ? 'border-(--mod) text-(--mod)'
           : 'border-transparent text-nav-foreground/90 hover:text-nav-foreground'
       )}
     >
-      <Icon size={24} weight={isActive ? 'duotone' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/mod:scale-110 group-hover/mod:-translate-y-0.5')} />
+      <Icon size={22} weight={isActive ? 'duotone' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/mod:scale-110 group-hover/mod:-translate-y-0.5')} />
       {isActive && (
         <span className="w-full px-1 text-center t-dato leading-tight truncate">
           {item.label}
@@ -84,7 +84,7 @@ function ModuleLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
 
 // Utilidades del pie (ajustes, sync, cuenta): solo icono + tooltip, sin fondo.
 const utilButtonClass =
-  'relative size-11 rounded-xl bg-transparent text-nav-foreground/75 hover:bg-transparent hover:text-nav-foreground aria-expanded:bg-nav-foreground/10 aria-expanded:text-nav-foreground focus-visible:border-transparent focus-visible:ring-nav-foreground/40';
+  'relative size-10 rounded-xl bg-transparent text-nav-foreground/75 hover:bg-transparent hover:text-nav-foreground aria-expanded:bg-nav-foreground/10 aria-expanded:text-nav-foreground focus-visible:border-transparent focus-visible:ring-nav-foreground/40';
 
 function UtilTooltip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -152,22 +152,23 @@ export function MainSidebarV2() {
         <AguacateEgg className="w-8 h-8" />
       </div>
 
-      <nav aria-label="Principal" className="flex-1 min-h-0 w-full overflow-y-auto hide-scrollbar flex flex-col items-center pb-6">
+      <nav aria-label="Principal" className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain [scrollbar-width:thin] [scrollbar-color:oklch(1_0_0/0.25)_transparent] flex flex-col items-center pb-2">
         {visibleNavItems.map(item => (
           <ModuleLink key={item.label} item={item} isActive={isActivePath(item.to)} />
         ))}
       </nav>
 
-      {/* Actividad de hoy: sobre el separador, con fondo sólido (la línea pasa por detrás). */}
-      <div className="relative w-full flex items-center justify-center">
-        <Separator className="bg-nav-foreground/10" />
+      {/* Actividad de hoy: sobre el separador, con fondo sólido (la línea pasa por detrás). El botón va en el flujo, centrado por flex:
+          centrarlo con translate chocaba con el desplazamiento de 1 px al presionar (active:translate-y-px) y lo movía al tocarlo, así que a veces no llegaba el clic. */}
+      <div className="relative w-full h-9 shrink-0 flex items-center justify-center">
+        <Separator className="absolute inset-x-0 top-1/2 bg-nav-foreground/10" />
         <UtilTooltip label="Actividad de hoy">
           <Button
             variant="ghost"
             size="icon"
             className={cn(
               // Base opaca (bg-nav) para que la línea del separador no se transparente; el tinte va en una capa encima.
-              "absolute left-1/2 top-1/2 z-10 size-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-0 bg-nav hover:bg-nav focus-visible:ring-nav-foreground/60 before:absolute before:inset-0 before:rounded-full before:content-[''] before:transition-colors",
+              "relative z-10 size-9 rounded-full border-0 bg-nav hover:bg-nav focus-visible:ring-nav-foreground/60 before:absolute before:inset-0 before:rounded-full before:content-[''] before:transition-colors",
               // Con actividad hoy el fondo y el ícono toman el acento de la navegación; sin actividad, el fondo neutro.
               totalActividad > 0
                 ? 'text-nav-accent before:bg-nav-accent/30 hover:before:bg-nav-accent/40'
@@ -176,22 +177,25 @@ export function MainSidebarV2() {
             onClick={() => setActividadOpen(true)}
             aria-label={totalActividad > 0 ? 'Abrir actividad de hoy (hay actividad)' : 'Abrir actividad de hoy'}
           >
-            <Pulse size={24} weight="bold" className={cn('relative', ICONO_ANIM, 'group-hover/button:scale-110')} />
+            <Pulse size={18} weight="bold" className={cn('relative', ICONO_ANIM, 'group-hover/button:scale-110')} />
           </Button>
         </UtilTooltip>
       </div>
 
-      <div className="flex flex-col items-center gap-1 pt-8 pb-4">
+      <div className="shrink-0 flex flex-col items-center gap-1 pt-2 pb-4">
         {permisos.verAjustes && (
+          <div className="flex justify-center">
           <UtilTooltip label={settingsItem.label}>
             <Button asChild variant="ghost" size="icon" className={cn(utilButtonClass, settingsActive && 'text-nav-foreground bg-nav-foreground/10')}>
               <NavLink to={settingsItem.to} aria-label={settingsItem.label}>
-                <Gear size={24} weight={settingsActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:rotate-90')} />
+                <Gear size={20} weight={settingsActive ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:rotate-90')} />
               </NavLink>
             </Button>
           </UtilTooltip>
+          </div>
         )}
 
+        <div className="flex justify-center">
         <UtilTooltip label={`Sincronización: ${syncLabel}`}>
           <Button
             variant="ghost"
@@ -200,16 +204,18 @@ export function MainSidebarV2() {
             onClick={() => setModalOpen(true)}
             aria-label={`Estado de sincronización: ${syncLabel}`}
           >
-            <ArrowsClockwise size={24} className={cn(ICONO_ANIM, 'group-hover/button:rotate-180', syncing && 'animate-spin')} />
-            <span className={cn('absolute top-2 right-2 size-2.5 rounded-full border-2 border-nav', syncDot)} />
+            <ArrowsClockwise size={20} className={cn(ICONO_ANIM, 'group-hover/button:rotate-180', syncing && 'animate-spin')} />
+            <span className={cn('absolute top-1.5 right-1.5 size-2.5 rounded-full border-2 border-nav', syncDot)} />
           </Button>
         </UtilTooltip>
+        </div>
 
+        <div className="flex justify-center">
         <Popover open={userMenuOpen} onOpenChange={setUserMenuOpen}>
           <UtilTooltip label={userName}>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className={utilButtonClass} aria-label={`Cuenta de ${userName}`}>
-                <User size={24} weight={userMenuOpen ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:scale-110')} />
+                <User size={20} weight={userMenuOpen ? 'fill' : 'regular'} className={cn(ICONO_ANIM, 'group-hover/button:scale-110')} />
               </Button>
             </PopoverTrigger>
           </UtilTooltip>
@@ -253,6 +259,7 @@ export function MainSidebarV2() {
             </Button>
           </PopoverContent>
         </Popover>
+        </div>
       </div>
 
       <SyncStatusModal

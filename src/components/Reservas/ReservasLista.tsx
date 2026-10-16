@@ -44,7 +44,7 @@ export function ReservasLista({ reservas, mesas, search, activaId, onCardClick, 
   if (grupos.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8 bg-background">
-        <CalendarBlank size={44} className="text-muted-foreground/40" />
+        <img src={search.trim() ? '/no_resultado.webp' : '/Reservas.webp'} alt="" aria-hidden="true" className="size-28 object-contain" />
         <span className="t-cuerpo-fuerte text-foreground">{search.trim() ? 'Sin resultados' : 'No hay reservas próximas'}</span>
         <span className="t-meta text-muted-foreground">
           {search.trim() ? 'Prueba con otro nombre.' : 'Las reservas de hoy en adelante aparecerán aquí.'}
