@@ -1,0 +1,29 @@
+{
+	"name": "pos-cloudbeds",
+	"main": "worker/index.ts",
+	"compatibility_date": "2025-01-01",
+	"placement": { "mode": "smart" },
+	// Cada 5 minutos sube las reservas pendientes (necesita el secreto SUPABASE_SERVICE_KEY; sin él no hace nada).
+	"triggers": { "crons": ["*/5 * * * *"] },
+	// Registros del Worker (errores de Cloudbeds, etc.) consultables en el panel de Cloudflare o con `wrangler tail`.
+	"observability": { "enabled": true },
+	// Estado compartido (caché, versión, idempotencia, sesiones): un Durable Object con SQLite (plan gratuito, sin el límite de 1.000 escrituras de KV).
+	"durable_objects": { "bindings": [{ "name": "ESTADO", "class_name": "EstadoHotel" }] },
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["EstadoHotel"] }],
+	// KV ya no se usa (se deja el enlace por si hay que volver atrás).
+	"kv_namespaces": [
+		{
+			"binding": "CACHE",
+			"id": "223f6b6a1016474883dc96dc73cd986c"
+		}
+	],
+	"vars": {
+		"CLOUDBEDS_BASE": "https://api.cloudbeds.com/api/v1.3",
+		"ALLOWED_ORIGIN": "https://tofipos.eljardinhoteles.workers.dev,http://localhost:5173",
+		"SUPABASE_URL": "https://oexqhyseeuvubyyeeefc.supabase.co",
+		"SOURCE_ID": "s-286267857948864",
+		"ALLOWED_ORG_ID": "e9fad140-4036-4736-bc18-acb1806b2eba"
+	}
+}
+// Secretos (no van aquí): CLOUDBEDS_ORGS (conexión de cada organización, ver README), SUPABASE_ANON_KEY y, opcional, SUPABASE_SERVICE_KEY (reintento desde el servidor).
+// Formato anterior, mientras no exista CLOUDBEDS_ORGS: CLOUDBEDS_API_KEY y WEBHOOK_SECRET (+ ALLOWED_ORG_ID y SOURCE_ID aquí).

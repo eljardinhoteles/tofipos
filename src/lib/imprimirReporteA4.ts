@@ -83,10 +83,10 @@ function documento(mesas: MesaReporteA4[]) {
   </body></html>`;
 }
 
-/** Abre el diálogo de impresión del navegador con el reporte de cocina en A4. */
-export function imprimirReporteA4(mesas: MesaReporteA4[]) {
+/** Abre el diálogo de impresión del navegador con un documento HTML ya armado (hoja A4), usando un iframe oculto. */
+export function imprimirHtmlA4(html: string, titulo: string) {
   const marco = document.createElement("iframe");
-  marco.title = "Reporte de cocina";
+  marco.title = titulo;
   marco.setAttribute("aria-hidden", "true");
   // Fuera de la vista pero no oculto con display:none (algunos navegadores no imprimen un iframe oculto).
   marco.className = "fixed bottom-0 right-0 size-0 border-0 opacity-0 pointer-events-none";
@@ -100,6 +100,11 @@ export function imprimirReporteA4(mesas: MesaReporteA4[]) {
     // Respaldo: si el navegador no avisa al terminar, el iframe se retira solo.
     setTimeout(quitar, 120_000);
   };
-  marco.srcdoc = documento(mesas);
+  marco.srcdoc = html;
   document.body.appendChild(marco);
+}
+
+/** Abre el diálogo de impresión del navegador con el reporte de cocina en A4. */
+export function imprimirReporteA4(mesas: MesaReporteA4[]) {
+  imprimirHtmlA4(documento(mesas), "Reporte de cocina");
 }
