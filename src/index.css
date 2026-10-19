@@ -456,3 +456,14 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+
+/* Resplandor del borde inferior del header del Hotel (PulsoSincronizacion): el color y el ritmo los fija el componente con
+   --glow, --pulso-dur, --pulso-min y --pulso-max según el estado (consultando, aviso, error). */
+@keyframes pulso-glow {
+  0%, 100% { opacity: var(--pulso-min, 0.3); transform: scaleX(0.85); }
+  50% { opacity: var(--pulso-max, 1); transform: scaleX(1); }
+}
+.pulso-glow { animation: pulso-glow var(--pulso-dur, 1.8s) ease-in-out infinite; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .pulso-glow { animation: none; opacity: var(--pulso-max, 0.8); }
+}

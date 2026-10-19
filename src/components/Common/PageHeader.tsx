@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from 'react';
-import { MagnifyingGlass, XCircle } from '@phosphor-icons/react';
+import { MagnifyingGlass, XCircle, type Icon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 // Marco de página: sidebar y header comparten el color `--nav` (una "L") y el
@@ -31,17 +31,30 @@ interface PageHeaderProps {
   search?: ReactNode;
   /** Acciones a la derecha: la principal con HeaderPrimaryButton, el resto con headerIconButtonClass. */
   actions?: ReactNode;
+  /**
+   * Secciones de la página (`HeaderTabs`), centradas en el header (debajo del buscador, si lo hay, y entonces el header es
+   * más alto; en celular, en una fila bajo el header). Así quedan separadas de los filtros del contenido.
+   */
+  tabs?: ReactNode;
+  /** Indicador que sale del borde inferior del header (p. ej. `PulsoSincronizacion`). Se posiciona solo, en absoluto. */
+  pulso?: ReactNode;
 }
 
-export function PageHeader({ title, badge, subtitle, search, actions }: PageHeaderProps) {
+export function PageHeader({ title, badge, subtitle, search, actions, tabs, pulso }: PageHeaderProps) {
   // En PC el buscador va centrado (columna del medio) con el título a la izquierda y
   // las acciones a la derecha; en móvil no hay buscador en el header.
+  // Con `tabs` la columna del medio lleva el buscador y, debajo, las secciones.
+  const centro = !!search || !!tabs;
   return (
+    <>
     <header className={cn(
-      'h-16 md:h-[72px] px-6 bg-nav text-nav-foreground flex items-center justify-between md:grid shrink-0 gap-4',
+      'relative h-16 px-6 bg-nav text-nav-foreground flex items-center justify-between md:grid shrink-0 gap-4',
+      // Con buscador y secciones apilados necesita más alto; con solo las secciones, el normal.
+      tabs && search ? 'md:h-[112px]' : 'md:h-[72px]',
       // Sin buscador no hay columna del medio: una columna vacía le quitaba ancho al título cuando un sidebar
       // abierto estrechaba la página. Con buscador, el título conserva al menos 9rem.
-      search ? 'md:grid-cols-[minmax(9rem,1fr)_minmax(8rem,24rem)_minmax(max-content,1fr)]' : 'md:grid-cols-[minmax(9rem,1fr)_auto]',
+      tabs ? 'md:grid-cols-[minmax(9rem,1fr)_minmax(0,34rem)_minmax(max-content,1fr)]'
+        : centro ? 'md:grid-cols-[minmax(9rem,1fr)_minmax(8rem,24rem)_minmax(max-content,1fr)]' : 'md:grid-cols-[minmax(9rem,1fr)_auto]',
     )}>
       <div className="flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -50,9 +63,37 @@ export function PageHeader({ title, badge, subtitle, search, actions }: PageHead
         </div>
         {subtitle && <span className="t-dato leading-tight text-nav-foreground/70 truncate">{subtitle}</span>}
       </div>
-      {search && <div className="hidden md:flex justify-center min-w-0">{search}</div>}
+      {tabs ? (
+        <div className="hidden md:flex flex-col items-center justify-center gap-2 min-w-0">
+          {search}
+          {tabs}
+        </div>
+      ) : search && <div className="hidden md:flex justify-center min-w-0">{search}</div>}
       <div className="flex items-center justify-end gap-3 shrink-0">{actions}</div>
+      {pulso}
     </header>
+    {tabs && <div className="md:hidden bg-nav px-4 pb-3 shrink-0 flex justify-center">{tabs}</div>}
+    </>
+  );
+}
+
+/** Secciones de la página dentro del header (sobre el fondo oscuro). Se pasan a `PageHeader` con la prop `tabs`. */
+export function HeaderTabs({ children, label }: { children: ReactNode; label: string }) {
+  return <div role="tablist" aria-label={label} className="flex items-center gap-1 max-w-full overflow-x-auto hide-scrollbar">{children}</div>;
+}
+
+export function HeaderTab({ activa, onClick, icono: Icono, children }: { activa: boolean; onClick: () => void; icono?: Icon; children: ReactNode }) {
+  return (
+    <button
+      type="button" role="tab" aria-selected={activa} onClick={onClick}
+      className={cn(
+        'h-9 pointer-coarse:h-11 px-3.5 rounded-2xl t-dato whitespace-nowrap shrink-0 cursor-pointer transition-colors inline-flex items-center gap-1.5',
+        activa ? 'bg-nav-foreground/15 text-nav-foreground' : 'text-nav-foreground/70 hover:bg-nav-foreground/10 hover:text-nav-foreground',
+      )}
+    >
+      {Icono && <Icono size={16} weight={activa ? 'fill' : 'bold'} aria-hidden />}
+      {children}
+    </button>
   );
 }
 

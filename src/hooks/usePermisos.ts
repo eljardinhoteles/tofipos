@@ -43,6 +43,8 @@ export interface Permisos {
   seccionesAjustes: readonly SeccionAjustes[] | 'todas';
   editarProductos: boolean;
   editarPlanificador: boolean;
+  // Crear, cambiar y cancelar reservas de hotel (Cloudbeds): admin y cajero. El mesero solo las ve.
+  gestionarHotel: boolean;
 }
 
 const TODAS = 'todas' as const;
@@ -65,6 +67,7 @@ export function permisosDe(rol: Rol): Permisos {
     seccionesAjustes: esAdmin ? TODAS : rol === 'cajero' ? ['impresion'] : [],
     editarProductos: esAdmin,
     editarPlanificador: rol !== 'mesero',
+    gestionarHotel: rol !== 'mesero',
   };
 }
 
