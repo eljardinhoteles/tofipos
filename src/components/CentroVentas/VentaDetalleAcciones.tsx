@@ -27,6 +27,7 @@ import { VentaEstadia } from './VentaEstadia';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
 import { VentaComandasPanel } from './VentaComandasPanel';
+import { VentaReservasHotelPanel } from './VentaReservasHotelPanel';
 import { useComandasDeVenta } from '../../hooks/useComandasDeVenta';
 import { ORIGEN_BORDE, ORIGEN_FONDO, ORIGEN_ICON, ORIGEN_LABEL, ORIGEN_TEXTO } from '../Common/OrigenBadge';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
@@ -83,6 +84,11 @@ const MOVIMIENTO_COLOR: Record<VentaMovimientoTipo, string> = {
  * barra de acción fija abajo. Cada acción agrega un movimiento nuevo —
  * nunca edita el historial existente.
  */
+type PestanaVenta = 'historial' | 'archivos' | 'comandas' | 'reservas';
+const pestanasDe = (esHotel: boolean): Array<[PestanaVenta, string]> => [
+  ['historial', 'Historial'], ['archivos', 'Archivos'], ['comandas', 'Comandas'], ...(esHotel ? [['reservas', 'Reservas Hotel'] as [PestanaVenta, string]] : []),
+];
+
 export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   
   const { venta, movimientos } = item;
@@ -93,7 +99,9 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const { clientes } = useRxClientes();
   const clienteVenta = venta.cliente_id ? clientes.find((c: any) => c.id === venta.cliente_id) : undefined;
   // Pestaña del detalle: movimientos de la venta o las comandas vinculadas.
-  const [pestana, setPestana] = useState<'historial' | 'archivos' | 'comandas'>('historial');
+  const [pestana, setPestana] = useState<'historial' | 'archivos' | 'comandas' | 'reservas'>('historial');
+  const [cantidadReservas, setCantidadReservas] = useState(0);
+  const esHotel = venta.origen === 'reserva_hotel';
   const comandasDeVenta = useComandasDeVenta(venta, movimientos);
   const cantidadComandas = comandasDeVenta.length;
   const [checkingSync, setCheckingSync] = useState(false);
@@ -253,7 +261,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 w-fit">
-              {([['historial', 'Historial'], ['archivos', 'Archivos'], ['comandas', 'Comandas']] as const).map(([id, label]) => (
+              {pestanasDe(esHotel).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -262,10 +270,10 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
                     pestana === id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}
                 >
                   {label}
-                  {(id === 'comandas' ? cantidadComandas : id === 'archivos' ? item.documentosAdjuntos.length : 0) > 0 && (
+                  {(id === 'comandas' ? cantidadComandas : id === 'archivos' ? item.documentosAdjuntos.length : id === 'reservas' ? cantidadReservas : 0) > 0 && (
                     <span className={cn('ml-1.5 inline-flex min-w-5 h-5 px-1.5 items-center justify-center rounded-full t-dato tabular-nums',
                       pestana === id ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20 text-muted-foreground')}>
-                      {id === 'comandas' ? cantidadComandas : item.documentosAdjuntos.length}
+                      {id === 'comandas' ? cantidadComandas : id === 'reservas' ? cantidadReservas : item.documentosAdjuntos.length}
                     </span>
                   )}
                 </button>
@@ -338,6 +346,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               </div>
             )
           )}
+          {pestana === 'reservas' && esHotel && <VentaReservasHotelPanel ventaId={venta.id} onCantidad={setCantidadReservas} />}
           {pestana === 'comandas' && <VentaComandasPanel relacionadas={comandasDeVenta} />}
           {pestana === 'historial' && [...movimientos].reverse().map(m => (
             <MovimientoHistorialCard
