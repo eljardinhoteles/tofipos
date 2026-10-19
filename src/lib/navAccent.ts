@@ -8,6 +8,7 @@ export const NAV_ACCENT: Record<string, string> = {
   '/v2/mesas': ACENTO,
   '/v2/ordenes': ACENTO,
   '/v2/reservas': ACENTO,
+  '/v2/hotel': ACENTO,
   '/v2/centro-ventas': ACENTO,
   '/v2/clientes': ACENTO,
   '/v2/menu': ACENTO,

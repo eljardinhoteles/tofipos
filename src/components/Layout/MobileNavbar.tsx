@@ -25,12 +25,12 @@ import {
  ShoppingCart,
  Gear,
  Users,
- PresentationChart,
  CurrencyCircleDollar,
  ArrowsClockwise,
  UserGear,
  SignOut,
  X,
+ Bed,
 } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 import { useAuth } from'../../context/AuthContext';
@@ -50,11 +50,11 @@ const navItemsMobile = [
  { label:'Mesas', to:'/v2/mesas', icon: SquaresFour },
  { label:'Órdenes', to:'/v2/ordenes', icon: Receipt },
  { label:'Reservas', to:'/v2/reservas', icon: CalendarCheck },
+ { label:'Hotel', to:'/v2/hotel', icon: Bed },
  // Centro de Ventas se usa en PC: en el celular queda visible pero inactivo.
  { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyCircleDollar, soloPc: true },
  { label:'Clientes', to:'/v2/clientes', icon: Users },
  { label:'Productos', to:'/v2/menu', icon: ShoppingCart },
- { label:'Métricas', to:'/v2/metricas', icon: PresentationChart },
  { label:'Ajustes', to:'/v2/ajustes', icon: Gear },
 ];
 

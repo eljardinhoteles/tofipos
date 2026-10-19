@@ -22,6 +22,7 @@ import { useUI } from '../../context/UIContext';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePermisos, rutaPermitida } from '../../hooks/usePermisos';
+import { useAvisosHotelEnVivo } from '../../hooks/useHotelEnVivo';
 import { useKeyboardCloseReset, useOtherDialogOpen } from '../../hooks/useKeyboardCloseReset';
 import { useIvaActivo } from '../../hooks/useIvaActivo';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
@@ -48,6 +49,7 @@ const importAjustes = () => import('../../pages/AjustesV2');
 const importMetricas = () => import('../../pages/MetricasV2');
 const importCentroVentas = () => import('../../pages/CentroVentasV2');
 const importPlanificacion = () => import('../../pages/PlanificacionV2');
+const importHotel = () => import('../../pages/HotelV2');
 const OrdenesV2 = lazy(importOrdenes);
 const MenuV2 = lazy(importMenu);
 const ReservasV2 = lazy(importReservas);
@@ -56,6 +58,7 @@ const AjustesV2 = lazy(importAjustes);
 const MetricasV2 = lazy(importMetricas);
 const CentroVentasV2 = lazy(importCentroVentas);
 const PlanificacionV2 = lazy(importPlanificacion);
+const HotelV2 = lazy(importHotel);
 
 // Con la app ya lista y el celular libre, calienta los trozos restantes para que
 // cambiar de pantalla sea instantáneo (salen del precaché, sin red).
@@ -154,7 +157,9 @@ export function AppLayoutV2() {
   }, []);
 
   const isMesasPage = location.pathname.includes('/mesas');
-  const currentPath = location.pathname === '/' ? '/v2/mesas' : location.pathname;
+  const currentPath = (location.pathname === '/' || location.pathname === '/v2' || location.pathname === '/v2/') ? '/v2/mesas' : location.pathname;
+  // Reservas nuevas y cambios que llegan desde Cloudbeds avisan en cualquier pantalla (el botón «Ver» solo si no se está en el Hotel).
+  useAvisosHotelEnVivo({ activo: permisos.gestionarHotel, onVer: currentPath.includes('/hotel') ? undefined : () => navigate('/v2/hotel') });
   const [selectedMesa, setSelectedMesa] = useState<any | null>(null);
 
   useEffect(() => {
@@ -433,6 +438,7 @@ export function AppLayoutV2() {
               {(currentPath === '/clientes' || currentPath.includes('/clientes')) && <div className="h-full"><ClientesV2 /></div>}
               {(currentPath === '/ajustes' || currentPath.includes('/ajustes')) && <div className="h-full"><AjustesV2 /></div>}
               {(currentPath === '/metricas' || currentPath.includes('/metricas')) && <div className="h-full"><MetricasV2 /></div>}
+              {currentPath.includes('/hotel') && <div className="h-full"><HotelV2 /></div>}
               {!isMobile && currentPath.includes('/planificacion') && <div className="h-full"><PlanificacionV2 /></div>}
               {!isMobile && (currentPath === '/centro-ventas' || currentPath.includes('/centro-ventas')) && <div className="h-full overflow-y-auto"><CentroVentasV2 /></div>}
             </Suspense>
