@@ -296,6 +296,17 @@ Un solo sistema: el `Toaster` de Sonner del UI kit (`src/components/ui/sonner.ts
 - Formularios de sidebar (cliente, reserva, hotel): etiqueta `t-etiqueta!` gris, campos `h-12 text-base`, pie con `bg-muted/40`.
 - En móvil la barra de navegación flota sobre el contenido (y se oculta al hacer scroll). Las listas largas reservan su alto al final de la propia lista (`pb-[calc(env(safe-area-inset-bottom)+96px)]`), y el paginador va dentro del scroll, al final de la lista; desde `md` el paginador queda fijo abajo.
 
+## Hotel › Reservas
+
+Una sola vista para operar el día y consultar todas las reservas (`ReservasHotelLista` y `components/Hotel/reservas/`).
+
+- **Columna del día** (`PanelDia`, a la izquierda en PC, arriba en pantallas angostas): tarjeta con el día (`t-hero`) y flechas de día anterior/siguiente, y tarjeta de ocupación con el anillo (`stroke-primary` sobre `stroke-muted`) y cuatro filas con punto de color: Disponibles (`success`), Ocupadas (`primary`), Fuera de servicio (`destructive`), Bloqueadas (`warning`). La ocupación cuenta cabañas activas y enlazadas.
+- **Tarjetas de actividad** (`ActividadKpis`): Llegadas, Salidas, En casa, Pernoctan, Nuevas, Canceladas y Todas. Son el filtro principal (`role="tablist"`): número `t-cifra`, etiqueta `t-meta`, icono de 18px; la activa lleva `border-primary bg-primary-soft` e icono relleno. Cuentan el día elegido, salvo «Todas» (cualquier fecha). *En casa* = ya llegaron; *Pernoctan* = todas las que duermen esa noche.
+- **Una fila = una reserva**, unida desde dos fuentes (`construirFilas`): la tarjeta de Cloudbeds y la reserva del POS. Una de Cloudbeds sin enlazar aparece con la insignia «Sin enlazar» y su ficha permite enlazarla; no tiene total ni pago.
+- **Una sola insignia de estado por fila**, la más importante (Cancelada, Rechazada, Sin subir, Sin enlazar, Revisar venta, Cambió en Cloudbeds, Salió, Sin confirmar). Lo normal no lleva píldora: «Confirmada» y «Check-in hecho» son texto. Así el verde queda para «Pagado».
+- **Buscador y filtros**: primera fila = buscador a todo el ancho + botón «Filtros» (panel con chips por grupo: Estadía y Estado solo en «Todas», Pago, Canal, Cabaña y Atención). Los aplicados salen debajo como chips que se quitan de uno en uno, más «Limpiar todo». El estado por defecto no cuenta como filtro.
+- La tabla sigue las reglas de «Tablas y listas»: encabezado fijo, filas de al menos 56px, orden por Estadía y Total, `Paginacion` común. Las tarjetas y el panel no usan tamaños sueltos: solo los roles tipográficos.
+
 ## Menú
 
 - Tarjeta de producto: la misma del selector de productos de Mesas. Arriba la categoría (`t-etiqueta` con icono), el nombre en `t-titulo` con `Adicionales: N` debajo (icono y `t-meta`, sin fondo), y abajo el precio en `t-valor` a la izquierda y el check de activo (`CheckRedondo`, zona táctil de 44px) en la esquina inferior derecha. Inactivo = tarjeta atenuada con el check vacío; abierta en el sidebar = aro `primary`.
