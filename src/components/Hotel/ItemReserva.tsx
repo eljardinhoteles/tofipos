@@ -16,14 +16,15 @@ import { getCategoryIcon } from '@/lib/categoryIcons';
 import type { VentaConMovimientos } from '../../lib/ventaConMovimientos';
 import { EstadoBadge } from '../Common/EstadoBadge';
 
-const RETRASO_HOVER_MS = 250;
+// Un poco más largo que un roce: así el popover no sale al pasar el cursor ni se cruza con el inicio de un arrastre.
+const RETRASO_HOVER_MS = 600;
 const dinero = (n: number) => `$${n.toFixed(2)}`;
 const fecha = (f: string) => dayjs(f).format('ddd D MMM');
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
 interface Props {
   tarjeta: TarjetaVista;
-  /** Nombre de la cabaña de la fila. */
+  /** Nombre de la habitación de la fila. */
   cabana: string;
   /** Posición dentro de la fila (el calendario la calcula): borde izquierdo y ancho, en CSS. */
   left: string;
@@ -33,6 +34,16 @@ interface Props {
   cortaDer: boolean;
   /** Abre la ficha completa. */
   onAbrir: (t: TarjetaVista) => void;
+  /** Arrastre vertical con el mouse para pasarla a otra habitación (mismas fechas). Solo reservas enlazadas con el POS. */
+  arrastrable?: boolean;
+  /** Fila en la que está dibujada la barra. */
+  filaId?: string;
+  /** Días visibles de la rejilla: con el ancho de la fila da lo que mide un día, para mover las fechas arrastrando en horizontal. */
+  diasVisibles?: number;
+  /** `eje`: 'v' = a otra habitación (según la fila bajo el cursor); 'h' = mover las fechas `dias` días (negativo = atrás). */
+  onArrastreMover?: (t: TarjetaVista, filaId: string, x: number, y: number, eje: 'h' | 'v') => void;
+  onSoltar?: (t: TarjetaVista, filaId: string, x: number, y: number, eje: 'h' | 'v', dias: number) => void;
+  onArrastreFin?: () => void;
 }
 
 /**
@@ -43,7 +54,7 @@ interface Props {
  * popover y desde él se abre la ficha. También aparece al enfocar con teclado.
  */
 // Con `memo`: el calendario se repinta con el reloj y con cada aviso de la caché, y la barra solo debe hacerlo si cambian sus datos.
-export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left, width, cortaIzq, cortaDer, onAbrir }: Props) {
+export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left, width, cortaIzq, cortaDer, onAbrir, arrastrable, filaId, diasVisibles, onArrastreMover, onSoltar, onArrastreFin }: Props) {
   const estilo = estiloDe(t);
   // Estado de pago: solo de la venta conciliada en el Centro de Ventas.
   const venta = useVentaDeReserva(t.local?.venta_id);
@@ -57,6 +68,12 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
 
   const [abierto, setAbierto] = useState(false);
   const [tactil, setTactil] = useState(false);
+  // Arrastre (solo mouse). El eje se fija con el primer movimiento: vertical = a otra habitación (mismas fechas); horizontal = mover
+  // las fechas (misma habitación y duración), de día en día. `mov` null = sin arrastrar.
+  const [mov, setMov] = useState<{ x: number; y: number; eje: 'h' | 'v'; dias: number } | null>(null);
+  const inicioArrastre = useRef<{ x: number; y: number; pxDia: number } | null>(null);
+  const huboArrastre = useRef(false);
+  const terminarArrastre = () => { inicioArrastre.current = null; setMov(null); onArrastreFin?.(); };
   const espera = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelar = () => { if (espera.current) { clearTimeout(espera.current); espera.current = null; } };
   useEffect(() => cancelar, []);
@@ -65,7 +82,8 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
     <Popover open={abierto} onOpenChange={setAbierto}>
       <PopoverAnchor asChild>
         <button
-          type="button" style={{ left, width, backgroundImage: estilo.imagen }} aria-label={`${t.nombre}. ${estilo.etiqueta}`}
+          type="button" style={{ left, width, backgroundImage: estilo.imagen, ...(mov ? { transform: `translate(${mov.x}px, ${mov.y}px)` } : {}) }} aria-label={`${t.nombre}. ${estilo.etiqueta}`}
+          data-arrastrando={mov ? '' : undefined}
           className={cn(
             '@container absolute top-1.5 bottom-1.5 z-10 rounded-xl pr-2.5 flex items-center gap-2 text-left cursor-pointer overflow-hidden transition-[filter] hover:brightness-95',
             'pl-3',
@@ -73,8 +91,43 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
             cortaIzq && 'rounded-l-none', cortaDer && 'rounded-r-none',
             t.estado === 'checked_out' && '[filter:grayscale(0.7)_brightness(1.03)]',
             sinConfirmar ? 'border-2 border-dashed border-current/60' : 'border',
+            arrastrable && !mov && 'cursor-grab',
+            mov && 'z-40! cursor-grabbing shadow-xl opacity-90 select-none touch-none',
           )}
-          onPointerDown={(e) => setTactil(e.pointerType !== 'mouse')}
+          onPointerDown={(e) => {
+            setTactil(e.pointerType !== 'mouse');
+            if (e.pointerType === 'mouse') { cancelar(); setAbierto(false); }
+            if (arrastrable && e.pointerType === 'mouse' && e.button === 0) {
+              const ancho = e.currentTarget.parentElement?.getBoundingClientRect().width ?? 0;
+              inicioArrastre.current = { x: e.clientX, y: e.clientY, pxDia: diasVisibles && ancho > 0 ? ancho / diasVisibles : 0 };
+              huboArrastre.current = false;
+            }
+          }}
+          onPointerMove={(e) => {
+            const i = inicioArrastre.current;
+            if (!i) return;
+            // Un clic con un poco de temblor no es un arrastre: se empieza al pasar de 6 px.
+            const dx = e.clientX - i.x;
+            const dyy = e.clientY - i.y;
+            if (!mov && Math.hypot(dx, dyy) < 6) return;
+            let eje = mov?.eje;
+            if (!eje) {
+              // Sin el ancho de un día no se pueden mover fechas: solo vertical.
+              eje = Math.abs(dx) > Math.abs(dyy) && i.pxDia > 0 ? 'h' : 'v';
+              e.currentTarget.setPointerCapture(e.pointerId); cancelar(); setAbierto(false);
+            }
+            huboArrastre.current = true;
+            const dias = eje === 'h' ? Math.round(dx / i.pxDia) : 0;
+            setMov(eje === 'h' ? { x: dias * i.pxDia, y: 0, eje, dias } : { x: 0, y: dyy, eje, dias: 0 });
+            onArrastreMover?.(t, filaId ?? '', e.clientX, e.clientY, eje);
+          }}
+          onPointerUp={(e) => {
+            if (!mov) { inicioArrastre.current = null; return; }
+            onSoltar?.(t, filaId ?? '', e.clientX, e.clientY, mov.eje, mov.dias);
+            terminarArrastre();
+          }}
+          onPointerCancel={() => { if (mov) terminarArrastre(); else inicioArrastre.current = null; }}
+          onKeyDown={(e) => { if (e.key === 'Escape' && mov) terminarArrastre(); }}
           onPointerEnter={(e) => {
             if (e.pointerType !== 'mouse') return;
             cancelar();
@@ -85,13 +138,14 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
           onBlur={(e) => { if (!tactil && !(e.relatedTarget as HTMLElement | null)?.closest('[data-slot=popover-content]')) setAbierto(false); }}
           onClick={() => {
             cancelar();
+            if (huboArrastre.current) { huboArrastre.current = false; return; } // el clic que sigue a un arrastre no abre la ficha
             if (tactil) setAbierto((a) => !a); // táctil: el primer toque muestra los datos
             else { setAbierto(false); onAbrir(t); }
           }}
         >
           <span className="flex flex-col min-w-0 grow leading-tight">
             <span className="t-cuerpo-fuerte truncate">{t.nombre}</span>
-            <span className="t-meta overflow-hidden whitespace-nowrap opacity-80 flex items-center gap-1">{plural(noches, 'noche', 'noches')}{iconosExtras.map((c, i) => { const Ic = getCategoryIcon(c.icono); return Ic ? <Ic key={c.id} size={13} weight="bold" aria-label={c.nombre} className={cn('shrink-0', i > 0 && 'hidden @min-[9rem]:block')} /> : null; })}{pago && <span className="hidden @min-[9rem]:inline"> · {pago.etiqueta}</span>}</span>
+            <span className="t-meta overflow-hidden whitespace-nowrap opacity-80 flex items-center gap-1">{mov?.eje === 'h' && mov.dias !== 0 ? `${dayjs(t.desde).add(mov.dias, 'day').format('D MMM')} → ${dayjs(t.hasta).add(mov.dias, 'day').format('D MMM')}` : plural(noches, 'noche', 'noches')}{iconosExtras.map((c, i) => { const Ic = getCategoryIcon(c.icono); return Ic ? <Ic key={c.id} size={13} weight="bold" aria-label={c.nombre} className={cn('shrink-0', i > 0 && 'hidden @min-[9rem]:block')} /> : null; })}{pago && <span className="hidden @min-[9rem]:inline"> · {pago.etiqueta}</span>}</span>
           </span>
           {/* El icono del canal solo cabe en las barras anchas; en las de una noche queda el nombre. */}
           <span className={cn('hidden @min-[6rem]:flex size-6 shrink-0 rounded-full items-center justify-center t-dato font-extrabold', estilo.circulo)}>
@@ -257,7 +311,7 @@ function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: Tar
                 {notasLocal.length > 3 && <span className="block">y {notasLocal.length - 3} más…</span>}
               </Fila>
             )}
-            {local?.grupo_id && <Fila icono={UsersThree}>Parte de un grupo; cada cabaña es independiente</Fila>}
+            {local?.grupo_id && <Fila icono={UsersThree}>Parte de un grupo; cada habitación es independiente</Fila>}
             {pendiente && <Fila icono={WarningCircle}><span className="text-warning-foreground">Aún no está en Cloudbeds: se reintenta sola</span></Fila>}
             {!local && <Fila icono={Hash}>Código {t.id}</Fila>}
             {venta && pago

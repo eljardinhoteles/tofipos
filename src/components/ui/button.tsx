@@ -21,6 +21,8 @@ const buttonVariants = cva(
         specialSoft: "border-border bg-card text-special-foreground shadow-(--shadow-btn) hover:bg-special-soft",
         // Principal de cuenta/cobro (naranja de "cuenta pedida").
         warning: "bg-warning-foreground text-white border-warning-foreground shadow-[inset_0_1px_0_oklch(1_0_0/0.2),var(--shadow-btn)] hover:brightness-110",
+        // Principal discreto: relleno gris suave sin borde ni sombra. Para editar/añadir dentro de una sección, donde el verde se reserva a la acción de dinero.
+        suave: "border-transparent bg-muted text-foreground hover:bg-muted/70 aria-expanded:bg-muted/70",
         ghost: "aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive: "bg-destructive/10 text-destructive focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40",
         // Acción de riesgo secundaria: solo texto en rojo atenuado.

@@ -18,6 +18,7 @@ import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront, PresentationC
 import { useUI } from '../context/UIContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePermisos } from '../hooks/usePermisos';
+import { SeccionesMesas } from '../components/Common/SeccionesMesas';
 import { SidebarKitchenReport } from '../components/Mesas/Sidebar/SidebarKitchenReport';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -431,7 +432,7 @@ export default function MesasV2() {
             <div className="flex-1 overflow-hidden relative min-w-0 flex flex-col bg-nav">
 
                 {vistaFondo === 'mapa' && (
-                        <header className="h-16 md:h-[72px] px-6 bg-nav border-b-0 flex items-center justify-between shrink-0">
+                        <header className="h-16 md:h-[72px] px-6 bg-nav border-b-0 flex items-center justify-between shrink-0 gap-4">
                             <div className="flex flex-col justify-center min-w-0">
                                 <h1 className="font-redonda t-titulo text-nav-foreground truncate max-w-[240px]">
                                     {localStorage.getItem('pos_org_name_cached') || 'POS'}
@@ -445,6 +446,7 @@ export default function MesasV2() {
                                     {printServerOk ? 'Impresión conectada' : 'Impresión sin conexión'}
                                 </span>
                             </div>
+                            <div className="hidden md:flex flex-1 justify-center min-w-0"><SeccionesMesas /></div>
                             <div className="flex items-center gap-3 shrink-0">
                                 {permisos.verMetricas && (
                                     <button
@@ -454,7 +456,7 @@ export default function MesasV2() {
                                             e.stopPropagation();
                                             navigate('/v2/metricas');
                                         }}
-                                        className="size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer"
+                                        className="md:pointer-fine:hidden size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer"
                                     >
                                         <PresentationChart size={18} weight="bold" />
                                     </button>
@@ -677,6 +679,7 @@ export default function MesasV2() {
                                                                 subcomandasCount={subcomandasCount}
                                                     salida={salida}
                                                     esperandoLlegada={!!llegadaCheckin}
+                                                    sugerida={!!llegadaCheckin?.mesaSugeridaId && llegadaCheckin.mesaSugeridaId === mesa.id}
                                                                 onSelect={handleSelectMesa}
                                                             />
                                                         </div>
@@ -705,6 +708,7 @@ export default function MesasV2() {
                                                     subcomandasCount={subcomandasCount}
                                                     salida={salida}
                                                     esperandoLlegada={!!llegadaCheckin}
+                                                    sugerida={!!llegadaCheckin?.mesaSugeridaId && llegadaCheckin.mesaSugeridaId === mesa.id}
                                                     onSelect={handleSelectMesa}
                                                 />
                                             </div>

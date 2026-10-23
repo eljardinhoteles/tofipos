@@ -65,5 +65,5 @@ export function SidebarHabitacionCuenta({ selectedMesa, onClose }: SidebarHabita
   }
 
   // key: si se elige o suelta una llegada con el formulario abierto, se recarga con sus datos.
-  return <CheckinForm key={`${selectedMesa.id}-${llegadaCheckin?.ventaId ?? ''}`} selectedMesa={selectedMesa} onClose={onClose} />
+  return <CheckinForm key={`${selectedMesa.id}-${llegadaCheckin?.reservaId ?? ''}`} selectedMesa={selectedMesa} onClose={onClose} />
 }

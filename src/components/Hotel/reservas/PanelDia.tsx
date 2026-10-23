@@ -17,7 +17,7 @@ const RADIO = 38;
 const CIRCUNFERENCIA = 2 * Math.PI * RADIO;
 
 /**
- * Columna del día: la fecha que se mira (con flechas para cambiarla) y la ocupación de las cabañas ese día.
+ * Columna del día: la fecha que se mira (con flechas para cambiarla) y la ocupación de las habitaciones ese día.
  * Cambiar el día cambia lo que cuentan las tarjetas de actividad y la tabla.
  */
 export function PanelDia({ fecha, hoy, onFecha, ocupacion }: Props) {
@@ -63,7 +63,7 @@ export function PanelDia({ fecha, hoy, onFecha, ocupacion }: Props) {
             <span className="t-valor">{ocupacion.tasa.toFixed(0)}%</span>
           </div>
         </div>
-        <span className="t-meta text-muted-foreground text-center -mt-1">de {ocupacion.total} cabañas activas</span>
+        <span className="t-meta text-muted-foreground text-center -mt-1">de {ocupacion.total} habitaciones activas</span>
         <ul className="flex flex-col gap-2 border-t border-border pt-3">
           {filas.map((f) => (
             <li key={f.etiqueta} className="flex items-center justify-between gap-2">

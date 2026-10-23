@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Bank, Check, CreditCard, Money, Paperclip, Plus, Receipt, WarningCircle } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
+import { Bank, Check, CreditCard, LinkSimple, Money, Paperclip, Plus, Receipt, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ClienteBuscador } from '../../Common/ClienteBuscador';
+import { agregarVentaMovimiento, updateRxVenta } from '../../../db/rxdb';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
@@ -11,9 +15,10 @@ import { PagoComprobanteLink } from '../../Mesas/Sidebar/PagoComprobanteLink';
 import { Girando } from '../Espera';
 import { pagoDeVenta } from '../estiloReserva';
 import { useMetodosPagoConfig } from '../../../hooks/useMetodosPagoConfig';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import type { VentaConMovimientos } from '../../../lib/ventaConMovimientos';
 import { ajustarVentaHotel, conciliacionDisponible, totalConExtras, type ReservaHotel } from '../../../lib/hotelReservasApi';
-import { atribucionDePago, motivoLegible, registrarAbonoHotel, type DestinoAbono, type MetodoCobro } from '../../../lib/hotelCobros';
+import { atribucionDePago, facturasDePago, motivoLegible, registrarAbonoHotel, verificarEnlaceGrupo, type DestinoAbono, type MetodoCobro } from '../../../lib/hotelCobros';
 import { Seccion } from './comunes';
 import { EPS, dinero, etiquetaCampo } from './formatos';
 
@@ -26,7 +31,7 @@ interface Props {
   /** La venta enlazada no existe en el Centro de Ventas (se eliminó o no está en este dispositivo). */
   ventaPerdida?: boolean;
   onDesenlazar?: () => void;
-  /** Cabañas vigentes del grupo (vacío si la reserva es individual): comparten UNA venta. */
+  /** Habitaciones vigentes del grupo (vacío si la reserva es individual): comparten UNA venta. */
   grupo: ReservaHotel[];
   puedeGestionar: boolean;
   usuario: { id?: string; nombre?: string };
@@ -51,6 +56,60 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
   const movimientos = (venta?.movimientos ?? []).filter((m) => (m.tipo === 'pago' || m.tipo === 'reembolso') && !m.anulado);
   const saldo = venta && !venta.anulado ? venta.saldo : totalPos;
   const [ajustando, setAjustando] = useState(false);
+  const [verificando, setVerificando] = useState(false);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+
+  // El Centro de Ventas abre la venta marcada en sessionStorage (mismo mecanismo que «Ver en C. de Ventas» de Mesas).
+  const verEnVentas = () => {
+    const ventaId = r.venta_id ?? grupo.find((g) => g.venta_id)?.venta_id;
+    if (!ventaId) return;
+    if (isMobile) { showToast.info('El pago se ve en Centro de Ventas', 'Disponible en la versión de escritorio.'); return; }
+    try { sessionStorage.setItem('pos_venta_a_abrir', ventaId); } catch { /* sin storage: abre sin selección */ }
+    navigate('/v2/centro-ventas');
+  };
+  // Alguna habitación del grupo sin venta mientras otra sí la tiene: quedó suelta y no aparece con cobros.
+  const hayCabanaSuelta = enGrupo && grupo.some((g) => g.venta_id) && grupo.some((g) => !g.venta_id);
+
+  const verificarEnlace = async () => {
+    setVerificando(true);
+    try {
+      const res = await verificarEnlaceGrupo(grupo, usuario.id);
+      if (res.enlazadas.length > 0) {
+        showToast.success(`${res.enlazadas.length === 1 ? 'Habitación enlazada' : 'Habitaciones enlazadas'}: ${res.enlazadas.join(', ')}`, res.ajuste > 0 ? `Se sumaron ${dinero(res.ajuste)} a la venta del grupo.` : 'La venta ya incluía su importe.');
+        onCambio(r);
+      } else if (res.sinVenta) {
+        showToast.info('El grupo aún no tiene venta', 'Se creará con el primer pago.');
+      } else {
+        showToast.success('Todo en orden', 'Todas las habitaciones del grupo están enlazadas a la misma venta.');
+      }
+    } catch (e) {
+      showToast.fallo('verificar el enlace', e);
+    } finally {
+      setVerificando(false);
+    }
+  };
+  // Crédito corporativo: igual que en el Centro de Ventas (la venta queda pendiente de cobro a nombre de un cliente o agencia).
+  const [creditoAbierto, setCreditoAbierto] = useState(false);
+  const [creditoCliente, setCreditoCliente] = useState<string>(venta?.venta.cliente_id ?? '');
+  const [creditoMotivo, setCreditoMotivo] = useState('');
+  const [marcando, setMarcando] = useState(false);
+  const marcarCredito = async () => {
+    if (!venta || !creditoCliente) return;
+    setMarcando(true);
+    try {
+      if (creditoCliente !== (venta.venta.cliente_id ?? '')) await updateRxVenta(venta.venta.id, { cliente_id: creditoCliente });
+      await agregarVentaMovimiento({ venta_id: venta.venta.id, tipo: 'marcar_credito', motivo: creditoMotivo.trim() || undefined, usuario_id: usuario.id });
+      showToast.success('Venta marcada como crédito');
+      setCreditoAbierto(false);
+      setCreditoMotivo('');
+      onCambio(r);
+    } catch (e) {
+      showToast.fallo('marcar la venta como crédito', e);
+    } finally {
+      setMarcando(false);
+    }
+  };
   const avance = venta && venta.montoTotal > EPS ? Math.min(100, Math.max(0, (venta.totalPagado / venta.montoTotal) * 100)) : 0;
 
   const ajustar = async () => {
@@ -66,25 +125,36 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
     }
   };
 
+  const enlaceGrupo = enGrupo && puedeGestionar ? (
+    <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => void verificarEnlace()} disabled={verificando} title="Comprueba que todas las habitaciones del grupo estén enlazadas a la misma venta y repara las sueltas">
+      {verificando ? <Girando /> : <LinkSimple size={14} weight="bold" />} {hayCabanaSuelta ? 'Enlazar habitaciones' : 'Verificar enlace'}
+    </Button>
+  ) : null;
+
   return (
     <Seccion icono={Receipt} color="success" titulo={enGrupo ? 'Cobros del grupo' : 'Cobros'}
       accion={<div className="flex items-center gap-2">
-        {pago && <EstadoBadge tono={pago.tono}>{pago.etiqueta}</EstadoBadge>}
+        {enlaceGrupo}
         {venta?.anulado && <EstadoBadge tono="neutral">Venta anulada</EstadoBadge>}
+        {puedeGestionar && venta && !venta.anulado && venta.venta.tipo === 'directa' && (
+          <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => { setCreditoCliente(venta.venta.cliente_id ?? ''); setCreditoAbierto(true); }} title="Pasa la venta a crédito de un cliente o agencia">
+            <CreditCard size={14} weight="bold" /> Crédito
+          </Button>
+        )}
         {puedeGestionar && !abierto && r.estado === 'confirmada' && !venta?.anulado && (
-          <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => onAbrir(true)} disabled={!!venta && venta.saldo <= EPS && venta.montoTotal > EPS}><Plus size={14} weight="bold" /> Registrar anticipo</Button>
+          <Button type="button" variant="default" className="h-9 gap-1.5" onClick={() => onAbrir(true)} disabled={!!venta && venta.saldo <= EPS && venta.montoTotal > EPS}><Plus size={14} weight="bold" /> Añadir pago</Button>
         )}
       </div>}>
       {!r.venta_id ? (
         <div className="flex flex-col gap-2">
           <span className="t-cuerpo-fuerte">Aún no tiene venta en el Centro de Ventas</span>
-          <span className="t-meta text-muted-foreground">El primer anticipo la crea con el total {enGrupo ? 'del grupo' : 'del POS'} ({dinero(totalPos)}). Si la reserva ya tiene una venta, concíliala.</span>
+          <span className="t-meta text-muted-foreground">El primer pago la crea con el total {enGrupo ? 'del grupo' : 'del POS'} ({dinero(totalPos)}). Si la reserva ya tiene una venta, concíliala.</span>
           {puedeGestionar && onConciliar && conciliacionDisponible && <Button type="button" variant="outline" className="self-start h-10" onClick={() => onConciliar(r)}>Conciliar con una venta existente</Button>}
         </div>
       ) : venta?.anulado || (!venta && ventaPerdida) ? (
         <div className="flex flex-col gap-2">
           <span className="t-cuerpo-fuerte">{venta?.anulado ? 'La venta enlazada está anulada' : 'La venta enlazada ya no existe'}</span>
-          <span className="t-meta text-muted-foreground">{venta?.anulado ? 'Se anuló en el Centro de Ventas, así que no admite cobros.' : 'Se eliminó del Centro de Ventas o aún no está en este dispositivo.'} Desenlázala: el próximo anticipo creará una venta nueva con el total del POS.</span>
+          <span className="t-meta text-muted-foreground">{venta?.anulado ? 'Se anuló en el Centro de Ventas, así que no admite cobros.' : 'Se eliminó del Centro de Ventas o aún no está en este dispositivo.'} Desenlázala: el próximo pago creará una venta nueva con el total del POS.</span>
           {puedeGestionar && onDesenlazar && <Button type="button" variant="outline" className="self-start h-10" onClick={onDesenlazar}>Desenlazar venta</Button>}
         </div>
       ) : !venta ? (
@@ -118,18 +188,22 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
               const MetodoIcono = m.metodo_pago === 'tarjeta' ? CreditCard : m.metodo_pago === 'transferencia' ? Bank : Money;
               const reembolso = m.tipo === 'reembolso';
               return (
-                <li key={m.id} className="flex items-center gap-3 py-2">
+                <li key={m.id} className="relative flex items-center gap-3 py-2 px-2 -mx-2 rounded-xl hover:bg-muted/60 transition-colors">
                   <span className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', reembolso ? 'bg-destructive-soft text-destructive' : 'bg-success-soft text-success-foreground')}><MetodoIcono size={20} /></span>
                   <span className="flex flex-col min-w-0 flex-1">
-                    <span className="t-cuerpo-fuerte capitalize truncate">{reembolso ? 'Reembolso' : 'Anticipo'} · {m.metodo_pago}</span>
+                    {/* Enlace extendido: el botón cubre toda la fila (el comprobante queda por encima para seguir siendo tocable). */}
+                    <button type="button" onClick={verEnVentas} title="Ver en el Centro de Ventas" className="t-cuerpo-fuerte capitalize truncate text-left cursor-pointer after:absolute after:inset-0 after:content-['']">{reembolso ? 'Reembolso' : 'Pago'} · {m.metodo_pago}</button>
                     <span className="t-meta text-muted-foreground truncate">
                       {new Date(m.fecha).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       {m.transferencia_banco ? ` · ${m.transferencia_banco}` : ''}{m.tarjeta_red ? ` · ${m.tarjeta_red}` : ''}
                     </span>
-                    {enGrupo && <Destino motivo={m.motivo} grupo={grupo} />}
+                    <span className="flex flex-wrap items-center gap-1">
+                      {enGrupo && <Destino motivo={m.motivo} grupo={grupo} />}
+                      {!reembolso && <FacturaDePago numeros={facturasDePago(venta?.movimientos ?? [], m.id)} />}
+                    </span>
                   </span>
                   {/* Hueco fijo para el comprobante: los importes quedan alineados con o sin adjunto. */}
-                  <span className="w-11 flex justify-center shrink-0">{m.comprobante_url && <PagoComprobanteLink url={m.comprobante_url} />}</span>
+                  <span className="relative z-10 w-11 flex justify-center shrink-0">{m.comprobante_url && <PagoComprobanteLink url={m.comprobante_url} />}</span>
                   <span className={cn('t-cuerpo-fuerte tabular-nums text-right w-24 shrink-0', reembolso ? 'text-destructive' : 'text-success')}>{reembolso ? '−' : '+'}{dinero(m.monto ?? 0)}</span>
                 </li>
               );
@@ -138,12 +212,41 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
         </div>
       )}
 
+      <AlertDialog open={creditoAbierto} onOpenChange={(o) => { if (!marcando) setCreditoAbierto(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar la venta como crédito</AlertDialogTitle>
+            <AlertDialogDescription>El saldo queda pendiente de cobro a nombre del cliente o agencia. Se puede cobrar después desde aquí o desde el Centro de Ventas. No se puede deshacer.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label className="t-etiqueta! text-muted-foreground">Cliente o agencia *</Label>
+              <ClienteBuscador value={creditoCliente} onChange={setCreditoCliente} placeholder="Cliente / agencia (requerido)" inputClassName="h-10 pl-9 t-cuerpo" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="cred-motivo" className="t-etiqueta! text-muted-foreground">Motivo (opcional)</Label>
+              <Input id="cred-motivo" value={creditoMotivo} onChange={(e) => setCreditoMotivo(e.target.value)} placeholder="Ej. acuerdo de crédito" className="h-11 text-base" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={marcando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={!creditoCliente || marcando} onClick={(e) => { e.preventDefault(); void marcarCredito(); }}>{marcando ? 'Guardando…' : 'Marcar como crédito'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {abierto && <FormAbono r={r} grupo={grupo} saldo={saldo} usuario={usuario} onCancelar={() => onAbrir(false)} onSucio={onSucio} onRegistrado={(n) => { onAbrir(false); onCambio(n); }} />}
     </Seccion>
   );
 }
 
-/** A qué cabaña (o a todo el grupo) corresponde un pago; los hechos en Ventas sin asignar quedan como «Sin asignar». */
+/** Si el pago ya está cubierto por una factura (vínculo hecho en el Centro de Ventas). */
+function FacturaDePago({ numeros }: { numeros: string[] }) {
+  return numeros.length > 0
+    ? <EstadoBadge tono="success" className="py-0.5">Factura {numeros.join(', ')}</EstadoBadge>
+    : <EstadoBadge tono="warning" className="py-0.5" title="Ninguna factura cubre este pago todavía">Sin facturar</EstadoBadge>;
+}
+
+/** A qué habitación (o a todo el grupo) corresponde un pago; los hechos en Ventas sin asignar quedan como «Sin asignar». */
 function Destino({ motivo, grupo }: { motivo?: string; grupo: ReservaHotel[] }) {
   const at = atribucionDePago(motivo);
   const texto = !at ? (motivoLegible(motivo) || 'Sin asignar') : at.destino === 'grupo' ? 'Todo el grupo' : grupo.find((g) => g.id === at.destino)?.cabana ?? at.texto;
@@ -191,11 +294,11 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
     setGuardando(true);
     try {
       const nueva = await registrarAbonoHotel(r, { monto: montoN, metodo, bancoDestino: banco || undefined, numeroComprobante: numero.trim() || undefined, redTarjeta: red || undefined, comprobanteFile: archivo }, usuario, { grupo, destino });
-      showToast.success('Anticipo registrado', `Se registró un anticipo de ${dinero(montoN)} en el Centro de Ventas.`);
+      showToast.success('Pago registrado', `Se registró un pago de ${dinero(montoN)} en el Centro de Ventas.`);
       onSucio(false);
       onRegistrado(nueva);
     } catch (e) {
-      showToast.fallo('registrar el anticipo', e);
+      showToast.fallo('registrar el pago', e);
     } finally {
       setGuardando(false);
     }
@@ -203,7 +306,7 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
-      <span className="t-cuerpo-fuerte">Registrar anticipo · saldo {dinero(Math.max(0, saldo))}</span>
+      <span className="t-cuerpo-fuerte">Añadir pago · saldo {dinero(Math.max(0, saldo))}</span>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="ab-monto" className={etiquetaCampo}>Monto</Label>
         <div className="flex items-center gap-2">
@@ -214,7 +317,7 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
           </div>
           {!sinSaldo && <Button type="button" variant="outline" className="h-11 px-4 shrink-0" onClick={() => cambiar(setMonto)(saldo.toFixed(2))}>Todo el saldo</Button>}
         </div>
-        {excede && <p className="t-meta text-destructive">El anticipo no puede superar el saldo ({dinero(saldo)}).</p>}
+        {excede && <p className="t-meta text-destructive">El pago no puede superar el saldo ({dinero(saldo)}).</p>}
         {sinSaldo && <p className="t-meta text-muted-foreground">No hay saldo pendiente: la reserva ya está cubierta.</p>}
       </div>
       {grupo.length > 1 && (
@@ -274,7 +377,7 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button type="button" variant="ghost" className="h-11" onClick={onCancelar} disabled={guardando}>Descartar</Button>
         <Button type="button" className="h-11 gap-2" onClick={() => void registrar()} disabled={guardando || sinSaldo}>
-          {guardando ? <><Girando /> Registrando…</> : <><Check size={16} weight="bold" /> Registrar anticipo</>}
+          {guardando ? <><Girando /> Registrando…</> : <><Check size={16} weight="bold" /> Registrar pago</>}
         </Button>
       </div>
     </div>

@@ -7,7 +7,7 @@ const CADA_MS = 60_000;
 
 /**
  * Reintenta solas las reservas que quedaron guardadas en el POS pero sin subir a Cloudbeds: mientras no suban, el
- * calendario de Cloudbeds sigue libre y esa cabaña se podría vender por otro canal. Se intenta al abrir la página, cada
+ * calendario de Cloudbeds sigue libre y esa habitación se podría vender por otro canal. Se intenta al abrir la página, cada
  * minuto y al volver la conexión. Nunca corren dos reintentos a la vez, y una misma reserva no se reintenta más de una
  * vez cada 45 s. El Worker comprueba que no exista ya en Cloudbeds antes de crearla, así que no duplica.
  */

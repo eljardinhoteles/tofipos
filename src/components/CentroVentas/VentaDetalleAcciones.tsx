@@ -181,8 +181,8 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
               {ORIGEN_LABEL[venta.origen]}
             </span>
-            {/* Reserva de hotel: la estadía va aquí, en la misma tarjeta, con un lápiz para editarla. */}
-            {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadia key={`${venta.id}-${venta.llegada ?? ''}-${venta.salida ?? ''}`} venta={venta} />}
+            {/* Reserva de hotel: la estadía va aquí, en la misma tarjeta, solo para consultar (se cambia en el módulo Hotel). */}
+            {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadia key={venta.id} venta={venta} />}
           </div>
 
           {/* Monto y saldo siempre en dos filas (etiqueta a la izquierda, valor a la derecha): ocupan poco ancho y le dejan el espacio al

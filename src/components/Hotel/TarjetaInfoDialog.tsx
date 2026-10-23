@@ -6,7 +6,7 @@ import { EstadoBadge } from '../Common/EstadoBadge';
 import { BannerEspera, Girando } from './Espera';
 import { TONO_ESTADO, bloques } from '../../lib/hotelCalendarioCache';
 import type { TarjetaCalendario } from '../../lib/cloudbeds';
-import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 
 interface Props {
   info: TarjetaCalendario | null;
@@ -30,14 +30,14 @@ export function TarjetaInfoDialog({ info, habitaciones, onClose, puedeGestionar,
     try { await fn(); setConfirmarBorrado(false); onClose(); } catch { /* quien llama ya avisó del error */ } finally { setTrabajando(null); }
   };
 
-  // Un bloqueo puede incluir varias cabañas (un solo bloqueo): eliminarlo las libera a todas.
+  // Un bloqueo puede incluir varias habitaciones (un solo bloqueo): eliminarlo las libera a todas.
   const cabanasDelBloqueo = info?.tipo === 'bloqueo'
-    ? new Set([...bloques.values()].flatMap((b) => b.tarjetas).filter((t) => t.tipo === 'bloqueo' && t.id === info.id).map((t) => t.roomTypeID)).size
+    ? new Set([...bloques.values()].flatMap((b) => b.tarjetas).filter((t) => t.tipo === 'bloqueo' && t.id === info.id).map((t) => `${t.roomTypeID}:${t.roomID ?? ''}`)).size
     : 0;
 
-  // Una reserva de Cloudbeds con varias cabañas dentro aparece como una tarjeta en cada una (mismo código).
+  // Una reserva de Cloudbeds con varias habitaciones dentro aparece como una tarjeta en cada una (mismo código).
   const cabanasDeLaReserva = info?.tipo === 'reserva'
-    ? new Set([...bloques.values()].flatMap((b) => b.tarjetas).filter((t) => t.tipo === 'reserva' && t.id === info.id).map((t) => t.roomTypeID)).size
+    ? new Set([...bloques.values()].flatMap((b) => b.tarjetas).filter((t) => t.tipo === 'reserva' && t.id === info.id).map((t) => `${t.roomTypeID}:${t.roomID ?? ''}`)).size
     : 0;
   const esDeVariasCabanas = cabanasDeLaReserva > 1;
 
@@ -60,18 +60,27 @@ export function TarjetaInfoDialog({ info, habitaciones, onClose, puedeGestionar,
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-2xl border border-border bg-card p-4">
               <Dato t="Llegada" v={dayjs(info.desde).format('DD/MM/YYYY')} />
               <Dato t="Salida" v={dayjs(info.hasta).format('DD/MM/YYYY')} />
-              <Dato t="Cabaña" v={habitaciones.find((h) => h.cloudbeds_room_type_id === info.roomTypeID)?.nombre ?? '—'} />
+              <Dato t="Habitación" v={habitacionDeUnidad(habitaciones, info.roomTypeID, info.roomID)?.nombre ?? '—'} />
               {info.fuente && <Dato t="Fuente" v={info.fuente} />}
               {info.saldo != null && info.tipo === 'reserva' && <Dato t="Saldo en Cloudbeds" v={`$${info.saldo.toFixed(2)}`} />}
               {info.tipo === 'reserva' && <Dato t="Código" v={info.id} />}
-              {esDeVariasCabanas && <Dato t="Cabañas en esta reserva" v={String(cabanasDeLaReserva)} />}
-              {info.tipo === 'bloqueo' && cabanasDelBloqueo > 1 && <Dato t="Cabañas en este bloqueo" v={String(cabanasDelBloqueo)} />}
+              {esDeVariasCabanas && <Dato t="Habitaciones en esta reserva" v={String(cabanasDeLaReserva)} />}
+              {info.tipo === 'bloqueo' && cabanasDelBloqueo > 1 && <Dato t="Habitaciones en este bloqueo" v={String(cabanasDelBloqueo)} />}
             </div>
 
             {info.tipo === 'reserva' && esDeVariasCabanas && (
-              <p className="t-meta rounded-2xl bg-muted text-muted-foreground px-3 py-2">
-                Es una sola reserva de Cloudbeds que incluye {cabanasDeLaReserva} cabañas. Se gestiona en Cloudbeds: el POS maneja una cabaña por reserva y cancelarla allá cancela todo el grupo.
-              </p>
+              <>
+                <p className="t-meta rounded-2xl bg-muted text-muted-foreground px-3 py-2">
+                  Es una sola reserva de Cloudbeds que incluye {cabanasDeLaReserva} habitaciones. Puedes adoptarla como grupo: se crea una reserva del POS por habitación y escribes la tarifa de cada una verificándola en Cloudbeds. Cancelarla en Cloudbeds cancela todo el grupo.
+                </p>
+                {puedeGestionar && (
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={() => void correr('Consultando la reserva en Cloudbeds…', () => onAdoptar(info))} disabled={!!trabajando} className="gap-2">
+                      {trabajando ? <Girando /> : null} Adoptar grupo
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             {info.tipo === 'reserva' && !esDeVariasCabanas && (
@@ -93,7 +102,7 @@ export function TarjetaInfoDialog({ info, habitaciones, onClose, puedeGestionar,
               confirmarBorrado ? (
                 <div className="flex flex-col gap-3 rounded-2xl bg-destructive-soft p-4">
                   <span className="t-cuerpo-fuerte text-destructive">
-                    ¿Eliminar este bloqueo{cabanasDelBloqueo > 1 ? ` (se liberan ${cabanasDelBloqueo} cabañas)` : ''}?
+                    ¿Eliminar este bloqueo{cabanasDelBloqueo > 1 ? ` (se liberan ${cabanasDelBloqueo} habitaciones)` : ''}?
                   </span>
                   <span className="t-meta text-destructive">Las fechas quedarán disponibles para reservar en todos los canales.</span>
                   <div className="flex justify-end gap-2">

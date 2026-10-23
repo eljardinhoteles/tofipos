@@ -17,10 +17,10 @@ export interface OfertaCabana {
   /** Si no se cumple la estadía mínima: cuántas noches pide como mínimo para esas fechas. */
   minNoches?: number | null;
   nombrePlan?: string | null;
-  /** Capacidad máxima de la cabaña (adultos + niños) y adultos incluidos en la tarifa, según Cloudbeds. */
+  /** Capacidad máxima de la habitación (adultos + niños) y adultos incluidos en la tarifa, según Cloudbeds. */
   capacidad?: number | null;
   adultosIncluidos?: number | null;
-  /** Otros planes de tarifa de la misma cabaña (paquetes). Hoy solo se ofrece el plan básico. */
+  /** Otros planes de tarifa de la misma habitación (paquetes). Hoy solo se ofrece el plan básico. */
   planes?: Array<{ rateID: string | null; nombrePlan: string | null; totalRate: number; reservable: boolean; motivo: string | null }>;
 }
 
@@ -38,6 +38,8 @@ export interface CrearReservaInput {
   adults: number;
   children?: number;
   roomTypeID: string;
+  /** Unidad concreta del tipo (modelo con varias unidades por tipo). Sin ella, Cloudbeds asigna una. */
+  roomID?: string;
   rateID?: string;
   guest: { firstName: string; lastName: string; email: string; phone?: string; country: string };
   /** Id de la venta del POS (thirdPartyIdentifier en Cloudbeds). */
@@ -52,6 +54,8 @@ export interface ModificarReservaInput {
   adults: number;
   children?: number;
   subReservationID?: string;
+  /** Unidad destino al cambiar de habitación cuando el tipo tiene varias (verificar en sandbox: depende de que putReservation acepte roomID). */
+  roomID?: string;
   rateID?: string;
   adjustPrice?: boolean;
 }
@@ -118,9 +122,9 @@ async function llamar<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export interface OpcionesDisponibilidad {
-  /** Solo qué cabañas están libres: sin tarifas ni noches (los precios llegan al cotizar). */
+  /** Solo qué habitaciones están libres: sin tarifas ni noches (los precios llegan al cotizar). */
   lista?: boolean;
-  /** Pedir solo estas cabañas (roomTypeID): para cotizar únicamente las elegidas. */
+  /** Pedir solo estas habitaciones (roomTypeID): para cotizar únicamente las elegidas. */
   roomTypeIDs?: string[];
 }
 
@@ -146,6 +150,16 @@ export function cancelarReservaCloudbeds(reservationId: string) {
   return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/cancel`, { method: 'POST' });
 }
 
+/** Check-in en Cloudbeds (la reserva pasa a «En casa»). */
+export function checkinReservaCloudbeds(reservationId: string) {
+  return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/checkin`, { method: 'POST' });
+}
+
+/** Check-out en Cloudbeds (la reserva pasa a «Salió»). */
+export function checkoutReservaCloudbeds(reservationId: string) {
+  return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/checkout`, { method: 'POST' });
+}
+
 export function modificarReservaCloudbeds(reservationId: string, input: ModificarReservaInput) {
   return llamar<{ ok: true; total?: number | null }>(`/api/reservations/${encodeURIComponent(reservationId)}`, {
     method: 'PATCH',
@@ -168,9 +182,22 @@ export interface TipoHabitacionCloudbeds {
   capacidad: number | null;
 }
 
-/** Tipos de habitación (cabañas) de Cloudbeds, solo para enlazarlos con el mapa del POS. */
+/** Una unidad (habitación física) de Cloudbeds. Un tipo puede tener varias; `roomID` es «<tipo>-<n>». */
+export interface UnidadCloudbeds {
+  roomID: string;
+  nombre: string;
+  roomTypeID: string;
+}
+
+/** Tipos de habitación y sus unidades en Cloudbeds, para enlazarlos con el mapa de habitaciones del POS. */
+export async function getInventarioCloudbeds() {
+  const r = await llamar<{ tipos: TipoHabitacionCloudbeds[]; unidades?: UnidadCloudbeds[] }>('/api/room-types');
+  return { tipos: r.tipos, unidades: r.unidades ?? [] };
+}
+
+/** Tipos de habitación (habitaciones) de Cloudbeds, solo para enlazarlos con el mapa del POS. */
 export async function getTiposHabitacion() {
-  return (await llamar<{ tipos: TipoHabitacionCloudbeds[] }>('/api/room-types')).tipos;
+  return (await getInventarioCloudbeds()).tipos;
 }
 
 /** Tarjeta del calendario: una reserva o un bloqueo de habitación de Cloudbeds. `hasta` es el día de salida (no incluido). */
@@ -178,6 +205,8 @@ export interface TarjetaCalendario {
   tipo: 'reserva' | 'bloqueo';
   id: string;
   roomTypeID: string;
+  /** Unidad de Cloudbeds («<tipo>-<n>»). Un tipo puede tener varias; una reserva de varias unidades da una tarjeta por unidad. */
+  roomID?: string | null;
   nombre: string;
   desde: string;
   hasta: string;
@@ -235,8 +264,10 @@ export function getSalud() {
 // ---------- bloqueos de habitación ----------
 
 export interface BloqueoInput {
-  /** Cabañas a bloquear (su roomTypeID de Cloudbeds). Con varias se crea UN bloqueo con todas. */
+  /** Habitaciones a bloquear (su roomTypeID de Cloudbeds). Con varias se crea UN bloqueo con todas. */
   roomTypeIDs: string[];
+  /** Unidades concretas (tipos con varias): mandan sobre `roomTypeIDs` al crear el bloqueo. */
+  rooms?: Array<{ roomTypeID: string; roomID: string }>;
   start: string;
   /** Día de salida: no se incluye, igual que en una reserva. */
   end: string;
@@ -248,7 +279,7 @@ export function crearBloqueoCloudbeds(input: BloqueoInput) {
   return llamar<{ roomBlockID: string | null }>('/api/blocks', { method: 'POST', body: JSON.stringify(input) });
 }
 
-/** Elimina el bloqueo entero (todas las cabañas que incluya). */
+/** Elimina el bloqueo entero (todas las habitaciones que incluya). */
 export function eliminarBloqueoCloudbeds(roomBlockID: string) {
   return llamar<{ ok: true }>(`/api/blocks/${encodeURIComponent(roomBlockID)}/delete`, { method: 'POST' });
 }
@@ -262,15 +293,54 @@ export interface ReservaCloudbedsDetalle {
   salida: string;
   total: number;
   /** De qué se compone el total en Cloudbeds: hospedaje (noches), extras cargados allá e impuestos. Null si no lo informa. */
-  desglose?: { hospedaje: number; extras: number; impuestos: number; total: number; pagado: number } | null;
+  desglose?: { hospedaje: number; extras: number; impuestos: number; total: number; pagado: number; impuestosIncluidos?: boolean } | null;
   saldo: number | null;
   fuente: string | null;
   /** Viene de un canal externo (Booking, Expedia…): sus fechas y cancelación las controla el canal. */
   fuenteExterna: boolean;
-  habitaciones: Array<{ roomTypeID: string; nombre: string; adultos: number; ninos: number }>;
+  habitaciones: Array<{
+    roomTypeID: string; nombre: string; adultos: number; ninos: number;
+    /** Unidad asignada y su nombre, la sub-reserva y el total de esa habitación dentro de la reserva (null si Cloudbeds no lo informa). */
+    roomID?: string | null; nombreUnidad?: string | null; subReservationID?: string | null; total?: number | null;
+  }>;
   huesped: { nombre: string; apellido: string; email: string; telefono: string; pais: string };
 }
 
 export function getReservaCloudbeds(reservationId: string) {
   return llamar<ReservaCloudbedsDetalle>(`/api/reservations/${encodeURIComponent(reservationId)}`);
 }
+
+// ---------- Ajustes › Integraciones (solo administradores) ----------
+
+/** Estado de la conexión de la organización con Cloudbeds. La API key nunca vuelve al navegador. */
+export interface EstadoIntegracionCloudbeds {
+  conectado: boolean;
+  /** 'ajustes' = guardada desde esta pantalla; 'secreto' = configurada en el servidor (no se puede quitar desde aquí). */
+  origen: 'ajustes' | 'secreto' | null;
+  hotel: string | null;
+  propiedad: string | null;
+  /** Hay una fuente de reservas del POS configurada. */
+  fuente: boolean;
+  /** Qué le falta al servidor para guardar credenciales (false = falta). */
+  listos: { servidor: boolean; cifrado: boolean };
+  actualizado?: string;
+}
+
+export const getIntegracionCloudbeds = () => llamar<EstadoIntegracionCloudbeds>('/api/integrations/cloudbeds');
+
+/** Prueba la clave contra Cloudbeds y, si la acepta, la guarda cifrada en el servidor. */
+export const guardarIntegracionCloudbeds = (apiKey: string, sourceId?: string) =>
+  llamar<EstadoIntegracionCloudbeds>('/api/integrations/cloudbeds', { method: 'POST', body: JSON.stringify({ apiKey, sourceId: sourceId?.trim() || undefined }) });
+
+/** Fuentes de reservas de la cuenta (id «s-…» y nombre): una de ellas es la del POS. */
+export const getFuentesCloudbeds = () => llamar<{ fuentes: Array<{ id: string; nombre: string }> }>('/api/integrations/cloudbeds/fuentes');
+
+export const probarIntegracionCloudbeds = () =>
+  llamar<{ ok: boolean; hotel?: string | null; propiedad?: string | null; error?: string }>('/api/integrations/cloudbeds/probar', { method: 'POST' });
+
+export const desconectarIntegracionCloudbeds = () =>
+  llamar<EstadoIntegracionCloudbeds>('/api/integrations/cloudbeds/desconectar', { method: 'POST' });
+
+/** Registra en Cloudbeds los avisos en vivo (reservas y bloqueos) hacia el Worker de esta organización. */
+export const registrarAvisosCloudbeds = () =>
+  llamar<{ registrados: number; total: number; fallidos: string[] }>('/api/integrations/cloudbeds/webhooks', { method: 'POST' });

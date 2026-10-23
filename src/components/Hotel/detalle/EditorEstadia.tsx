@@ -16,7 +16,7 @@ import { dinero, etiquetaCampo, fechaCorta, plural } from './formatos';
 const MAX_NOCHES = 30;
 
 interface Props {
-  /** Qué se edita: las fechas (en grupo, a todas las cabañas) o los huéspedes de esta cabaña. */
+  /** Qué se edita: las fechas (en grupo, a todas las habitaciones) o los huéspedes de esta habitación. */
   modo: 'fechas' | 'huespedes';
   r: ReservaHotel;
   /** Reservas vigentes del mismo grupo (incluida esta). */
@@ -26,6 +26,8 @@ interface Props {
   planes?: PlanAlimentacion[];
   /** Solo el plan (reservas de canales externos: sus huéspedes no se tocan). */
   soloPlan?: boolean;
+  /** Fechas ya puestas (p. ej. al arrastrar la reserva en el calendario): se calcula la tarifa al abrir. */
+  fechasIniciales?: { llegada: string; salida: string };
   onCancelar: () => void;
   onGuardado: () => void;
   onSucio: (sucio: boolean) => void;
@@ -37,18 +39,18 @@ interface Cotizacion {
   /** Noches nuevas que Cloudbeds no tiene libres. */
   bloqueadas: string[];
   capacidad: number | null;
-  /** Cloudbeds no devolvió la cabaña para esa ocupación (no cabe). */
+  /** Cloudbeds no devolvió la habitación para esa ocupación (no cabe). */
   noAdmite: boolean;
 }
 
 /**
- * Cambiar fechas y huéspedes de una reserva. Se calcula lo que cambia ANTES de guardar: la cabaña ocupada por esta misma
+ * Cambiar fechas y huéspedes de una reserva. Se calcula lo que cambia ANTES de guardar: la habitación ocupada por esta misma
  * reserva aparece «no disponible» en sus propias noches, así que solo se exige que estén libres las noches NUEVAS. Si es de un
- * grupo se puede aplicar la misma fecha a todas las cabañas (cada una se valida en Cloudbeds al guardar).
+ * grupo se puede aplicar la misma fecha a todas las habitaciones (cada una se valida en Cloudbeds al guardar).
  */
-export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, onCancelar, onGuardado, onSucio }: Props) {
-  const [llegada, setLlegada] = useState(r.llegada);
-  const [salida, setSalida] = useState(r.salida);
+export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, fechasIniciales, onCancelar, onGuardado, onSucio }: Props) {
+  const [llegada, setLlegada] = useState(fechasIniciales?.llegada ?? r.llegada);
+  const [salida, setSalida] = useState(fechasIniciales?.salida ?? r.salida);
   const [adultos, setAdultos] = useState(r.adultos);
   const [ninos, setNinos] = useState(r.ninos);
   const [planId, setPlanId] = useState<string | null>(r.plan_alimentacion?.id ?? null);
@@ -66,13 +68,17 @@ export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, 
   const hayCambios = cambiaFechas || cambiaGente || cambiaPlan;
   // Fechas o huéspedes se calculan antes con Cloudbeds; cambiar solo el plan no necesita calcular.
   const necesitaCalculo = cambiaFechas || cambiaGente;
-  const modoGrupo = modo === 'fechas' && aTodoElGrupo && grupo.length > 1;
-  // En grupo solo se cambian las fechas (cada cabaña conserva sus huéspedes).
+  // Un grupo adoptado de Cloudbeds (una reserva con varias habitaciones) cambia siempre todo junto y solo en el POS.
+  const adoptadoDeCloudbeds = !!r.cloudbeds_grupo_ref && grupo.length > 1;
+  const modoGrupo = modo === 'fechas' && (adoptadoDeCloudbeds || aTodoElGrupo) && grupo.length > 1;
+  // En grupo solo se cambian las fechas (cada habitación conserva sus huéspedes).
   const hayCambiosEfectivos = modoGrupo ? cambiaFechas : hayCambios;
 
   useEffect(() => { onSucio(hayCambios); }, [hayCambios, onSucio]);
 
   const alCambiar = () => { setCot(null); setError(''); };
+  // Con fechas ya puestas se calcula al abrir (en grupo no hay vista previa: se valida al guardar).
+  useEffect(() => { if (fechasIniciales && modo === 'fechas' && !(r.grupo_id && grupo.length > 1)) void calcular(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const calcular = async () => {
     if (!fechasOk) return;
@@ -98,10 +104,10 @@ export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, 
   };
 
   const excede = cot?.capacidad != null && adultos + ninos > cot.capacidad;
-  const problema = cot ? (cot.noAdmite ? `La cabaña no admite ${plural(adultos, 'adulto', 'adultos')}${ninos ? ` y ${plural(ninos, 'niño', 'niños')}` : ''}.`
-    : excede ? `La cabaña admite hasta ${cot.capacidad} personas.`
+  const problema = cot ? (cot.noAdmite ? `La habitación no admite ${plural(adultos, 'adulto', 'adultos')}${ninos ? ` y ${plural(ninos, 'niño', 'niños')}` : ''}.`
+    : excede ? `La habitación admite hasta ${cot.capacidad} personas.`
     : cot.bloqueadas.length > 0 ? `No hay disponibilidad las noches del ${cot.bloqueadas.map(fechaCorta).join(', ')}.` : '') : '';
-  // En grupo no hay vista previa (cada cabaña tiene su propia tarifa): se valida al guardar.
+  // En grupo no hay vista previa (cada habitación tiene su propia tarifa): se valida al guardar.
   const puedeGuardar = fechasOk && hayCambiosEfectivos && !guardando && (modoGrupo || !necesitaCalculo || (cot !== null && !problema));
 
   const guardar = async () => {
@@ -110,13 +116,15 @@ export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, 
     try {
       if (modoGrupo) {
         const g = await cambiarFechasGrupoReservasHotel(grupo, llegada, salida);
-        if (g.fallos.length > 0) showToast.warning(`${g.cambiadas} de ${grupo.length} cabañas cambiadas`, g.fallos.map((f) => `${f.cabana}: ${f.mensaje}`).join(' · '));
+        if (g.fallos.length > 0) showToast.warning(`${g.cambiadas} de ${grupo.length} habitaciones cambiadas`, g.fallos.map((f) => `${f.cabana}: ${f.mensaje}`).join(' · '));
         else if (g.tarifaManualRevisar > 0) showToast.warning('Fechas del grupo actualizadas', `${g.tarifaManualRevisar} con tarifa manual del POS: no cambió, revísala si hace falta.`);
+        else if (adoptadoDeCloudbeds) showToast.warning('Fechas del grupo actualizadas en el POS', 'Cámbialas también en Cloudbeds, y revisa las tarifas si cambió la duración.');
         else showToast.success('Fechas del grupo actualizadas', 'Cloudbeds recalculó las tarifas si cambió la duración.');
       } else {
         if (cambiaFechas || cambiaGente) {
           const res = await cambiarFechasReservaHotel(r, llegada, salida, { adultos, ninos, usuario, totalEstimado: cot && !cot.noAdmite ? cot.total : null });
-          if (res.tarifaManualRevisar) showToast.warning('Estadía actualizada', 'La tarifa del POS es manual y no cambió: revísala si hace falta.');
+          if (r.cloudbeds_grupo_ref) showToast.warning('Estadía actualizada solo en el POS', 'Cámbiala también en Cloudbeds. La tarifa no cambió: revísala si hace falta.');
+          else if (res.tarifaManualRevisar) showToast.warning('Estadía actualizada', 'La tarifa del POS es manual y no cambió: revísala si hace falta.');
           else showToast.success('Estadía actualizada', 'Cloudbeds recalculó la tarifa si cambió la duración.');
         }
         if (cambiaPlan) {
@@ -162,12 +170,16 @@ export function EditorEstadia({ modo, r, grupo, usuario, planes = [], soloPlan, 
         </div>
       )}
 
-      {modo === 'fechas' && grupo.length > 1 && (
+      {modo === 'fechas' && grupo.length > 1 && adoptadoDeCloudbeds && (
+        <p className="t-meta rounded-xl bg-muted text-muted-foreground px-3 py-2">Este grupo viene de Cloudbeds: las fechas cambian en todas las habitaciones a la vez y solo en el POS. Cámbialas también en Cloudbeds.</p>
+      )}
+
+      {modo === 'fechas' && grupo.length > 1 && !adoptadoDeCloudbeds && (
         <label className="flex items-start gap-3 py-1 cursor-pointer">
           <Checkbox checked={aTodoElGrupo} onCheckedChange={(v) => { setATodoElGrupo(v === true); alCambiar(); }} className="mt-0.5" />
           <span className="flex flex-col">
-            <span className="t-cuerpo-fuerte">Aplicar las fechas a todo el grupo ({grupo.length} cabañas)</span>
-            <span className="t-meta text-muted-foreground">Cada cabaña se valida por separado en Cloudbeds; los huéspedes de cada una no cambian.</span>
+            <span className="t-cuerpo-fuerte">Aplicar las fechas a todo el grupo ({grupo.length} habitaciones)</span>
+            <span className="t-meta text-muted-foreground">Cada habitación se valida por separado en Cloudbeds; los huéspedes de cada una no cambian.</span>
           </span>
         </label>
       )}

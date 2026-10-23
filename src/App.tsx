@@ -1,3 +1,4 @@
+import { PantallaSincronizacion } from './components/Common/PantallaSincronizacion';
 import { useAuth } from './context/AuthContext';
 import { useEffect, useState, type ReactElement } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -7,7 +8,6 @@ import { setSuspendHooks } from './db/database';
 import { supabase } from './lib/supabase';
 import { initVerticalRxDb, forceSyncAll, waitForInitialSync } from './db/rxdb';
 import {
-  ArrowsClockwise,
   SignOut,
   SquaresFour,
   Receipt,
@@ -74,13 +74,21 @@ export default function App() {
   const [organizacionRuc] = useState('');
   const [organizacionTelefono] = useState('');
   const [organizacionDireccion] = useState('');
-  const [isCreatingOrg] = useState(false);
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [verPassword, setVerPassword] = useState(false);
   const [isAdminSubmitting, setIsAdminSubmitting] = useState(false);
   const [isSyncingInitial, setIsSyncingInitial] = useState(false);
+  // Cierre de la pantalla de sincronización: un instante con «¡Listo!» antes de entrar a la app.
+  const [syncTerminado, setSyncTerminado] = useState(false);
+  const terminarSyncInicial = async () => {
+    setSyncTerminado(true);
+    await new Promise((r) => setTimeout(r, 900));
+    setIsSyncingInitial(false);
+    setSyncTerminado(false);
+  };
 
   const [, setOrganizacionNombre] = useState<string | null>(
     () => localStorage.getItem('pos_org_name_cached') || null
@@ -155,7 +163,7 @@ export default function App() {
       await initVerticalRxDb();
       await waitForInitialSync();
       await forceSyncAll();
-      setIsSyncingInitial(false);
+      await terminarSyncInicial();
     } catch (error) {
       console.error('Error al vincular organización:', error);
       showToast.error('No se pudo vincular la organización');
@@ -190,7 +198,7 @@ export default function App() {
       await initVerticalRxDb();
       await waitForInitialSync();
       await forceSyncAll();
-      setIsSyncingInitial(false);
+      await terminarSyncInicial();
     } catch (error) {
       console.error('Error al crear organización:', error);
       showToast.error('No se pudo crear la organización');
@@ -211,17 +219,7 @@ export default function App() {
   let content: ReactElement;
 
   if (activeOrganizationId && isSyncingInitial) {
-    content = (
-      <div className="h-screen w-screen flex flex-col items-center justify-center p-6 bg-background text-center gap-4">
-        <ArrowsClockwise size={32} className="animate-spin text-muted-foreground" />
-        <div className="flex flex-col gap-1">
-          <h2 className="t-valor text-foreground">Sincronizando datos...</h2>
-          <p className="t-meta text-muted-foreground max-w-sm">
-            Descargando mesas, menú y configuración. Esto solo pasa la primera vez que vinculas este dispositivo.
-          </p>
-        </div>
-      </div>
-    );
+    content = <PantallaSincronizacion terminado={syncTerminado} />;
   } else if (!activeOrganizationId) {
     const brandPanel = (
       <div className="relative hidden md:flex md:w-1/2 lg:w-[45%] flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground">
@@ -328,7 +326,7 @@ export default function App() {
                 </h2>
                 <p className="t-cuerpo text-muted-foreground">
                   {isCreatingOrg || orgs.length === 0
-                    ? 'Aún no hay ninguno: crea el primero para vincular este dispositivo.'
+                    ? (orgs.length === 0 ? 'Aún no hay ninguno: crea el primero para vincular este dispositivo.' : 'Crea un establecimiento nuevo y vincula este dispositivo a él.')
                     : 'Elige a cuál se vinculará este dispositivo.'}
                 </p>
               </div>
@@ -360,6 +358,17 @@ export default function App() {
                       >
                         Crear y vincular
                       </Button>
+                      {orgs.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsCreatingOrg(false)}
+                          disabled={isAdminSubmitting}
+                          className="h-12 w-full"
+                        >
+                          Volver a mis establecimientos
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <>
@@ -397,6 +406,15 @@ export default function App() {
                         className="h-12 w-full font-bold"
                       >
                         Vincular dispositivo
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCreatingOrg(true)}
+                        disabled={isAdminSubmitting}
+                        className="h-12 w-full"
+                      >
+                        Crear nuevo establecimiento
                       </Button>
                     </>
                   )}

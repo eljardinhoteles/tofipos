@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
@@ -66,29 +66,58 @@ const ESTILO_PULSO: Record<'cargando' | 'aviso' | 'error', { glow: string; dur: 
   error: { glow: 'oklch(0.7 0.22 25)', dur: '2.2s', min: '0.65', max: '1' },
 };
 
+type EstadoPulso = 'cargando' | 'aviso' | 'error';
+
+/**
+ * Suaviza el estado del resplandor para que una API inestable no lo haga parpadear entre rojo y verde:
+ *  · entrada con retraso: el rojo solo aparece si el fallo se mantiene 2 s, y el verde si la consulta dura más de 0,25 s
+ *    (las respuestas instantáneas no encienden nada);
+ *  · permanencia mínima: lo que ya se muestra no se quita antes de 4 s (rojo) o 1,2 s (verde), así los fallos intermitentes
+ *    dan un rojo estable en vez de intermitente y la recuperación no deja un destello.
+ */
+function useEstadoSuavizado(crudo: EstadoPulso | null): EstadoPulso | null {
+  const [mostrado, setMostrado] = useState<EstadoPulso | null>(crudo);
+  const desde = useRef(Date.now());
+  useEffect(() => {
+    if (crudo === mostrado) return;
+    const entrada = crudo === 'error' ? 2000 : crudo === 'cargando' ? 250 : 0;
+    const minimo = mostrado === 'error' ? 4000 : mostrado === 'cargando' ? 1200 : 0;
+    const espera = Math.max(entrada, minimo - (Date.now() - desde.current), 0);
+    const t = setTimeout(() => { setMostrado(crudo); desde.current = Date.now(); }, espera);
+    return () => clearTimeout(t);
+  }, [crudo, mostrado]);
+  return mostrado;
+}
+
+/** Una capa de color del resplandor: las tres están montadas y se funden entre sí (opacidad), en vez de cambiar de color de golpe. */
+function CapaPulso({ activa, estilo: e }: { activa: boolean; estilo: (typeof ESTILO_PULSO)[EstadoPulso] }) {
+  const vars = { '--glow': e.glow, '--pulso-dur': e.dur, '--pulso-min': e.min, '--pulso-max': e.max } as CSSProperties;
+  return (
+    <span aria-hidden style={vars} className={cn('absolute inset-0 transition-opacity duration-1000 ease-in-out motion-reduce:duration-0', activa ? 'opacity-100' : 'opacity-0')}>
+      <span className="pulso-glow absolute inset-x-0 bottom-0 h-full bg-[radial-gradient(ellipse_70%_100%_at_50%_100%,color-mix(in_oklab,var(--glow)_55%,transparent),transparent)]" />
+      <span className="pulso-glow absolute inset-x-0 bottom-0 h-0.5 bg-[var(--glow)] shadow-[0_0_10px_2px_color-mix(in_oklab,var(--glow)_75%,transparent)]" />
+    </span>
+  );
+}
+
 /**
  * Resplandor que sale del borde inferior del header del Hotel, en la mitad central y desvanecido en los extremos (sin
  * cortes). Se enciende e intensifica en tres casos y se apaga cuando todo está bien:
+ *  · rojo   → falló la última consulta o no hay conexión con Cloudbeds (`nivel = 'error'`); manda sobre los demás;
  *  · verde  → se está consultando Cloudbeds (calendario, actualizar, precarga);
- *  · rojo   → falló la última consulta o no hay conexión con Cloudbeds (`nivel = 'error'`);
- *  · naranja → hay algo que revisar: reservas sin subir, cambios en Cloudbeds, cabañas sin enlazar (`nivel = 'aviso'`).
+ *  · naranja → hay algo que revisar: reservas sin subir, cambios en Cloudbeds, habitaciones sin enlazar (`nivel = 'aviso'`).
+ * Los cambios de estado se funden en ~1 s y se filtran los parpadeos de una API inestable (ver `useEstadoSuavizado`).
  * Es absoluto (prop `pulso` de `PageHeader`): no ocupa espacio. Con «reducir movimiento» queda fijo, sin pulsar.
  */
 export function PulsoSincronizacion({ nivel = 'ok' }: { nivel?: NivelHotel }) {
   useCacheCalendario();
-  const estado = consultando() ? 'cargando' : hayFalloConsulta() || nivel === 'error' ? 'error' : nivel === 'aviso' ? 'aviso' : null;
-  // Al apagarse se conserva el último color para que se desvanezca sin cambiar de tono.
-  const [ultimo, setUltimo] = useState<'cargando' | 'aviso' | 'error'>('cargando');
-  if (estado && estado !== ultimo) setUltimo(estado);
-  const e = ESTILO_PULSO[estado ?? ultimo];
-  const vars = { '--glow': e.glow, '--pulso-dur': e.dur, '--pulso-min': e.min, '--pulso-max': e.max } as CSSProperties;
+  // El error va primero: mientras Cloudbeds sigue fallando, un reintento en curso no lo pinta de verde (era lo que parpadeaba).
+  const crudo: EstadoPulso | null = hayFalloConsulta() || nivel === 'error' ? 'error' : consultando() ? 'cargando' : nivel === 'aviso' ? 'aviso' : null;
+  const estado = useEstadoSuavizado(crudo);
+  const mascara = 'linear-gradient(to right, transparent, #000 35%, #000 65%, transparent)';
   return (
-    <span
-      aria-hidden style={{ ...vars, maskImage: 'linear-gradient(to right, transparent, #000 35%, #000 65%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, #000 35%, #000 65%, transparent)' }}
-      className={cn('pointer-events-none absolute inset-x-[20%] bottom-0 block h-6 overflow-hidden transition-opacity duration-700', estado ? 'opacity-100' : 'opacity-0')}
-    >
-      <span className="pulso-glow absolute inset-x-0 bottom-0 h-full bg-[radial-gradient(ellipse_70%_100%_at_50%_100%,color-mix(in_oklab,var(--glow)_55%,transparent),transparent)]" />
-      <span className="pulso-glow absolute inset-x-0 bottom-0 h-0.5 bg-[var(--glow)] shadow-[0_0_10px_2px_color-mix(in_oklab,var(--glow)_75%,transparent)]" />
+    <span aria-hidden style={{ maskImage: mascara, WebkitMaskImage: mascara }} className="pointer-events-none absolute inset-x-[20%] bottom-0 block h-6 overflow-hidden">
+      {(['cargando', 'aviso', 'error'] as const).map((k) => <CapaPulso key={k} activa={estado === k} estilo={ESTILO_PULSO[k]} />)}
     </span>
   );
 }

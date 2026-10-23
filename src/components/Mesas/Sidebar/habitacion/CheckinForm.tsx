@@ -1,10 +1,14 @@
-import { useState } from'react';
+import { useEffect, useState } from'react';
 import dayjs from'dayjs';
 import'dayjs/locale/es';
 import { Bed } from'@phosphor-icons/react';
 import { type Mesa } from'../../../../db/database';
 import { showToast } from'@/lib/toast';
+import { checkinReservaCloudbeds } from'../../../../lib/cloudbeds';
 import { initVerticalRxDb, createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
+import { Switch } from'@/components/ui/switch';
+import { listarHabitaciones, habitacionDeUnidad, type HabitacionHotel } from'../../../../lib/hotelHabitacionesApi';
+import { cambiarCabanaReservaHotel, listarReservasHotel, type ReservaHotel } from'../../../../lib/hotelReservasApi';
 import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -24,6 +28,26 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  const [checkOut, setCheckOut] = useState(llegadaCheckin?.salida ?? '');
  const [notas, setNotas] = useState('');
  const [clienteSeleccionado, setClienteSeleccionado] = useState<RxCliente | null>(null);
+ // Cloudbeds: check-in al abrir la cuenta (se puede apagar) y, si esta habitación no es la reservada, moverla.
+ const cloudbedsId = llegadaCheckin?.cloudbedsId;
+ const [hacerCheckin, setHacerCheckin] = useState(true);
+ const [moverReserva, setMoverReserva] = useState(true);
+ const [reserva, setReserva] = useState<ReservaHotel | null>(null);
+ const [destino, setDestino] = useState<HabitacionHotel | null>(null);
+ const [reservada, setReservada] = useState<HabitacionHotel | null>(null);
+ useEffect(() => {
+ if (!llegadaCheckin?.reservaId || !cloudbedsId) return;
+ let vigente = true;
+ Promise.all([listarReservasHotel(llegadaCheckin.llegada, llegadaCheckin.llegada), listarHabitaciones()]).then(([reservas, habs]) => {
+ if (!vigente) return;
+ const r = reservas.find((x) => x.id === llegadaCheckin.reservaId) ?? null;
+ setReserva(r);
+ setDestino(habs.find((h) => h.mesa_id === selectedMesa.id) ?? null);
+ setReservada(r ? habitacionDeUnidad(habs, r.room_type_id, r.room_id) ?? null : null);
+ }).catch(() => { /* sin datos no se ofrece mover; el check-in sigue siendo posible */ });
+ return () => { vigente = false; };
+ }, [llegadaCheckin?.reservaId, llegadaCheckin?.llegada, cloudbedsId, selectedMesa.id]);
+ const hayCambioDeHabitacion = !!reserva && !!destino && !!destino.cloudbeds_room_type_id && (!reservada || reservada.id !== destino.id);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
@@ -58,6 +82,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  huesped: huesped.trim(),
  cliente_id: clienteMatch?.id ?? (llegadaCheckin && huesped.trim() === llegadaCheckin.huesped ? llegadaCheckin.clienteId : undefined),
  venta_id: llegadaCheckin?.ventaId,
+ reserva_hotel_id: llegadaCheckin?.reservaId,
  check_in: checkIn,
  check_out: checkOut || undefined,
  estado:'activa',
@@ -70,6 +95,22 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  await updateRxMesa(selectedMesa.id, { estado:'ocupada'});
  setLlegadaCheckin(null);
  showToast.success('Cuenta abierta',`${selectedMesa.nombre} — ${huesped}`);
+ // Check-in en Cloudbeds: no bloquea la cuenta; si falla, se hace a mano desde Cloudbeds.
+ if (cloudbedsId && hacerCheckin) {
+ void (async () => {
+ try {
+ if (hayCambioDeHabitacion && moverReserva && reserva && destino?.cloudbeds_room_type_id) {
+ // Se mantiene la tarifa pactada: cambiarla es decisión de recepción desde Hotel.
+ await cambiarCabanaReservaHotel(reserva, { roomTypeID: destino.cloudbeds_room_type_id, nombre: destino.nombre, roomID: destino.cloudbeds_room_id }, { tarifa: { modo: 'mantener' } });
+ }
+ } catch (e) {
+ showToast.fallo('mover la reserva a esta habitación', e);
+ return; // sin moverla no se hace el check-in: quedaría en la habitación equivocada
+ }
+ try { await checkinReservaCloudbeds(cloudbedsId); }
+ catch { showToast.warning('No se pudo hacer el check-in en Cloudbeds', 'La cuenta quedó abierta: hazlo desde Cloudbeds.'); }
+ })();
+ }
  onClose();
  } catch (error) {
  console.error('Error al abrir cuenta:', error);
@@ -121,6 +162,21 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  className="min-h-24 text-base"
  />
  </div>
+
+ {cloudbedsId && (
+ <div className="flex flex-col gap-3 rounded-2xl border border-border p-3">
+ <label className="flex items-center justify-between gap-3 cursor-pointer">
+ <span className="flex flex-col"><span className="t-cuerpo-fuerte">Check-in en Cloudbeds</span><span className="t-meta text-muted-foreground">Marca la reserva como «En casa» al abrir la cuenta</span></span>
+ <Switch checked={hacerCheckin} onCheckedChange={setHacerCheckin} />
+ </label>
+ {hacerCheckin && hayCambioDeHabitacion && destino && (
+ <label className="flex items-center justify-between gap-3 cursor-pointer border-t border-border pt-3">
+ <span className="flex flex-col"><span className="t-cuerpo-fuerte">Mover la reserva a {destino.nombre}</span><span className="t-meta text-muted-foreground">{reservada ? `Estaba en ${reservada.nombre}` : 'Es otra habitación que la reservada'}; se conserva la tarifa pactada</span></span>
+ <Switch checked={moverReserva} onCheckedChange={setMoverReserva} />
+ </label>
+ )}
+ </div>
+ )}
 
  </div>
 

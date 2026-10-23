@@ -15,7 +15,7 @@ interface Props {
   onCantidad?: (n: number) => void;
 }
 
-/** Reservas del Hotel que cubre esta venta: una, o todas las cabañas de un grupo. Solo lectura; se gestionan en Hotel. */
+/** Reservas del Hotel que cubre esta venta: una, o todas las habitaciones de un grupo. Solo lectura; se gestionan en Hotel. */
 export function VentaReservasHotelPanel({ ventaId, onCantidad }: Props) {
   const [lista, setLista] = useState<ReservaHotel[] | null>(null);
   const [error, setError] = useState('');
@@ -32,7 +32,7 @@ export function VentaReservasHotelPanel({ ventaId, onCantidad }: Props) {
     return () => { vigente = false; };
   }, [ventaId, onCantidad, version]);
 
-  // El mapa de cabañas solo se necesita al abrir una reserva (el detalle muestra el nombre y valida cambios con él).
+  // El mapa de habitaciones solo se necesita al abrir una reserva (el detalle muestra el nombre y valida cambios con él).
   const abrir = (r: ReservaHotel) => {
     setAbierta(r);
     if (habitaciones.length === 0) void listarHabitaciones().then(setHabitaciones).catch(() => { /* el detalle usa el nombre guardado */ });

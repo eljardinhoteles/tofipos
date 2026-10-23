@@ -146,6 +146,8 @@ export interface RxHabitacionCuenta {
   principal_nombre?: string | null
   // Venta de reserva de hotel de la que viene esta cuenta (una venta abre una sola habitación).
   venta_id?: string
+  // Reserva del módulo Hotel de la que viene esta cuenta (una cuenta por habitación reservada; las cuentas antiguas no la tienen).
+  reserva_hotel_id?: string
   created_at: string
   updated_at: string
   organization_id: string
@@ -642,7 +644,7 @@ const pisoSchema = {
 } as const
 
 const habitacionCuentaSchema = {
-  version: 3,
+  version: 4,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -664,6 +666,7 @@ const habitacionCuentaSchema = {
     },
     principal_nombre: { type: ['string', 'null'] },
     venta_id: { type: ['string', 'null'] },
+    reserva_hotel_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     organization_id: { type: 'string' },
@@ -1147,7 +1150,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v1 → v2: nombre editable de la subcuenta principal.
         2: (oldDoc: any) => ({ ...oldDoc, principal_nombre: null }),
         // v2 → v3: venta_id opcional (cuenta abierta desde una reserva de hotel) — passthrough.
-        3: (oldDoc: any) => oldDoc
+        3: (oldDoc: any) => oldDoc,
+        // v3 → v4: reserva_hotel_id opcional (la reserva del módulo Hotel de la que viene la cuenta) — passthrough.
+        4: (oldDoc: any) => oldDoc
       }
     },
     reservas: { schema: reservaSchema },
@@ -1674,7 +1679,10 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
   // cuanto la replicación logra completar un ciclo, con o sin conexión al
   // vincular. El objetivo es solo evitar la ventana de carrera del primer
   // instante, no exigir sincronización perfecta antes de operar.
-  initialSyncPromise = Promise.all(allReplications.map((state: any) => state?.awaitInitialReplication?.()))
+  const nombresReplicas = ['clientes', 'categorias', 'mesas', 'comandas', 'items', 'pisos', 'habitacionCuentas', 'reservas', 'pagos', 'ventas', 'ajustesIva', 'usuarios', 'menuItems']
+  reiniciarProgresoInicial(nombresReplicas)
+  // Cada colección avisa al terminar su primer pull (para la pantalla de «Sincronizando…»); un fallo suelto no frena a las demás.
+  initialSyncPromise = Promise.all(allReplications.map((state: any, i: number) => Promise.resolve(state?.awaitInitialReplication?.()).catch(() => undefined).then(() => marcarReplicaInicial(nombresReplicas[i]))))
     .then(() => { markInitialSyncDone() })
     .catch((err: unknown) => {
       console.warn('[RxDB] error esperando sincronización inicial, habilitando push de todas formas:', err)
@@ -1870,6 +1878,23 @@ export async function waitForInitialSync(timeoutMs = 15_000): Promise<void> {
     initialSyncPromise,
     new Promise<void>(resolve => setTimeout(resolve, timeoutMs))
   ])
+}
+
+/** Avance del primer pull al vincular un dispositivo: cuántas colecciones hay y cuáles ya terminaron. */
+export type ProgresoInicial = { total: number; listas: string[] }
+let progresoInicial: ProgresoInicial = { total: 0, listas: [] }
+const progresoListeners = new Set<(p: ProgresoInicial) => void>()
+function emitirProgreso() { progresoListeners.forEach((fn) => fn(progresoInicial)) }
+function reiniciarProgresoInicial(nombres: string[]) { progresoInicial = { total: nombres.length, listas: [] }; emitirProgreso() }
+function marcarReplicaInicial(nombre: string) {
+  if (progresoInicial.listas.includes(nombre)) return
+  progresoInicial = { ...progresoInicial, listas: [...progresoInicial.listas, nombre] }
+  emitirProgreso()
+}
+export function subscribeProgresoInicial(fn: (p: ProgresoInicial) => void): () => void {
+  progresoListeners.add(fn)
+  fn(progresoInicial)
+  return () => { progresoListeners.delete(fn) }
 }
 
 export type SyncStatus = {

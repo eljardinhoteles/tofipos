@@ -160,7 +160,7 @@ export function SeccionNotas({ r, puedeEditar, usuario, onCambio }: SeccionProps
   if (!notasReservaDisponible && r.notas_items.length === 0) return null;
   return (
     <Seccion icono={Note} color="warning" titulo="Notas de la reserva"
-      accion={puedeEditar && !abierto && notasReservaDisponible ? <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => setAbierto(true)}><Plus size={14} weight="bold" /> Nota</Button> : undefined}>
+      accion={puedeEditar && !abierto && notasReservaDisponible ? <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => setAbierto(true)}><Plus size={14} weight="bold" /> Nota</Button> : undefined}>
       {r.notas_items.length === 0 && !abierto && (
         <p className="t-meta text-muted-foreground">Sin notas. Úsalas para organizar actividades (horarios de un tour) o avisar de una alergia.</p>
       )}

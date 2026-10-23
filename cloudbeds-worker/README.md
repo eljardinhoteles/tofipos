@@ -24,6 +24,15 @@ Worker de Cloudflare entre el POS y Cloudbeds. Plan completo: [../PLAN-cloudbeds
    ```
    Formato anterior (una organización): `CLOUDBEDS_API_KEY` + `WEBHOOK_SECRET` + `ALLOWED_ORG_ID`/`SOURCE_ID` en `vars`.
    Solo se usa si no existe `CLOUDBEDS_ORGS`.
+   **Conexión desde Ajustes (opcional, sin tocar secretos por organización):** un administrador puede pegar la API key de su
+   propiedad en *Ajustes › Integraciones*. Se prueba contra Cloudbeds, se cifra con AES-GCM y se guarda en `hotel_integraciones`
+   (migración `20261022000400`); la tabla solo la lee el Worker. Requiere dos secretos en el Worker:
+   ```bash
+   npx wrangler secret put SUPABASE_SERVICE_KEY      # clave de servicio de Supabase
+   openssl rand -base64 32                           # genera la clave de cifrado…
+   npx wrangler secret put CREDENCIALES_KEY          # …y pégala aquí (guárdala: sin ella no se pueden leer las claves guardadas)
+   ```
+   Una organización con clave guardada desde Ajustes usa esa; las demás siguen usando `CLOUDBEDS_ORGS`.
 6. Local: copiar `.dev.vars.example` a `.dev.vars` y rellenar; `npm run dev`.
 7. Desplegar: `npm run deploy`.
 8. Registrar webhooks (después de desplegar), una vez por organización, con SU apiKey y SU webhookSecret:

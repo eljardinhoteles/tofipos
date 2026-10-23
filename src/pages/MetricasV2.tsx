@@ -17,6 +17,7 @@ import { Calendar as CalendarPicker } from'@/components/ui/calendar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from'@/components/ui/chart';
 import { cn } from'@/lib/utils';
 import { PageFrame, PageHeader, PageContent, PageToolbar, headerIconButtonClass, toolbarChipClass } from'../components/Common/PageHeader';
+import { SeccionesMesas } from '../components/Common/SeccionesMesas';
 
 type DatesRange = [Date | null, Date | null];
 
@@ -508,6 +509,7 @@ comandaItems.forEach((item) => {
  <PageFrame>
  <PageHeader
  title="Métricas"
+ tabs={<SeccionesMesas />}
  subtitle={`${etiquetaPeriodo}${filtrando ? ` · ${catFiltro.length} ${catFiltro.length === 1 ? 'categoría' : 'categorías'}` : ''}`}
  actions={
  <button type="button" title="Recargar datos" aria-label="Recargar datos" onClick={handleForceSync} disabled={syncing}

@@ -10,13 +10,13 @@ import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { BannerEspera, Girando } from './Espera';
 import { crearBloqueoCloudbeds } from '../../lib/cloudbeds';
-import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { claveEnlace, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 
 interface Props {
   open: boolean;
   habitaciones: HabitacionHotel[];
-  /** Cabaña y fecha con las que abrir (si se llegó desde el calendario). */
-  preset?: { roomTypeID?: string; desde?: string; hasta?: string } | null;
+  /** Habitación y fecha con las que abrir (si se llegó desde el calendario). */
+  preset?: { roomTypeID?: string; roomID?: string; desde?: string; hasta?: string } | null;
   onClose: () => void;
   onCreado: () => void;
 }
@@ -24,7 +24,7 @@ interface Props {
 const etiqueta = 't-etiqueta! text-muted-foreground';
 type Tipo = 'blocked_dates' | 'out_of_service';
 
-/** Bloquear cabañas en Cloudbeds (quedan no disponibles en todos los canales). Una sola operación para varias cabañas. */
+/** Bloquear habitaciones en Cloudbeds (quedan no disponibles en todos los canales). Una sola operación para varias habitaciones. */
 export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCreado }: Props) {
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [desde, setDesde] = useState('');
@@ -40,7 +40,7 @@ export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCrea
     if (!open) return;
     const d = preset?.desde ?? dayjs().format('YYYY-MM-DD');
     setDesde(d); setHasta(preset?.hasta ?? dayjs(d).add(1, 'day').format('YYYY-MM-DD'));
-    setElegidas(preset?.roomTypeID ? [preset.roomTypeID] : []);
+    setElegidas(preset?.roomTypeID ? [claveEnlace(preset.roomTypeID, preset.roomID)] : []);
     setMotivo(''); setTipo('blocked_dates'); setIntentado(false); setGuardando(false);
   }, [open, preset]);
 
@@ -53,8 +53,16 @@ export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCrea
     if (falta.cabanas || falta.fechas || falta.motivo) { showToast.warning('Completa los campos marcados en rojo'); return; }
     setGuardando(true);
     try {
-      await crearBloqueoCloudbeds({ roomTypeIDs: elegidas, start: desde, end: hasta, motivo: motivo.trim(), tipo });
-      showToast.success(elegidas.length === 1 ? 'Cabaña bloqueada' : `${elegidas.length} cabañas bloqueadas`, `${dayjs(desde).format('DD/MM')} al ${dayjs(hasta).format('DD/MM')} · ${motivo.trim()}`);
+      // Cada elegida es un tipo («tipo») o una unidad de un tipo con varias («tipo|unidad»).
+      const partes = elegidas.map((k) => k.split('|') as [string, string | undefined]);
+      const unidades = partes.filter(([, u]) => u).map(([t, u]) => ({ roomTypeID: t, roomID: u as string }));
+      await crearBloqueoCloudbeds({
+        roomTypeIDs: [...new Set(partes.map(([t]) => t))],
+        // Con alguna unidad concreta, todas se mandan como unidad (la única de un tipo sin unidades es «<tipo>-0»).
+        ...(unidades.length > 0 ? { rooms: partes.map(([t, u]) => ({ roomTypeID: t, roomID: u ?? `${t}-0` })) } : {}),
+        start: desde, end: hasta, motivo: motivo.trim(), tipo,
+      });
+      showToast.success(elegidas.length === 1 ? 'Habitación bloqueada' : `${elegidas.length} habitaciones bloqueadas`, `${dayjs(desde).format('DD/MM')} al ${dayjs(hasta).format('DD/MM')} · ${motivo.trim()}`);
       onCreado();
       onClose();
     } catch (e) {
@@ -69,7 +77,7 @@ export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCrea
     <Dialog open={open} onOpenChange={(o) => { if (!o && !guardando) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="t-titulo">Bloquear cabañas</DialogTitle>
+          <DialogTitle className="t-titulo">Bloquear habitaciones</DialogTitle>
           <DialogDescription className="t-meta">Las fechas quedan no disponibles en Cloudbeds y en todos los canales.</DialogDescription>
         </DialogHeader>
 
@@ -77,12 +85,13 @@ export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCrea
 
         <div className={cn('grid gap-4', guardando && 'opacity-60 pointer-events-none')}>
           <section className="flex flex-col gap-2">
-            <h4 className={cn('t-etiqueta', intentado && falta.cabanas ? 'text-destructive' : 'text-muted-foreground')}>Cabañas {intentado && falta.cabanas && '· elige al menos una'}</h4>
+            <h4 className={cn('t-etiqueta', intentado && falta.cabanas ? 'text-destructive' : 'text-muted-foreground')}>Habitaciones {intentado && falta.cabanas && '· elige al menos una'}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
               {disponibles.map((h) => {
-                const activa = elegidas.includes(h.cloudbeds_room_type_id!);
+                const clave = claveEnlace(h.cloudbeds_room_type_id, h.cloudbeds_room_id);
+                const activa = elegidas.includes(clave);
                 return (
-                  <button key={h.id} type="button" aria-pressed={activa} onClick={() => alternar(h.cloudbeds_room_type_id!)}
+                  <button key={h.id} type="button" aria-pressed={activa} onClick={() => alternar(clave)}
                     className={cn('flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left cursor-pointer transition-colors bg-card', activa ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary')}>
                     <span className={cn('size-5 rounded-md border flex items-center justify-center shrink-0', activa ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
                       {activa && <Check size={12} weight="bold" />}
@@ -93,7 +102,7 @@ export function NuevoBloqueoDialog({ open, habitaciones, preset, onClose, onCrea
               })}
             </div>
             {disponibles.length > 1 && (
-              <button type="button" onClick={() => setElegidas(elegidas.length === disponibles.length ? [] : disponibles.map((h) => h.cloudbeds_room_type_id!))} className="self-start t-meta underline cursor-pointer text-muted-foreground">
+              <button type="button" onClick={() => setElegidas(elegidas.length === disponibles.length ? [] : disponibles.map((h) => claveEnlace(h.cloudbeds_room_type_id, h.cloudbeds_room_id)))} className="self-start t-meta underline cursor-pointer text-muted-foreground">
                 {elegidas.length === disponibles.length ? 'Quitar todas' : 'Elegir todas'}
               </button>
             )}

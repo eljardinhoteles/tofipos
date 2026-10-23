@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageFrame, PageHeader, PageContent } from '../components/Common/PageHeader';
+import { SeccionesMesas } from '../components/Common/SeccionesMesas';
 import { CabeceraDia } from '../components/Planificacion/CabeceraDia';
 import { CeldaDia, EtiquetaFila } from '../components/Planificacion/CeldaDia';
 import { NavegacionPlan } from '../components/Planificacion/NavegacionPlan';
@@ -91,6 +92,7 @@ export default function PlanificacionV2() {
     <PageFrame>
       <PageHeader
         title="Planificador"
+        tabs={<SeccionesMesas />}
         subtitle={<span className="inline-block first-letter:uppercase">{inicio.toLocaleDateString('es', { month: 'long', year: 'numeric' })}</span>}
       />
 

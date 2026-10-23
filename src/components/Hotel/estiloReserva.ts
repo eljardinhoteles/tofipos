@@ -58,7 +58,7 @@ export function estiloDe(t: TarjetaVista): EstiloReserva {
 
 /** Estado de pago según la venta conciliada del Centro de Ventas. */
 export interface InfoPago {
-  clave: 'pagado' | 'parcial' | 'sin_pago';
+  clave: 'pagado' | 'parcial' | 'sin_pago' | 'credito';
   etiqueta: string;
   /** Fondo, texto y borde de la tarjeta (clases). */
   fondo: string;
@@ -71,7 +71,10 @@ const PAGADO: InfoPago = { clave: 'pagado', etiqueta: 'Pagado', fondo: 'bg-[#CBE
 const PARCIAL: InfoPago = { clave: 'parcial', etiqueta: 'Pago parcial', fondo: 'bg-[#FAE2A5] text-[#5B3A04] border-[#E2BB55]', barra: 'bg-[#E2A92E]', tono: 'warning' };
 const SIN_PAGO: InfoPago = { clave: 'sin_pago', etiqueta: 'Sin pago', fondo: 'bg-[#F6CBC4] text-[#7F1D1D] border-[#E49A8E]', barra: 'bg-[#D9705F]', tono: 'destructive' };
 
-export const ESTADOS_PAGO = [PAGADO, PARCIAL, SIN_PAGO];
+// Venta a crédito (agencia o empresa) con saldo pendiente: se cobra después, no es «sin pago».
+const CREDITO: InfoPago = { clave: 'credito', etiqueta: 'Crédito', fondo: 'bg-[#E3D9F2] text-[#3B1F6B] border-[#B9A3DC]', barra: 'bg-[#8B6BC2]', tono: 'special' };
+
+export const ESTADOS_PAGO = [PAGADO, PARCIAL, SIN_PAGO, CREDITO];
 
 const EPS = 0.005;
 
@@ -79,5 +82,6 @@ const EPS = 0.005;
 export function pagoDeVenta(v: VentaConMovimientos | undefined): InfoPago | null {
   if (!v || v.anulado) return null;
   if (v.montoTotal > EPS && v.saldo <= EPS) return PAGADO;
+  if (v.venta.tipo === 'credito') return CREDITO;
   return v.totalPagado > EPS ? PARCIAL : SIN_PAGO;
 }

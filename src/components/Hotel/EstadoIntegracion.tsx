@@ -6,6 +6,7 @@ import { EstadoBadge, type TonoEstado } from '../Common/EstadoBadge';
 import { Girando } from './Espera';
 import { hace } from '../../lib/hotelCalendarioCache';
 import type { SaludResp } from '../../lib/cloudbeds';
+import { ConexionCloudbeds } from './ConexionCloudbeds';
 
 interface Props {
   salud: SaludResp | null;
@@ -18,6 +19,8 @@ interface Props {
   pendientes: number;
   divergentes: number;
   sinEnlazar: number;
+  /** Solo administradores: muestra la gestión de la API key de Cloudbeds de esta organización. */
+  puedeConfigurar?: boolean;
   /** Lleva a la lista de reservas ya filtrada (por sincronizar o por revisar) o a Habitaciones. */
   onIrA: (destino: 'pendientes' | 'revisar' | 'habitaciones') => void;
 }
@@ -41,7 +44,7 @@ interface Dato { icono: Icon; titulo: string; nivel: Nivel; valor: string; detal
  * Salud de la integración con Cloudbeds: un resumen arriba (verde, naranja o rojo) con su botón de comprobar, las tres
  * conexiones que sostienen la integración, y las cosas que requieren una acción con su botón «Ver».
  */
-export function EstadoIntegracion({ salud, ahora, error, comprobando, onComprobar, pendientes, divergentes, sinEnlazar, onIrA }: Props) {
+export function EstadoIntegracion({ salud, ahora, error, comprobando, onComprobar, pendientes, divergentes, sinEnlazar, puedeConfigurar, onIrA }: Props) {
   const ultimo = salud?.ultimoAvisoWebhook ?? null;
   const antiguoAviso = ultimo !== null && ahora - ultimo > AVISO_VIEJO_MS;
   const sync = salud?.sincronizacion;
@@ -82,7 +85,7 @@ export function EstadoIntegracion({ salud, ahora, error, comprobando, onComproba
 
   // ---- Para revisar ----
   const tareas: Array<{ icono: Icon; titulo: string; ayuda: string; n: number; ok: string; ir: () => void }> = [
-    { icono: CloudArrowUp, titulo: 'Reservas sin subir', n: pendientes, ok: 'Todas están en Cloudbeds', ir: () => onIrA('pendientes'), ayuda: 'Se reintentan solas cada minuto; mientras tanto la cabaña sigue libre en Cloudbeds.' },
+    { icono: CloudArrowUp, titulo: 'Reservas sin subir', n: pendientes, ok: 'Todas están en Cloudbeds', ir: () => onIrA('pendientes'), ayuda: 'Se reintentan solas cada minuto; mientras tanto la habitación sigue libre en Cloudbeds.' },
     { icono: ArrowsLeftRight, titulo: 'Cambiaron en Cloudbeds', n: divergentes, ok: 'Todas coinciden con el POS', ir: () => onIrA('revisar'), ayuda: 'Se cancelaron o cambiaron allá y no coinciden con el POS.' },
     { icono: Bed, titulo: 'Habitaciones sin enlazar', n: sinEnlazar, ok: 'Todas enlazadas', ir: () => onIrA('habitaciones'), ayuda: 'No se pueden reservar hasta enlazarlas con su tipo de Cloudbeds.' },
   ];
@@ -155,6 +158,8 @@ export function EstadoIntegracion({ salud, ahora, error, comprobando, onComproba
           })}
         </ul>
       </section>
+
+      {puedeConfigurar && <ConexionCloudbeds onCambio={onComprobar} />}
     </div>
   );
 }

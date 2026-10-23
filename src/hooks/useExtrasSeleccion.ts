@@ -4,13 +4,13 @@ import { useIvaActivo } from './useIvaActivo';
 import type { RxMenuItem } from '../db/rxdb';
 import { calcularPreciosItem, obtenerIvaProducto } from '../lib/taxUtils';
 
-/** Un producto elegido como extra de una reserva. `roomTypeID`: la cabaña a la que va (al crear un grupo). */
+/** Un producto elegido como extra de una reserva. `roomTypeID`: la habitación a la que va (al crear un grupo). */
 export interface ItemExtra { key: string; producto: RxMenuItem; cantidad: number; precio: string; roomTypeID: string }
 
 /**
  * Selección de extras de una reserva (al crearla o al editarla): productos activos del sistema, cantidades, y el monto de
  * cada extra con los impuestos del POS (IVA del sistema o el propio del producto; precios con IVA incluido o no).
- * `roomTypeIDNuevo`: cabaña a la que se asigna un extra recién elegido.
+ * `roomTypeIDNuevo`: habitación a la que se asigna un extra recién elegido.
  */
 export function useExtrasSeleccion(roomTypeIDNuevo = '') {
   const { menuItems, categorias } = useRxMenuCatalog() as { menuItems: RxMenuItem[]; categorias: Array<{ id: string; nombre: string; icono?: string | null }> };

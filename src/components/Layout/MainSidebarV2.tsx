@@ -25,6 +25,10 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useUI } from '../../context/UIContext';
 import { NAV_ACCENT } from '../../lib/navAccent';
 import { usePermisos, rutaPermitida, ROL_LABELS } from '../../hooks/usePermisos';
@@ -96,7 +100,7 @@ function UtilTooltip({ label, children }: { label: string; children: React.React
 }
 
 export function MainSidebarV2() {
-  const { currentMesero, adminUser, logoutAdmin, logoutMesero } = useAuth();
+  const { currentMesero, adminUser, logoutAdmin, logoutMesero, desvincularDispositivo } = useAuth();
   const { setActividadOpen } = useUI();
   // Recuento de la actividad de hoy para el badge del botón (el drawer abre su propia vista, con filtros).
   const { eventos: eventosHoy } = useActividadDia(true);
@@ -115,6 +119,7 @@ export function MainSidebarV2() {
   const [modalOpen, setModalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [confirmandoCambioOrg, setConfirmandoCambioOrg] = useState(false);
 
   const userName = currentMesero?.nombre || adminUser?.user_metadata?.full_name || adminUser?.email?.split('@')[0] || 'Admin';
   const userRole = ROL_LABELS[permisos.rol];
@@ -250,6 +255,12 @@ export function MainSidebarV2() {
             >
               <ArrowsClockwise size={16} /> Estado de sync
             </Button>
+            {/* Volver al selector de organización: solo el administrador. La confirmación va en un modal (ver abajo). */}
+            {permisos.esAdmin && adminUser && (
+              <Button variant="ghost" className="w-full justify-start h-9 px-3 rounded-2xl" onClick={() => { setUserMenuOpen(false); setConfirmandoCambioOrg(true); }}>
+                <Buildings size={16} /> Cambiar de organización
+              </Button>
+            )}
             <Button
               variant="ghost"
               className="w-full justify-start h-9 px-3 rounded-2xl text-destructive hover:bg-destructive/10"
@@ -261,6 +272,28 @@ export function MainSidebarV2() {
         </Popover>
         </div>
       </div>
+
+      <AlertDialog open={confirmandoCambioOrg} onOpenChange={setConfirmandoCambioOrg}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cambiar de organización?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {!syncStatus.online
+                ? 'Sin conexión: espera a tenerla para cambiar de organización.'
+                : syncStatus.activePushQueue > 0 || syncStatus.hasError
+                  ? 'Aún hay cambios por sincronizar. Espera a que termine para no perderlos.'
+                  : 'Se cierra esta organización en este equipo y se borra su copia local. Volverá a cargarse al entrar. Tu sesión de administrador se mantiene.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={!syncStatus.online || syncStatus.activePushQueue > 0 || syncStatus.hasError}
+              onClick={() => { setConfirmandoCambioOrg(false); void desvincularDispositivo(); }}>
+              Sí, cambiar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <SyncStatusModal
         opened={modalOpen}

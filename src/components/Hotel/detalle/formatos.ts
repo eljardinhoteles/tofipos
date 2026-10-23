@@ -7,7 +7,7 @@ export const plural = (n: number, uno: string, varios: string) => `${n} ${n === 
 export const etiquetaCampo = 't-etiqueta! text-muted-foreground';
 export const EPS = 0.005;
 
-/** Totales de un grupo de cabañas: lo que se cobra (POS) y lo ya pagado. Si comparten venta, sus pagos se cuentan una sola vez. */
+/** Totales de un grupo de habitaciones: lo que se cobra (POS) y lo ya pagado. Si comparten venta, sus pagos se cuentan una sola vez. */
 export function totalesGrupo(
   filas: Array<{ total: number; ventaId?: string | null; venta?: { anulado?: boolean; totalPagado: number } }>,
 ) {

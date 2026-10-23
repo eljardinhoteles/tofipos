@@ -1,20 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import dayjs from 'dayjs';
-import { ArrowLeft, ArrowRight, Bed, PencilSimple, Plus, CloudArrowDown, UsersThree, X } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, Bed, CheckCircle, Door, PencilSimple, Plus, Cloud, CloudArrowDown, CloudSlash, UsersThree } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { showToast } from '@/lib/toast';
 import { EstadoBadge } from '../Common/EstadoBadge';
 import { Girando } from './Espera';
-import { getTiposHabitacion, type TipoHabitacionCloudbeds } from '../../lib/cloudbeds';
-import {
-  actualizarHabitacion, crearHabitacion, importarDesdeCloudbeds, intercambiarOrden, type HabitacionHotel,
-} from '../../lib/hotelHabitacionesApi';
+import { EditorHabitacionDrawer } from './EditorHabitacionDrawer';
+import { useRxMesas } from '../../hooks/useRxMesas';
+import { coincideUnidad, importarDesdeCloudbeds, intercambiarOrden, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 import type { ReservaHotel } from '../../lib/hotelReservasApi';
 
 interface Props {
@@ -25,14 +19,12 @@ interface Props {
   onCambio: () => void;
 }
 
-const etiqueta = 't-etiqueta! text-muted-foreground';
-const SIN_ENLACE = '__sin_enlace__';
 
 /** Qué pasa hoy en una habitación, según las reservas vigentes del POS (la salida es el día de salida, no incluido). */
 function ocupacionHoy(h: HabitacionHotel, reservas: ReservaHotel[]): { texto: string; tono: 'info' | 'warning' | 'libre' } | null {
   if (!h.cloudbeds_room_type_id) return null;
   const hoy = dayjs().format('YYYY-MM-DD');
-  const vigentes = reservas.filter((r) => r.room_type_id === h.cloudbeds_room_type_id && r.estado === 'confirmada');
+  const vigentes = reservas.filter((r) => coincideUnidad(h, r.room_type_id, r.room_id) && r.estado === 'confirmada');
   const dentro = vigentes.find((r) => r.llegada <= hoy && r.salida > hoy);
   if (dentro) return { texto: `Ocupada hasta el ${dayjs(dentro.salida).format('DD/MM')}`, tono: 'info' };
   if (vigentes.some((r) => r.llegada === hoy)) return { texto: 'Llega hoy', tono: 'warning' };
@@ -42,6 +34,9 @@ function ocupacionHoy(h: HabitacionHotel, reservas: ReservaHotel[]): { texto: st
 export function HabitacionesHotel({ habitaciones, reservas = [], puedeEditar, onCambio }: Props) {
   const [importando, setImportando] = useState(false);
   const [editando, setEditando] = useState<HabitacionHotel | 'nueva' | null>(null);
+  // Nombre de la mesa de Mesas enlazada a cada habitación.
+  const { mesas } = useRxMesas();
+  const nombresMesas = new Map((mesas as Array<{ id: string; nombre: string }>).map((m) => [m.id, m.nombre]));
 
   const importar = async () => {
     setImportando(true);
@@ -81,38 +76,58 @@ export function HabitacionesHotel({ habitaciones, reservas = [], puedeEditar, on
 
       {habitaciones.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center t-cuerpo text-muted-foreground">
-          Aún no hay habitaciones. {puedeEditar ? 'Usa «Importar desde Cloudbeds» para traer las cabañas de una vez.' : 'Un administrador debe configurarlas.'}
+          Aún no hay habitaciones. {puedeEditar ? 'Usa «Importar desde Cloudbeds» para traer las habitaciones de una vez.' : 'Un administrador debe configurarlas.'}
         </div>
       ) : (
         <ul className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {habitaciones.map((h, i) => {
             const hoy = ocupacionHoy(h, reservas);
             const sinEnlazar = !h.cloudbeds_room_type_id;
+            const mesa = h.mesa_id ? nombresMesas.get(h.mesa_id) : undefined;
+            const mesaPerdida = !!h.mesa_id && !mesa;
+            const camasVisibles = h.camas.slice(0, 3);
             return (
-              <li key={h.id} className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-4', sinEnlazar ? 'border-warning/40' : 'border-border', !h.activo && 'opacity-60')}>
+              <li key={h.id} className={cn('flex flex-col gap-3.5 rounded-2xl border bg-card p-4', sinEnlazar ? 'border-warning/40' : 'border-border', !h.activo && 'opacity-60')}>
+                {/* Cabecera: nombre y código; el estado solo si es notable. */}
                 <div className="flex items-start gap-3">
-                  <span className="size-10 shrink-0 rounded-xl bg-info-soft text-info-foreground flex items-center justify-center"><Bed size={20} weight="bold" aria-hidden /></span>
+                  <span className={cn('size-10 shrink-0 rounded-xl flex items-center justify-center', sinEnlazar ? 'bg-info-soft text-info-foreground' : 'bg-success-soft text-success-foreground')}><Bed size={20} weight="bold" aria-hidden /></span>
                   <span className="flex flex-col min-w-0 grow">
-                    <span className="t-fila truncate">{h.nombre}</span>
-                    <span className="t-meta text-muted-foreground truncate">{h.codigo || `Habitación ${i + 1}`}</span>
+                    <span className="t-fila line-clamp-2 leading-snug break-words" title={h.nombre}>{h.nombre}</span>
+                    <span className="flex items-center gap-2 min-w-0 t-meta text-muted-foreground">
+                      <span className="truncate">{h.codigo || `Habitación ${i + 1}`}</span>
+                      <span className="flex items-center gap-1 shrink-0 tabular-nums" title={h.capacidad ? `Hasta ${h.capacidad} personas` : 'Capacidad sin definir'}>
+                        <UsersThree size={13} weight="bold" aria-hidden /> {h.capacidad ?? '—'}
+                      </span>
+                    </span>
                   </span>
-                  <span className="flex flex-col items-end gap-1 shrink-0">
-                    {!h.activo && <EstadoBadge tono="neutral">Inactiva</EstadoBadge>}
-                    {sinEnlazar && <EstadoBadge tono="warning" title="No se puede reservar hasta enlazarla con su tipo de habitación de Cloudbeds">Sin enlazar</EstadoBadge>}
-                  </span>
+                  {!h.activo && <EstadoBadge tono="neutral">Inactiva</EstadoBadge>}
                 </div>
+
+                {/* Conexiones: dónde está enlazada, con el mismo orden y alineación en todas las tarjetas. */}
+                <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 rounded-xl bg-muted/50 px-3 py-2.5">
+                  <dt className="flex items-center gap-1.5 t-meta text-muted-foreground"><Cloud size={14} weight="bold" aria-hidden /> Cloudbeds</dt>
+                  <dd className={cn('t-cuerpo-fuerte truncate flex items-center gap-1.5', sinEnlazar ? 'text-warning-foreground' : 'text-success-foreground')}
+                    title={sinEnlazar ? 'No se puede reservar hasta enlazarla con su habitación de Cloudbeds' : `Tipo ${h.cloudbeds_room_type_id}${h.cloudbeds_room_id ? `, unidad ${h.cloudbeds_room_id}` : ''}`}>
+                    {sinEnlazar ? <><CloudSlash size={14} weight="bold" aria-hidden /> Sin enlazar</> : <><CheckCircle size={14} weight="fill" aria-hidden /> {h.cloudbeds_room_id ? 'Unidad enlazada' : 'Enlazada'}</>}
+                  </dd>
+                  <dt className="flex items-center gap-1.5 t-meta text-muted-foreground"><Door size={14} weight="bold" aria-hidden /> Mesas</dt>
+                  <dd className={cn('t-cuerpo truncate', mesa ? 't-cuerpo-fuerte text-foreground' : mesaPerdida ? 'text-warning-foreground' : 'text-muted-foreground')} title={mesa ?? undefined}>
+                    {mesa ?? (mesaPerdida ? 'La mesa ya no existe' : 'Sin enlazar')}
+                  </dd>
+                </dl>
+
+                {/* Camas. */}
                 <div className="flex flex-col gap-2 grow">
-                  <span className="t-cuerpo text-muted-foreground flex items-center gap-1.5">
-                    <UsersThree size={16} aria-hidden /> {h.capacidad ? `Hasta ${h.capacidad} personas` : 'Capacidad sin definir'}
-                  </span>
                   {h.camas.length > 0 ? (
                     <ul className="flex flex-wrap gap-1.5" aria-label={`Camas de ${h.nombre}`}>
-                      {h.camas.map((c) => <li key={c} className="rounded-md bg-muted px-2 py-0.5 t-dato text-foreground">{c}</li>)}
+                      {camasVisibles.map((c) => <li key={c} className="rounded-md bg-muted px-2 py-0.5 t-dato text-foreground">{c}</li>)}
+                      {h.camas.length > camasVisibles.length && <li className="rounded-md px-1.5 py-0.5 t-dato text-muted-foreground" title={h.camas.slice(3).join(', ')}>+{h.camas.length - camasVisibles.length}</li>}
                     </ul>
                   ) : (
                     <span className="t-meta text-muted-foreground">Sin camas definidas</span>
                   )}
                 </div>
+
                 <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
                   {hoy
                     ? hoy.tono === 'libre'
@@ -133,142 +148,11 @@ export function HabitacionesHotel({ habitaciones, reservas = [], puedeEditar, on
         </ul>
       )}
 
-      <EditorHabitacion
+      <EditorHabitacionDrawer
         valor={editando} habitaciones={habitaciones}
         onClose={() => setEditando(null)}
         onGuardada={() => { setEditando(null); onCambio(); }}
       />
     </div>
-  );
-}
-
-function EditorHabitacion({ valor, habitaciones, onClose, onGuardada }: {
-  valor: HabitacionHotel | 'nueva' | null;
-  habitaciones: HabitacionHotel[];
-  onClose: () => void;
-  onGuardada: () => void;
-}) {
-  const [nombre, setNombre] = useState('');
-  const [codigo, setCodigo] = useState('');
-  const [capacidad, setCapacidad] = useState('');
-  const [activo, setActivo] = useState(true);
-  const [enlace, setEnlace] = useState(SIN_ENLACE);
-  const [camas, setCamas] = useState<string[]>([]);
-  const [camaNueva, setCamaNueva] = useState('');
-  const [tipos, setTipos] = useState<TipoHabitacionCloudbeds[]>([]);
-  const [errorTipos, setErrorTipos] = useState('');
-  const [guardando, setGuardando] = useState(false);
-
-  const abierto = valor !== null;
-  const actual = valor && valor !== 'nueva' ? valor : null;
-
-  useEffect(() => {
-    if (!abierto) return;
-    setNombre(actual?.nombre ?? ''); setCodigo(actual?.codigo ?? '');
-    setCapacidad(actual?.capacidad ? String(actual.capacidad) : '');
-    setActivo(actual?.activo ?? true); setEnlace(actual?.cloudbeds_room_type_id ?? SIN_ENLACE);
-    setCamas(actual?.camas ?? []); setCamaNueva('');
-    setErrorTipos('');
-    getTiposHabitacion().then(setTipos).catch((e) => setErrorTipos(e instanceof Error ? e.message : 'No se pudo consultar Cloudbeds'));
-  }, [abierto, actual]);
-
-  // Tipos libres + el que ya tiene esta habitación.
-  const usados = new Set(habitaciones.filter((h) => h.id !== actual?.id).map((h) => h.cloudbeds_room_type_id));
-  const opciones = tipos.filter((t) => !usados.has(t.roomTypeID));
-
-  const agregarCama = () => {
-    const c = camaNueva.trim();
-    if (c && !camas.some((x) => x.toLowerCase() === c.toLowerCase())) setCamas((a) => [...a, c]);
-    setCamaNueva('');
-  };
-
-  const guardar = async () => {
-    if (!nombre.trim()) { showToast.warning('Escribe el nombre de la habitación'); return; }
-    const cap = capacidad.trim() ? parseInt(capacidad, 10) : null;
-    if (cap !== null && !(cap >= 1)) { showToast.warning('La capacidad debe ser 1 o más'); return; }
-    const datos = {
-      nombre: nombre.trim(), codigo: codigo.trim() || null, capacidad: cap, activo,
-      cloudbeds_room_type_id: enlace === SIN_ENLACE ? null : enlace,
-      camas: camaNueva.trim() && !camas.includes(camaNueva.trim()) ? [...camas, camaNueva.trim()] : camas,
-    };
-    setGuardando(true);
-    try {
-      if (actual) await actualizarHabitacion(actual.id, datos);
-      else await crearHabitacion(datos, habitaciones.reduce((m, h) => Math.max(m, h.orden), 0) + 1);
-      showToast.success(actual ? 'Habitación actualizada' : 'Habitación creada');
-      onGuardada();
-    } catch (e) {
-      showToast.fallo('guardar la habitación', e);
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <Dialog open={abierto} onOpenChange={(o) => { if (!o && !guardando) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="t-titulo">{actual ? 'Editar habitación' : 'Nueva habitación'}</DialogTitle>
-          <DialogDescription className="t-meta">El nombre es solo del POS; el enlace indica a qué cabaña de Cloudbeds corresponde.</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label className={etiqueta}>Nombre *</Label>
-            <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-12 text-base" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className={etiqueta}>Código corto</Label>
-              <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} className="h-12 text-base" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className={etiqueta}>Capacidad</Label>
-              <Input type="number" inputMode="numeric" min={1} value={capacidad} onChange={(e) => setCapacidad(e.target.value)} className="h-12 text-base" />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className={etiqueta}>Enlace con Cloudbeds</Label>
-            <Select value={enlace} onValueChange={setEnlace}>
-              <SelectTrigger className="data-[size=default]:h-12 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SIN_ENLACE} className="t-cuerpo">Sin enlazar</SelectItem>
-                {actual?.cloudbeds_room_type_id && !opciones.some((t) => t.roomTypeID === actual.cloudbeds_room_type_id) && (
-                  <SelectItem value={actual.cloudbeds_room_type_id} className="t-cuerpo">Enlace actual ({actual.cloudbeds_room_type_id})</SelectItem>
-                )}
-                {opciones.map((t) => <SelectItem key={t.roomTypeID} value={t.roomTypeID} className="t-cuerpo">{t.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {errorTipos && <p className="t-meta text-destructive">{errorTipos}</p>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className={etiqueta}>Camas disponibles</Label>
-            {camas.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5" aria-label="Camas de la habitación">
-                {camas.map((c) => (
-                  <li key={c} className="flex items-center gap-1 rounded-full bg-muted pl-3 pr-1 min-h-9">
-                    <span className="t-cuerpo">{c}</span>
-                    <button type="button" onClick={() => setCamas((a) => a.filter((x) => x !== c))} aria-label={`Quitar ${c}`} className="size-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"><X size={14} weight="bold" /></button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex items-center gap-2">
-              <Input value={camaNueva} onChange={(e) => setCamaNueva(e.target.value)} placeholder="Ej. Matrimonial, 2 individuales" className="h-12 text-base"
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarCama(); } }} />
-              <Button type="button" variant="outline" className="h-12 shrink-0" onClick={agregarCama} disabled={!camaNueva.trim()}>Añadir</Button>
-            </div>
-            <p className="t-meta text-muted-foreground">Se elige al reservar y se puede cambiar después. Es solo del POS: no va a Cloudbeds ni afecta la disponibilidad.</p>
-          </div>
-          <label className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-4 py-3 cursor-pointer">
-            <span className="t-cuerpo-fuerte">Activa (se muestra en el calendario)</span>
-            <Switch checked={activo} onCheckedChange={setActivo} />
-          </label>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Button>
-            <Button type="button" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

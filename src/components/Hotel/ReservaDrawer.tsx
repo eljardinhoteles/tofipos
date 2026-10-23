@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import {
-  ArrowLeft, ArrowsLeftRight, Bed, CalendarBlank, Copy, Hash, Printer, PencilSimple, Prohibit, User, UserCircle, UsersThree, WarningCircle, X,
+  ArrowLeft, ArrowsLeftRight, Bed, CalendarBlank, Copy, Hash, Plus, Printer, PencilSimple, Prohibit, User, UserCircle, UsersThree, WarningCircle, X,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -12,7 +12,7 @@ import { BannerEspera, Girando } from './Espera';
 import { useUI } from '../../context/UIContext';
 import { useAuth } from '../../context/AuthContext';
 import { useVentasHotel } from '../../hooks/useVentasHotel';
-import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 import {
   ajustarVentaHotel,
   desenlazarVentaHotel,
@@ -30,7 +30,7 @@ import {
 } from '../../lib/hotelReservasApi';
 import type { Divergencia } from '../../lib/hotelReconciliar';
 import { estiloDe, pagoDeVenta } from './estiloReserva';
-import { atribucionDePago, leerVentaHotel } from '../../lib/hotelCobros';
+import { atribucionDePago, facturasDePago, leerVentaHotel } from '../../lib/hotelCobros';
 import { useRxClientes } from '../../hooks/useRxClientes';
 import { documentoCliente } from '../../lib/documentoCliente';
 import { getOrgCache } from '../../lib/orgCache';
@@ -46,9 +46,10 @@ import { FichaCliente } from './detalle/FichaCliente';
 import { SeccionNotas } from './detalle/NotasReserva';
 import { SeccionPlan } from './detalle/SeccionPlan';
 import { usePlanesAlimentacion } from '../../hooks/usePlanesAlimentacion';
-import { incluyeDelPlan, incluyePorPersona, planSeCobra } from '../../lib/hotelPlanesApi';
+import { incluyePorPersona, planSeCobra } from '../../lib/hotelPlanesApi';
 import { GrupoResumen } from './detalle/GrupoResumen';
 import { SelectorCama } from './detalle/SelectorCama';
+import { VistaGrupo } from './detalle/VistaGrupo';
 import { SeccionHistorial } from './detalle/SeccionHistorial';
 import { Dato, Seccion } from './detalle/comunes';
 import { EPS, dinero, fechaLarga, plural, totalesGrupo } from './detalle/formatos';
@@ -57,6 +58,8 @@ export interface PresetReserva {
   llegada?: string;
   salida?: string;
   roomTypeID?: string;
+  /** Unidad elegida (tipos con varias unidades). */
+  roomID?: string;
 }
 
 interface ReservaDrawerProps {
@@ -74,7 +77,7 @@ interface ReservaDrawerProps {
   onClose: () => void;
 }
 
-type Pestana = 'reserva' | 'cliente' | 'cuenta' | 'historial';
+type Pestana = 'reserva' | 'grupo' | 'cliente' | 'cuenta' | 'historial';
 type Editor = null | 'estadia' | 'cabana' | 'huespedes' | 'cliente' | 'abono' | EditorCuenta;
 
 function FilaHeader({ icono: Icono, children }: { icono: typeof Bed; children: ReactNode }) {
@@ -112,12 +115,21 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const [pestana, setPestana] = useState<Pestana>(initialTab);
   const cobrosRef = useRef<HTMLDivElement>(null);
 
+  // Al saltar de una habitación a otra del mismo grupo (el padre cambia `reserva`) se conserva la pestaña: solo se reinicia al abrir
+  // el panel o al pasar a una reserva distinta de otro grupo (recargar la misma reserva tampoco la reinicia).
+  const grupoAbierto = useRef<{ abierto: boolean; grupo: string | null; id: string | null }>({ abierto: false, grupo: null, id: null });
   useEffect(() => {
-    if (!open) return;
+    if (!open) { grupoAbierto.current = { abierto: false, grupo: null, id: null }; return; }
+    const previo = grupoAbierto.current;
+    const mismoGrupo = previo.abierto && ((!!reserva?.grupo_id && previo.grupo === reserva.grupo_id) || (!!reserva && previo.id === reserva.id));
     setActual(reserva ?? null);
     setEditor(null);
     setSucio(false);
-    setPestana(initialTab);
+    // Una reserva de grupo se abre por su pestaña «Grupo» (salvo que quien la abre pida otra, p. ej. «Cuenta»).
+    const hayHermanas = !!reserva?.grupo_id && reservas.some((x) => x.grupo_id === reserva.grupo_id && x.id !== reserva.id && x.estado === 'confirmada');
+    if (!mismoGrupo) setPestana(initialTab === 'reserva' && hayHermanas ? 'grupo' : initialTab);
+    grupoAbierto.current = { abierto: true, grupo: reserva?.grupo_id ?? null, id: reserva?.id ?? null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `reservas` cambia a menudo y no debe reiniciar el panel
   }, [open, reserva, initialTab]);
 
   // La lista de la página no trae el historial (es lo más pesado): se pide aparte al abrir la reserva.
@@ -157,14 +169,15 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const vigente = r?.estado === 'confirmada';
   const puedeEditar = puedeGestionar && vigente;
   const enGrupo = vigentesDelGrupo.length > 1;
+  useEffect(() => { if (pestana === 'grupo' && !enGrupo) setPestana('reserva'); }, [pestana, enGrupo]);
   const totGrupo = totalesGrupo(vigentesDelGrupo.map((x) => ({ total: totalConExtras(x), ventaId: x.venta_id, venta: x.venta_id ? ventas.get(x.venta_id) : undefined })));
-  // Pagada por completo: según la venta (en grupo, la suma de sus cabañas contra el total del POS).
+  // Pagada por completo: según la venta (en grupo, la suma de sus habitaciones contra el total del POS).
   const pagadaPorCompleto = enGrupo ? totGrupo.total > EPS && totGrupo.saldo <= EPS : !!venta && !venta.anulado && venta.montoTotal > EPS && venta.saldo <= EPS;
   const cifrasCobro = enGrupo ? totGrupo : venta && !venta.anulado ? { pagado: venta.totalPagado, saldo: venta.saldo } : null;
   const textoSinCobros = !r?.venta_id ? 'Sin cobros registrados' : venta?.anulado ? 'Venta anulada' : sinVenta ? 'Venta no encontrada' : 'Cargando cobros…';
   const noches = r ? dayjs(r.salida).diff(dayjs(r.llegada), 'day') : 0;
   const totalPos = r ? totalConExtras(r) : 0;
-  const cabana = r ? habitaciones.find((h) => h.cloudbeds_room_type_id === r.room_type_id)?.nombre ?? r.cabana : '';
+  const cabana = r ? habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.nombre ?? r.cabana : '';
 
   /** Trae la reserva como está ahora en la base, y avisa a la página para que refresque lo que corresponda. */
   const refrescar = useCallback(async (afectaCalendario: boolean, nueva?: ReservaHotel) => {
@@ -214,7 +227,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const aceptarDivergencia = () => {
     if (!r || !divergencia) return;
     void correr('Actualizando el POS con lo de Cloudbeds…', async () => {
-      const cab = divergencia.room_type_id ? habitaciones.find((h) => h.cloudbeds_room_type_id === divergencia.room_type_id)?.nombre : undefined;
+      const cab = divergencia.room_type_id ? habitacionDeUnidad(habitaciones, divergencia.room_type_id, divergencia.room_id)?.nombre : undefined;
       const res = await aplicarDivergenciaHotel(r, { ...divergencia, cabana: cab });
       if (divergencia.tipo === 'cancelada') { showToast.success('Reserva marcada como cancelada'); onCambio?.(true); onClose(); return; }
       const cambioTarifa = res.tarifaNueva !== null && res.tarifaAnterior !== null && Math.abs(res.tarifaNueva - res.tarifaAnterior) > EPS;
@@ -267,14 +280,14 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
     if (!r) return;
     const cobros = venta && !venta.anulado && venta.totalPagado > EPS ? ` Tiene cobros por ${dinero(venta.totalPagado)} en el Centro de Ventas: no se reembolsan solos; se deja un comentario en la venta para que revises si corresponde.` : '';
     openConfirm('Cancelar reserva',
-      `Se cancelará la reserva de ${nombreHuesped(r)}${r.cloudbeds_reservation_id ? ' también en Cloudbeds' : ''} y se liberan sus fechas.${cobros} Esta acción no se puede deshacer.`,
+      `Se cancelará la reserva de ${nombreHuesped(r)}${r.cloudbeds_reservation_id ? ' también en Cloudbeds' : r.cloudbeds_grupo_ref ? ' solo en el POS (esta habitación viene de una reserva de Cloudbeds con varias habitaciones: quítala o cancélala allá a mano)' : ''} y se liberan sus fechas.${cobros} Esta acción no se puede deshacer.`,
       () => { void correr('Cancelando la reserva…', async () => { await cancelarReservaHotel(r); showToast.success('Reserva cancelada'); onCambio?.(true); onClose(); }); });
   };
 
   const cancelarGrupo = () => {
     if (!r) return;
     openConfirm('Cancelar todo el grupo',
-      `Se cancelarán las ${vigentesDelGrupo.length} reservas vigentes del grupo de ${nombreHuesped(r)}, también en Cloudbeds, y se liberan sus fechas. Esta acción no se puede deshacer.`,
+      `Se cancelarán las ${vigentesDelGrupo.length} reservas vigentes del grupo de ${nombreHuesped(r)}${r.cloudbeds_grupo_ref ? `, solo en el POS: cancela también la reserva ${r.cloudbeds_grupo_ref} en Cloudbeds` : ', también en Cloudbeds'}, y se liberan sus fechas. Esta acción no se puede deshacer.`,
       () => { void correr('Cancelando el grupo…', async () => {
         const fallos = await cancelarGrupoReservasHotel(vigentesDelGrupo);
         if (fallos > 0) showToast.warning('Algunas reservas no se pudieron cancelar', `${fallos} sigue${fallos === 1 ? '' : 'n'} vigente${fallos === 1 ? '' : 's'}. Revisa e inténtalo de nuevo.`);
@@ -284,7 +297,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
       }); });
   };
 
-  /** La venta enlazada ya no existe: se desenlaza (a toda la reserva o a su grupo) y el primer anticipo crea una nueva. */
+  /** La venta enlazada ya no existe: se desenlaza (a toda la reserva o a su grupo) y el primer pago crea una nueva. */
   const desenlazarVenta = () => {
     if (!r) return;
     void correr('Desenlazando la venta…', async () => {
@@ -292,11 +305,11 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
       for (const x of afectadas) await desenlazarVentaHotel(x.id);
       setVentaPerdida(null);
       await refrescar(false, { ...r, venta_id: null });
-      showToast.success('Venta desenlazada', 'El próximo anticipo creará una venta nueva.');
+      showToast.success('Venta desenlazada', 'El próximo pago creará una venta nueva.');
     });
   };
 
-  /** Documento A4 de la reserva (de todo el grupo si es de varias cabañas), con sus cobros del Centro de Ventas. */
+  /** Documento A4 de la reserva (de todo el grupo si es de varias habitaciones), con sus cobros del Centro de Ventas. */
   const imprimir = () => {
     if (!r) return;
     const filas = enGrupo ? vigentesDelGrupo : [r];
@@ -310,7 +323,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
         const para = !at ? '' : at.destino === 'grupo' ? ' · todo el grupo' : ` · ${filas.find((f) => f.id === at.destino)?.cabana ?? at.texto}`;
         return {
           fecha: new Date(m.fecha).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }),
-          texto: `${m.tipo === 'reembolso' ? 'Reembolso' : 'Anticipo'} · ${m.metodo_pago ?? ''}${m.transferencia_banco ? ` · ${m.transferencia_banco}` : ''}${m.tarjeta_red ? ` · ${m.tarjeta_red}` : ''}${para}`,
+          texto: `${m.tipo === 'reembolso' ? 'Reembolso' : 'Pago'} · ${m.metodo_pago ?? ''}${m.transferencia_banco ? ` · ${m.transferencia_banco}` : ''}${m.tarjeta_red ? ` · ${m.tarjeta_red}` : ''}${para}${m.tipo === 'pago' ? (facturasDePago(v.movimientos, m.id).length > 0 ? ` · Factura ${facturasDePago(v.movimientos, m.id).join(', ')}` : ' · Sin facturar') : ''}`,
           monto: m.monto ?? 0,
           reembolso: m.tipo === 'reembolso',
           orden: m.fecha,
@@ -326,12 +339,12 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
       cancelada: r.estado === 'cancelada',
       huesped: { nombre: nombreHuesped(r), documento: cliente ? documentoCliente(cliente) : null, email: r.huesped_email, telefono: r.huesped_telefono ?? '', pais: r.huesped_pais },
       llegada: fechaLarga(r.llegada), salida: fechaLarga(r.salida), noches,
-      cabanas: filas.map((f) => ({ nombre: habitaciones.find((h) => h.cloudbeds_room_type_id === f.room_type_id)?.nombre ?? f.cabana, cama: f.cama, adultos: f.adultos, ninos: f.ninos, tarifa: f.total_estadia, manual: f.tarifa_manual })),
+      cabanas: filas.map((f) => ({ nombre: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.nombre ?? f.cabana, cama: f.cama, adultos: f.adultos, ninos: f.ninos, tarifa: f.total_estadia, manual: f.tarifa_manual })),
       extras: filas.flatMap((f) => f.extras.filter((e) => e.monto > 0).map((e) => ({ descripcion: filas.length > 1 ? `${e.descripcion} (${f.cabana})` : e.descripcion, monto: e.monto, notas: f.notas_items.filter((n) => n.extra_id === e.id).map((n) => n.texto) }))),
       total,
       cobros: ventasDoc.length > 0 ? { pagado: totGrupo.pagado, saldo: totGrupo.saldo, pagos } : null,
       notas: r.notas,
-      plan: r.plan_alimentacion ? { nombre: r.plan_alimentacion.nombre, incluye: incluyeDelPlan(r.plan_alimentacion, filas.reduce((a, f) => a + f.ninos, 0)), incluido: !planSeCobra(r.plan_alimentacion) } : null,
+      plan: r.plan_alimentacion ? { nombre: r.plan_alimentacion.nombre, adultos: filas.reduce((a, f) => a + f.adultos, 0), ninos: filas.reduce((a, f) => a + f.ninos, 0), incluyeAdulto: incluyePorPersona(r.plan_alimentacion).adulto, incluyeNino: incluyePorPersona(r.plan_alimentacion).nino, incluido: !planSeCobra(r.plan_alimentacion) } : null,
       notasGenerales: filas.flatMap((f) => f.notas_items.filter((n) => !n.extra_id || !f.extras.some((e) => e.id === n.extra_id)).map((n) => (filas.length > 1 ? `${n.texto} (${f.cabana})` : n.texto))),
     });
   };
@@ -340,7 +353,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
   const elegirCabana = (h: ReservaHotel) => {
     if (h.id === r?.id) return;
-    if (sucio) { openConfirm('¿Descartar los cambios?', 'Tienes cambios sin guardar. Si cambias de cabaña, se pierden.', () => { setSucio(false); setEditor(null); onAbrirHermana?.(h); }); return; }
+    if (sucio) { openConfirm('¿Descartar los cambios?', 'Tienes cambios sin guardar. Si cambias de habitación, se pierden.', () => { setSucio(false); setEditor(null); onAbrirHermana?.(h); }); return; }
     setEditor(null);
     onAbrirHermana?.(h);
   };
@@ -408,15 +421,25 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
           <SheetDescription className="sr-only">Detalle y edición de la reserva</SheetDescription>
           {r && (
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 t-cuerpo text-foreground" aria-label="Resumen de la reserva">
-              <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(r.llegada).format('ddd D MMM')} → {dayjs(r.salida).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
-              <FilaHeader icono={UserCircle}>{plural(r.adultos, 'adulto', 'adultos')}{r.ninos > 0 ? `, ${plural(r.ninos, 'niño', 'niños')}` : ''}</FilaHeader>
-              <FilaHeader icono={Bed}>{cabana}{r.cama ? <span className="text-muted-foreground"> · {r.cama}</span> : null}</FilaHeader>
+              {enGrupo ? (
+                <>
+                  <FilaHeader icono={Bed}>{plural(vigentesDelGrupo.length, 'habitación', 'habitaciones')}</FilaHeader>
+                  <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(vigentesDelGrupo.map((g) => g.llegada).sort()[0]).format('ddd D MMM')} → {dayjs(vigentesDelGrupo.map((g) => g.salida).sort().at(-1)).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
+                  <FilaHeader icono={UserCircle}>{plural(vigentesDelGrupo.reduce((a, g) => a + g.adultos, 0), 'adulto', 'adultos')}{vigentesDelGrupo.some((g) => g.ninos > 0) ? `, ${plural(vigentesDelGrupo.reduce((a, g) => a + g.ninos, 0), 'niño', 'niños')}` : ''}</FilaHeader>
+                </>
+              ) : (
+                <>
+                  <FilaHeader icono={Bed}>{cabana}{r.cama ? <span className="text-muted-foreground"> · {r.cama}</span> : null}</FilaHeader>
+                  <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(r.llegada).format('ddd D MMM')} → {dayjs(r.salida).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
+                  <FilaHeader icono={UserCircle}>{plural(r.adultos, 'adulto', 'adultos')}{r.ninos > 0 ? `, ${plural(r.ninos, 'niño', 'niños')}` : ''}</FilaHeader>
+                </>
+              )}
             </ul>
           )}
           {/* Pestañas subrayadas, pegadas al borde inferior del encabezado. */}
           {r && editor !== 'extras' && (
             <div role="tablist" aria-label="Secciones de la reserva" className="flex items-center gap-5 -mb-px">
-              {([['reserva', 'Reserva'], ['cliente', 'Cliente'], ['cuenta', 'Cuenta'], ['historial', 'Historial']] as const).map(([id, label]) => {
+              {([...(enGrupo ? [['grupo', 'Grupo'] as const] : []), ['reserva', 'Reserva'], ['cliente', 'Cliente'], ['cuenta', 'Cuenta'], ['historial', 'Historial']] as const).map(([id, label]) => {
                 const tieneAviso = id === 'reserva' && !!divergencia && vigente;
                 const tieneSaldo = id === 'cuenta' && !!cifrasCobro && cifrasCobro.saldo > EPS;
                 const pagadoCompleto = id === 'cuenta' && pagadaPorCompleto;
@@ -517,24 +540,25 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                 </div>
               )}
 
-              {enGrupo && pestana !== 'historial' && (
-                <>
-                  <GrupoResumen filas={vigentesDelGrupo} seleccionada={r.id} ventas={ventas} onElegir={elegirCabana} />
-                  <p className="t-meta text-muted-foreground -mt-1">Editando: <b className="text-foreground">{cabana}</b>. Toca otra cabaña de la lista para editarla.</p>
-                </>
+              {enGrupo && pestana !== 'historial' && pestana !== 'grupo' && (
+                <GrupoResumen filas={vigentesDelGrupo} seleccionada={r.id} ventas={ventas} onElegir={elegirCabana} />
+              )}
+
+              {pestana === 'grupo' && enGrupo && (
+                <VistaGrupo filas={vigentesDelGrupo} ventas={ventas} onElegir={(h) => { elegirCabana(h); setPestana('reserva'); }} />
               )}
 
               {pestana === 'reserva' && (<>
               <Seccion icono={Bed} color="info" titulo={`Estadía · ${plural(noches, 'noche', 'noches')}`}
                 accion={puedeEditar && !r.fuente_externa && editor !== 'estadia' && editor !== 'cabana' ? (
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => abrirEditor('cabana')}><ArrowsLeftRight size={14} /> Cabaña</Button>
-                    <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => abrirEditor('estadia')}><PencilSimple size={14} /> Editar</Button>
+                    {!r.cloudbeds_grupo_ref && <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => abrirEditor('cabana')}><ArrowsLeftRight size={14} /> Habitación</Button>}
+                    <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('estadia')}><PencilSimple size={14} /> Editar</Button>
                   </div>
                 ) : undefined}>
                 <div className="grid grid-cols-2 gap-3">
-                  <Dato t="Cabaña" v={cabana} />
-                  <SelectorCama r={r} camas={habitaciones.find((h) => h.cloudbeds_room_type_id === r.room_type_id)?.camas ?? []} puedeEditar={puedeGestionar && vigente && editor === 'estadia'} usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
+                  <Dato t="Habitación" v={cabana} />
+                  <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar={puedeGestionar && vigente && editor === 'estadia'} usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Dato t="Llegada" v={<span className="capitalize">{fechaLarga(r.llegada)}</span>} />
@@ -551,7 +575,8 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
               </Seccion>
 
               <Seccion icono={UsersThree} titulo="Huéspedes"
-                accion={puedeEditar && (!r.fuente_externa || planes.length > 0) && editor !== 'huespedes' ? <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => abrirEditor('huespedes')}><PencilSimple size={14} /> Editar</Button> : undefined}>
+                accion={puedeEditar && (!r.fuente_externa || planes.length > 0) && editor !== 'huespedes' ? <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('huespedes')}><PencilSimple size={14} /> Editar</Button> : undefined}>
+                {editor !== 'huespedes' && (
                 <div className="grid grid-cols-2 gap-3">
                   {/* Cada grupo con lo que incluye su plan, para leer de corrido «cuántos» y «qué reciben». */}
                   <div className="flex flex-col gap-0.5">
@@ -562,8 +587,9 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                     <Dato t="Niños" v={r.ninos} />
                     {r.plan_alimentacion && r.ninos > 0 && incluyePorPersona(r.plan_alimentacion).nino && <span className="t-cuerpo text-muted-foreground">{incluyePorPersona(r.plan_alimentacion).nino}</span>}
                   </div>
-                  {editor !== 'huespedes' && <SeccionPlan r={r} hayPlanes={planes.length > 0} />}
+                  <SeccionPlan r={r} hayPlanes={planes.length > 0} />
                 </div>
+                )}
                 {editor === 'huespedes' && (
                   <EditorEstadia modo="huespedes" r={r} grupo={[r]} planes={planes} soloPlan={r.fuente_externa} usuario={usuarioNombre} onCancelar={cerrarEditor} onSucio={setSucio}
                     onGuardado={() => { setEditor(null); void refrescar(true); }} />
@@ -575,7 +601,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
               {pestana === 'cliente' && (<>
               <Seccion icono={User} titulo="Cliente"
-                accion={puedeGestionar && editor !== 'cliente' ? <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => abrirEditor('cliente')}><PencilSimple size={14} /> Editar</Button> : undefined}>
+                accion={puedeGestionar && editor !== 'cliente' ? <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('cliente')}><PencilSimple size={14} /> Editar</Button> : undefined}>
                 <div className="grid grid-cols-2 gap-3">
                   <Dato t="Nombre" v={nombreHuesped(r)} />
                   <Dato
@@ -632,7 +658,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                   <p className="t-meta text-muted-foreground">Cancela la reserva{r.cloudbeds_reservation_id ? ' también en Cloudbeds' : ''} y libera las fechas. Los cobros de la venta no se tocan: se deja un comentario para que revises si corresponde un reembolso.</p>
                   <div className="flex flex-wrap gap-2">
                     {vigentesDelGrupo.length > 1 && <Button type="button" variant="outline" className="h-11 text-destructive" onClick={cancelarGrupo} disabled={ocupado}>Cancelar todo el grupo</Button>}
-                    <Button type="button" variant="outline" className="h-11 text-destructive" onClick={cancelar} disabled={ocupado}>{r.grupo_id ? 'Cancelar solo esta cabaña' : 'Cancelar reserva'}</Button>
+                    <Button type="button" variant="outline" className="h-11 text-destructive" onClick={cancelar} disabled={ocupado}>{r.grupo_id ? 'Cancelar solo esta habitación' : 'Cancelar reserva'}</Button>
                   </div>
                 </Seccion>
               )}
@@ -662,7 +688,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
             <div className="flex items-center gap-3 ml-auto">
               {pago && <EstadoBadge tono={pago.tono}>{pago.etiqueta}</EstadoBadge>}
               {puedeGestionar && vigente && editor !== 'abono' && !venta?.anulado && !sinVenta && (
-                <Button type="button" variant={pagadaPorCompleto ? 'outline' : 'default'} className="h-11 px-5 shrink-0" onClick={abrirAbono} disabled={pagadaPorCompleto} title={pagadaPorCompleto ? 'La reserva ya está pagada por completo' : undefined}>Registrar anticipo</Button>
+                <Button type="button" variant={pagadaPorCompleto ? 'outline' : 'default'} className="h-11 px-5 shrink-0 gap-1.5" onClick={abrirAbono} disabled={pagadaPorCompleto} title={pagadaPorCompleto ? 'La reserva ya está pagada por completo' : undefined}><Plus size={16} weight="bold" /> Añadir pago</Button>
               )}
             </div>
           </div>

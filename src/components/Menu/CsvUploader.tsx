@@ -115,6 +115,38 @@ export function CsvUploader() {
     }
   };
 
+  const exportarMenu = async () => {
+    try {
+      const rxDb = await initVerticalRxDb();
+      const orgId = localStorage.getItem('pos_active_org_id') || '';
+      const docs = await rxDb.menu_items.find({
+        selector: { organization_id: orgId, _deleted: { $ne: true } }
+      }).exec();
+      if (docs.length === 0) {
+        showToast.warning('No hay productos para exportar');
+        return;
+      }
+      const filas = docs
+        .map(d => d.toJSON())
+        .sort((a, b) => (a.categoria_nombre || '').localeCompare(b.categoria_nombre || '') || a.nombre.localeCompare(b.nombre))
+        .map(i => ({ nombre: i.nombre, precio: Number(i.precio ?? 0).toFixed(2), categoria: i.categoria_nombre || 'General' }));
+      const csv = '\uFEFF' + Papa.unparse(filas, { columns: ['nombre', 'precio', 'categoria'] });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = `menu_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast.success('Menú exportado', `${filas.length} productos.`);
+    } catch (error) {
+      console.error('Error exportando menú:', error);
+      showToast.error('No se pudo exportar el menú');
+    }
+  };
+
   const downloadTemplate = () => {
     const csvContent = "nombre,precio,categoria\nHamburguesa Clásica,12.50,Comida\nCoca Cola,2.50,Bebidas";
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -155,6 +187,14 @@ export function CsvUploader() {
             >
               <DownloadSimple size={16} />
               Descargar Plantilla CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportarMenu}
+              className="h-9 px-4 rounded-2xl bg-secondary text-secondary-foreground t-dato flex items-center gap-2 transition-all cursor-pointer w-full justify-center hover:opacity-80 border border-border"
+            >
+              <DownloadSimple size={16} />
+              Exportar menú actual (CSV)
             </button>
           </div>
 

@@ -2,7 +2,7 @@ import { CheckCircle, WarningCircle, XCircle } from '@phosphor-icons/react';
 import { BannerEspera, Girando } from '../Espera';
 import type { EstadoLinea } from './tipos';
 
-/** Avance de la creación: una fila por cabaña (guardando en el POS, reservando en Cloudbeds, extras). */
+/** Avance de la creación: una fila por habitación (guardando en el POS, reservando en Cloudbeds, extras). */
 export function ProgresoReserva({ avance }: { avance: Array<{ id: string; nombre: string; estado: EstadoLinea }> }) {
   const terminadas = avance.filter((l) => l.estado === 'ok' || l.estado === 'pendiente' || l.estado === 'error').length;
   return (

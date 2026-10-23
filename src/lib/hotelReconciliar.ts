@@ -23,6 +23,7 @@ export interface Divergencia {
   llegada?: string;
   salida?: string;
   room_type_id?: string;
+  room_id?: string;
 }
 
 function mesesQueToca(r: ReservaHotel): string[] {
@@ -51,13 +52,14 @@ export function detectarDivergencias(reservas: ReservaHotel[], version: number):
       continue;
     }
     const fechas = t.desde !== r.llegada || t.hasta !== r.salida;
-    const cabana = t.roomTypeID !== r.room_type_id;
+    // Otra habitación: otro tipo, o —si la reserva ya tenía unidad— otra unidad del mismo tipo.
+    const cabana = t.roomTypeID !== r.room_type_id || (r.room_id != null && t.roomID != null && t.roomID !== r.room_id);
     if (fechas || cabana) {
       const partes = [
         fechas ? `fechas ${dayjs(t.desde).format('DD/MM')} → ${dayjs(t.hasta).format('DD/MM')}` : null,
-        cabana ? 'otra cabaña' : null,
+        cabana ? 'otra habitación' : null,
       ].filter(Boolean);
-      out.set(r.id, { id: r.id, tipo: 'cambiada', resumen: `En Cloudbeds cambió: ${partes.join(' y ')}`, llegada: t.desde, salida: t.hasta, room_type_id: t.roomTypeID });
+      out.set(r.id, { id: r.id, tipo: 'cambiada', resumen: `En Cloudbeds cambió: ${partes.join(' y ')}`, llegada: t.desde, salida: t.hasta, room_type_id: t.roomTypeID, room_id: t.roomID ?? undefined });
     }
   }
   return out;

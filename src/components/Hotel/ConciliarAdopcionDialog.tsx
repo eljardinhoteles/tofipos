@@ -12,7 +12,7 @@ import { useRxClientes } from '../../hooks/useRxClientes';
 import { useVentasConMovimientos } from '../../hooks/useVentasConMovimientos';
 import { agregarVentaMovimiento, createRxCliente, createRxVenta, updateRxCliente, updateRxVenta, type RxCliente } from '../../db/rxdb';
 import type { ReservaCloudbedsDetalle } from '../../lib/cloudbeds';
-import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 import { adoptarReservaHotel, conciliacionDisponible, desenlazarVentaHotel, enlazarReservaHotel, type ReservaHotel } from '../../lib/hotelReservasApi';
 import {
   ETIQUETA_CAMPO, candidatosCliente, candidatosVenta, diferencias, nombreCompleto, valoresCloudbeds, type CampoCliente,
@@ -28,7 +28,7 @@ type EleccionCliente = { tipo: 'existente'; id: string } | { tipo: 'nuevo' } | {
 interface Props {
   det: ReservaCloudbedsDetalle;
   habitaciones: HabitacionHotel[];
-  /** Reservas del POS ya cargadas: para avisar si una venta ya está conciliada con otra cabaña. */
+  /** Reservas del POS ya cargadas: para avisar si una venta ya está conciliada con otra habitación. */
   reservas: ReservaHotel[];
   /** Si viene, la reserva YA está en el POS (adoptada antes o creada aquí): solo se concilia, no se adopta. */
   reserva?: ReservaHotel;
@@ -54,7 +54,7 @@ export function ConciliarAdopcionDialog({ det, habitaciones, reservas, reserva, 
   const [guardando, setGuardando] = useState(false);
 
   const hab = det.habitaciones[0];
-  const cabana = habitaciones.find((h) => h.cloudbeds_room_type_id === hab?.roomTypeID)?.nombre ?? hab?.nombre ?? '—';
+  const cabana = (hab ? habitacionDeUnidad(habitaciones, hab.roomTypeID, hab.roomID) : undefined)?.nombre ?? hab?.nombreUnidad ?? hab?.nombre ?? '—';
   const nombre = nombreCompleto(det) || 'Huésped';
   const cb = valoresCloudbeds(det);
 
@@ -209,13 +209,13 @@ export function ConciliarAdopcionDialog({ det, habitaciones, reservas, reserva, 
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {motivos.map((m) => <EstadoBadge key={m} tono="info">{m}</EstadoBadge>)}
-                    {yaEnlazadaCon > 0 && <EstadoBadge tono="warning">Ya conciliada con {yaEnlazadaCon} {yaEnlazadaCon === 1 ? 'cabaña' : 'cabañas'}</EstadoBadge>}
+                    {yaEnlazadaCon > 0 && <EstadoBadge tono="warning">Ya conciliada con {yaEnlazadaCon} {yaEnlazadaCon === 1 ? 'habitación' : 'habitaciones'}</EstadoBadge>}
                   </div>
                 </Opcion>
               ))}
               <Opcion activa={venta?.tipo === 'nueva'} onClick={() => setVenta({ tipo: 'nueva' })} icono={Plus}>
                 <span className="t-cuerpo-fuerte">Crear venta nueva por {dinero(det.total)}</span>
-                <span className="t-meta text-muted-foreground">Reserva de hotel, directa, con la tarifa de Cloudbeds. Los anticipos se registran después en Ventas.</span>
+                <span className="t-meta text-muted-foreground">Reserva de hotel, directa, con la tarifa de Cloudbeds. Los pagos se registran después en Ventas.</span>
               </Opcion>
               <Opcion activa={venta?.tipo === 'ninguna'} onClick={() => setVenta({ tipo: 'ninguna' })}>
                 <span className="t-cuerpo-fuerte">Sin venta por ahora</span>

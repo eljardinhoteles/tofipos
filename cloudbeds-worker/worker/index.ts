@@ -14,6 +14,8 @@ interface Env {
   ALLOWED_ORG_ID?: string
   SOURCE_ID?: string
   SUPABASE_ANON_KEY: string
+  // Clave AES-256 (32 bytes en base64) con la que se cifran en la base las API keys guardadas desde Ajustes del POS.
+  CREDENCIALES_KEY?: string
   // Clave de servicio de Supabase (secreto, opcional): solo la usa la tarea programada que sube las reservas pendientes. Sin ella no se reintenta desde el servidor.
   SUPABASE_SERVICE_KEY?: string
   SUPABASE_URL: string
@@ -270,7 +272,7 @@ async function reclamar(x: Ctx, key: string, value: string, ttlSeg: number): Pro
 async function autorizar(req: Request, env: Env, ec: ExecutionContext): Promise<Ctx> {
   const orgId = req.headers.get('X-Org-Id') || ''
   if (!ORG_RE.test(orgId)) throw new HttpError(401, 'Falta la organización activa')
-  const c = conexiones(env).mapa.get(orgId)
+  const c = await conexionDe(env, orgId)
   if (!c) throw new HttpError(403, 'Esta organización no tiene una cuenta de Cloudbeds conectada')
   const x: Ctx = { env, c, t: {}, ec }
   const t0 = Date.now()
@@ -433,7 +435,7 @@ interface Oferta {
   minNoches: number | null // estadía mínima que exigen las fechas pedidas (solo si no se cumple)
   nombrePlan: string | null
   derivada: boolean // plan derivado (paquetes como «Premium: almuerzo + cena»): no se ofrece por defecto
-  // Otros planes de tarifa de la misma cabaña (solo en la fila principal).
+  // Otros planes de tarifa de la misma habitación (solo en la fila principal).
   planes?: Array<{ rateID: string | null; nombrePlan: string | null; totalRate: number; reservable: boolean; motivo: string | null }>
 }
 
@@ -469,13 +471,13 @@ function mapRatePlans(raw: any, start: string, end: string): Oferta[] {
   })
 }
 
-// Cloudbeds devuelve una fila por plan de tarifa: una cabaña puede salir varias veces. Se ordena para que el plan
+// Cloudbeds devuelve una fila por plan de tarifa: una habitación puede salir varias veces. Se ordena para que el plan
 // básico (no derivado) vaya primero: es el que se reserva si no se pide otro.
 function ordenarPlanes(rows: Oferta[]): Oferta[] {
   return [...rows].sort((a, b) => Number(a.derivada) - Number(b.derivada))
 }
 
-// Una fila por cabaña, con el plan básico como principal y el resto en `planes`.
+// Una fila por habitación, con el plan básico como principal y el resto en `planes`.
 function agruparPorCabana(rows: Oferta[]): Oferta[] {
   const porCabana = new Map<string, Oferta[]>()
   for (const r of ordenarPlanes(rows)) porCabana.set(r.roomTypeID, [...(porCabana.get(r.roomTypeID) ?? []), r])
@@ -504,8 +506,8 @@ async function getVersion(x: Ctx): Promise<string> {
 
 /**
  * Disponibilidad. Dos usos:
- *  - Lista (`lista=1`): qué cabañas están libres, SIN tarifas (no viajan los precios ni las noches).
- *  - Cotización: la tarifa de unas cabañas concretas (`roomTypeIDs`) para una ocupación, solo de esas.
+ *  - Lista (`lista=1`): qué habitaciones están libres, SIN tarifas (no viajan los precios ni las noches).
+ *  - Cotización: la tarifa de unas habitaciones concretas (`roomTypeIDs`) para una ocupación, solo de esas.
  */
 async function availability(req: Request, x: Ctx): Promise<Response> {
   const q = new URL(req.url).searchParams
@@ -513,7 +515,7 @@ async function availability(req: Request, x: Ctx): Promise<Response> {
   const { adults, children } = parseGuests(q.get('adults'), q.get('children'))
   const lista = q.get('lista') === '1'
   const ids = (q.get('roomTypeIDs') ?? '').split(',').map((v) => v.trim()).filter(Boolean)
-  if (ids.length > 30 || !ids.every((id) => /^\d{3,30}$/.test(id))) throw new HttpError(400, 'Cabañas inválidas')
+  if (ids.length > 30 || !ids.every((id) => /^\d{3,30}$/.test(id))) throw new HttpError(400, 'Habitaciones inválidas')
 
   const sufijo = `${start}:${end}:${adults}:${children}:${lista ? 'l' : ids.slice().sort().join('+') || 'todas'}`
   const { version, valor: cached } = await leerVersionado(x, sufijo)
@@ -522,7 +524,7 @@ async function availability(req: Request, x: Ctx): Promise<Response> {
 
   const [crudas, tipos] = await Promise.all([fetchOfertas(x, start, end, adults, children, ids), obtenerTipos(x).catch(() => [] as TipoHab[])])
   const porTipo = new Map(tipos.map((t) => [t.roomTypeID, t]))
-  // Capacidad máxima de cada cabaña (adultos + niños): permite repartir un grupo sin tener que probar a ciegas.
+  // Capacidad máxima de cada habitación (adultos + niños): permite repartir un grupo sin tener que probar a ciegas.
   const agrupadas = agruparPorCabana(crudas).map((o) => ({ ...o, capacidad: porTipo.get(o.roomTypeID)?.capacidad ?? null, adultosIncluidos: porTipo.get(o.roomTypeID)?.adultosIncluidos ?? null }))
   const ofertas = lista
     ? agrupadas.map((o) => ({ ...o, totalRate: 0, noches: [], planes: [], rateID: null, nombrePlan: null }))
@@ -664,7 +666,16 @@ async function cancelarReserva(req: Request, x: Ctx, id: string): Promise<Respon
   return json(x.env, { ok: true })
 }
 
+// VERIFICAR con una reserva de prueba: se asume que putReservation acepta status 'checked_in' / 'checked_out'.
+async function cambiarEstadia(x: Ctx, id: string, status: 'checked_in' | 'checked_out'): Promise<Response> {
+  await marcarPropio(x, id)
+  await cloudbeds(x, 'PUT', 'putReservation', { reservationID: id, status })
+  await bumpVersion(x)
+  return json(x.env, { ok: true })
+}
+
 interface ModificarBody {
+  roomID?: string // unidad destino (tipos con varias unidades)
   subReservationID?: string
   roomTypeID: string
   start: string
@@ -680,40 +691,73 @@ async function modificarReserva(req: Request, x: Ctx, id: string): Promise<Respo
   if (!b || !str(b.roomTypeID, 20)) throw new HttpError(400, 'JSON inválido')
   const { start, end } = parseRange(b.start, b.end)
   const { adults, children } = parseGuests(b.adults, b.children)
+  const unidad = b.roomID && /^\d{3,30}-\d{1,4}$/.test(b.roomID) ? b.roomID : null
+  if (b.roomID && !unidad) throw new HttpError(400, 'Unidad inválida')
 
   await marcarPropio(x, id)
+  const cuartosDe = (d: Dict | undefined): Dict[] => [...(Array.isArray(d?.assigned) ? d!.assigned : []), ...(Array.isArray(d?.unassigned) ? d!.unassigned : [])]
+  const buscarCuarto = (d: Dict | undefined) => cuartosDe(d).find((r) => !b.subReservationID || String(r.subReservationID) === b.subReservationID) ?? cuartosDe(d)[0]
+
+  // Con unidad concreta se mira dónde está hoy: si ya es del mismo tipo, solo hay que reasignar la unidad (no se toca el tipo).
+  const antes = unidad ? await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id }) : null
+  const cuartoActual = antes ? buscarCuarto(antes.data) : undefined
+  const mismoTipo = !!cuartoActual && String(cuartoActual.roomTypeID) === b.roomTypeID
+
   // VERIFICAR en sandbox (plan §11.4): la spec define rooms[] en putReservation.
-  await cloudbeds(x, 'PUT', 'putReservation', {
-    reservationID: id,
-    rooms: [
-      {
-        subReservationID: b.subReservationID,
+  if (!(unidad && mismoTipo && start === String(antes?.data?.startDate) && end === String(antes?.data?.endDate))) {  // sin cambio de tipo ni de fechas, solo se reasigna la unidad
+    await cloudbeds(x, 'PUT', 'putReservation', {
+      reservationID: id,
+      rooms: [
+        {
+          subReservationID: b.subReservationID,
+          roomTypeID: b.roomTypeID,
+          checkinDate: start,
+          checkoutDate: end,
+          adults,
+          children,
+          rateID: b.rateID,
+          adjustPrice: b.adjustPrice ?? true,
+        },
+      ],
+    })
+  }
+  // Reasignar la unidad (modelo con varias unidades por tipo). Si cambió el tipo, Cloudbeds suele asignar una unidad por su cuenta
+  // (a veces justo la pedida): se relee para no reasignar a la misma y para indicar de cuál sale. VERIFICAR en sandbox: postRoomAssign.
+  if (unidad) {
+    const tras = mismoTipo ? antes : await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
+    const actual = mismoTipo ? cuartoActual : buscarCuarto(tras?.data)
+    if (String(actual?.roomID ?? '') !== unidad) {
+      await cloudbeds(x, 'POST', 'postRoomAssign', {
+        reservationID: id,
+        ...(b.subReservationID ? { subReservationID: b.subReservationID } : {}),
         roomTypeID: b.roomTypeID,
-        checkinDate: start,
-        checkoutDate: end,
-        adults,
-        children,
-        rateID: b.rateID,
-        adjustPrice: b.adjustPrice ?? true,
-      },
-    ],
-  })
+        newRoomID: unidad,
+        ...(actual?.roomID && String(actual.roomID) !== unidad ? { oldRoomID: String(actual.roomID) } : {}),
+      })
+    }
+  }
   await bumpVersion(x)
   // Cloudbeds recalcula su tarifa al cambiar las fechas: se devuelve para que el POS la tenga al día.
   let total: number | null = null
+  let info: { data?: Dict } | null = null
   try {
-    const info = await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
+    info = await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
     // El total de Cloudbeds incluye los extras cargados allá; la tarifa de la estadía es el hospedaje (subTotal).
     const hospedaje = desgloseDe(info.data ?? {})?.hospedaje
     if (typeof hospedaje === 'number' && hospedaje > 0) total = hospedaje
     else if (typeof info.data?.total === 'number') total = info.data.total
-  } catch { /* la tarifa es informativa: el cambio de fechas ya se hizo */ }
+  } catch { /* la tarifa es informativa: el cambio ya se hizo */ }
+  // Si Cloudbeds respondió bien pero la reserva no quedó en esa unidad, se dice (si no, el POS la daría por movida y luego se revertiría sola).
+  if (unidad && info) {
+    const ahora = buscarCuarto(info.data)
+    if (ahora && String(ahora.roomID ?? '') !== unidad) throw new HttpError(409, 'Cloudbeds no movió la reserva a esa habitación. No se cambió nada en el POS.')
+  }
   return json(x.env, { ok: true, total })
 }
 
 interface TipoHab { roomTypeID: string; nombre: string; codigo: string | null; capacidad: number | null; adultosIncluidos: number | null }
 
-// Tipos de habitación (cabañas) de Cloudbeds. Casi nunca cambian: caché 1 h.
+// Tipos de habitación (habitaciones) de Cloudbeds. Casi nunca cambian: caché 1 h.
 async function obtenerTipos(x: Ctx): Promise<TipoHab[]> {
   const cached = await leer(x, 'room-types')
   if (cached) return (JSON.parse(cached) as { tipos: TipoHab[] }).tipos
@@ -729,8 +773,26 @@ async function obtenerTipos(x: Ctx): Promise<TipoHab[]> {
   return tipos
 }
 
+interface UnidadHab { roomID: string; nombre: string; roomTypeID: string }
+
+// Unidades (habitaciones físicas) de Cloudbeds. Un tipo puede tener varias (Matrimonial #2, #4, #5…); roomID = «<tipo>-<n>».
+async function obtenerUnidades(x: Ctx): Promise<UnidadHab[]> {
+  const cached = await leer(x, 'rooms')
+  if (cached) return (JSON.parse(cached) as { unidades: UnidadHab[] }).unidades
+  const raw = await cloudbeds<{ data?: Array<{ rooms?: Array<Record<string, unknown>> }> }>(x, 'GET', 'getRooms', { pageSize: 100 })
+  const unidades: UnidadHab[] = (raw.data ?? []).flatMap((p) => p.rooms ?? []).map((r) => ({
+    roomID: String(r.roomID),
+    nombre: String(r.roomName ?? ''),
+    roomTypeID: String(r.roomTypeID),
+  }))
+  await enFondo(x, guardar(x, 'rooms', JSON.stringify({ unidades }), { expirationTtl: 3600 }))
+  return unidades
+}
+
 async function tiposHabitacion(req: Request, x: Ctx): Promise<Response> {
-  return json(x.env, { tipos: await obtenerTipos(x) })
+  // Las unidades no son imprescindibles para quien solo lee los tipos: si fallan, la respuesta sigue siendo válida.
+  const [tipos, unidades] = await Promise.all([obtenerTipos(x), obtenerUnidades(x).catch(() => [] as UnidadHab[])])
+  return json(x.env, { tipos, unidades })
 }
 
 // ---------- calendario (tarjetas de reservas y bloqueos) ----------
@@ -739,6 +801,7 @@ interface Tarjeta {
   tipo: 'reserva' | 'bloqueo'
   id: string
   roomTypeID: string
+  roomID?: string | null // unidad de Cloudbeds («<tipo>-<n>»); un tipo puede tener varias
   nombre: string
   desde: string // primera noche
   hasta: string // día de salida (no incluido), igual que en Cloudbeds
@@ -759,31 +822,72 @@ const ESTADOS_FUERA = new Set(['canceled', 'no_show'])
 
 const sumarDias = (f: string, n: number) => new Date(Date.parse(f + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
 
+/**
+ * Las tarjetas de UNA reserva: una por habitación (unidad) alojada, con sus fechas y huéspedes. `roomTypeID` limita a ese tipo.
+ * Sin el detalle de habitaciones y con tipo dado queda una sola tarjeta sin unidad (se comporta como un tipo = una habitación);
+ * sin tipo y sin detalle no se puede ubicar la reserva y se devuelve null.
+ */
+function tarjetasDeReserva(r: Record<string, unknown>, start: string, end: string, roomTypeID?: string): Tarjeta[] | null {
+  if (ESTADOS_FUERA.has(String(r.status))) return []
+  const todos = Array.isArray(r.rooms) ? (r.rooms as Array<Record<string, unknown>>) : []
+  const cuartos = roomTypeID ? todos.filter((q) => String(q.roomTypeID) === roomTypeID) : todos
+  if (!roomTypeID && cuartos.length === 0) return null
+  const base = {
+    tipo: 'reserva' as const,
+    id: String(r.reservationID),
+    nombre: String(r.guestName ?? ''),
+    estado: String(r.status),
+    fuente: r.sourceName ? String(r.sourceName) : null,
+    saldo: r.balance != null ? Number(r.balance) : null,
+    externo: r.thirdPartyIdentifier ? String(r.thirdPartyIdentifier) : null,
+    creada: r.dateCreated ? String(r.dateCreated) : null,
+  }
+  const out: Tarjeta[] = []
+  for (const q of cuartos.length > 0 ? cuartos : [null]) {
+    const desde = String(q?.roomCheckIn ?? r.startDate)
+    const hasta = String(q?.roomCheckOut ?? r.endDate)
+    if (!(desde < end && hasta > start)) continue
+    out.push({
+      ...base,
+      roomTypeID: q ? String(q.roomTypeID) : (roomTypeID as string),
+      roomID: q?.roomID ? String(q.roomID) : null,
+      desde,
+      hasta,
+      adultos: q?.adults != null ? Number(q.adults) : r.adults != null ? Number(r.adults) : undefined,
+      ninos: q?.children != null ? Number(q.children) : r.children != null ? Number(r.children) : undefined,
+    })
+  }
+  return out
+}
+
+// Una estadía que empezó antes de `start` también se ve: se busca hacia atrás (las estadías largas son raras).
+const PARAMS_LISTA = (start: string, end: string) => ({ checkInFrom: sumarDias(start, -45), checkInTo: sumarDias(end, -1), includeAllRooms: true, pageSize: 100 })
+const MAX_PAGINAS_CALENDARIO = 6
+
+/**
+ * TODAS las reservas del rango en una sola lista (con sus páginas pedidas en paralelo), en vez de una consulta por tipo de
+ * habitación: menos peticiones a Cloudbeds (límite de uso, y menos posibilidades de que una se cuelgue). Devuelve null si alguna
+ * reserva no trae el detalle de habitaciones: entonces no se puede ubicar y quien llama usa la consulta por tipo.
+ */
+async function reservasDeRango(x: Ctx, start: string, end: string): Promise<Tarjeta[] | null> {
+  const pedir = (pagina: number) => cloudbeds<{ data?: Array<Record<string, unknown>>; total?: number }>(x, 'GET', 'getReservations', { ...PARAMS_LISTA(start, end), pageNumber: pagina })
+  const primera = await pedir(1)
+  const total = Number(primera.total) || 0
+  const paginas = Math.min(Math.ceil(total / 100), MAX_PAGINAS_CALENDARIO)
+  const resto = await Promise.all(Array.from({ length: Math.max(0, paginas - 1) }, (_, i) => pedir(i + 2)))
+  const out: Tarjeta[] = []
+  for (const r of [primera, ...resto].flatMap((l) => l.data ?? [])) {
+    const t = tarjetasDeReserva(r, start, end)
+    if (t === null) return null
+    out.push(...t)
+  }
+  return out
+}
+
+/** Respaldo: una consulta por tipo de habitación. */
 async function reservasDeCabana(x: Ctx, roomTypeID: string, start: string, end: string): Promise<Tarjeta[]> {
-  // Una estadía que empezó antes de `start` también se ve: se busca hacia atrás (las estadías largas son raras).
-  const raw = await cloudbeds<{ data?: Array<Record<string, unknown>> }>(x, 'GET', 'getReservations', {
-    checkInFrom: sumarDias(start, -45),
-    checkInTo: sumarDias(end, -1),
-    roomTypeID,
-    pageSize: 100,
-  })
-  return (raw.data ?? [])
-    .filter((r) => !ESTADOS_FUERA.has(String(r.status)) && String(r.startDate) < end && String(r.endDate) > start)
-    .map((r) => ({
-      tipo: 'reserva' as const,
-      id: String(r.reservationID),
-      roomTypeID,
-      nombre: String(r.guestName ?? ''),
-      desde: String(r.startDate),
-      hasta: String(r.endDate),
-      estado: String(r.status),
-      fuente: r.sourceName ? String(r.sourceName) : null,
-      saldo: r.balance != null ? Number(r.balance) : null,
-      externo: r.thirdPartyIdentifier ? String(r.thirdPartyIdentifier) : null,
-      adultos: r.adults != null ? Number(r.adults) : undefined,
-      ninos: r.children != null ? Number(r.children) : undefined,
-      creada: r.dateCreated ? String(r.dateCreated) : null,
-    }))
+  const raw = await cloudbeds<{ data?: Array<Record<string, unknown>> }>(x, 'GET', 'getReservations', { ...PARAMS_LISTA(start, end), roomTypeID })
+  return (raw.data ?? []).flatMap((r) => tarjetasDeReserva(r, start, end, roomTypeID) ?? [])
 }
 
 async function bloqueosDeRango(x: Ctx, start: string, end: string): Promise<Tarjeta[]> {
@@ -805,13 +909,15 @@ async function bloqueosDeRango(x: Ctx, start: string, end: string): Promise<Tarj
       const rooms = (b.rooms as Array<Record<string, unknown>> | undefined) ?? []
       for (const room of rooms) {
         const roomTypeID = String(room.roomTypeID)
-        const clave = `${b.roomBlockID}:${roomTypeID}`
+        const roomID = room.roomID ? String(room.roomID) : null
+        const clave = `${b.roomBlockID}:${roomTypeID}:${roomID ?? ''}`
         if (vistos.has(clave)) continue
         vistos.add(clave)
         out.push({
           tipo: 'bloqueo',
           id: String(b.roomBlockID),
           roomTypeID,
+          roomID,
           // El motivo suele ser el nombre de la persona; solo se usa la primera línea.
           nombre: String(b.roomBlockReason ?? '').split('\n')[0].trim() || 'Bloqueada',
           desde: String(b.startDate),
@@ -837,13 +943,13 @@ interface EntradaCalendario { start: string; end: string; tarjetas: Tarjeta[]; t
 /** Reconstruye el calendario (reservas y bloqueos) consultando a Cloudbeds y lo guarda. */
 async function refrescarCalendario(x: Ctx, key: string, start: string, end: string): Promise<EntradaCalendario> {
   const v = await getVersion(x)
-  const tipos = await obtenerTipos(x)
-  // Una consulta por cabaña, en paralelo (Cloudbeds las atiende juntas en ~1 s), más los bloqueos.
-  const [porCabana, bloqueos] = await Promise.all([
-    Promise.all(tipos.map((t) => reservasDeCabana(x, t.roomTypeID, start, end))),
+  // Una sola lista con todas las reservas del rango (más los bloqueos); si no se puede ubicar alguna o falla, una consulta por tipo.
+  const [reservas, bloqueos] = await Promise.all([
+    reservasDeRango(x, start, end).catch(() => null),
     bloqueosDeRango(x, start, end),
   ])
-  const entrada: EntradaCalendario = { start, end, tarjetas: [...porCabana.flat(), ...bloqueos], t: Date.now(), v }
+  const porTipo = reservas ?? (await Promise.all((await obtenerTipos(x)).map((t) => reservasDeCabana(x, t.roomTypeID, start, end)))).flat()
+  const entrada: EntradaCalendario = { start, end, tarjetas: [...porTipo, ...bloqueos], t: Date.now(), v }
   await enFondo(x, guardar(x, key, JSON.stringify(entrada), { expirationTtl: GUARDADO_SEG }))
   return entrada
 }
@@ -851,7 +957,7 @@ async function refrescarCalendario(x: Ctx, key: string, start: string, end: stri
 async function calendario(req: Request, x: Ctx, ctx: ExecutionContext): Promise<Response> {
   const q = new URL(req.url).searchParams
   const { start, end } = parseRange(q.get('start'), q.get('end'), MAX_NIGHTS_CALENDARIO)
-  const key = `cal3:${start}:${end}`
+  const key = `cal6:${start}:${end}`
   const responder = (e: EntradaCalendario, obsoleto: boolean, cache: string) =>
     new Response(JSON.stringify({ start: e.start, end: e.end, tarjetas: e.tarjetas, actualizado: e.t, obsoleto }), {
       headers: { ...cors(x.env), 'Content-Type': 'application/json', 'X-Cache': cache },
@@ -893,8 +999,8 @@ async function bumpVersion(x: Ctx): Promise<void> {
 // Cada cuenta de Cloudbeds avisa a su propia URL: /api/webhooks/cloudbeds/<orgId>. La URL sin orgId (la primera que se
 // registró) sigue sirviendo a la organización «legado».
 async function webhook(req: Request, env: Env, ctx: ExecutionContext, orgId: string | null): Promise<Response> {
-  const { mapa, legado } = conexiones(env)
-  const c = mapa.get(orgId ?? legado ?? '')
+  const { legado } = conexiones(env)
+  const c = await conexionDe(env, orgId ?? legado ?? '')
   if (!c) return new Response('forbidden', { status: 403 })
   const x: Ctx = { env, c, t: {} }
   const secret = req.headers.get('X-Webhook-Secret') || ''
@@ -919,19 +1025,24 @@ async function webhook(req: Request, env: Env, ctx: ExecutionContext, orgId: str
 
 const MAX_NOCHES_BLOQUEO = 366
 
-interface BloqueoBody { roomTypeIDs: string[]; start: string; end: string; motivo: string; tipo?: string }
+interface BloqueoBody { roomTypeIDs: string[]; /** Unidades concretas (tipo con varias): si vienen, mandan sobre roomTypeIDs. */ rooms?: Array<{ roomTypeID: string; roomID: string }>; start: string; end: string; motivo: string; tipo?: string }
 
 function validarBloqueo(b: BloqueoBody | null) {
   if (!b || !Array.isArray(b.roomTypeIDs) || b.roomTypeIDs.length < 1 || b.roomTypeIDs.length > 20 || !b.roomTypeIDs.every((id) => /^\d{3,30}$/.test(String(id)))) {
-    throw new HttpError(400, 'Elige al menos una cabaña')
+    throw new HttpError(400, 'Elige al menos una habitación')
   }
   const { start, end } = parseRange(b.start, b.end, MAX_NOCHES_BLOQUEO)
   if (!str(b.motivo, 200)) throw new HttpError(400, 'Indica el motivo del bloqueo (máx. 200 caracteres)')
   const tipo = b.tipo === 'out_of_service' ? 'out_of_service' : 'blocked_dates'
-  return { ids: b.roomTypeIDs.map(String), start, end, motivo: b.motivo.trim(), tipo }
+  // Unidades concretas (un tipo con varias): se valida su formato; sin ellas, la única unidad de cada tipo es «<tipo>-0».
+  const unidades = Array.isArray(b.rooms) && b.rooms.length > 0
+    ? b.rooms.map((r) => ({ roomTypeID: String(r?.roomTypeID), roomID: String(r?.roomID) }))
+    : null
+  if (unidades && (unidades.length > 60 || !unidades.every((r) => /^\d{3,30}$/.test(r.roomTypeID) && /^\d{3,30}-\d{1,4}$/.test(r.roomID)))) throw new HttpError(400, 'Unidad inválida')
+  return { ids: b.roomTypeIDs.map(String), unidades, start, end, motivo: b.motivo.trim(), tipo }
 }
 
-// Cada cabaña es un tipo de habitación con una sola unidad: su roomID es «<roomTypeID>-0».
+// Sin unidades concretas, cada habitación es un tipo con una sola unidad: su roomID es «<roomTypeID>-0».
 async function crearBloqueo(req: Request, x: Ctx): Promise<Response> {
   const v = validarBloqueo((await req.json().catch(() => null)) as BloqueoBody | null)
   const res = await cloudbeds<{ roomBlockID?: string }>(x, 'POST', 'postRoomBlock', {
@@ -939,7 +1050,7 @@ async function crearBloqueo(req: Request, x: Ctx): Promise<Response> {
     roomBlockReason: v.motivo,
     startDate: v.start,
     endDate: v.end,
-    rooms: v.ids.map((id) => ({ roomID: `${id}-0`, roomTypeID: id })),
+    rooms: v.unidades ?? v.ids.map((id) => ({ roomID: `${id}-0`, roomTypeID: id })),
   })
   await bumpVersion(x)
   return json(x.env, { roomBlockID: res.roomBlockID ? String(res.roomBlockID) : null }, 201)
@@ -956,12 +1067,31 @@ async function eliminarBloqueo(req: Request, x: Ctx, id: string): Promise<Respon
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Dict = Record<string, any>
 
-/** Desglose del total según `balanceDetailed` de Cloudbeds; null si la reserva no lo trae. */
-function desgloseDe(d: Dict): { hospedaje: number; extras: number; impuestos: number; total: number; pagado: number } | null {
+/**
+ * Desglose del total según `balanceDetailed` de Cloudbeds; null si la reserva no lo trae.
+ * Hay propiedades que cobran los impuestos APARTE de la tarifa (total = noches + impuestos) y otras con la tarifa que YA los
+ * incluye (el precio de la habitación es el total y `taxesFees` solo dice cuánto de eso es impuesto). Se distinguen porque, con
+ * impuestos incluidos, el total de las habitaciones (`roomTotal`) ya es el total de la reserva sin los cargos extra. En ese caso
+ * el hospedaje es ese total y los impuestos no se cuentan otra vez como un cargo aparte.
+ */
+function desgloseDe(d: Dict): { hospedaje: number; extras: number; impuestos: number; total: number; pagado: number; impuestosIncluidos: boolean } | null {
   const b = d.balanceDetailed
   if (!b || typeof b !== 'object') return null
   const n = (v: unknown) => Math.round((Number(v) || 0) * 100) / 100
-  return { hospedaje: n(b.subTotal), extras: n(b.additionalItems), impuestos: n(b.taxesFees), total: n(b.grandTotal ?? d.total), pagado: n(b.paid) }
+  const total = n(b.grandTotal ?? d.total)
+  const extras = n(b.additionalItems)
+  const impuestos = n(b.taxesFees)
+  const cuartos: Dict[] = [...(Array.isArray(d.assigned) ? d.assigned : []), ...(Array.isArray(d.unassigned) ? d.unassigned : [])]
+  const sumaCuartos = n(cuartos.reduce((a, r) => a + (Number(r.roomTotal) || 0), 0))
+  const incluidos = impuestos > 0.005 && sumaCuartos > 0 && Math.abs(sumaCuartos - (total - extras)) < 0.02
+  return {
+    hospedaje: incluidos ? sumaCuartos : n(b.subTotal),
+    extras,
+    impuestos: incluidos ? 0 : impuestos,
+    total,
+    pagado: n(b.paid),
+    impuestosIncluidos: incluidos,
+  }
 }
 
 async function detalleReserva(req: Request, x: Ctx, id: string): Promise<Response> {
@@ -997,6 +1127,12 @@ async function leerDetalleCloudbeds(x: Ctx, id: string) {
       nombre: String(r.roomTypeName ?? ''),
       adultos: Number(r.adults) || 1,
       ninos: Number(r.children) || 0,
+      // Unidad asignada (un tipo puede tener varias), y lo propio de esa habitación dentro de la reserva.
+      roomID: r.roomID ? String(r.roomID) : null,
+      nombreUnidad: r.roomName ? String(r.roomName) : null,
+      subReservationID: r.subReservationID ? String(r.subReservationID) : null,
+      // Total de esa habitación (con impuestos si Cloudbeds los incluye en la tarifa): sirve para repartir el de un grupo.
+      total: r.roomTotal != null ? Number(r.roomTotal) || 0 : null,
     })),
     huesped: {
       nombre: String(p.guestFirstName ?? ''),
@@ -1038,7 +1174,7 @@ async function salud(req: Request, x: Ctx): Promise<Response> {
 
 // Una reserva queda «pendiente» cuando se guardó en el POS pero Cloudbeds no respondió. El POS la reintenta mientras haya un
 // equipo abierto; esta tarea (cada pocos minutos) lo hace desde el servidor para que una reserva no quede sin subir —y la
-// cabaña libre en Cloudbeds— si nadie tiene el POS abierto. Usa la misma clave de idempotencia que el POS (el id de la reserva),
+// habitación libre en Cloudbeds— si nadie tiene el POS abierto. Usa la misma clave de idempotencia que el POS (el id de la reserva),
 // así que nunca duplica una reserva aunque coincida con un reintento del POS.
 const ESPERA_REINTENTO_MS = 3 * 60_000 // el POS tiene prioridad en los primeros minutos
 const VIGENCIA_REINTENTO_MS = 7 * 86_400_000 // la clave de idempotencia dura 7 días
@@ -1058,6 +1194,226 @@ interface FilaPendiente {
   huesped_pais: string
   grupo_etiqueta: string | null
   tarifa_manual: boolean
+}
+
+// ---------- conexión configurable desde Ajustes (credenciales cifradas en la base) ----------
+
+// Además del secreto CLOUDBEDS_ORGS, cada organización puede guardar su API key desde Ajustes del POS. Se cifra con AES-GCM (clave
+// CREDENCIALES_KEY, atada a la organización) y vive en `hotel_integraciones`, una tabla a la que solo accede el Worker con la
+// clave de servicio. El navegador nunca recibe la clave de vuelta, solo el estado. Si una organización tiene fila, manda sobre el secreto.
+
+const TABLA_INTEGRACION = 'hotel_integraciones'
+interface FilaIntegracion {
+  organization_id: string
+  api_key_cifrada: string
+  webhook_secret_cifrado: string
+  fuente_id: string | null
+  propiedad_id: string | null
+  hotel_nombre: string | null
+  updated_at: string
+}
+
+const aBase64 = (b: Uint8Array) => btoa(String.fromCharCode(...b))
+const deBase64 = (t: string) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0))
+
+async function claveDeCifrado(env: Env): Promise<CryptoKey> {
+  if (!env.CREDENCIALES_KEY) throw new HttpError(503, 'Falta el secreto CREDENCIALES_KEY en el Worker: sin él no se pueden guardar credenciales.')
+  let raw: Uint8Array
+  try { raw = deBase64(env.CREDENCIALES_KEY) } catch { throw new HttpError(503, 'CREDENCIALES_KEY no es base64 válido') }
+  if (raw.length !== 32) throw new HttpError(503, 'CREDENCIALES_KEY debe tener 32 bytes (base64)')
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
+}
+
+// El orgId va como dato autenticado: una fila copiada a otra organización no se puede descifrar.
+async function cifrar(env: Env, orgId: string, texto: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(orgId) }, await claveDeCifrado(env), new TextEncoder().encode(texto)))
+  const out = new Uint8Array(iv.length + ct.length)
+  out.set(iv); out.set(ct, iv.length)
+  return aBase64(out)
+}
+
+async function descifrar(env: Env, orgId: string, b64: string): Promise<string> {
+  const datos = deBase64(b64)
+  const claro = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: datos.slice(0, 12), additionalData: new TextEncoder().encode(orgId) }, await claveDeCifrado(env), datos.slice(12))
+  return new TextDecoder().decode(claro)
+}
+
+const memoConexionGuardada = new Map<string, { c: Conexion | null; exp: number }>()
+const MEMO_CONEXION_MS = 60_000
+
+async function filaIntegracion(env: Env, orgId: string): Promise<FilaIntegracion | null> {
+  const q = new URLSearchParams({ select: '*', organization_id: `eq.${orgId}`, limit: '1' })
+  const res = await supabaseAdmin(env, `${TABLA_INTEGRACION}?${q}`, { headers: { Prefer: '' } })
+  if (!res.ok) return null // la tabla aún no existe (falta la migración) o no hay acceso: se usa solo el secreto
+  return ((await res.json()) as FilaIntegracion[])[0] ?? null
+}
+
+async function conexionDeFila(env: Env, f: FilaIntegracion): Promise<Conexion> {
+  return {
+    orgId: f.organization_id,
+    apiKey: await descifrar(env, f.organization_id, f.api_key_cifrada),
+    sourceId: f.fuente_id || undefined,
+    propertyId: f.propiedad_id || undefined,
+    webhookSecret: await descifrar(env, f.organization_id, f.webhook_secret_cifrado),
+  }
+}
+
+/** La conexión guardada desde Ajustes para esa organización (null si no hay, o si faltan los secretos del Worker). */
+async function conexionGuardada(env: Env, orgId: string): Promise<Conexion | null> {
+  if (!env.SUPABASE_SERVICE_KEY || !env.CREDENCIALES_KEY) return null
+  const hit = memoConexionGuardada.get(orgId)
+  if (hit && hit.exp > Date.now()) return hit.c
+  const f = await filaIntegracion(env, orgId)
+  const c = f ? await conexionDeFila(env, f) : null
+  memoConexionGuardada.set(orgId, { c, exp: Date.now() + MEMO_CONEXION_MS })
+  return c
+}
+
+/** La conexión de una organización: la guardada desde Ajustes o, si no tiene, la del secreto CLOUDBEDS_ORGS. */
+async function conexionDe(env: Env, orgId: string): Promise<Conexion | null> {
+  return (await conexionGuardada(env, orgId)) ?? conexiones(env).mapa.get(orgId) ?? null
+}
+
+/** Todas las conexiones activas (para las tareas programadas): las guardadas mandan sobre las del secreto. */
+async function todasLasConexiones(env: Env): Promise<Conexion[]> {
+  const out = new Map(conexiones(env).mapa)
+  if (env.SUPABASE_SERVICE_KEY && env.CREDENCIALES_KEY) {
+    const res = await supabaseAdmin(env, `${TABLA_INTEGRACION}?select=*`, { headers: { Prefer: '' } })
+    if (res.ok) {
+      for (const f of (await res.json()) as FilaIntegracion[]) {
+        try { out.set(f.organization_id, await conexionDeFila(env, f)) } catch (e) { console.error('Integración ilegible', f.organization_id, e instanceof Error ? e.message : e) }
+      }
+    }
+  }
+  return [...out.values()]
+}
+
+const EVENTOS_AVISO: Array<[string, string]> = [
+  ['reservation', 'created'], ['reservation', 'status_changed'], ['reservation', 'dates_changed'], ['reservation', 'deleted'],
+  ['reservation', 'accommodation_type_changed'], ['roomblock', 'created'], ['roomblock', 'removed'], ['roomblock', 'details_changed'],
+  ['availability', 'closeout_changed'],
+]
+
+/** Solo administradores de la organización: miembros activos con rol «admin». */
+async function requerirAdmin(req: Request, env: Env, ec: ExecutionContext, orgId: string): Promise<void> {
+  const falsa: Ctx = { env, c: { orgId, apiKey: '', webhookSecret: '' }, t: {}, ec }
+  const usuario = await requireUser(req, falsa)
+  const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+  const q = new URLSearchParams({ select: 'rol', user_id: `eq.${usuario.id}`, organization_id: `eq.${orgId}`, activo: 'eq.true', limit: '1' })
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/usuarios?${q}`, { headers: { Authorization: `Bearer ${token}`, apikey: env.SUPABASE_ANON_KEY }, signal: AbortSignal.timeout(8000) }).catch(() => { throw new HttpError(503, 'No se pudo validar el rol (Supabase no respondió)') })
+  const filas = res.ok ? ((await res.json()) as Array<{ rol?: string }>) : []
+  if (filas[0]?.rol !== 'admin') throw new HttpError(403, 'Solo un administrador puede configurar la integración con Cloudbeds')
+}
+
+/** Prueba una API key contra Cloudbeds y devuelve la propiedad a la que da acceso. */
+async function probarClave(env: Env, c: Conexion): Promise<{ hotel: string | null; propiedad: string | null }> {
+  try {
+    const d = await cloudbeds<{ data?: { propertyName?: string; propertyID?: string } }>({ env, c, t: {} }, 'GET', 'getHotelDetails')
+    return { hotel: d.data?.propertyName ?? null, propiedad: d.data?.propertyID != null ? String(d.data.propertyID) : null }
+  } catch (e) {
+    throw new HttpError(400, `Cloudbeds no aceptó esa clave${e instanceof HttpError && e.message ? ` (${e.message})` : ''}. Usa una API key de propiedad.`)
+  }
+}
+
+async function estadoIntegracion(env: Env, orgId: string): Promise<Dict> {
+  const listos = { servidor: !!env.SUPABASE_SERVICE_KEY, cifrado: !!env.CREDENCIALES_KEY }
+  const f = listos.servidor ? await filaIntegracion(env, orgId) : null
+  if (f) return { conectado: true, origen: 'ajustes', hotel: f.hotel_nombre, propiedad: f.propiedad_id, fuente: !!f.fuente_id, listos, actualizado: f.updated_at }
+  const delSecreto = conexiones(env).mapa.get(orgId)
+  if (delSecreto) return { conectado: true, origen: 'secreto', hotel: null, propiedad: delSecreto.propertyId ?? null, fuente: !!delSecreto.sourceId, listos }
+  return { conectado: false, origen: null, hotel: null, propiedad: null, fuente: false, listos }
+}
+
+/** Ajustes › Integraciones: estado, guardar la clave, probarla, registrar avisos y desconectar. Nunca devuelve la clave. */
+async function integracion(req: Request, env: Env, ec: ExecutionContext, accion: string | null): Promise<Response> {
+  const orgId = req.headers.get('X-Org-Id') || ''
+  if (!ORG_RE.test(orgId)) throw new HttpError(401, 'Falta la organización activa')
+  await requerirAdmin(req, env, ec, orgId)
+
+  if (!accion && req.method === 'GET') return json(env, await estadoIntegracion(env, orgId))
+
+  if (accion === 'fuentes' && req.method === 'GET') {
+    const c = await conexionDe(env, orgId)
+    if (!c) throw new HttpError(409, 'Conecta primero la cuenta de Cloudbeds')
+    // VERIFICAR en sandbox: forma exacta de getSources (se aceptan los nombres de campo habituales).
+    const raw = await cloudbeds<{ data?: Array<Record<string, unknown>> }>({ env, c, t: {}, ec }, 'GET', 'getSources')
+    const fuentes = (raw.data ?? [])
+      .map((f) => ({ id: String(f.sourceID ?? f.id ?? ''), nombre: String(f.sourceName ?? f.name ?? '') }))
+      .filter((f) => /^(s-\d+|ss-\d+-[01])$/.test(f.id))
+    return json(env, { fuentes })
+  }
+
+  if (req.method !== 'POST') throw new HttpError(405, 'Método no permitido')
+
+  if (!accion) {
+    if (!env.SUPABASE_SERVICE_KEY || !env.CREDENCIALES_KEY) throw new HttpError(503, 'El Worker aún no puede guardar credenciales: faltan los secretos SUPABASE_SERVICE_KEY y CREDENCIALES_KEY.')
+    const b = (await req.json().catch(() => null)) as { apiKey?: unknown; sourceId?: unknown } | null
+    const apiKey = typeof b?.apiKey === 'string' ? b.apiKey.trim() : ''
+    const sourceId = typeof b?.sourceId === 'string' ? b.sourceId.trim() : ''
+    // Cloudbeds exige «s-<id>» (fuente propia) o «ss-<id>-0|1» (de terceros): cualquier otra cosa hace fallar cada reserva que se crea.
+    if (sourceId && !/^(s-\d{1,30}|ss-\d{1,30}-[01])$/.test(sourceId)) throw new HttpError(400, 'El ID de fuente debe verse como s-123456789 (el que muestra Cloudbeds para esa fuente)')
+    // Sin clave nueva y con una conexión ya guardada, solo se cambia la fuente (no hace falta volver a pegar la clave).
+    if (!apiKey) {
+      const previaFuente = await filaIntegracion(env, orgId)
+      if (!previaFuente || !sourceId) throw new HttpError(400, 'Pega la API key para conectar')
+      const r = await supabaseAdmin(env, `${TABLA_INTEGRACION}?organization_id=eq.${encodeURIComponent(orgId)}`, { method: 'PATCH', body: JSON.stringify({ fuente_id: sourceId, updated_at: new Date().toISOString() }) })
+      if (!r.ok) throw new HttpError(500, `No se pudo guardar la fuente (HTTP ${r.status})`)
+      memoConexionGuardada.delete(orgId)
+      return json(env, await estadoIntegracion(env, orgId))
+    }
+    if (apiKey.length < 20 || apiKey.length > 400 || /\s/.test(apiKey)) throw new HttpError(400, 'La API key no tiene un formato válido (sin espacios ni saltos de línea)')
+    // Se prueba ANTES de guardar: una clave que Cloudbeds rechaza nunca se almacena.
+    const { hotel, propiedad } = await probarClave(env, { orgId, apiKey, webhookSecret: '' })
+    const previa = await filaIntegracion(env, orgId)
+    // El secreto de los avisos se conserva: el de la fila anterior o, si la conexión venía del secreto del servidor, ese mismo, para
+    // que los avisos ya registrados en Cloudbeds sigan llegando sin volver a registrarlos. Solo una conexión nueva genera uno.
+    const delServidor = conexiones(env).mapa.get(orgId)
+    const webhookSecret = previa ? await descifrar(env, orgId, previa.webhook_secret_cifrado) : delServidor?.webhookSecret ?? aBase64(crypto.getRandomValues(new Uint8Array(24))).replace(/[^A-Za-z0-9]/g, '')
+    const fila = {
+      organization_id: orgId,
+      api_key_cifrada: await cifrar(env, orgId, apiKey),
+      webhook_secret_cifrado: await cifrar(env, orgId, webhookSecret),
+      fuente_id: sourceId || (previa?.fuente_id ?? delServidor?.sourceId ?? null),
+      propiedad_id: propiedad,
+      hotel_nombre: hotel,
+      updated_at: new Date().toISOString(),
+    }
+    const res = await supabaseAdmin(env, `${TABLA_INTEGRACION}?on_conflict=organization_id`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(fila) })
+    if (!res.ok) throw new HttpError(500, res.status === 404 ? 'Falta la tabla hotel_integraciones: ejecuta la migración 20261022000400 en Supabase.' : `No se pudo guardar la conexión (HTTP ${res.status})`)
+    memoConexionGuardada.delete(orgId)
+    return json(env, await estadoIntegracion(env, orgId), 201)
+  }
+
+  const c = await conexionDe(env, orgId)
+
+  if (accion === 'probar') {
+    if (!c) return json(env, { ok: false, error: 'Esta organización no tiene una cuenta de Cloudbeds conectada' })
+    try { return json(env, { ok: true, ...(await probarClave(env, c)) }) } catch (e) { return json(env, { ok: false, error: e instanceof Error ? e.message : 'No se pudo probar la conexión' }) }
+  }
+
+  if (accion === 'desconectar') {
+    const f = env.SUPABASE_SERVICE_KEY ? await filaIntegracion(env, orgId) : null
+    if (!f) throw new HttpError(409, c ? 'Esta conexión viene de la configuración del servidor y no se puede quitar desde aquí.' : 'No hay conexión que quitar')
+    const res = await supabaseAdmin(env, `${TABLA_INTEGRACION}?organization_id=eq.${encodeURIComponent(orgId)}`, { method: 'DELETE' })
+    if (!res.ok) throw new HttpError(500, `No se pudo desconectar (HTTP ${res.status})`)
+    memoConexionGuardada.delete(orgId)
+    return json(env, await estadoIntegracion(env, orgId))
+  }
+
+  if (accion === 'webhooks') {
+    if (!c) throw new HttpError(409, 'Conecta primero la cuenta de Cloudbeds')
+    const x: Ctx = { env, c, t: {}, ec }
+    const destino = `${new URL(req.url).origin}/api/webhooks/cloudbeds/${orgId}`
+    const fallidos: string[] = []
+    for (const [objeto, evento] of EVENTOS_AVISO) {
+      try {
+        await cloudbeds(x, 'POST', 'postWebhook', { object: objeto, action: evento, endpointUrl: destino, authHeaderName: 'X-Webhook-Secret', authHeaderValue: c.webhookSecret })
+      } catch (e) { fallidos.push(`${objeto}:${evento}${e instanceof HttpError && e.message ? ` (${e.message})` : ''}`) }
+    }
+    return json(env, { registrados: EVENTOS_AVISO.length - fallidos.length, total: EVENTOS_AVISO.length, fallidos })
+  }
+  throw new HttpError(404, 'No encontrado')
 }
 
 function supabaseAdmin(env: Env, ruta: string, init: RequestInit = {}): Promise<Response> {
@@ -1134,9 +1490,9 @@ async function reintentarPendientesDeOrg(x: Ctx): Promise<{ subidas: number; rec
 
 async function reintentarPendientesServidor(env: Env): Promise<void> {
   if (!env.SUPABASE_SERVICE_KEY) return
-  let mapa: Map<string, Conexion>
-  try { mapa = conexiones(env).mapa } catch (e) { console.error('Reintento: configuración inválida', e instanceof Error ? e.message : e); return }
-  for (const c of mapa.values()) {
+  let todas: Conexion[]
+  try { todas = await todasLasConexiones(env) } catch (e) { console.error('Reintento: configuración inválida', e instanceof Error ? e.message : e); return }
+  for (const c of todas) {
     const x: Ctx = { env, c, t: {} }
     try {
       const r = await reintentarPendientesDeOrg(x)
@@ -1159,7 +1515,7 @@ async function reintentarPendientesServidor(env: Env): Promise<void> {
 // ---------- sincronización de vuelta: Cloudbeds → POS (fase 2) ----------
 
 // Lo que cambia en Cloudbeds (desde Booking, la extranet o el propio Cloudbeds) se aplica solo en el POS:
-//  - Reserva ya enlazada: cancelación (o no presentado), fechas, cabaña y huéspedes, con la tarifa nueva de Cloudbeds
+//  - Reserva ya enlazada: cancelación (o no presentado), fechas, habitación y huéspedes, con la tarifa nueva de Cloudbeds
 //    (salvo tarifa manual). Queda en el historial y en `aviso_cloudbeds` para que una persona revise lo que el servidor NO
 //    toca: la venta del Centro de Ventas (el dinero nunca cambia solo) y el cargo del plan de alimentación.
 //  - Reserva del POS que quedó sin enlazar (la respuesta al crearla se perdió): se enlaza.
@@ -1183,6 +1539,7 @@ interface FilaPos {
   id: string
   cloudbeds_reservation_id: string | null
   room_type_id: string
+  room_id: string | null
   cabana: string
   llegada: string
   salida: string
@@ -1193,7 +1550,7 @@ interface FilaPos {
   historial: unknown
   updated_at: string
 }
-const COLUMNAS_POS = 'id,cloudbeds_reservation_id,room_type_id,cabana,llegada,salida,adultos,ninos,estado,tarifa_manual,historial,updated_at'
+const COLUMNAS_POS = 'id,cloudbeds_reservation_id,room_type_id,room_id,cabana,llegada,salida,adultos,ninos,estado,tarifa_manual,historial,updated_at'
 
 type ResultadoSync = 'sin-cambios' | 'enlazada' | 'cancelada' | 'cambiada' | 'creada' | 'omitida'
 
@@ -1216,11 +1573,13 @@ async function filasPos(x: Ctx, codigos: string[], externos: string[]): Promise<
   return (await res.json()) as FilaPos[]
 }
 
-async function nombreCabanaPos(x: Ctx, roomTypeID: string): Promise<string | null> {
-  const q = new URLSearchParams({ select: 'nombre', organization_id: `eq.${x.c.orgId}`, cloudbeds_room_type_id: `eq.${roomTypeID}`, limit: '1' })
+// Nombre de la habitación del POS para un tipo y, si el tipo tiene varias unidades, la unidad. Sin la columna de unidades (falta
+// la migración) o sin coincidencia exacta, sirve la habitación enlazada solo al tipo.
+async function nombreCabanaPos(x: Ctx, roomTypeID: string, roomID?: string | null): Promise<string | null> {
+  const q = new URLSearchParams({ select: 'nombre,cloudbeds_room_id', organization_id: `eq.${x.c.orgId}`, cloudbeds_room_type_id: `eq.${roomTypeID}` })
   const res = await supabaseAdmin(x.env, `hotel_habitaciones?${q}`, { headers: { Prefer: '' } })
-  const filas = res.ok ? ((await res.json()) as Array<{ nombre: string }>) : []
-  return filas[0]?.nombre ?? null
+  const filas = res.ok ? ((await res.json()) as Array<{ nombre: string; cloudbeds_room_id?: string | null }>) : []
+  return (roomID ? filas.find((f) => f.cloudbeds_room_id === roomID) : undefined)?.nombre ?? filas.find((f) => f.cloudbeds_room_id == null)?.nombre ?? null
 }
 
 /**
@@ -1272,7 +1631,7 @@ async function esNueva(x: Ctx, creada: string | null): Promise<boolean> {
 /** Crea en el POS una reserva nueva de otro canal (Booking, Expedia, web), ya enlazada y sin venta. */
 async function crearDesdeCloudbeds(x: Ctx, det: DetalleCloudbeds): Promise<ResultadoSync> {
   if (ESTADOS_FUERA.has(det.estado) || det.salida < hoyUTC()) return 'omitida'
-  // Varias cabañas en una reserva: el POS gestiona una por registro (se ve en el calendario y se maneja en Cloudbeds).
+  // Varias habitaciones en una reserva: el POS gestiona una por registro (se ve en el calendario y se maneja en Cloudbeds).
   if (det.habitaciones.length !== 1) return 'omitida'
   // La creó un POS (de otra organización, o se borró aquí): no se duplica.
   if (det.externo && UUID_RE.test(det.externo)) return 'omitida'
@@ -1290,7 +1649,8 @@ async function crearDesdeCloudbeds(x: Ctx, det: DetalleCloudbeds): Promise<Resul
     organization_id: x.c.orgId,
     cloudbeds_reservation_id: det.reservationID,
     room_type_id: hab.roomTypeID,
-    cabana: (await nombreCabanaPos(x, hab.roomTypeID)) ?? hab.nombre,
+    room_id: hab.roomID,
+    cabana: (await nombreCabanaPos(x, hab.roomTypeID, hab.roomID)) ?? hab.nombreUnidad ?? hab.nombre,
     llegada: det.llegada,
     salida: det.salida,
     adultos: Math.max(1, hab.adultos),
@@ -1357,10 +1717,11 @@ async function sincronizarReserva(x: Ctx, id: string, filas?: FilaPos[]): Promis
         Object.assign(patch, { llegada: det.llegada, salida: det.salida })
         cambios.push(`fechas ${ddmm(det.llegada)} → ${ddmm(det.salida)}`)
       }
-      if (h.roomTypeID !== fila.room_type_id) {
-        const cabana = (await nombreCabanaPos(x, h.roomTypeID)) ?? h.nombre
-        Object.assign(patch, { room_type_id: h.roomTypeID, cabana })
-        cambios.push(`cabaña ${cabana}`)
+      // Cambio de tipo, o de unidad dentro del tipo (solo si la reserva ya tenía unidad: sin ella es un tipo = una habitación).
+      if (h.roomTypeID !== fila.room_type_id || (fila.room_id != null && h.roomID != null && h.roomID !== fila.room_id)) {
+        const cabana = (await nombreCabanaPos(x, h.roomTypeID, h.roomID)) ?? h.nombreUnidad ?? h.nombre
+        Object.assign(patch, { room_type_id: h.roomTypeID, room_id: h.roomID, cabana })
+        cambios.push(`habitación ${cabana}`)
       }
       if (Math.max(1, h.adultos) !== fila.adultos || Math.max(0, h.ninos) !== fila.ninos) {
         Object.assign(patch, { adultos: Math.max(1, h.adultos), ninos: Math.max(0, h.ninos) })
@@ -1394,6 +1755,7 @@ function hayQueSincronizar(r: Dict, fila: FilaPos | undefined): boolean {
   if (rooms.length !== 1) return false
   const h = rooms[0]
   return String(r.startDate) !== fila.llegada || String(r.endDate) !== fila.salida || String(h.roomTypeID) !== fila.room_type_id
+    || (fila.room_id != null && h.roomID != null && String(h.roomID) !== fila.room_id)
     || Math.max(1, Number(h.adults) || 1) !== fila.adultos || Math.max(0, Number(h.children) || 0) !== fila.ninos
 }
 
@@ -1466,6 +1828,10 @@ export default {
       if (aviso && req.method === 'POST') return fin(await webhook(req, env, ctx, aviso[1] ?? null))
       if (!pathname.startsWith('/api/')) return fin(json(env, { error: 'No encontrado' }, 404))
 
+      // Ajustes › Integraciones: lo usa un administrador aunque la organización todavía no tenga cuenta conectada.
+      const ajustes = pathname.match(/^\/api\/integrations\/cloudbeds(?:\/(probar|desconectar|webhooks|fuentes))?$/)
+      if (ajustes) return fin(await integracion(req, env, ctx, ajustes[1] ?? null))
+
       // Todo lo demás exige sesión del POS y resuelve la cuenta de Cloudbeds de la organización activa.
       const x = await autorizar(req, env, ctx)
       medidas = x.t
@@ -1479,6 +1845,12 @@ export default {
       if (pathname === '/api/reservations' && req.method === 'POST') return fin(await crearReserva(req, x))
       if (/^\/api\/reservations\/[^/]+\/cancel$/.test(pathname) && req.method === 'POST') {
         return fin(await cancelarReserva(req, x, reservationId(pathname)))
+      }
+      if (/^\/api\/reservations\/[^/]+\/checkout$/.test(pathname) && req.method === 'POST') {
+        return fin(await cambiarEstadia(x, reservationId(pathname), 'checked_out'))
+      }
+      if (/^\/api\/reservations\/[^/]+\/checkin$/.test(pathname) && req.method === 'POST') {
+        return fin(await cambiarEstadia(x, reservationId(pathname), 'checked_in'))
       }
       if (/^\/api\/reservations\/[^/]+\/notes$/.test(pathname) && req.method === 'POST') {
         return fin(await anotarReserva(req, x, reservationId(pathname)))

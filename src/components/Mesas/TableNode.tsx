@@ -18,6 +18,8 @@ interface TableNodeProps {
  salida?: 'hoy' | 'vencida' | null;
  // Hay una llegada elegida esperando habitación: las habitaciones ocupadas se atenúan y no se pueden tocar.
  esperandoLlegada?: boolean;
+ // Es la habitación asignada a la llegada elegida (sugerencia: se puede abrir otra libre).
+ sugerida?: boolean;
 }
 
 export const TableNode = memo(function TableNode({
@@ -31,7 +33,8 @@ export const TableNode = memo(function TableNode({
  roomBadge,
  subcomandasCount = 0,
  salida = null,
- esperandoLlegada = false
+ esperandoLlegada = false,
+ sugerida = false
 }: TableNodeProps) {
  const isFree = mesa.estado ==='libre'&& !activeComanda;
 
@@ -54,6 +57,7 @@ export const TableNode = memo(function TableNode({
  aria-disabled={bloqueada || undefined}
  className={cn("w-full min-w-0 min-h-0 aspect-square overflow-hidden rounded-2xl p-3 border-2 transition-all cursor-pointer flex flex-col justify-between select-none active:scale-95 relative",
  bloqueada && "opacity-40 pointer-events-none",
+ sugerida && isFree && !isSelected && "ring-2 ring-info ring-offset-2 ring-offset-background",
  isSelected
  // Seleccionada/sidebar abierto: azul (info) sólido, siempre (salvo cuenta).
  ? activeComanda?.estado ==='cuenta'?"bg-warning-foreground border-warning text-white":"bg-info border-info text-white": isFree
@@ -68,7 +72,7 @@ export const TableNode = memo(function TableNode({
  >
  <div className="flex items-center justify-between gap-1">
  <span className="t-etiqueta truncate min-w-0">
- {isFree ?'Libre': activeComanda?.estado ==='cuenta'?'Cuenta': avisoSalida === 'hoy' ?'Sale hoy': avisoSalida === 'vencida' ?'Salida vencida':'Ocupada'}
+ {isFree ? (sugerida ? 'Asignada' : 'Libre') : activeComanda?.estado ==='cuenta'?'Cuenta': avisoSalida === 'hoy' ?'Sale hoy': avisoSalida === 'vencida' ?'Salida vencida':'Ocupada'}
  </span>
  {/* Con aviso de salida la cama pasa a puerta: el huésped se va. */}
  {(() => {

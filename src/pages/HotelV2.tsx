@@ -11,6 +11,7 @@ import { listarPlanes, type PlanAlimentacion } from '../lib/hotelPlanesApi';
 import { ReservasHotelLista, type FiltroInicialReservas } from '../components/Hotel/ReservasHotelLista';
 import { NuevoBloqueoDialog } from '../components/Hotel/NuevoBloqueoDialog';
 import { ConciliarAdopcionDialog } from '../components/Hotel/ConciliarAdopcionDialog';
+import { AdoptarGrupoDialog } from '../components/Hotel/AdoptarGrupoDialog';
 import { ReservaDrawer, type PresetReserva } from '../components/Hotel/ReservaDrawer';
 import { NuevaReservaDrawer } from '../components/Hotel/NuevaReservaDrawer';
 import { cloudbedsConfigurado, eliminarBloqueoCloudbeds, getReservaCloudbeds, type ReservaCloudbedsDetalle, type TarjetaCalendario } from '../lib/cloudbeds';
@@ -18,6 +19,7 @@ import { listarHabitaciones, type HabitacionHotel } from '../lib/hotelHabitacion
 import { listarReservasRecientes, validarAdopcion, type ReservaHotel } from '../lib/hotelReservasApi';
 import { usePermisos } from '../hooks/usePermisos';
 import { useCacheCalendario } from '../hooks/useMesesHotel';
+import { hayFalloConsulta, ultimaConsulta } from '../lib/hotelCalendarioCache';
 import { useEstadoIntegracion } from '../hooks/useEstadoIntegracion';
 import { useReintentoAutomatico } from '../hooks/useReintentoAutomatico';
 import { useHotelEnVivo } from '../hooks/useHotelEnVivo';
@@ -56,7 +58,7 @@ export default function HotelV2() {
   const [nueva, setNueva] = useState<{ abierta: boolean; preset: PresetReserva | null }>({ abierta: false, preset: null });
   const [detalle, setDetalle] = useState<ReservaHotel | null>(null);
   const [bloqueo, setBloqueo] = useState(false);
-  const [presetBloqueo, setPresetBloqueo] = useState<{ desde: string; roomTypeID: string; hasta?: string } | null>(null);
+  const [presetBloqueo, setPresetBloqueo] = useState<{ desde: string; roomTypeID: string; roomID?: string; hasta?: string } | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -95,9 +97,16 @@ export default function HotelV2() {
   // Enlaza una reserva que ya existía en Cloudbeds para gestionarla desde el POS (no cambia nada en Cloudbeds). Primero se
   // trae su detalle; luego el asistente la concilia, a mano, con su venta del Centro de Ventas y la ficha del cliente.
   const [conciliar, setConciliar] = useState<{ det: ReservaCloudbedsDetalle; reserva?: ReservaHotel } | null>(null);
+  const [adoptarGrupo, setAdoptarGrupo] = useState<ReservaCloudbedsDetalle | null>(null);
   const adoptar = useCallback(async (t: TarjetaCalendario) => {
     try {
       const det = await getReservaCloudbeds(t.id);
+      // Varias habitaciones en una sola reserva de Cloudbeds: se adopta como grupo (una reserva del POS por habitación).
+      if (det.habitaciones.length > 1 && det.estado !== 'canceled' && det.estado !== 'no_show') {
+        if (reservas.some((r) => r.cloudbeds_grupo_ref === det.reservationID)) throw new Error('Este grupo ya está adoptado en el POS.');
+        setAdoptarGrupo(det);
+        return;
+      }
       validarAdopcion(det);
       if (reservas.some((r) => r.cloudbeds_reservation_id === det.reservationID)) throw new Error('Esta reserva ya está enlazada en el POS.');
       setConciliar({ det });
@@ -130,11 +139,16 @@ export default function HotelV2() {
   const categoriasExtras = useCategoriasPorProducto();
 
   // Color del resplandor del header: rojo si no hay conexión con Cloudbeds; naranja si hay algo que revisar (reservas sin
-  // subir, cambios hechos en Cloudbeds, cabañas sin enlazar). Son los mismos avisos de la sección «Estado».
+  // subir, cambios hechos en Cloudbeds, habitaciones sin enlazar). Son los mismos avisos de la sección «Estado».
   const sinEnlazarHab = habitaciones.filter((h) => h.activo && !h.cloudbeds_room_type_id).length;
   const reservasPendientes = reservas.filter((r) => r.estado === 'confirmada' && r.sync_estado === 'pendiente').length;
-  const nivelHotel: NivelHotel = estado.error || estado.salud?.cloudbeds.ok === false ? 'error'
-    : reservasPendientes > 0 || divergencias.size > 0 || sinEnlazarHab > 0 ? 'aviso' : 'ok';
+  // La comprobación de salud es una sola consulta y a veces se cuelga aunque Cloudbeds esté sirviendo: si el calendario cargó bien hace
+  // poco, un fallo de esa comprobación es «lento» (naranja), no «no responde» (rojo). Si el Worker mismo no responde, siempre es rojo.
+  const ultimaOk = ultimaConsulta();
+  const consultaReciente = ultimaOk !== null && Date.now() - ultimaOk < 10 * 60_000 && !hayFalloConsulta();
+  const saludMal = estado.salud?.cloudbeds.ok === false;
+  const nivelHotel: NivelHotel = estado.error || (saludMal && !consultaReciente) ? 'error'
+    : saludMal || reservasPendientes > 0 || divergencias.size > 0 || sinEnlazarHab > 0 ? 'aviso' : 'ok';
 
   return (
     <VentasHotelContext.Provider value={ventasHotel}>
@@ -145,7 +159,7 @@ export default function HotelV2() {
         subtitle={!cloudbedsConfigurado ? 'Cloudbeds no está configurado'
           : estado.error ? 'Sin conexión con Cloudbeds'
           : !estado.salud ? 'Comprobando Cloudbeds…'
-          : estado.salud.cloudbeds.ok ? 'Conectado con Cloudbeds' : 'Cloudbeds no responde'}
+          : estado.salud.cloudbeds.ok ? 'Conectado con Cloudbeds' : consultaReciente ? 'Cloudbeds responde lento' : 'Cloudbeds no responde'}
         // Estado de la última consulta a Cloudbeds y botón de actualizar: visibles en todas las secciones.
         actions={(
           <>
@@ -172,12 +186,13 @@ export default function HotelV2() {
           {vista === 'calendario' ? (
             <CalendarioCabanas
               habitaciones={habitaciones} reservas={reservas} puedeGestionar={permisos.gestionarHotel} version={version}
-              onNueva={(llegada, roomTypeID, salida) => setNueva({ abierta: true, preset: { llegada, roomTypeID, salida } })}
-              onBloquear={(desde, roomTypeID, hasta) => { setPresetBloqueo({ desde, roomTypeID, hasta }); setBloqueo(true); }}
-              onAbrir={setDetalle} onAdoptar={adoptar} onEliminarBloqueo={eliminarBloqueo}
+              onNueva={(llegada, roomTypeID, salida, roomID) => setNueva({ abierta: true, preset: { llegada, roomTypeID, roomID, salida } })}
+              onBloquear={(desde, roomTypeID, hasta, roomID) => { setPresetBloqueo({ desde, roomTypeID, roomID, hasta }); setBloqueo(true); }}
+              onAbrir={setDetalle} onAdoptar={adoptar} onEliminarBloqueo={eliminarBloqueo} onMovida={() => recargarTodo(true)}
             />
           ) : vista === 'estado' ? (
             <EstadoIntegracion
+              puedeConfigurar={permisos.esAdmin}
               salud={estado.salud} ahora={estado.ahora} error={estado.error} comprobando={estado.comprobando} onComprobar={() => void estado.comprobar()}
               pendientes={reservasPendientes}
               divergentes={divergencias.size} sinEnlazar={habitaciones.filter((h) => h.activo && !h.cloudbeds_room_type_id).length}
@@ -195,6 +210,7 @@ export default function HotelV2() {
               reservas={reservas} habitaciones={habitaciones} onAbrir={setDetalle} divergencias={divergencias}
               busqueda={search} onBusqueda={setSearch}
               version={version} puedeGestionar={permisos.gestionarHotel} onAdoptar={adoptar} onEliminarBloqueo={eliminarBloqueo}
+              onCambio={() => recargarTodo()}
             />
           )}
         </div>
@@ -218,6 +234,13 @@ export default function HotelV2() {
           det={conciliar.det} reserva={conciliar.reserva} habitaciones={habitaciones} reservas={reservas}
           onClose={() => setConciliar(null)}
           onHecha={(r) => { setConciliar(null); recargarTodo(false); setDetalle(r); }}
+        />
+      )}
+      {adoptarGrupo && (
+        <AdoptarGrupoDialog
+          det={adoptarGrupo} habitaciones={habitaciones}
+          onClose={() => setAdoptarGrupo(null)}
+          onHecha={(rs) => { setAdoptarGrupo(null); recargarTodo(true); setDetalle(rs[0]); }}
         />
       )}
       <NuevoBloqueoDialog open={bloqueo} preset={presetBloqueo} habitaciones={habitaciones} onClose={() => setBloqueo(false)} onCreado={() => recargarTodo(true)} />

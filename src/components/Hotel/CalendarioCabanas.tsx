@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { Bed, CalendarBlank, CaretLeft, CaretRight, CalendarPlus, Plus, Prohibit } from '@phosphor-icons/react';
@@ -12,7 +12,10 @@ import { ESTADOS_PAGO, estiloDe, type EstiloReserva } from './estiloReserva';
 import { ItemReserva } from './ItemReserva';
 import type { TarjetaCalendario } from '../../lib/cloudbeds';
 import { bloques, cargarMes, mesDe, mesMas, oyentes, tarjetasDeMeses, vigente, type TarjetaVista } from '../../lib/hotelCalendarioCache';
-import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { claveEnlace, habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
+import { buscadorDeReservaLocal } from '../../lib/hotelUnidades';
+import { MoverHabitacionDialog } from './MoverHabitacionDialog';
+import { MoverFechasDialog } from './MoverFechasDialog';
 import { nombreHuesped, type ReservaHotel } from '../../lib/hotelReservasApi';
 
 // Días que se ven a la vez. Las celdas se reparten TODO el ancho disponible, así que en una pantalla normal no hay
@@ -23,7 +26,7 @@ const DIAS = 10;
 const ANCHO_NOMBRE = 'clamp(8.5rem, 15vw, 13rem)';
 // Ancho mínimo por día: solo en pantallas muy estrechas (celular) aparece un desplazamiento horizontal en vez de aplastar las barras.
 const ANCHO_DIA_MIN = 56;
-// Alto mínimo de cada fila (clase `min-h-16` = 4 rem = 64 px, en la fila de cabañas): si la ventana es tan baja que no caben todas
+// Alto mínimo de cada fila (clase `min-h-16` = 4 rem = 64 px, en la fila de habitaciones): si la ventana es tan baja que no caben todas
 // con ese alto, la rejilla se desplaza en vertical (la cabecera queda fija) en lugar de aplastar las barras.
 // Días que avanzan o retroceden las flechas.
 const PASO_FLECHAS = 2;
@@ -42,18 +45,21 @@ interface Props {
   puedeGestionar: boolean;
   /** Cambia cuando algo se creó/canceló: lo guardado deja de ser fiable y se vuelve a pedir. */
   version: number;
-  onNueva: (llegada: string, roomTypeID: string, salida?: string) => void;
-  onBloquear: (desde: string, roomTypeID: string, hasta?: string) => void;
+  /** `roomID`: la unidad elegida cuando el tipo tiene varias (undefined = la única unidad del tipo). */
+  onNueva: (llegada: string, roomTypeID: string, salida?: string, roomID?: string) => void;
+  onBloquear: (desde: string, roomTypeID: string, hasta?: string, roomID?: string) => void;
   onAbrir: (r: ReservaHotel) => void;
   onAdoptar: (t: TarjetaCalendario) => Promise<void>;
   onEliminarBloqueo: (t: TarjetaCalendario) => Promise<void>;
+  /** Se movió una reserva a otra habitación (arrastrándola): hay que recargar. */
+  onMovida?: () => void;
 }
 
 /**
- * Calendario por cabaña: rejilla fija (habitaciones × días) con las reservas y bloqueos de Cloudbeds montados encima
+ * Calendario por habitación: rejilla fija (habitaciones × días) con las reservas y bloqueos de Cloudbeds montados encima
  * como tarjetas. Una casilla vacía no garantiza que esté libre: al crear la reserva se comprueba en vivo.
  */
-export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, version, onNueva, onBloquear, onAbrir, onAdoptar, onEliminarBloqueo }: Props) {
+export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, version, onNueva, onBloquear, onAbrir, onAdoptar, onEliminarBloqueo, onMovida }: Props) {
   // Selección por clics en una fila: el primero marca la llegada (`sel`), el segundo la última noche y abre el menú (`menu`).
   const [sel, setSel] = useState<{ hid: string; ini: string } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
@@ -62,6 +68,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   const [error, setError] = useState('');
   const [info, setInfo] = useState<TarjetaVista | null>(null);
   const [saltoAbierto, setSaltoAbierto] = useState(false);
+  // Arrastrar una reserva a otra habitación: fila sobre la que está el cursor (con el motivo si no se puede soltar ahí) y confirmación.
+  const [objetivo, setObjetivo] = useState<{ id: string; error: string | null } | null>(null);
+  const [moviendo, setMoviendo] = useState<{ r: ReservaHotel; destino: string; nombre: string } | null>(null);
+  // Mover las fechas arrastrando en horizontal (misma habitación y duración).
+  const [moviendoFechas, setMoviendoFechas] = useState<{ r: ReservaHotel; llegada: string; salida: string; grupo: ReservaHotel[] } | null>(null);
   const versionVista = useRef(version);
   useEffect(() => {
     if (!sel) return;
@@ -124,31 +135,41 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   }, [asegurar]);
 
   const filas = useMemo(() => habitaciones.filter((h) => h.activo), [habitaciones]);
-  const porId = useMemo(() => new Map(reservas.map((r) => [r.id, r])), [reservas]);
-  // Las adoptadas se reconocen por el código de Cloudbeds (no llevan nuestro id como identificador externo).
-  const porCb = useMemo(() => new Map(reservas.filter((r) => r.cloudbeds_reservation_id).map((r) => [r.cloudbeds_reservation_id as string, r])), [reservas]);
+  // Cada tarjeta de Cloudbeds se enlaza con su reserva del POS (por código, por id del POS o, en un grupo adoptado, por grupo + unidad).
+  const localDe = useMemo(() => buscadorDeReservaLocal(reservas), [reservas]);
 
   // Tarjetas de la ventana: las de Cloudbeds (de los meses que toca, sin repetir las que cruzan de mes) más las
   // reservas del POS que aún no llegaron a Cloudbeds. Se recalcula solo tras cada carga (`datos`) o si cambian las
   // reservas: así las barras conservan su identidad y `ItemReserva` (memo) no se repinta con el reloj ni con cada aviso.
-  const porHabitacion = useMemo(() => {
+  const { porHabitacion, sinFila, sinUnidad } = useMemo(() => {
     const unicas = new Map<string, TarjetaVista>();
     for (const t of tarjetasDeMeses(meses)) {
-      unicas.set(`${t.tipo}:${t.id}:${t.roomTypeID}`, { ...t, local: t.tipo === 'reserva' ? (porCb.get(t.id) ?? (t.externo ? porId.get(t.externo) : undefined)) : undefined });
+      unicas.set(`${t.tipo}:${t.id}:${t.roomTypeID}:${t.roomID ?? ''}`, { ...t, local: t.tipo === 'reserva' ? localDe(t) : undefined });
     }
     for (const r of reservas) {
       if (r.estado !== 'confirmada' || r.sync_estado === 'sincronizada' || r.cloudbeds_reservation_id) continue;
       unicas.set(`local:${r.id}`, {
-        tipo: 'reserva', id: r.id, roomTypeID: r.room_type_id, nombre: nombreHuesped(r), desde: r.llegada, hasta: r.salida,
+        tipo: 'reserva', id: r.id, roomTypeID: r.room_type_id, roomID: r.room_id, nombre: nombreHuesped(r), desde: r.llegada, hasta: r.salida,
         estado: 'pending_local', local: r,
       });
     }
+    // Cada tarjeta va a la fila de SU unidad: con un tipo = una habitación es la fila del tipo; con varias unidades por tipo, la de su roomID.
     const out = new Map<string, TarjetaVista[]>();
-    for (const t of unicas.values()) out.set(t.roomTypeID, [...(out.get(t.roomTypeID) ?? []), t]);
+    // Reservas o bloqueos de Cloudbeds cuya unidad no tiene habitación en el POS: no se pueden dibujar y se avisa (solo de reservas).
+    const sinFila = new Set<string>();
+    // Reservas de un tipo con varias unidades que aún no tienen unidad asignada (como el «sin asignar» de Cloudbeds).
+    const sinUnidad = new Map<string, TarjetaVista[]>();
+    const tiposConUnidades = new Set(filas.filter((h) => h.cloudbeds_room_id).map((h) => h.cloudbeds_room_type_id));
+    for (const t of unicas.values()) {
+      const h = habitacionDeUnidad(filas, t.roomTypeID, t.roomID);
+      if (h) out.set(h.id, [...(out.get(h.id) ?? []), t]);
+      else if (!t.roomID && tiposConUnidades.has(t.roomTypeID)) sinUnidad.set(t.roomTypeID, [...(sinUnidad.get(t.roomTypeID) ?? []), t]);
+      else if (t.tipo === 'reserva' && t.estado !== 'pending_local' && habitaciones.some((x) => x.cloudbeds_room_type_id === t.roomTypeID)) sinFila.add(t.id);
+    }
     for (const lista of out.values()) lista.sort((a, b) => a.desde.localeCompare(b.desde));
-    return out;
+    return { porHabitacion: out, sinFila: sinFila.size, sinUnidad };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `datos` y `version` marcan que la caché del módulo cambió
-  }, [meses, reservas, porCb, porId, datos, version]);
+  }, [meses, reservas, localDe, filas, habitaciones, datos, version]);
 
   const hoy = dayjs().format('YYYY-MM-DD');
   const primera = fechas[0];
@@ -190,14 +211,104 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
     };
   };
 
-  const barra = (t: TarjetaVista, cabana: string) => (
-    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}`} tarjeta={t} cabana={cabana} onAbrir={abrir} {...posicion(t)} />
+  // Se puede arrastrar una reserva enlazada con el POS, vigente y que no venga de un canal externo ni de un grupo adoptado.
+  const sePuedeMover = (t: TarjetaVista) => {
+    const r = t.local;
+    return puedeGestionar && t.tipo === 'reserva' && !!r && r.estado === 'confirmada' && !r.fuente_externa && !r.cloudbeds_grupo_ref && t.hasta > hoy && t.estado !== 'checked_out';
+  };
+  const barra = (t: TarjetaVista, cabana: string, filaId: string) => (
+    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}-${t.roomID ?? ''}`} tarjeta={t} cabana={cabana} onAbrir={abrir} {...posicion(t)}
+      arrastrable={sePuedeMover(t)} filaId={filaId} diasVisibles={DIAS} onArrastreMover={arrastreMover} onSoltar={soltar} onArrastreFin={finArrastre} />
   );
+
+  // Filas que se dibujan: las habitaciones y, tras las unidades de un tipo con varias, las filas «Sin asignar» con las reservas de
+  // ese tipo que no tienen unidad. Si se cruzan en fechas se reparten en carriles (una fila por carril), como en Cloudbeds.
+  const { filasVista, porFila } = useMemo(() => {
+    const porFila = new Map(porHabitacion);
+    const filasVista: HabitacionHotel[] = [];
+    filas.forEach((h, i) => {
+      filasVista.push(h);
+      const siguiente = filas[i + 1];
+      const tipo = h.cloudbeds_room_type_id;
+      if (!tipo || !h.cloudbeds_room_id || siguiente?.cloudbeds_room_type_id === tipo) return;
+      const visibles = (sinUnidad.get(tipo) ?? []).filter((t) => t.hasta > primera && t.desde < ultimaExcl).sort((a, b) => a.desde.localeCompare(b.desde));
+      const carriles: TarjetaVista[][] = [];
+      for (const t of visibles) {
+        const carril = carriles.find((c) => c[c.length - 1].hasta <= t.desde);
+        if (carril) carril.push(t); else carriles.push([t]);
+      }
+      carriles.forEach((c, n) => {
+        const virtual: HabitacionHotel = { ...h, id: `sin:${tipo}:${n}`, nombre: 'Sin asignar', codigo: null, cloudbeds_room_id: null, camas: [] };
+        filasVista.push(virtual);
+        porFila.set(virtual.id, c);
+      });
+    });
+    return { filasVista, porFila };
+  }, [filas, porHabitacion, sinUnidad, primera, ultimaExcl]);
+
+  // Arrastre: los manejadores son estables (leen la vista actual de estos refs) para no romper el `memo` de las barras.
+  const vistaRef = useRef({ filasVista, porFila });
+  const reservasRef = useRef(reservas);
+  useEffect(() => { vistaRef.current = { filasVista, porFila }; reservasRef.current = reservas; });
+
+  /** Por qué no se puede soltar la reserva en esa fila (null = se puede). */
+  const errorDestino = useCallback((t: TarjetaVista, h: HabitacionHotel): string | null => {
+    const r = t.local;
+    if (!r) return 'Solo se pueden mover reservas enlazadas con el POS';
+    if (h.id.startsWith('sin:')) return 'No se puede mover a «Sin asignar»';
+    if (!h.cloudbeds_room_type_id) return 'Esa habitación no está enlazada con Cloudbeds';
+    const ocupada = (vistaRef.current.porFila.get(h.id) ?? []).some((c) => c.desde < t.hasta && c.hasta > t.desde && c.local?.id !== r.id);
+    if (ocupada) return 'Esa habitación está ocupada en esas fechas';
+    if (h.capacidad && r.adultos + r.ninos > h.capacidad) return `Esa habitación admite hasta ${h.capacidad} personas`;
+    return null;
+  }, []);
+
+  /** La fila de habitación que hay bajo el cursor (se ignora la propia barra que se arrastra). */
+  const filaBajo = useCallback((x: number, y: number): HabitacionHotel | undefined => {
+    for (const el of document.elementsFromPoint(x, y)) {
+      if (el.closest('[data-arrastrando]')) continue;
+      const id = el.closest('[data-fila-id]')?.getAttribute('data-fila-id');
+      if (id) return vistaRef.current.filasVista.find((f) => f.id === id);
+    }
+    return undefined;
+  }, []);
+
+  const arrastreMover = useCallback((t: TarjetaVista, origen: string, x: number, y: number, eje: 'h' | 'v') => {
+    const h = eje === 'v' ? filaBajo(x, y) : undefined;
+    setObjetivo((prev) => {
+      if (!h || h.id === origen) return prev === null ? prev : null;
+      const error = errorDestino(t, h);
+      return prev && prev.id === h.id && prev.error === error ? prev : { id: h.id, error };
+    });
+  }, [filaBajo, errorDestino]);
+
+  const finArrastre = useCallback(() => setObjetivo(null), []);
+
+  const soltar = useCallback((t: TarjetaVista, origen: string, x: number, y: number, eje: 'h' | 'v', dias: number) => {
+    // Horizontal: mover las fechas `dias` días en la misma habitación (misma duración).
+    if (eje === 'h') {
+      const r = t.local;
+      if (!r || dias === 0) return;
+      const llegada = dayjs(r.llegada).add(dias, 'day').format('YYYY-MM-DD');
+      const salida = dayjs(r.salida).add(dias, 'day').format('YYYY-MM-DD');
+      if (llegada < dayjs().format('YYYY-MM-DD')) { showToast.warning('No se puede mover ahí', 'La llegada quedaría en una fecha pasada.'); return; }
+      const choca = (vistaRef.current.porFila.get(origen) ?? []).some((c) => c.local?.id !== r.id && c.desde < salida && c.hasta > llegada);
+      if (choca) { showToast.warning('No se puede mover ahí', 'Esa habitación tiene otra reserva o bloqueo en esas fechas.'); return; }
+      const grupo = r.grupo_id ? reservasRef.current.filter((x) => x.grupo_id === r.grupo_id && x.estado === 'confirmada') : [];
+      setMoviendoFechas({ r, llegada, salida, grupo: grupo.length > 1 ? grupo : [r] });
+      return;
+    }
+    const h = filaBajo(x, y);
+    if (!h || h.id === origen || !t.local) return;
+    const error = errorDestino(t, h);
+    if (error) { showToast.warning('No se puede mover ahí', error); return; }
+    setMoviendo({ r: t.local, destino: claveEnlace(h.cloudbeds_room_type_id, h.cloudbeds_room_id), nombre: h.nombre });
+  }, [filaBajo, errorDestino]);
 
   // Leyenda: solo lo que aparece en la ventana que se ve.
   const leyenda = (() => {
     const m = new Map<string, EstiloReserva>();
-    for (const lista of porHabitacion.values()) {
+    for (const lista of porFila.values()) {
       for (const t of lista) if (t.hasta > primera && t.desde < ultimaExcl) { const e = estiloDe(t); m.set(e.clave, e); }
     }
     return [...m.values()];
@@ -205,6 +316,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
 
   return (
     <div className="relative flex flex-col gap-2.5 pb-3 min-h-0 flex-1">
+      {sinFila > 0 && (
+        <p role="status" className="rounded-xl bg-warning-soft text-warning-foreground px-3 py-2 t-meta">
+          {sinFila === 1 ? 'Hay 1 reserva de Cloudbeds que no se ve' : `Hay ${sinFila} reservas de Cloudbeds que no se ven`} porque su unidad no tiene habitación enlazada en el POS. En Ajustes → Habitaciones usa «Importar desde Cloudbeds».
+        </p>
+      )}
       {/* Guía flotante de la selección por clics: aparece solo mientras hay una llegada marcada, al centro y separada del
           borde superior. Es superpuesta (no ocupa espacio) y no intercepta clics. */}
       {sel && (
@@ -265,18 +381,31 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
               </div>
             </div>
 
-            {filas.map((h) => {
-              const tarjetas = h.cloudbeds_room_type_id ? porHabitacion.get(h.cloudbeds_room_type_id) ?? [] : [];
+            {filasVista.map((h, i) => {
+              const sinAsignar = h.id.startsWith('sin:');
+              const tarjetas = h.cloudbeds_room_type_id ? porFila.get(h.id) ?? [] : [];
+              // Tipos con varias unidades (Matrimonial #2, #4…): un encabezado con el nombre del tipo antes de sus unidades.
+              const encabezadoTipo = h.cloudbeds_room_id && (i === 0 || filasVista[i - 1].cloudbeds_room_type_id !== h.cloudbeds_room_type_id)
+                ? h.nombre.replace(/\s*#?\d+\s*$/, '') || h.nombre
+                : null;
               return (
-                <div key={h.id} className="flex flex-1 min-h-16 border-b border-border/80 last:border-b-0">
+                <Fragment key={h.id}>
+                {encabezadoTipo && (
+                  <div className="flex min-h-7 border-b border-border/80 bg-muted/60">
+                    <span className="sticky left-0 z-20 px-4 flex items-center t-etiqueta text-muted-foreground uppercase tracking-wide" style={{ width: ANCHO_NOMBRE }}>{encabezadoTipo}</span>
+                  </div>
+                )}
+                <div data-fila-id={h.id} className={cn('flex flex-1 min-h-16 border-b border-border/80 last:border-b-0 transition-colors', objetivo?.id === h.id && (objetivo.error ? 'bg-destructive/10 ring-2 ring-inset ring-destructive/40' : 'bg-primary/10 ring-2 ring-inset ring-primary/40'))}>
                   <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-4 border-r border-border/80" style={{ width: ANCHO_NOMBRE }}>
-                    <span className="t-cuerpo-fuerte line-clamp-2 leading-snug break-words min-w-0" title={h.nombre}>{h.nombre}</span>
+                    {sinAsignar
+                      ? <span className="t-cuerpo text-muted-foreground italic leading-snug min-w-0" title="Reservas de este tipo que en Cloudbeds aún no tienen habitación asignada">{h.id.endsWith(':0') ? 'Sin asignar' : ''}</span>
+                      : <span className="t-cuerpo-fuerte line-clamp-2 leading-snug break-words min-w-0" title={h.nombre}>{h.nombre}</span>}
                   </div>
                   <div className="relative grow">
                     {/* Fondo: líneas verticales muy suaves; hoy resaltado y los días pasados atenuados. Cada casilla vacía reserva. */}
                     <div className="absolute inset-0 grid" style={columnas}>
                       {fechas.map((f, idx) => {
-                        const reservable = !!h.cloudbeds_room_type_id && puedeGestionar && f >= hoy;
+                        const reservable = !!h.cloudbeds_room_type_id && !sinAsignar && puedeGestionar && f >= hoy;
                         const finSel = sel?.hid === h.id ? (sobre && sobre >= sel.ini ? sobre : sel.ini) : null;
                         const enRango = (sel?.hid === h.id && f >= sel.ini && f <= finSel!) || (menu?.hid === h.id && f >= menu.ini && f <= menu.fin);
                         const salida = menu ? dayjs(menu.fin).add(1, 'day').format('YYYY-MM-DD') : '';
@@ -314,10 +443,10 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                                       </div>
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                      <Button type="button" className="w-full" onClick={() => { const m = menu; setMenu(null); onNueva(m.ini, h.cloudbeds_room_type_id!, salida); }}>
+                                      <Button type="button" className="w-full" onClick={() => { const m = menu; setMenu(null); onNueva(m.ini, h.cloudbeds_room_type_id!, salida, h.cloudbeds_room_id ?? undefined); }}>
                                         <CalendarPlus size={16} weight="bold" />Nueva reserva
                                       </Button>
-                                      <Button type="button" variant="outline" className="w-full" onClick={() => { const m = menu; setMenu(null); onBloquear(m.ini, h.cloudbeds_room_type_id!, salida); }}>
+                                      <Button type="button" variant="outline" className="w-full" onClick={() => { const m = menu; setMenu(null); onBloquear(m.ini, h.cloudbeds_room_type_id!, salida, h.cloudbeds_room_id ?? undefined); }}>
                                         <Prohibit size={16} weight="bold" />Bloqueo
                                       </Button>
                                     </div>
@@ -330,9 +459,10 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                         );
                       })}
                     </div>
-                    {tarjetas.filter((t) => t.hasta > primera && t.desde < ultimaExcl).map((t) => barra(t, h.nombre))}
+                    {tarjetas.filter((t) => t.hasta > primera && t.desde < ultimaExcl).map((t) => barra(t, h.nombre, h.id))}
                   </div>
                 </div>
+                </Fragment>
               );
             })}
           </div>
@@ -361,6 +491,18 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
         <span className="t-meta text-muted-foreground">· Blanco: sin venta conciliada · Punteado: sin confirmar o pendiente · Gris: ya salió</span>
       </div>
 
+      {moviendo && (
+        <MoverHabitacionDialog
+          r={moviendo.r} habitaciones={habitaciones} destino={moviendo.destino} nombreDestino={moviendo.nombre}
+          onClose={() => setMoviendo(null)} onHecho={() => onMovida?.()}
+        />
+      )}
+      {moviendoFechas && (
+        <MoverFechasDialog
+          r={moviendoFechas.r} grupo={moviendoFechas.grupo} llegada={moviendoFechas.llegada} salida={moviendoFechas.salida}
+          onClose={() => setMoviendoFechas(null)} onHecho={() => onMovida?.()}
+        />
+      )}
       <TarjetaInfoDialog info={info} habitaciones={habitaciones} onClose={() => setInfo(null)} puedeGestionar={puedeGestionar} onAdoptar={onAdoptar} onEliminarBloqueo={onEliminarBloqueo} />
     </div>
   );

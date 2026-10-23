@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { CamasSelect } from './detalle/CamasSelect';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateRangePickerField } from '@/components/ui/date-range-picker-field';
 import { cn } from '@/lib/utils';
@@ -31,7 +32,7 @@ import { Seccion } from './detalle/comunes';
 import { dinero, etiquetaCampo, plural } from './detalle/formatos';
 import { getDisponibilidad, type DisponibilidadResp, type OfertaCabana } from '../../lib/cloudbeds';
 import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
-import { disponibilidadDesdeCalendario } from '../../lib/hotelCalendarioCache';
+import { disponibilidadDesdeCalendario, unidadesOcupadasDesdeCalendario } from '../../lib/hotelCalendarioCache';
 import { partirNombre } from '../../lib/hotelConciliacion';
 import { ClienteSelector } from '../Common/ClienteSelector';
 import {
@@ -39,13 +40,15 @@ import {
   leerReservaHotel, type LineaGrupo, type ProgresoCreacion, type ReservaHotel,
 } from '../../lib/hotelReservasApi';
 import { asegurarVentaHotel } from '../../lib/hotelCobros';
+import { claveEnlace, habitacionDeClave, tipoDeClave, unidadDeClave } from '../../lib/hotelHabitacionesApi';
+import { expandirOfertasPorUnidad } from '../../lib/hotelUnidades';
 import type { PresetReserva } from './ReservaDrawer';
 
 /**
  * Nueva reserva en 4 pasos, dentro del panel lateral:
- *   1. Estadía: fechas, huéspedes y cabañas disponibles (Cloudbeds, en vivo).
+ *   1. Estadía: fechas, huéspedes y habitaciones disponibles (Cloudbeds, en vivo).
  *   2. Cliente: buscar una ficha de Clientes o escribir los datos (y guardarla como cliente nuevo).
- *   3. Extras: productos del sistema (spa, tours…), por cabaña.
+ *   3. Extras: productos del sistema (spa, tours…), por habitación.
  *   4. Revisar y confirmar.
  * Se guarda primero en el POS y luego se sube a Cloudbeds con la tarifa estándar (la manual vale solo en el POS).
  */
@@ -66,21 +69,20 @@ function planesDe(o: OfertaCabana) {
 
 /** Pendiente de calcular: bloquea el paso, pero no se repite en la franja roja (el total del pie ya dice «Sin calcular»). */
 const AVISO_CALCULAR = 'Calcula la tarifa antes de continuar';
-const SIN_CAMA = '__sin__';
 const LINEA_BASE = { cama: '', planRateID: null, manual: false, monto: '', motivo: '' } as const;
 
-/** Capacidad de cada cabaña (adultos + niños) según Cloudbeds; sin dato, sin límite. */
+/** Capacidad de cada habitación (adultos + niños) según Cloudbeds; sin dato, sin límite. */
 const capsDe = (ofertas: OfertaCabana[] | undefined, habitaciones: HabitacionHotel[]): Record<string, number> => {
   const out: Record<string, number> = {};
   for (const o of ofertas ?? []) {
-    out[o.roomTypeID] = o.capacidad ?? habitaciones.find((h) => h.cloudbeds_room_type_id === o.roomTypeID)?.capacidad ?? Infinity;
+    out[o.roomTypeID] = o.capacidad ?? habitacionDeClave(habitaciones, o.roomTypeID)?.capacidad ?? Infinity;
   }
   return out;
 };
 
 /**
- * Reparte `a` adultos y `n` niños entre las cabañas elegidas respetando la capacidad de cada una: primero un adulto por
- * cabaña, luego el resto de adultos y por último los niños, de uno en uno y por turnos entre las que aún tienen cupo
+ * Reparte `a` adultos y `n` niños entre las habitaciones elegidas respetando la capacidad de cada una: primero un adulto por
+ * habitación, luego el resto de adultos y por último los niños, de uno en uno y por turnos entre las que aún tienen cupo
  * (así queda parejo). Si el grupo no cabe, el exceso queda sin ubicar y el pie lo avisa.
  */
 function repartirSel(sel: Record<string, Linea>, a: number, n: number, caps: Record<string, number>): Record<string, Linea> {
@@ -115,7 +117,7 @@ interface Props {
   onCreada?: (reservas: ReservaHotel[]) => void;
 }
 
-/** Se monta solo mientras está abierto: cada apertura empieza limpia (con la cabaña y fechas del calendario, si vienen). */
+/** Se monta solo mientras está abierto: cada apertura empieza limpia (con la habitación y fechas del calendario, si vienen). */
 export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose, onCreada }: Props) {
   const { currentMesero } = useAuth();
   const { openConfirm } = useUI();
@@ -138,13 +140,13 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   const [avisoBusqueda, setAvisoBusqueda] = useState('');
   const [sel, setSel] = useState<Record<string, Linea>>({});
   const consulta = useRef(0);
-  // Tarifas según la ocupación de cada cabaña (una consulta por combinación distinta de adultos y niños).
+  // Tarifas según la ocupación de cada habitación (una consulta por combinación distinta de adultos y niños).
   const [cotizaciones, setCotizaciones] = useState<Record<string, DisponibilidadResp>>({});
   const [cotizando, setCotizando] = useState(false);
   const [errorCupo, setErrorCupo] = useState<string[]>([]);
-  // Cabañas que no admiten el reparto que se les dio (por cabaña, para marcarlas en su tarjeta).
+  // Habitaciones que no admiten el reparto que se les dio (por habitación, para marcarlas en su tarjeta).
   const [sinCupo, setSinCupo] = useState<Record<string, string>>({});
-  const preelegir = useRef(preset?.roomTypeID ?? null);
+  const preelegir = useRef(preset?.roomTypeID ? claveEnlace(preset.roomTypeID, preset.roomID) : null);
 
   const noches = llegada && salida ? dayjs(salida).diff(dayjs(llegada), 'day') : 0;
   const fechasOk = noches >= 1 && noches <= MAX_NOCHES;
@@ -153,7 +155,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   // rellenan fechas y huéspedes sin disparar una consulta a Cloudbeds por cada cambio.
   const [buscadoCon, setBuscadoCon] = useState('');
   // La lista de libres no depende de los huéspedes (Cloudbeds filtraría por capacidad): se busca con la ocupación mínima y
-  // la tarifa de cada cabaña se calcula después, según los huéspedes que se le asignen.
+  // la tarifa de cada habitación se calcula después, según los huéspedes que se le asignen.
   const claveActual = `${llegada}|${salida}`;
   const desactualizado = !!resultado && buscadoCon !== claveActual;
 
@@ -182,7 +184,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       setProvisional(!real);
       setBuscadoCon(clave);
       setBuscando(false);
-      // Se conservan las cabañas elegidas que sigan disponibles; la del calendario se elige sola la primera vez.
+      // Se conservan las habitaciones elegidas que sigan disponibles; la del calendario se elige sola la primera vez.
       // (El ref se lee y se limpia FUERA del actualizador: React puede ejecutarlo dos veces.)
       const pre = preelegir.current ? r.ofertas.find((o) => o.roomTypeID === preelegir.current && o.reservable) : undefined;
       preelegir.current = null;
@@ -197,14 +199,17 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       else if (libresProvisionales) {
         const ids = libresProvisionales;
         const ocupadas = [...ids].filter((id) => !r.ofertas.some((o) => o.roomTypeID === id && o.reservable)).length;
-        if (ocupadas > 0) setAvisoBusqueda(`Cloudbeds confirmó que ${ocupadas === 1 ? 'una cabaña que parecía libre no lo está' : `${ocupadas} cabañas que parecían libres no lo están`}: ya no aparece${ocupadas === 1 ? '' : 'n'} en la lista.`);
+        if (ocupadas > 0) setAvisoBusqueda(`Cloudbeds confirmó que ${ocupadas === 1 ? 'una habitación que parecía libre no lo está' : `${ocupadas} habitaciones que parecían libres no lo están`}: ya no aparece${ocupadas === 1 ? '' : 'n'} en la lista.`);
       }
     };
     const desdeCalendario = disponibilidadDesdeCalendario(llegada, salida, habitaciones, version).catch(() => null);
     void desdeCalendario.then((r) => { if (r && !llegoReal && vigenteConsulta()) aplicar(r, false); });
     void (async () => {
       try {
-        const r = await getDisponibilidad(llegada, salida, 1, 0, { lista: true });
+        const real = await getDisponibilidad(llegada, salida, 1, 0, { lista: true });
+        // Los tipos con varias unidades se reparten entre sus unidades según el calendario (sin datos, se asumen libres).
+        const ocupadas = habitaciones.some((h) => h.cloudbeds_room_id) ? await unidadesOcupadasDesdeCalendario(llegada, salida, version).catch(() => null) : null;
+        const r = { ...real, ofertas: expandirOfertasPorUnidad(real.ofertas, habitaciones, ocupadas) };
         llegoReal = true;
         if (vigenteConsulta()) aplicar(r, true);
       } catch (e) {
@@ -220,7 +225,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     })();
   };
 
-  // Al venir de una casilla del calendario ya hay fechas y cabaña: se busca una vez al abrir.
+  // Al venir de una casilla del calendario ya hay fechas y habitación: se busca una vez al abrir.
   const buscarAlAbrir = useRef(buscar);
   useEffect(() => { buscarAlAbrir.current = buscar; });
   useEffect(() => {
@@ -232,9 +237,9 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
 
   const caps = useMemo(() => capsDe(resultado?.ofertas, habitaciones), [resultado, habitaciones]);
 
-  // Solo las cabañas libres: las ocupadas o cerradas no se muestran para no alargar la lista.
+  // Solo las habitaciones libres: las ocupadas o cerradas no se muestran para no alargar la lista.
   const libres = useMemo(() => (resultado ? resultado.ofertas.filter((o) => o.reservable) : []), [resultado]);
-  // Cabañas que fallan SOLO por la estadía mínima: con más noches sí estarían libres.
+  // Habitaciones que fallan SOLO por la estadía mínima: con más noches sí estarían libres.
   const estadiaMinima = useMemo(() => {
     const fallan = resultado ? resultado.ofertas.filter((o) => !o.reservable && o.motivo === 'No cumple la estadía mínima') : [];
     if (fallan.length === 0) return null;
@@ -242,7 +247,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     return { cabanas: fallan.length, noches: pedidas.length ? Math.min(...pedidas) : null };
   }, [resultado]);
 
-  // Mínimo de cabañas para el grupo, tomando primero las de mayor capacidad (null si falta el dato o no cabe).
+  // Mínimo de habitaciones para el grupo, tomando primero las de mayor capacidad (null si falta el dato o no cabe).
   const minimoCabanas = useMemo(() => {
     const cups = libres.map((o) => caps[o.roomTypeID]).sort((x, y) => y - x);
     if (cups.length === 0 || cups.some((c) => !Number.isFinite(c))) return null;
@@ -256,20 +261,21 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     if (!resultado) return [];
     return resultado.ofertas.filter((o) => sel[o.roomTypeID]).map((base) => {
       const l = sel[base.roomTypeID];
-      // La tarifa buena es la de la ocupación de ESTA cabaña; mientras no se calcule se usa la base (1 adulto).
-      const cot = cotizaciones[claveCotizacion(resultado.start, resultado.end, l.adultos, l.ninos)]?.ofertas.find((x) => x.roomTypeID === base.roomTypeID);
-      const o = cot ?? base;
+      // La tarifa buena es la de la ocupación de ESTA habitación; mientras no se calcule se usa la base (1 adulto).
+      const cot = cotizaciones[claveCotizacion(resultado.start, resultado.end, l.adultos, l.ninos)]?.ofertas.find((x) => x.roomTypeID === tipoDeClave(base.roomTypeID));
+      // La cotización llega por TIPO: se conserva la clave de la unidad (y su nombre) para no perder cuál se eligió.
+      const o = cot ? { ...cot, roomTypeID: base.roomTypeID, roomTypeName: base.roomTypeName } : base;
       const planes = planesDe(o);
       const plan = planes.find((p) => p.rateID === l.planRateID) ?? planes[0];
       const monto = parseFloat(l.monto);
       const manualValida = l.manual && monto >= 0 && !Number.isNaN(monto);
-      const hab = habitaciones.find((h) => h.cloudbeds_room_type_id === o.roomTypeID);
+      const hab = habitacionDeClave(habitaciones, o.roomTypeID);
       return { o, l, planes, plan, manualValida, monto, totalPOS: manualValida ? monto : plan.total, nombre: hab?.nombre ?? o.roomTypeName, hab, cotizado: !!cot, camas: hab?.camas ?? [] };
     });
   }, [resultado, sel, habitaciones, cotizaciones]);
   const esGrupo = elegidas.length > 1;
 
-  // Al sumar o quitar una cabaña, el grupo se reparte de nuevo a partes iguales (se puede ajustar a mano después).
+  // Al sumar o quitar una habitación, el grupo se reparte de nuevo a partes iguales (se puede ajustar a mano después).
   const alternar = (o: OfertaCabana) => {
     setErrorCupo([]); setSinCupo({});
     setSel((a) => {
@@ -279,8 +285,8 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   };
   const cambiarGrupo = (a: number, n: number) => { setAdultos(a); setNinos(n); setErrorCupo([]); setSinCupo({}); setSel((prev) => repartirSel(prev, a, n, caps)); };
   const repartirAuto = () => { setErrorCupo([]); setSinCupo({}); setSel((prev) => repartirSel(prev, adultos, ninos, caps)); };
-  // Los totales del grupo son el punto de partida del reparto, no un límite: al ajustar una cabaña a mano, el grupo pasa a
-  // ser la suma de lo que tiene cada cabaña (así se puede elegir cualquier combinación entre las libres).
+  // Los totales del grupo son el punto de partida del reparto, no un límite: al ajustar una habitación a mano, el grupo pasa a
+  // ser la suma de lo que tiene cada habitación (así se puede elegir cualquier combinación entre las libres).
   const ajustar = (id: string, patch: Partial<Linea>) => {
     const siguiente = { ...sel, [id]: { ...sel[id], ...patch } };
     setSel(siguiente);
@@ -328,7 +334,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   const ext = useExtrasSeleccion(elegidas[0]?.o.roomTypeID ?? '');
   const { items: extras, activos, categorias, cantidades: cantidadesPorProducto, tasaIva, preciosConIva, sumar: sumarProducto, restar: restarProducto, cambiar: cambiarExtra, quitar: quitarExtra, monto: montoExtra } = ext;
   const [extraAbierto, setExtraAbierto] = useState<string | null>(null); // fila expandida en el pie
-  // Si se quitó una cabaña después de añadirle extras, esos extras pasan a la primera cabaña elegida (no se pierden).
+  // Si se quitó una habitación después de añadirle extras, esos extras pasan a la primera habitación elegida (no se pierden).
   const extrasOk = extras.map((x) => (elegidas.some((e) => e.o.roomTypeID === x.roomTypeID) ? x : { ...x, roomTypeID: elegidas[0]?.o.roomTypeID ?? '' }));
   const { total: totalExtras, neto: netoExtras, iva: ivaExtras } = ext;
 
@@ -341,14 +347,14 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
 
   // Paso 1: primero se reparte el grupo, luego se pulsa «Calcular tarifa» (una consulta por ocupación distinta) y recién
   // entonces se puede continuar. Cambiar el reparto invalida el cálculo.
-  // La franja del pie resume el grupo (suma de lo que tiene cada cabaña) y avisa solo de lo que sí es un problema.
+  // La franja del pie resume el grupo (suma de lo que tiene cada habitación) y avisa solo de lo que sí es un problema.
   const textoReparto = (() => {
     const partes: string[] = [];
     const sinAdulto = elegidas.filter((e) => e.l.adultos < 1).length;
-    if (sinAdulto > 0) partes.push(sinAdulto === 1 ? 'una cabaña sin adultos: cada una necesita al menos uno' : `${sinAdulto} cabañas sin adultos: cada una necesita al menos uno`);
-    if (elegidas.some((e) => e.l.adultos + e.l.ninos > (caps[e.o.roomTypeID] ?? Infinity))) partes.push('una cabaña supera su capacidad');
+    if (sinAdulto > 0) partes.push(sinAdulto === 1 ? 'una habitación sin adultos: cada una necesita al menos uno' : `${sinAdulto} habitaciones sin adultos: cada una necesita al menos uno`);
+    if (elegidas.some((e) => e.l.adultos + e.l.ninos > (caps[e.o.roomTypeID] ?? Infinity))) partes.push('una habitación supera su capacidad');
     if (partes.length > 0) return `Revisa el reparto: ${partes.join(', ')}`;
-    return `Grupo: ${plural(sumaAdultos, 'adulto', 'adultos')}${sumaNinos ? ` y ${plural(sumaNinos, 'niño', 'niños')}` : ''} en ${plural(elegidas.length, 'cabaña', 'cabañas')}`;
+    return `Grupo: ${plural(sumaAdultos, 'adulto', 'adultos')}${sumaNinos ? ` y ${plural(sumaNinos, 'niño', 'niños')}` : ''} en ${plural(elegidas.length, 'habitación', 'habitaciones')}`;
   })();
   const repartoOk = !elegidas.some((e) => e.l.adultos < 1 || e.l.adultos + e.l.ninos > (caps[e.o.roomTypeID] ?? Infinity));
   const todoCotizado = elegidas.length > 0 && elegidas.every((e) => e.cotizado);
@@ -356,12 +362,12 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   const faltas = {
     1: [
       !fechasOk && `Elige fechas de 1 a ${MAX_NOCHES} noches`,
-      fechasOk && !resultado && !errorBusqueda && 'Pulsa «Buscar disponibilidad» para ver las cabañas libres',
+      fechasOk && !resultado && !errorBusqueda && 'Pulsa «Buscar disponibilidad» para ver las habitaciones libres',
       fechasOk && !!errorBusqueda && 'Reintenta la consulta de disponibilidad',
       desactualizado && 'Cambiaste las fechas: vuelve a buscar',
-      elegidas.length > 0 && elegidas.some((e) => e.l.adultos < 1) && 'Cada cabaña necesita al menos un adulto',
-      elegidas.some((e) => e.l.adultos + e.l.ninos > (caps[e.o.roomTypeID] ?? Infinity)) && 'Una cabaña supera su capacidad máxima',
-      fechasOk && !!resultado && !desactualizado && elegidas.length === 0 && 'Elige al menos una cabaña',
+      elegidas.length > 0 && elegidas.some((e) => e.l.adultos < 1) && 'Cada habitación necesita al menos un adulto',
+      elegidas.some((e) => e.l.adultos + e.l.ninos > (caps[e.o.roomTypeID] ?? Infinity)) && 'Una habitación supera su capacidad máxima',
+      fechasOk && !!resultado && !desactualizado && elegidas.length === 0 && 'Elige al menos una habitación',
       elegidas.some((e) => e.l.manual && !e.manualValida) && 'Escribe el total de la tarifa manual',
     ].filter(Boolean) as string[],
     2: [
@@ -379,7 +385,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   faltas[1] = [...faltasReparto, ...errorCupo, ...(faltasReparto.length === 0 && errorCupo.length === 0 && !todoCotizado && elegidas.length > 0 ? [AVISO_CALCULAR] : [])];
 
   // Lo del reparto lo explica su propia franja y lo de calcular el total del pie: aquí no se repite.
-  const avisos = faltas[paso].filter((f) => f !== AVISO_CALCULAR && !/^(Reparte|Cada cabaña necesita|Una cabaña supera|Escribe el total de la tarifa manual)/.test(f));
+  const avisos = faltas[paso].filter((f) => f !== AVISO_CALCULAR && !/^(Reparte|Cada habitación necesita|Una habitación supera|Escribe el total de la tarifa manual)/.test(f));
 
   const irA = (n: Paso) => {
     setPaso(n);
@@ -387,17 +393,18 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     setTimeout(() => tituloPaso.current?.focus(), 0);
   };
   /**
-   * Calcula la tarifa de cada cabaña según SU ocupación (una consulta por combinación distinta de adultos y niños) y
-   * comprueba que la admite: Cloudbeds deja fuera las cabañas sin capacidad suficiente. Devuelve true si todo cuadra.
+   * Calcula la tarifa de cada habitación según SU ocupación (una consulta por combinación distinta de adultos y niños) y
+   * comprueba que la admite: Cloudbeds deja fuera las habitaciones sin capacidad suficiente. Devuelve true si todo cuadra.
    */
   const cotizar = async (): Promise<boolean> => {
     if (!resultado) return false;
-    // Solo se consultan las cabañas ELEGIDAS, agrupadas por ocupación (una consulta por combinación distinta de adultos y niños).
+    // Solo se consultan las habitaciones ELEGIDAS, agrupadas por ocupación (una consulta por combinación distinta de adultos y niños).
     const porCombo = new Map<string, string[]>();
     for (const e of elegidas) {
       const k = claveCotizacion(resultado.start, resultado.end, e.l.adultos, e.l.ninos);
-      if (cotizaciones[k]?.ofertas.some((o) => o.roomTypeID === e.o.roomTypeID)) continue; // ya calculada
-      porCombo.set(k, [...(porCombo.get(k) ?? []), e.o.roomTypeID]);
+      if (cotizaciones[k]?.ofertas.some((o) => o.roomTypeID === tipoDeClave(e.o.roomTypeID))) continue; // ya calculada
+      // Cloudbeds cotiza por tipo: varias unidades del mismo tipo con la misma ocupación comparten una sola consulta.
+      porCombo.set(k, [...new Set([...(porCombo.get(k) ?? []), tipoDeClave(e.o.roomTypeID)])]);
     }
     let nuevas = cotizaciones;
     if (porCombo.size > 0) {
@@ -420,7 +427,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     }
     const marcas: Record<string, string> = {};
     const problemas = elegidas.flatMap((e) => {
-      const o = nuevas[claveCotizacion(resultado.start, resultado.end, e.l.adultos, e.l.ninos)]?.ofertas.find((x) => x.roomTypeID === e.o.roomTypeID);
+      const o = nuevas[claveCotizacion(resultado.start, resultado.end, e.l.adultos, e.l.ninos)]?.ofertas.find((x) => x.roomTypeID === tipoDeClave(e.o.roomTypeID));
       const quien = `${plural(e.l.adultos, 'adulto', 'adultos')}${e.l.ninos ? ` y ${plural(e.l.ninos, 'niño', 'niños')}` : ''}`;
       if (o && o.reservable) return [];
       marcas[e.o.roomTypeID] = `No admite ${quien}${o?.motivo ? ` (${o.motivo})` : ''}. Cambia el reparto y vuelve a calcular.`;
@@ -481,9 +488,9 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         if (Object.keys(patch).length > 0) await updateRxCliente(cliente.id, patch);
       }
 
-      // 2) Reservas: en el POS y luego en Cloudbeds (una por cabaña; en grupo, enlazadas).
+      // 2) Reservas: en el POS y luego en Cloudbeds (una por habitación; en grupo, enlazadas).
       const lineas: LineaGrupo[] = elegidas.map((e) => ({
-        roomTypeID: e.o.roomTypeID, cabana: e.nombre, codigo: e.hab?.codigo ?? null, rateID: e.plan.rateID,
+        roomTypeID: tipoDeClave(e.o.roomTypeID), roomID: unidadDeClave(e.o.roomTypeID) ?? undefined, cabana: e.nombre, codigo: e.hab?.codigo ?? null, rateID: e.plan.rateID,
         cama: e.l.cama || null, adultos: e.l.adultos, ninos: e.l.ninos, totalEstadia: e.plan.total, totalManual: e.manualValida ? e.monto : null, motivoTarifa: e.l.motivo,
       }));
       const huesped = { nombre, apellido, email, telefono, pais };
@@ -492,7 +499,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       let estados: Array<{ sync: string; mensaje?: string }>;
       if (lineas.length === 1) {
         const l = lineas[0];
-        const res = await crearReservaHotel({ ...comun, roomTypeID: l.roomTypeID, cama: l.cama, cabana: l.cabana, rateID: l.rateID, adultos: l.adultos, ninos: l.ninos, totalEstadia: l.totalEstadia, totalManual: l.totalManual, motivoTarifa: l.motivoTarifa }, alProgreso);
+        const res = await crearReservaHotel({ ...comun, roomTypeID: l.roomTypeID, roomID: l.roomID, cama: l.cama, cabana: l.cabana, rateID: l.rateID, adultos: l.adultos, ninos: l.ninos, totalEstadia: l.totalEstadia, totalManual: l.totalManual, motivoTarifa: l.motivoTarifa }, alProgreso);
         creadas = [res.reserva];
         estados = [res];
       } else {
@@ -501,12 +508,12 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         estados = res.resultados;
       }
 
-      // 3) Extras, por cabaña (una sola nota en Cloudbeds por reserva). Un fallo aquí no deshace la reserva.
+      // 3) Extras, por habitación (una sola nota en Cloudbeds por reserva). Un fallo aquí no deshace la reserva.
       let extrasFallidos = 0;
       for (const r of creadas) {
-        const suyos = extrasOk.filter((x) => x.roomTypeID === r.room_type_id);
+        const suyos = extrasOk.filter((x) => x.roomTypeID === claveEnlace(r.room_type_id, r.room_id));
         if (suyos.length === 0 || r.estado === 'cancelada') continue;
-        setAvance((a) => a.map((l) => (l.id === r.room_type_id && l.estado === 'ok' ? { ...l, estado: 'extras' } : l)));
+        setAvance((a) => a.map((l) => (l.id === claveEnlace(r.room_type_id, r.room_id) && l.estado === 'ok' ? { ...l, estado: 'extras' } : l)));
         try {
           await agregarExtrasHotel(r, suyos.map((x) => ({
             descripcion: `${x.cantidad > 1 ? `${x.cantidad}× ` : ''}${x.producto.nombre}`,
@@ -515,10 +522,10 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
             cantidad: x.cantidad,
           })), currentMesero?.nombre);
         } catch { extrasFallidos += suyos.length; }
-        setAvance((a) => a.map((l) => (l.id === r.room_type_id && l.estado === 'extras' ? { ...l, estado: 'ok' } : l)));
+        setAvance((a) => a.map((l) => (l.id === claveEnlace(r.room_type_id, r.room_id) && l.estado === 'extras' ? { ...l, estado: 'ok' } : l)));
       }
 
-      // Plan de alimentación con precio: se suma como un extra (adultos y niños de cada cabaña × noches).
+      // Plan de alimentación con precio: se suma como un extra (adultos y niños de cada habitación × noches).
       for (const c of creadas) {
         if (c.estado === 'cancelada' || !planSeCobra(c.plan_alimentacion)) continue;
         await sincronizarExtraPlanHotel(c).catch((e) => console.warn('No se pudo añadir el plan de alimentación', e));
@@ -532,7 +539,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         if (vigentes.length > 0) await asegurarVentaHotel(vigentes[0], currentMesero?.id, vigentes);
       } catch (e) {
         console.warn('No se pudo crear la venta de la reserva', e);
-        showToast.warning('La reserva quedó creada, pero no su venta', 'Se creará con el primer anticipo, o concíliala desde su detalle.');
+        showToast.warning('La reserva quedó creada, pero no su venta', 'Se creará con el primer pago, o concíliala desde su detalle.');
       }
 
       const ok = estados.filter((e) => e.sync === 'sincronizada').length;
@@ -540,11 +547,11 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       const rechazadas = creadas.filter((_, i) => estados[i].sync === 'error');
       const rango = `${dayjs(resultado.start).format('DD/MM')} al ${dayjs(resultado.end).format('DD/MM')}`;
       if (rechazadas.length === 0 && pendientes === 0) {
-        showToast.success(esGrupo ? `Grupo reservado · ${ok} cabañas` : 'Reserva creada', `${nombreHuesped(creadas[0])} · ${rango}`);
+        showToast.success(esGrupo ? `Grupo reservado · ${ok} habitaciones` : 'Reserva creada', `${nombreHuesped(creadas[0])} · ${rango}`);
       } else {
         if (pendientes > 0) showToast.warning(`${plural(pendientes, 'reserva quedó', 'reservas quedaron')} sin subir a Cloudbeds`, 'Están guardadas en el POS y se reintentan solas. Revísalas en «Por sincronizar».');
         rechazadas.forEach((r) => showToast.error(`Cloudbeds rechazó ${r.cabana}`, estados[creadas.indexOf(r)].mensaje));
-        if (ok > 0) showToast.success(`${plural(ok, 'cabaña reservada', 'cabañas reservadas')}`, rango);
+        if (ok > 0) showToast.success(`${plural(ok, 'habitación reservada', 'habitaciones reservadas')}`, rango);
       }
       if (extrasFallidos > 0) showToast.warning(`${plural(extrasFallidos, 'extra no se guardó', 'extras no se guardaron')}`, 'La reserva sí quedó creada. Agrégalos desde su detalle.');
       onCreada?.(creadas);
@@ -555,7 +562,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     }
   };
 
-  // Hay algo que perder si ya se avanzó de paso o se cambió lo que traía el calendario (fechas, huéspedes, cabañas).
+  // Hay algo que perder si ya se avanzó de paso o se cambió lo que traía el calendario (fechas, huéspedes, habitaciones).
   const salidaInicial = preset?.salida ?? (preset?.llegada ? dayjs(preset.llegada).add(1, 'day').format('YYYY-MM-DD') : '');
   const hayCambios = paso > 1 || adultos !== 2 || ninos !== 0 || llegada !== (preset?.llegada ?? '') || salida !== salidaInicial
     || Object.keys(sel).length > (preset?.roomTypeID ? 1 : 0);
@@ -605,7 +612,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
 
               <section className="flex flex-col gap-2.5" aria-labelledby="nr-cabanas">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 id="nr-cabanas" className="t-fila flex items-center gap-2"><Bed size={18} className="text-primary" /> Cabañas disponibles</h4>
+                  <h4 id="nr-cabanas" className="t-fila flex items-center gap-2"><Bed size={18} className="text-primary" /> Habitaciones disponibles</h4>
                   <span className="t-meta text-muted-foreground" role="status" aria-live="polite">
                     {buscando ? 'Consultando Cloudbeds…' : resultado ? `${libres.length} ${libres.length === 1 ? 'libre' : 'libres'}` : ''}
                     {!buscando && provisional && confirmando && <span className="inline-flex items-center gap-1.5 ml-2"><Girando size={12} /> Confirmando con Cloudbeds…</span>}
@@ -628,7 +635,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                 {buscando && !resultado && <SkeletonFilas n={4} alto="h-16" />}
                 {resultado && libres.length > 0 && minimoCabanas && (
                   <p className="t-meta text-muted-foreground">
-                    Para {plural(adultos + ninos, 'persona', 'personas')} hace{minimoCabanas === 1 ? '' : 'n'} falta al menos {plural(minimoCabanas, 'cabaña', 'cabañas')}.
+                    Para {plural(adultos + ninos, 'persona', 'personas')} hace{minimoCabanas === 1 ? '' : 'n'} falta al menos {plural(minimoCabanas, 'habitación', 'habitaciones')}.
                   </p>
                 )}
                 {desactualizado && !buscando && (
@@ -637,20 +644,20 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                 {resultado && libres.length === 0 && (
                   <p className="t-meta text-warning-foreground rounded-2xl bg-warning-soft px-3 py-2">
                     {estadiaMinima
-                      ? `Estas fechas exigen una estadía mínima${estadiaMinima.noches ? ` de ${plural(estadiaMinima.noches, 'noche', 'noches')}` : ''} (elegiste ${plural(noches, 'noche', 'noches')}). Amplía la salida para ver las cabañas disponibles.`
-                      : 'No hay cabañas libres para estas fechas y huéspedes. Prueba con otras fechas.'}
+                      ? `Estas fechas exigen una estadía mínima${estadiaMinima.noches ? ` de ${plural(estadiaMinima.noches, 'noche', 'noches')}` : ''} (elegiste ${plural(noches, 'noche', 'noches')}). Amplía la salida para ver las habitaciones disponibles.`
+                      : 'No hay habitaciones libres para estas fechas y huéspedes. Prueba con otras fechas.'}
                   </p>
                 )}
                 {resultado && libres.length > 0 && estadiaMinima && (
                   <p className="t-meta text-muted-foreground">
-                    {plural(estadiaMinima.cabanas, 'cabaña más no aparece', 'cabañas más no aparecen')} porque piden una estadía mínima{estadiaMinima.noches ? ` de ${plural(estadiaMinima.noches, 'noche', 'noches')}` : ''}.
+                    {plural(estadiaMinima.cabanas, 'habitación más no aparece', 'habitaciones más no aparecen')} porque piden una estadía mínima{estadiaMinima.noches ? ` de ${plural(estadiaMinima.noches, 'noche', 'noches')}` : ''}.
                   </p>
                 )}
                 {resultado && libres.length > 0 && (
                   <div className={cn('flex flex-col gap-2 transition-opacity', (buscando || desactualizado) && 'opacity-60')}>
                     {libres.map((o) => {
                       const activa = !!sel[o.roomTypeID];
-                      const nombreCabana = habitaciones.find((h) => h.cloudbeds_room_type_id === o.roomTypeID)?.nombre ?? o.roomTypeName;
+                      const nombreCabana = habitacionDeClave(habitaciones, o.roomTypeID)?.nombre ?? o.roomTypeName;
                       return (
                         <div key={o.roomTypeID} className={cn('rounded-2xl border bg-card transition-colors', activa ? 'border-primary ring-2 ring-primary/20' : 'border-border')}>
                           <button type="button" onClick={() => alternar(o)} aria-pressed={activa}
@@ -755,7 +762,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
             <PasoRevision
               llegada={llegada} salida={salida} noches={noches} elegidas={elegidas} esGrupo={esGrupo}
               huesped={{ nombre: `${nombre} ${apellido}`.trim(), email, telefono, pais, documento: numeroDoc.trim() ? `${ETIQUETA_DOC[tipoDoc]} ${numeroDoc.trim()}` : '' }} cliente={cliente} guardarCliente={guardarCliente} notas={notas}
-              plan={plan ? plan.nombre : null} extras={extrasOk} montoExtra={montoExtra} totalEstadia={totalEstadia} totalExtras={totalExtras} netoExtras={netoExtras} ivaExtras={ivaExtras} onEditar={irA}
+              plan={plan} extras={extrasOk} montoExtra={montoExtra} totalEstadia={totalEstadia} totalExtras={totalExtras} netoExtras={netoExtras} ivaExtras={ivaExtras} onEditar={irA}
             />
           )}
 
@@ -807,7 +814,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                         )}
                         {esGrupo && (
                           <label className="flex items-center gap-1.5 t-meta text-muted-foreground">
-                            Cabaña
+                            Habitación
                             <select value={x.roomTypeID} onChange={(e) => cambiarExtra(x.key, { roomTypeID: e.target.value })} className="h-9 rounded-xl border border-border bg-card px-2 text-base text-foreground cursor-pointer">
                               {elegidas.map((e) => <option key={e.o.roomTypeID} value={e.o.roomTypeID}>{e.nombre}</option>)}
                             </select>
@@ -826,7 +833,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         )}
         {!guardando && (
           <div className="border-t border-border bg-card flex flex-col">
-            {/* Contexto de la reserva, siempre a la vista: fechas, huéspedes y cabañas. */}
+            {/* Contexto de la reserva, siempre a la vista: fechas, huéspedes y habitaciones. */}
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2.5 t-cuerpo text-foreground border-b border-border" aria-label="Resumen de la reserva">
               {fechasOk && (
                 <li className="flex items-center gap-2">
@@ -841,7 +848,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
               </li>
               <li className="flex items-center gap-2">
                 <Bed size={18} className="text-primary shrink-0" />
-                {elegidas.length > 0 ? plural(elegidas.length, 'cabaña', 'cabañas') : 'sin cabañas elegidas'}
+                {elegidas.length > 0 ? plural(elegidas.length, 'habitación', 'habitaciones') : 'sin habitaciones elegidas'}
               </li>
             </ul>
             <div className="flex items-end justify-between gap-3 px-4 pt-3 pb-4">
@@ -871,7 +878,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                 )
               ) : (
                 <Button type="button" className="h-11 px-5 gap-2" onClick={() => void confirmar()}>
-                  <Check size={16} weight="bold" /> {esGrupo ? `Reservar ${elegidas.length} cabañas` : 'Crear reserva'}
+                  <Check size={16} weight="bold" /> {esGrupo ? `Reservar ${elegidas.length} habitaciones` : 'Crear reserva'}
                 </Button>
               )}
               </div>
@@ -924,30 +931,24 @@ function Campo({ label, id, requerido, error, children }: { label: string; id: s
 }
 
 
-/** Ajustes de una cabaña elegida: huéspedes (en grupo), plan de tarifa y tarifa manual del POS. */
+/** Ajustes de una habitación elegida: huéspedes (en grupo), plan de tarifa y tarifa manual del POS. */
 function ConfigCabana({ e, esGrupo, intentado, error, capacidad, onAjustar }: { e: Elegida; esGrupo: boolean; intentado: boolean; error?: string; capacidad: number; onAjustar: (p: Partial<Linea>) => void }) {
   const id = `nr-${e.o.roomTypeID}`;
   return (
     <div className="flex flex-col gap-2.5 border-t border-border px-3 py-2.5">
       {error && <p role="alert" className="t-meta text-destructive rounded-xl bg-destructive-soft px-3 py-2">{error}</p>}
       {e.camas.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="t-meta text-muted-foreground shrink-0">Cama</span>
-          <Select value={e.l.cama || SIN_CAMA} onValueChange={(v) => onAjustar({ cama: v === SIN_CAMA ? '' : v })}>
-            <SelectTrigger className="data-[size=default]:h-10 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs" aria-label={`Cama de ${e.nombre}`}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SIN_CAMA} className="t-cuerpo">Sin definir</SelectItem>
-              {e.camas.map((c) => <SelectItem key={c} value={c} className="t-cuerpo">{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex items-start gap-2">
+          <span className="t-meta text-muted-foreground shrink-0 pt-3">Cama</span>
+          <CamasSelect camas={e.camas} valor={e.l.cama || null} onChange={(v) => onAjustar({ cama: v ?? '' })} alto="h-10" etiqueta={`Cama de ${e.nombre}`} />
         </div>
       )}
       {/* Una sola fila: reparto de huéspedes (en grupo) y tarifa manual. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {esGrupo && (
           <>
-            <Contador enLinea etiquetaTexto="Adultos en esta cabaña" corto="Adultos" valor={e.l.adultos} min={0} max={Math.min(60, capacidad - e.l.ninos)} onCambio={(n) => onAjustar({ adultos: n })} />
-            <Contador enLinea etiquetaTexto="Niños en esta cabaña" corto="Niños" valor={e.l.ninos} min={0} max={Math.min(60, capacidad - e.l.adultos)} onCambio={(n) => onAjustar({ ninos: n })} />
+            <Contador enLinea etiquetaTexto="Adultos en esta habitación" corto="Adultos" valor={e.l.adultos} min={0} max={Math.min(60, capacidad - e.l.ninos)} onCambio={(n) => onAjustar({ adultos: n })} />
+            <Contador enLinea etiquetaTexto="Niños en esta habitación" corto="Niños" valor={e.l.ninos} min={0} max={Math.min(60, capacidad - e.l.adultos)} onCambio={(n) => onAjustar({ ninos: n })} />
           </>
         )}
         <label className="flex items-center gap-2 cursor-pointer ml-auto min-h-9" title="Descuento o cortesía. Cloudbeds conserva su tarifa estándar.">

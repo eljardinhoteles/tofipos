@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ForkKnife, PencilSimple, Plus, Star } from '@phosphor-icons/react';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,35 +45,59 @@ export function PlanesAlimentacion({ planes, puedeEditar, onCambio }: Props) {
           Aún no hay planes. {puedeEditar ? 'Crea el primero con «Nuevo plan» (por ejemplo, Solo desayuno).' : 'Un administrador debe crearlos.'}
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {planes.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-              <span className="size-10 rounded-xl bg-warning-soft text-warning-foreground flex items-center justify-center shrink-0"><ForkKnife size={20} /></span>
-              <span className="flex flex-col min-w-0 grow">
-                <span className="t-fila truncate">{p.nombre}</span>
-                <span className="t-meta text-muted-foreground truncate">{incluyeDelPlan(p, 1).map((l) => `${l.quien ? `${l.quien}: ` : ''}${l.texto}`).join(' · ') || 'Sin descripción'}</span>
-              </span>
-              {p.incluido ? (
-                <EstadoBadge tono="info">Incluido en la tarifa</EstadoBadge>
-              ) : (
-                <span className="hidden sm:flex flex-col items-end shrink-0 t-meta text-muted-foreground tabular-nums">
-                  <span>Adulto {dinero(p.precio_adulto)}</span>
-                  <span>Niño {dinero(p.precio_nino)}</span>
-                </span>
-              )}
-              {!p.activo && <EstadoBadge tono="neutral">Inactivo</EstadoBadge>}
-              {puedeEditar && (
-                <span className="flex items-center gap-1 shrink-0">
-                  <button type="button" onClick={() => void marcarDefecto(p)} disabled={!p.activo} aria-pressed={p.por_defecto}
-                    aria-label={p.por_defecto ? 'Quitar como plan por defecto' : 'Marcar como plan por defecto'} title={p.por_defecto ? 'Plan por defecto' : 'Marcar como plan por defecto'}
-                    className="size-9 rounded-xl border border-border flex items-center justify-center cursor-pointer disabled:opacity-40 hover:bg-muted">
-                    <Star size={16} weight={p.por_defecto ? 'fill' : 'regular'} className={p.por_defecto ? 'text-warning-foreground' : 'text-muted-foreground'} />
-                  </button>
-                  <button type="button" aria-label="Editar" onClick={() => setEditando(p)} className="size-9 rounded-xl border border-border flex items-center justify-center cursor-pointer hover:bg-muted"><PencilSimple size={16} /></button>
-                </span>
-              )}
-            </li>
-          ))}
+        <ul className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {planes.map((p) => {
+            const incluye = incluyeDelPlan(p, 1);
+            const boton = 'size-9 pointer-coarse:size-11 rounded-2xl text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default';
+            return (
+              <li key={p.id} className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-4', p.por_defecto ? 'border-primary/40' : 'border-border', !p.activo && 'opacity-60')}>
+                <div className="flex items-start gap-3">
+                  <span className="size-10 shrink-0 rounded-xl bg-primary-soft text-primary flex items-center justify-center"><ForkKnife size={20} weight="bold" aria-hidden /></span>
+                  <span className="flex flex-col min-w-0 grow">
+                    <span className="t-fila truncate">{p.nombre}</span>
+                    {p.por_defecto && <span className="t-meta text-warning-foreground flex items-center gap-1"><Star size={12} weight="fill" aria-hidden /> Se preselecciona al reservar</span>}
+                  </span>
+                  {!p.activo && <EstadoBadge tono="neutral">Inactivo</EstadoBadge>}
+                </div>
+
+                <div className="flex flex-col gap-1.5 grow">
+                  <span className="t-etiqueta text-muted-foreground">Qué incluye</span>
+                  {incluye.length === 0 ? (
+                    <span className="t-cuerpo text-muted-foreground">Sin descripción</span>
+                  ) : incluye.map((l) => (
+                    <span key={l.quien ?? 'todos'} className="t-cuerpo text-foreground">
+                      {l.quien && <span className="t-dato text-muted-foreground mr-1.5">{l.quien}</span>}{l.texto}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="rounded-xl bg-muted px-3 py-2.5">
+                  {p.incluido ? (
+                    <span className="t-cuerpo-fuerte text-foreground">Incluido en la tarifa</span>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <span className="flex flex-col"><span className="t-meta text-muted-foreground">Por adulto</span><span className="t-valor">{dinero(p.precio_adulto)}</span></span>
+                      <span className="flex flex-col"><span className="t-meta text-muted-foreground">Por niño</span><span className="t-valor">{dinero(p.precio_nino)}</span></span>
+                      <span className="col-span-2 t-meta text-muted-foreground -mt-1">por noche, se suma a la reserva</span>
+                    </div>
+                  )}
+                </div>
+
+                {puedeEditar && (
+                  <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+                    <button type="button" onClick={() => void marcarDefecto(p)} disabled={!p.activo} aria-pressed={p.por_defecto}
+                      aria-label={p.por_defecto ? 'Quitar como plan por defecto' : 'Marcar como plan por defecto'} title={p.por_defecto ? 'Plan por defecto' : 'Marcar como plan por defecto'}
+                      className={cn(boton, 'w-auto px-2.5 gap-1.5 t-dato', p.por_defecto && 'text-warning-foreground')}>
+                      <Star size={16} weight={p.por_defecto ? 'fill' : 'bold'} aria-hidden /> {p.por_defecto ? 'Por defecto' : 'Marcar por defecto'}
+                    </button>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <button type="button" aria-label={`Editar ${p.nombre}`} title="Editar" onClick={() => setEditando(p)} className={boton}><PencilSimple size={16} /></button>
+                    </span>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

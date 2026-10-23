@@ -248,7 +248,7 @@ export default function MenuV2() {
  onBack={() => setEditingCategory(null)} onClose={() => setIsManageCategoriesOpen(false)} />
  </SheetHeader>
 
- <div className="p-4 flex flex-col gap-6 overflow-y-auto flex-1">
+ <div className="p-4 flex flex-col gap-6 overflow-y-auto flex-1 min-h-0">
  <div className="flex flex-col gap-1.5">
  <Label htmlFor="cat-nombre" className="t-etiqueta! text-muted-foreground">Nombre</Label>
  <Input id="cat-nombre" type="text" value={ed.nombre}
@@ -317,7 +317,7 @@ export default function MenuV2() {
  onClose={() => setIsManageCategoriesOpen(false)} />
  </SheetHeader>
 
- <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
+ <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1 min-h-0">
  <form
  onSubmit={async (e) => {
  e.preventDefault();
@@ -329,7 +329,7 @@ export default function MenuV2() {
  showToast.success('Categoría creada');
  setNewCategoryName('');
  }}
- className="flex items-center gap-2">
+ className="flex items-center gap-2 shrink-0">
  <Input
  type="text" placeholder="Nueva categoría..." value={newCategoryName}
  onChange={(e) => setNewCategoryName(e.target.value)}
@@ -342,7 +342,7 @@ export default function MenuV2() {
  {safeDbCategorias.length === 0 ? (
  <div className="py-8 text-center t-cuerpo text-muted-foreground">Sin categorías aún</div>
  ) : (
- <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col divide-y divide-border">
+ <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col divide-y divide-border shrink-0">
  {safeDbCategorias.map((cat, idx) => {
  const CategoryIcon = getCategoryIcon(cat.icono);
  const nProductos = conteoPorCategoria.get(cat.nombre) ?? 0;

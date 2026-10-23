@@ -5,14 +5,17 @@ import type { RxCliente } from '../../../db/rxdb';
 import type { ItemExtra } from '../../../hooks/useExtrasSeleccion';
 import { Seccion } from '../detalle/comunes';
 import { dinero, fechaLarga, plural } from '../detalle/formatos';
+import { importePlan, incluyeDelPlan, planSeCobra, type PlanAlimentacion } from '../../../lib/hotelPlanesApi';
 import type { Elegida, Paso } from './tipos';
 
 /** Último paso de crear una reserva: resumen de estadía, cliente y extras con el total, cada bloque con su «Editar». */
 export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesped, cliente, guardarCliente, notas, plan, extras, montoExtra, totalEstadia, totalExtras, netoExtras, ivaExtras, onEditar }: {
   llegada: string; salida: string; noches: number; elegidas: Elegida[]; esGrupo: boolean;
   huesped: { nombre: string; email: string; telefono: string; pais: string; documento?: string }; cliente: RxCliente | null; guardarCliente: boolean; notas: string;
-  plan: string | null; extras: ItemExtra[]; montoExtra: (x: ItemExtra) => number; totalEstadia: number; totalExtras: number; netoExtras: number; ivaExtras: number; onEditar: (p: Paso) => void;
+  plan: PlanAlimentacion | null; extras: ItemExtra[]; montoExtra: (x: ItemExtra) => number; totalEstadia: number; totalExtras: number; netoExtras: number; ivaExtras: number; onEditar: (p: Paso) => void;
 }) {
+  const adultos = elegidas.reduce((n, e) => n + e.l.adultos, 0);
+  const ninos = elegidas.reduce((n, e) => n + e.l.ninos, 0);
   return (
     <div className="flex flex-col gap-3">
       <Bloque titulo="Estadía" icono={Bed} color="info" onEditar={() => onEditar(1)}>
@@ -33,7 +36,7 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
             </li>
           ))}
         </ul>
-        {esGrupo && <p className="t-meta text-muted-foreground">Se crea una reserva por cabaña en Cloudbeds, enlazadas como grupo en el POS.</p>}
+        {esGrupo && <p className="t-meta text-muted-foreground">Se crea una reserva por habitación en Cloudbeds, enlazadas como grupo en el POS.</p>}
       </Bloque>
 
       <Bloque titulo="Cliente" icono={User} onEditar={() => onEditar(2)}>
@@ -44,11 +47,22 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
       </Bloque>
 
       <Bloque titulo="Plan de alimentación" icono={ForkKnife} color="warning" onEditar={() => onEditar(3)}>
-        <p className={plan ? 't-cuerpo-fuerte' : 't-meta text-muted-foreground'}>{plan ?? 'Sin plan (solo alojamiento)'}</p>
+        {plan ? (
+          <>
+            <p className="t-cuerpo-fuerte">{plan.nombre}</p>
+            <div className="flex flex-col gap-0.5 t-meta text-muted-foreground">
+              {incluyeDelPlan(plan, ninos).map((l) => <span key={l.texto + (l.quien ?? '')} className="text-foreground">{l.quien && <b>{l.quien}: </b>}{l.texto}</span>)}
+              <span>
+                Para {plural(adultos, 'adulto', 'adultos')}{ninos ? ` y ${plural(ninos, 'niño', 'niños')}` : ''} · {plural(noches, 'noche', 'noches')}
+                {planSeCobra(plan) ? <> · <b className="text-foreground">se cobra {dinero(importePlan(plan, adultos, ninos, noches))}</b></> : <> · incluido en la tarifa</>}
+              </span>
+            </div>
+          </>
+        ) : <p className="t-meta text-muted-foreground">Sin plan (solo alojamiento)</p>}
       </Bloque>
 
+      {extras.length > 0 && (
       <Bloque titulo="Extras" icono={ShoppingBag} onEditar={() => onEditar(3)}>
-        {extras.length === 0 ? <p className="t-meta text-muted-foreground">Sin extras</p> : (
           <ul className="flex flex-col gap-1">
             {extras.map((x) => (
               <li key={x.key} className="flex items-baseline justify-between gap-3 t-cuerpo">
@@ -57,8 +71,8 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
               </li>
             ))}
           </ul>
-        )}
       </Bloque>
+      )}
 
       <Seccion icono={Wallet} color="success" titulo="Total en el POS">
         <div className="flex flex-col gap-1.5">

@@ -44,10 +44,10 @@ export function SeccionCuenta({ r, puedeEditar, usuario, editor, onEditor, onSuc
     <Seccion icono={Wallet} titulo="Tarifa y extras"
       accion={puedeEditar && editor === null ? (
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => onEditor('tarifa')}><PencilSimple size={14} /> Tarifa</Button>
           {r.cloudbeds_reservation_id && (
-            <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => onEditor('cloudbeds')} title="Conciliar con Cloudbeds" aria-label="Conciliar con Cloudbeds"><ArrowsClockwise size={14} /> <span className="hidden sm:inline">Cloudbeds</span></Button>
+            <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => onEditor('cloudbeds')} title="Conciliar con Cloudbeds" aria-label="Conciliar con Cloudbeds"><ArrowsClockwise size={14} /> <span className="hidden sm:inline">Cloudbeds</span></Button>
           )}
+          <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => onEditor('tarifa')}><PencilSimple size={14} /> Tarifa</Button>
         </div>
       ) : undefined}>
       <div className="flex flex-col gap-1">

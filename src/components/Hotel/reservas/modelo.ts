@@ -1,13 +1,14 @@
 import dayjs from 'dayjs';
 import type { TarjetaCalendario } from '../../../lib/cloudbeds';
-import type { HabitacionHotel } from '../../../lib/hotelHabitacionesApi';
+import { habitacionDeUnidad, type HabitacionHotel } from '../../../lib/hotelHabitacionesApi';
+import { buscadorDeReservaLocal } from '../../../lib/hotelUnidades';
 import { nombreHuesped, type ReservaHotel } from '../../../lib/hotelReservasApi';
 
 /** Cómo está la estadía respecto de hoy (`salida` es el día de salida, no incluido). */
 export type Estadia = 'en_casa' | 'llegan_hoy' | 'salen_hoy' | 'proximas' | 'pasadas';
 /** Estado de la reserva en el POS: vigente en Cloudbeds, por subir, rechazada por Cloudbeds o cancelada. */
 export type Estado = 'confirmada' | 'pendiente' | 'rechazada' | 'cancelada';
-export type Pago = 'pagado' | 'parcial' | 'sin_pago' | 'sin_venta';
+export type Pago = 'pagado' | 'parcial' | 'sin_pago' | 'credito' | 'sin_venta';
 /** Qué se está mirando: la actividad de un día (llegadas, salidas…) o todas las reservas del POS. */
 export type Vista = 'llegadas' | 'salidas' | 'in_house' | 'pernoctaciones' | 'nuevas' | 'canceladas' | 'todas';
 export const VISTAS: Vista[] = ['llegadas', 'salidas', 'in_house', 'pernoctaciones', 'nuevas', 'canceladas', 'todas'];
@@ -22,6 +23,8 @@ export interface Fila {
   t?: TarjetaCalendario;
   nombre: string;
   roomTypeID: string;
+  /** Unidad de Cloudbeds (null = la única unidad del tipo). */
+  roomID: string | null;
   cabana: string;
   llegada: string;
   salida: string;
@@ -59,15 +62,15 @@ export const esViva = (f: Pick<Fila, 'estado'>) => f.estado !== 'cancelada' && f
 
 function filaDeReserva(r: ReservaHotel, t?: TarjetaCalendario): Fila {
   return {
-    clave: `r:${r.id}`, r, t, nombre: nombreHuesped(r), roomTypeID: r.room_type_id, cabana: r.cabana, llegada: r.llegada, salida: r.salida,
+    clave: `r:${r.id}`, r, t, nombre: nombreHuesped(r), roomTypeID: r.room_type_id, roomID: r.room_id, cabana: r.cabana, llegada: r.llegada, salida: r.salida,
     adultos: r.adultos, ninos: r.ninos, canal: canalDeReserva(r), estado: estadoDe(r), codigo: r.cloudbeds_reservation_id,
     creada: t?.creada ? t.creada.slice(0, 10) : dayjs(r.created_at).format('YYYY-MM-DD'),
   };
 }
 
-function filaDeTarjeta(t: TarjetaCalendario, nombreCabana: (roomTypeID: string) => string): Fila {
+function filaDeTarjeta(t: TarjetaCalendario, nombreCabana: (roomTypeID: string, roomID?: string | null) => string): Fila {
   return {
-    clave: `t:${t.id}:${t.roomTypeID}`, t, nombre: t.nombre, roomTypeID: t.roomTypeID, cabana: nombreCabana(t.roomTypeID), llegada: t.desde, salida: t.hasta,
+    clave: `t:${t.id}:${t.roomTypeID}:${t.roomID ?? ''}`, t, nombre: t.nombre, roomTypeID: t.roomTypeID, roomID: t.roomID ?? null, cabana: nombreCabana(t.roomTypeID, t.roomID), llegada: t.desde, salida: t.hasta,
     adultos: t.adultos ?? 1, ninos: t.ninos ?? 0, canal: canalDeTarjeta(t), estado: 'confirmada', codigo: t.id, creada: t.creada ? t.creada.slice(0, 10) : null,
   };
 }
@@ -76,14 +79,13 @@ function filaDeTarjeta(t: TarjetaCalendario, nombreCabana: (roomTypeID: string) 
  * Todas las reservas que se conocen: las tarjetas de Cloudbeds cargadas (cada una enlazada con su reserva del POS si la hay)
  * más las del POS que no tienen tarjeta (por ejemplo, las que aún no subieron a Cloudbeds o las canceladas).
  */
-export function construirFilas(tarjetas: TarjetaCalendario[], reservas: ReservaHotel[], nombreCabana: (roomTypeID: string) => string): Fila[] {
-  const porId = new Map(reservas.map((r) => [r.id, r]));
-  const porCb = new Map(reservas.filter((r) => r.cloudbeds_reservation_id).map((r) => [r.cloudbeds_reservation_id as string, r]));
+export function construirFilas(tarjetas: TarjetaCalendario[], reservas: ReservaHotel[], nombreCabana: (roomTypeID: string, roomID?: string | null) => string): Fila[] {
+  const localDe = buscadorDeReservaLocal(reservas);
   const usadas = new Set<string>();
   const out: Fila[] = [];
   for (const t of tarjetas) {
     if (t.tipo !== 'reserva') continue;
-    const local = porCb.get(t.id) ?? (t.externo ? porId.get(t.externo) : undefined);
+    const local = localDe(t);
     if (local) { usadas.add(local.id); out.push(filaDeReserva(local, t)); } else out.push(filaDeTarjeta(t, nombreCabana));
   }
   for (const r of reservas) if (!usadas.has(r.id)) out.push(filaDeReserva(r));
@@ -95,7 +97,8 @@ export function enVista(f: Fila, vista: Vista, fecha: string): boolean {
   const duerme = f.llegada <= fecha && fecha < f.salida;
   switch (vista) {
     case 'llegadas': return esViva(f) && f.llegada === fecha;
-    case 'salidas': return esViva(f) && f.salida === fecha;
+    // Una reserva en casa que debió salir antes y sigue sin check-out se queda en Salidas hasta hacerlo.
+    case 'salidas': return esViva(f) && (f.salida === fecha || (f.t?.estado === 'checked_in' && f.salida < fecha));
     // «En casa»: ya llegaron (hicieron check-in, o llegaron un día anterior). «Pernoctaciones»: todas las que duermen esa noche.
     case 'in_house': return esViva(f) && duerme && (f.t?.estado === 'checked_in' || f.llegada < fecha);
     case 'pernoctaciones': return esViva(f) && duerme;
@@ -115,14 +118,16 @@ export interface Ocupacion {
   tasa: number;
 }
 
-/** Ocupación de las cabañas activas y enlazadas en un día, con lo que las reservas y los bloqueos cargados dicen. */
+/** Ocupación de las habitaciones activas y enlazadas en un día, con lo que las reservas y los bloqueos cargados dicen. */
 export function ocupacionDelDia(filas: Fila[], tarjetas: TarjetaCalendario[], habitaciones: HabitacionHotel[], fecha: string): Ocupacion {
-  const activas = new Set(habitaciones.filter((h) => h.activo && h.cloudbeds_room_type_id).map((h) => h.cloudbeds_room_type_id as string));
-  const ocupadas = new Set(filas.filter((f) => enVista(f, 'pernoctaciones', fecha) && activas.has(f.roomTypeID)).map((f) => f.roomTypeID));
-  const bloqueos = tarjetas.filter((t) => t.tipo === 'bloqueo' && t.desde <= fecha && fecha < t.hasta && activas.has(t.roomTypeID));
-  const bloqueadas = new Set(bloqueos.map((t) => t.roomTypeID).filter((id) => !ocupadas.has(id)));
-  const fuera = new Set(bloqueos.filter((t) => t.tipoBloqueo === 'out_of_service').map((t) => t.roomTypeID));
-  const total = activas.size;
+  // Se cuenta por habitación del POS (cada una es una unidad): con varios tipos de una sola habitación es lo mismo que contar tipos.
+  const activas = habitaciones.filter((h) => h.activo && h.cloudbeds_room_type_id);
+  const deUnidad = (roomTypeID: string, roomID?: string | null) => habitacionDeUnidad(activas, roomTypeID, roomID)?.id;
+  const ocupadas = new Set(filas.filter((f) => enVista(f, 'pernoctaciones', fecha)).map((f) => deUnidad(f.roomTypeID, f.roomID)).filter((id): id is string => !!id));
+  const bloqueos = tarjetas.filter((t) => t.tipo === 'bloqueo' && t.desde <= fecha && fecha < t.hasta).map((t) => ({ t, id: deUnidad(t.roomTypeID, t.roomID) })).filter((x): x is { t: TarjetaCalendario; id: string } => !!x.id);
+  const bloqueadas = new Set(bloqueos.map((b) => b.id).filter((id) => !ocupadas.has(id)));
+  const fuera = new Set(bloqueos.filter((b) => b.t.tipoBloqueo === 'out_of_service').map((b) => b.id));
+  const total = activas.length;
   return {
     total, ocupadas: ocupadas.size, bloqueadas: bloqueadas.size, fueraDeServicio: fuera.size,
     disponibles: Math.max(0, total - ocupadas.size - bloqueadas.size),

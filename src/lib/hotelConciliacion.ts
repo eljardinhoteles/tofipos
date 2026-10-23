@@ -34,7 +34,7 @@ export interface CandidatoVenta {
   item: VentaConMovimientos;
   puntos: number;
   motivos: string[];
-  /** Otras reservas del POS ya conciliadas con esta venta (una venta puede cubrir varias cabañas). */
+  /** Otras reservas del POS ya conciliadas con esta venta (una venta puede cubrir varias habitaciones). */
   yaEnlazadaCon: number;
 }
 
@@ -139,7 +139,7 @@ export function detDeReserva(r: ReservaHotel): ReservaCloudbedsDetalle {
     saldo: null,
     fuente: r.fuente_nombre,
     fuenteExterna: r.fuente_externa,
-    habitaciones: [{ roomTypeID: r.room_type_id, nombre: r.cabana, adultos: r.adultos, ninos: r.ninos }],
+    habitaciones: [{ roomTypeID: r.room_type_id, roomID: r.room_id, nombreUnidad: r.cabana, nombre: r.cabana, adultos: r.adultos, ninos: r.ninos }],
     huesped: { nombre: r.huesped_nombre, apellido: r.huesped_apellido, email: r.huesped_email, telefono: r.huesped_telefono ?? '', pais: r.huesped_pais },
   };
 }

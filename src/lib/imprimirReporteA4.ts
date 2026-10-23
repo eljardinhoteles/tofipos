@@ -95,8 +95,11 @@ export function imprimirHtmlA4(html: string, titulo: string) {
     const ventana = marco.contentWindow;
     if (!ventana) { quitar(); showToast.error("No se pudo abrir la impresión"); return; }
     ventana.onafterprint = quitar;
-    ventana.focus();
-    ventana.print();
+    // Espera a que carguen las fuentes del documento para que la hoja salga con su tipografía.
+    void (ventana.document.fonts?.ready ?? Promise.resolve()).catch(() => undefined).then(() => {
+      ventana.focus();
+      ventana.print();
+    });
     // Respaldo: si el navegador no avisa al terminar, el iframe se retira solo.
     setTimeout(quitar, 120_000);
   };

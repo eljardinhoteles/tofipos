@@ -1,8 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-/** Llegada de hotel elegida en Mesas › Hotel: la próxima habitación libre que se abra toma sus datos y queda ligada a la venta. */
+/** Llegada de hotel elegida en Mesas › Hotel: la próxima habitación libre que se abra toma sus datos y queda ligada a su reserva (y a su venta). */
 export interface LlegadaCheckin {
-  ventaId: string;
+  /** Reserva del módulo Hotel (una por habitación reservada). */
+  reservaId: string;
+  /** Código de la reserva en Cloudbeds: al abrir la cuenta se le hace el check-in. */
+  cloudbedsId?: string;
+  /** Venta de la reserva, si ya la tiene. */
+  ventaId?: string;
+  /** Habitación reservada (nombre del módulo Hotel), para mostrarla al abrir la cuenta. */
+  habitacion?: string;
+  /** Mesa de habitación asignada a esta reserva (enlace del Hotel): se resalta como sugerencia, pero se puede abrir cualquier libre. */
+  mesaSugeridaId?: string;
   huesped: string;
   clienteId?: string;
   llegada: string;

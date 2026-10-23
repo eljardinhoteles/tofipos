@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { getCalendario, type DisponibilidadResp, type OfertaCabana, type TarjetaCalendario } from './cloudbeds';
-import type { HabitacionHotel } from './hotelHabitacionesApi';
+import { claveEnlace, type HabitacionHotel } from './hotelHabitacionesApi';
 import type { ReservaHotel } from './hotelReservasApi';
 import type { TonoEstado } from '../components/Common/EstadoBadge';
 
@@ -121,13 +121,13 @@ const MAX_EDAD_LIBRES_MS = 15 * 60_000;
 
 /**
  * Disponibilidad PROVISIONAL sacada de las tarjetas del calendario (reservas y bloqueos ya cargados), sin preguntar a
- * Cloudbeds: una cabaña está libre si nada se cruza con [start, end). No sabe de restricciones de tarifa (estadía mínima,
+ * Cloudbeds: una habitación está libre si nada se cruza con [start, end). No sabe de restricciones de tarifa (estadía mínima,
  * cerrado a la llegada), así que solo sirve para mostrar algo al instante mientras llega la consulta real; al crear, el
  * Worker comprueba la disponibilidad en vivo. Carga los meses que falten (el Worker los sirve guardados, en milisegundos).
  * Devuelve null si no hay datos fiables.
  */
 export async function disponibilidadDesdeCalendario(
-  start: string, end: string, habitaciones: Array<Pick<HabitacionHotel, 'nombre' | 'activo' | 'capacidad' | 'cloudbeds_room_type_id'>>, version: number,
+  start: string, end: string, habitaciones: Array<Pick<HabitacionHotel, 'nombre' | 'activo' | 'capacidad' | 'cloudbeds_room_type_id' | 'cloudbeds_room_id'>>, version: number,
 ): Promise<DisponibilidadResp | null> {
   const meses = new Set<string>();
   for (let d = dayjs(start); d.isBefore(dayjs(end)); d = d.add(1, 'day')) meses.add(mesDe(d.format('YYYY-MM-DD')));
@@ -141,16 +141,36 @@ export async function disponibilidadDesdeCalendario(
   const ofertas: OfertaCabana[] = [];
   for (const h of habitaciones) {
     const id = h.cloudbeds_room_type_id;
-    if (!h.activo || !id || vistas.has(id)) continue;
-    vistas.add(id);
-    const cruce = tarjetas.filter((t) => t.roomTypeID === id);
+    if (!h.activo || !id) continue;
+    // Un tipo = una habitación: una oferta por tipo. Un tipo con varias unidades: una oferta por unidad (clave «tipo|unidad»), que
+    // solo se cruza con las tarjetas de ESA unidad.
+    const clave = claveEnlace(id, h.cloudbeds_room_id);
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    const cruce = tarjetas.filter((t) => t.roomTypeID === id && (h.cloudbeds_room_id == null || t.roomID === h.cloudbeds_room_id));
     const motivo = cruce.length === 0 ? null : cruce.some((t) => t.tipo === 'reserva') ? 'Sin disponibilidad' : 'Bloqueada';
     ofertas.push({
-      roomTypeID: id, roomTypeName: h.nombre, roomsAvailable: motivo ? 0 : 1, rateID: null, totalRate: 0, noches: [],
+      roomTypeID: clave, roomTypeName: h.nombre, roomsAvailable: motivo ? 0 : 1, rateID: null, totalRate: 0, noches: [],
       reservable: !motivo, motivo, capacidad: h.capacidad, adultosIncluidos: null, planes: [],
     });
   }
   return { start, end, adults: 1, children: 0, ofertas };
+}
+
+/**
+ * Unidades ocupadas o bloqueadas en [start, end) según el calendario ya cargado (claves «tipo|unidad»). Sirve para repartir la
+ * disponibilidad de un tipo con varias unidades entre sus unidades. Devuelve null si no hay datos fiables de esos meses.
+ */
+export async function unidadesOcupadasDesdeCalendario(start: string, end: string, version: number): Promise<Set<string> | null> {
+  const meses = new Set<string>();
+  for (let d = dayjs(start); d.isBefore(dayjs(end)); d = d.add(1, 'day')) meses.add(mesDe(d.format('YYYY-MM-DD')));
+  const lista = [...meses];
+  const fresco = (m: string) => { const b = bloques.get(m); return !!b && Date.now() - b.actualizado < MAX_EDAD_LIBRES_MS; };
+  await Promise.all(lista.filter((m) => !fresco(m)).map((m) => cargarMes(m, version)));
+  if (!lista.every(fresco)) return null;
+  const ocupadas = new Set<string>();
+  for (const t of tarjetasDeMeses(lista)) if (t.desde < end && t.hasta > start && t.roomID) ocupadas.add(claveEnlace(t.roomTypeID, t.roomID));
+  return ocupadas;
 }
 
 /** Estado de una reserva de Cloudbeds: texto y color del badge. */
