@@ -96,7 +96,8 @@ export function construirFilas(tarjetas: TarjetaCalendario[], reservas: ReservaH
 export function enVista(f: Fila, vista: Vista, fecha: string): boolean {
   const duerme = f.llegada <= fecha && fecha < f.salida;
   switch (vista) {
-    case 'llegadas': return esViva(f) && f.llegada === fecha;
+    // Hoy, una llegada que ya hizo el check-in (o salió) pasa a «En casa» y deja de estar en Llegadas; en otros días se ven todas.
+    case 'llegadas': return esViva(f) && f.llegada === fecha && !(fecha === dayjs().format('YYYY-MM-DD') && (f.t?.estado === 'checked_in' || f.t?.estado === 'checked_out'));
     // Una reserva en casa que debió salir antes y sigue sin check-out se queda en Salidas hasta hacerlo.
     case 'salidas': return esViva(f) && (f.salida === fecha || (f.t?.estado === 'checked_in' && f.salida < fecha));
     // «En casa»: ya llegaron (hicieron check-in, o llegaron un día anterior). «Pernoctaciones»: todas las que duermen esa noche.

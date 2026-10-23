@@ -16,7 +16,7 @@ import { DateRangePickerField } from '@/components/ui/date-range-picker-field';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { Girando, SkeletonFilas } from './Espera';
-import { useAuth } from '../../context/AuthContext';
+import { useUsuarioActual } from '../../hooks/useUsuarioActual';
 import { useUI } from '../../context/UIContext';
 import { useExtrasSeleccion } from '../../hooks/useExtrasSeleccion';
 import { createRxCliente, updateRxCliente, type RxCliente } from '../../db/rxdb';
@@ -119,7 +119,8 @@ interface Props {
 
 /** Se monta solo mientras está abierto: cada apertura empieza limpia (con la habitación y fechas del calendario, si vienen). */
 export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose, onCreada }: Props) {
-  const { currentMesero } = useAuth();
+  // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
+  const currentMesero = useUsuarioActual();
   const { openConfirm } = useUI();
 
   const [paso, setPaso] = useState<Paso>(1);

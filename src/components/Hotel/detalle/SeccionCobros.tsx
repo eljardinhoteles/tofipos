@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bank, Check, CreditCard, LinkSimple, Money, Paperclip, Plus, Receipt, WarningCircle } from '@phosphor-icons/react';
+import { Bank, Check, CreditCard, LinkSimple, Money, Plus, Receipt, SlidersHorizontal, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ClienteBuscador } from '../../Common/ClienteBuscador';
 import { agregarVentaMovimiento, updateRxVenta } from '../../../db/rxdb';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
@@ -17,8 +18,9 @@ import { pagoDeVenta } from '../estiloReserva';
 import { useMetodosPagoConfig } from '../../../hooks/useMetodosPagoConfig';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import type { VentaConMovimientos } from '../../../lib/ventaConMovimientos';
-import { ajustarVentaHotel, conciliacionDisponible, totalConExtras, type ReservaHotel } from '../../../lib/hotelReservasApi';
+import { ajustarVentaHotel, conciliacionDisponible, desenlazarVentaHotel, totalConExtras, type ReservaHotel } from '../../../lib/hotelReservasApi';
 import { atribucionDePago, facturasDePago, motivoLegible, registrarAbonoHotel, verificarEnlaceGrupo, type DestinoAbono, type MetodoCobro } from '../../../lib/hotelCobros';
+import { ComprobanteAdjunto } from '../../Common/ComprobanteAdjunto';
 import { Seccion } from './comunes';
 import { EPS, dinero, etiquetaCampo } from './formatos';
 
@@ -89,6 +91,28 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
       setVerificando(false);
     }
   };
+  // Cambiar de venta: la reserva quedó enlazada a una venta NUEVA y vacía (p. ej. al volver a crearla) y los cobros están en otra.
+  // Solo con la venta actual sin pagos: se desenlaza, se anula esa venta vacía (si nadie más la usa) y se abre la conciliación.
+  const [cambiandoVenta, setCambiandoVenta] = useState(false);
+  const [confirmaCambio, setConfirmaCambio] = useState(false);
+  const puedeCambiarVenta = puedeGestionar && !!onConciliar && conciliacionDisponible && !!venta && !venta.anulado && venta.totalPagado <= EPS && !!r.venta_id;
+  const cambiarVenta = async () => {
+    if (!venta || !onConciliar) return;
+    setCambiandoVenta(true);
+    try {
+      const comparte = grupo.some((g) => g.id !== r.id && g.venta_id === r.venta_id);
+      await desenlazarVentaHotel(r.id);
+      if (!comparte) {
+        await agregarVentaMovimiento({ venta_id: venta.venta.id, tipo: 'anular', motivo: 'Venta vacía creada al volver a crear la reserva: se enlaza a la venta existente', usuario_id: usuario.id });
+      }
+      setConfirmaCambio(false);
+      onConciliar({ ...r, venta_id: null });
+    } catch (e) {
+      showToast.fallo('cambiar de venta', e);
+    } finally {
+      setCambiandoVenta(false);
+    }
+  };
   // Crédito corporativo: igual que en el Centro de Ventas (la venta queda pendiente de cobro a nombre de un cliente o agencia).
   const [creditoAbierto, setCreditoAbierto] = useState(false);
   const [creditoCliente, setCreditoCliente] = useState<string>(venta?.venta.cliente_id ?? '');
@@ -125,21 +149,45 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
     }
   };
 
-  const enlaceGrupo = enGrupo && puedeGestionar ? (
-    <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => void verificarEnlace()} disabled={verificando} title="Comprueba que todas las habitaciones del grupo estén enlazadas a la misma venta y repara las sueltas">
-      {verificando ? <Girando /> : <LinkSimple size={14} weight="bold" />} {hayCabanaSuelta ? 'Enlazar habitaciones' : 'Verificar enlace'}
-    </Button>
-  ) : null;
+  // Acciones secundarias de la venta, en un menú junto a «Añadir pago» para no llenar el encabezado.
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const accionesMenu: Array<{ clave: string; icono: typeof LinkSimple; texto: string; ayuda: string; onClick: () => void; deshabilitada?: boolean }> = [
+    ...(enGrupo && puedeGestionar ? [{
+      clave: 'enlace', icono: LinkSimple, texto: hayCabanaSuelta ? 'Enlazar habitaciones' : 'Verificar enlace',
+      ayuda: 'Comprueba que todas las habitaciones del grupo estén enlazadas a la misma venta y repara las sueltas',
+      onClick: () => void verificarEnlace(), deshabilitada: verificando,
+    }] : []),
+    ...(puedeCambiarVenta ? [{
+      clave: 'cambiar', icono: LinkSimple, texto: 'Cambiar venta',
+      ayuda: 'Enlaza la reserva a otra venta que ya tiene los cobros', onClick: () => setConfirmaCambio(true),
+    }] : []),
+    ...(puedeGestionar && venta && !venta.anulado && venta.venta.tipo === 'directa' ? [{
+      clave: 'credito', icono: CreditCard, texto: 'Marcar como crédito',
+      ayuda: 'Pasa la venta a crédito de un cliente o agencia', onClick: () => { setCreditoCliente(venta.venta.cliente_id ?? ''); setCreditoAbierto(true); },
+    }] : []),
+  ];
 
   return (
     <Seccion icono={Receipt} color="success" titulo={enGrupo ? 'Cobros del grupo' : 'Cobros'}
       accion={<div className="flex items-center gap-2">
-        {enlaceGrupo}
         {venta?.anulado && <EstadoBadge tono="neutral">Venta anulada</EstadoBadge>}
-        {puedeGestionar && venta && !venta.anulado && venta.venta.tipo === 'directa' && (
-          <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => { setCreditoCliente(venta.venta.cliente_id ?? ''); setCreditoAbierto(true); }} title="Pasa la venta a crédito de un cliente o agencia">
-            <CreditCard size={14} weight="bold" /> Crédito
-          </Button>
+        {accionesMenu.length > 0 && (
+          <Popover open={menuAbierto} onOpenChange={setMenuAbierto}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="size-9" title="Más acciones de la venta" aria-label="Más acciones de la venta">
+                {verificando ? <Girando /> : <SlidersHorizontal size={16} weight="bold" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-1.5 flex flex-col">
+              {accionesMenu.map((a) => (
+                <button key={a.clave} type="button" disabled={a.deshabilitada} title={a.ayuda}
+                  onClick={() => { setMenuAbierto(false); a.onClick(); }}
+                  className="min-h-11 px-3 rounded-xl flex items-center gap-2.5 text-left t-cuerpo-fuerte hover:bg-muted cursor-pointer disabled:opacity-50">
+                  <a.icono size={16} weight="bold" className="shrink-0 text-muted-foreground" /> {a.texto}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
         )}
         {puedeGestionar && !abierto && r.estado === 'confirmada' && !venta?.anulado && (
           <Button type="button" variant="default" className="h-9 gap-1.5" onClick={() => onAbrir(true)} disabled={!!venta && venta.saldo <= EPS && venta.montoTotal > EPS}><Plus size={14} weight="bold" /> Añadir pago</Button>
@@ -212,6 +260,18 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
         </div>
       )}
 
+      <AlertDialog open={confirmaCambio} onOpenChange={(o) => { if (!cambiandoVenta) setConfirmaCambio(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cambiar la venta de esta reserva</AlertDialogTitle>
+            <AlertDialogDescription>La venta actual no tiene pagos. Se desenlaza de la reserva y, si ninguna otra reserva la usa, se anula (queda en el historial). Después eliges la venta existente con los cobros.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cambiandoVenta}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={cambiandoVenta} onClick={(e) => { e.preventDefault(); void cambiarVenta(); }}>{cambiandoVenta ? 'Cambiando…' : 'Continuar'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={creditoAbierto} onOpenChange={(o) => { if (!marcando) setCreditoAbierto(o); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -367,11 +427,7 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
       )}
       <div className="flex flex-col gap-1.5">
         <Label className={etiquetaCampo}>Comprobante (opcional)</Label>
-        <label className="flex items-center gap-2 h-11 px-3 rounded-2xl border border-dashed border-border t-cuerpo text-muted-foreground cursor-pointer hover:bg-muted/60 hover:text-foreground transition-colors">
-          <Paperclip size={16} className="shrink-0" />
-          <span className="truncate">{archivo ? archivo.name : 'Adjuntar foto o PDF'}</span>
-          <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => cambiar(setArchivo)(e.target.files?.[0] ?? null)} />
-        </label>
+        <ComprobanteAdjunto file={archivo} onChange={cambiar(setArchivo)} />
       </div>
       {!r.venta_id && <p className="t-meta text-muted-foreground">Se creará {grupo.length > 1 ? 'una sola venta para todo el grupo' : 'la venta de esta reserva'} en el Centro de Ventas con el total del POS.</p>}
       <div className="flex flex-wrap items-center justify-end gap-2">

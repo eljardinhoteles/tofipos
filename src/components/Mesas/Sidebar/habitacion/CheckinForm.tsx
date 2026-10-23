@@ -8,7 +8,7 @@ import { checkinReservaCloudbeds } from'../../../../lib/cloudbeds';
 import { initVerticalRxDb, createRxHabitacionCuenta, updateRxMesa, type RxCliente } from'../../../../db/rxdb';
 import { Switch } from'@/components/ui/switch';
 import { listarHabitaciones, habitacionDeUnidad, type HabitacionHotel } from'../../../../lib/hotelHabitacionesApi';
-import { cambiarCabanaReservaHotel, listarReservasHotel, type ReservaHotel } from'../../../../lib/hotelReservasApi';
+import { cambiarCabanaReservaHotel, listarReservasHotel, registrarCheckHotel, type ReservaHotel } from'../../../../lib/hotelReservasApi';
 import { Textarea } from'@/components/ui/textarea';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -107,7 +107,7 @@ export function CheckinForm({ selectedMesa, onClose }: { selectedMesa: Mesa; onC
  showToast.fallo('mover la reserva a esta habitación', e);
  return; // sin moverla no se hace el check-in: quedaría en la habitación equivocada
  }
- try { await checkinReservaCloudbeds(cloudbedsId); }
+ try { await checkinReservaCloudbeds(cloudbedsId); if (llegadaCheckin?.reservaId) registrarCheckHotel([llegadaCheckin.reservaId], 'checkin'); }
  catch { showToast.warning('No se pudo hacer el check-in en Cloudbeds', 'La cuenta quedó abierta: hazlo desde Cloudbeds.'); }
  })();
  }

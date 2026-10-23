@@ -11,6 +11,7 @@ import {
   getReservaCloudbeds,
   crearReservaCloudbeds,
   modificarReservaCloudbeds,
+  reactivarReservaCloudbeds,
 } from './cloudbeds';
 
 /**
@@ -48,14 +49,21 @@ export interface NotaReserva {
   /** Extra al que va ligada (y su nombre, por si luego se quita). Ausentes si es una nota general. */
   extra_id?: string;
   extra?: string;
+  /** Nota de TODO el grupo: en el documento sale sin el nombre de la habitación. */
+  grupo?: boolean;
   fecha: string;
   usuario?: string;
 }
 
+export const TIPOS_MASCOTA = ['Perro', 'Gato', 'Otro'] as const;
+export const TAMANOS_MASCOTA = ['Pequeño', 'Mediano', 'Grande'] as const;
+/** `cantidad`: cuántas mascotas (registros anteriores sin ella cuentan como 1). */
+export interface MascotaReserva { cantidad?: number; tipo: (typeof TIPOS_MASCOTA)[number]; tamano: (typeof TAMANOS_MASCOTA)[number]; comentario?: string }
+
 export interface EventoHistorial {
   id: string;
   fecha: string;
-  tipo: 'creada' | 'plan' | 'cabana' | 'cama' | 'fechas' | 'tarifa' | 'extra' | 'cliente' | 'conciliacion' | 'cobro' | 'sync' | 'cancelada' | 'nota';
+  tipo: 'creada' | 'plan' | 'cabana' | 'cama' | 'fechas' | 'tarifa' | 'extra' | 'cliente' | 'mascota' | 'checkin' | 'checkout' | 'conciliacion' | 'cobro' | 'sync' | 'cancelada' | 'nota';
   texto: string;
   usuario?: string;
 }
@@ -120,6 +128,8 @@ export interface ReservaHotel {
   notas_items: NotaReserva[];
   /** Plan de alimentación de la reserva (copia del plan al elegirlo). Null = sin plan. Informativo: no cobra. */
   plan_alimentacion: PlanReserva | null;
+  /** Mascota que viaja con el huésped (registro informativo); null si no trae. */
+  mascota: MascotaReserva | null;
   /** Cambio que el servidor aplicó solo desde Cloudbeds y falta revisar (venta y plan). Null = nada pendiente. */
   aviso_cloudbeds: AvisoCloudbeds | null;
   estado: EstadoReservaHotel;
@@ -167,6 +177,8 @@ export let historialDisponible = true;
 export let camaDisponible = true;
 /** Notas de la reserva (migración 20261019000100). */
 export let notasReservaDisponible = true;
+/** Mascota de la reserva (migración 20261024000100). */
+export let mascotaDisponible = true;
 /** Plan de alimentación de la reserva (migración 20261019000200). */
 export let planReservaDisponible = true;
 /** Avisos de la sincronización con Cloudbeds (migración 20261019000500). */
@@ -179,7 +191,7 @@ export let unidadReservaDisponible = true;
 export let sinCuentaMesasDisponible = true;
 // `sinHistorial`: el historial (hasta 200 eventos por reserva) es lo más pesado y solo se ve en el detalle; las listas no
 // lo traen y el panel lo pide al abrirse (`leerHistorialHotel`).
-const columnas = (sinHistorial = false) => `${COLUMNAS_BASE}${conciliacionDisponible ? ', venta_id, cliente_id' : ''}${historialDisponible && !sinHistorial ? ', historial' : ''}${camaDisponible ? ', cama' : ''}${grupoRefDisponible ? ', cloudbeds_grupo_ref' : ''}${unidadReservaDisponible ? ', room_id' : ''}${sinCuentaMesasDisponible ? ', sin_cuenta_mesas' : ''}${notasReservaDisponible ? ', notas_items' : ''}${planReservaDisponible ? ', plan_alimentacion' : ''}${avisoCloudbedsDisponible ? ', aviso_cloudbeds' : ''}`;
+const columnas = (sinHistorial = false) => `${COLUMNAS_BASE}${conciliacionDisponible ? ', venta_id, cliente_id' : ''}${historialDisponible && !sinHistorial ? ', historial' : ''}${camaDisponible ? ', cama' : ''}${grupoRefDisponible ? ', cloudbeds_grupo_ref' : ''}${unidadReservaDisponible ? ', room_id' : ''}${sinCuentaMesasDisponible ? ', sin_cuenta_mesas' : ''}${notasReservaDisponible ? ', notas_items' : ''}${planReservaDisponible ? ', plan_alimentacion' : ''}${mascotaDisponible ? ', mascota' : ''}${avisoCloudbedsDisponible ? ', aviso_cloudbeds' : ''}`;
 const columnaInexistente = (e: { code?: string } | null) => e?.code === '42703';
 /** Desactiva lo que falta según el mensaje de Postgres (nombra la columna). Devuelve false si ya no hay nada que desactivar. */
 function desactivarColumnaFaltante(mensaje: string): boolean {
@@ -187,6 +199,7 @@ function desactivarColumnaFaltante(mensaje: string): boolean {
   if (unidadReservaDisponible && /\broom_id\b/.test(mensaje)) { console.warn('hotel_reservas sin columna room_id: falta la migración 20261022000300'); unidadReservaDisponible = false; return true; }
   if (grupoRefDisponible && /cloudbeds_grupo_ref/.test(mensaje)) { console.warn('hotel_reservas sin columna cloudbeds_grupo_ref: falta la migración 20261022000200'); grupoRefDisponible = false; return true; }
   if (avisoCloudbedsDisponible && /aviso_cloudbeds/.test(mensaje)) { console.warn('hotel_reservas sin columna aviso_cloudbeds: falta la migración 20261019000500'); avisoCloudbedsDisponible = false; return true; }
+  if (mascotaDisponible && /\bmascota\b/.test(mensaje)) { console.warn('hotel_reservas sin columna mascota: falta la migración 20261024000100'); mascotaDisponible = false; return true; }
   if (planReservaDisponible && /plan_alimentacion/.test(mensaje)) { console.warn('hotel_reservas sin columna plan_alimentacion: falta la migración 20261019000200'); planReservaDisponible = false; return true; }
   if (notasReservaDisponible && /notas_items/.test(mensaje)) { console.warn('hotel_reservas sin columna notas_items: falta la migración 20261019000100'); notasReservaDisponible = false; return true; }
   if (camaDisponible && /cama/.test(mensaje)) { console.warn('hotel_reservas sin columna cama: falta la migración 20261018000300'); camaDisponible = false; return true; }
@@ -197,13 +210,13 @@ function desactivarColumnaFaltante(mensaje: string): boolean {
 
 const orgActiva = () => localStorage.getItem('pos_active_org_id') || '';
 
-type FilaReserva = Omit<ReservaHotel, 'total_estadia' | 'total_cloudbeds' | 'extras' | 'venta_id' | 'cliente_id' | 'cama' | 'historial' | 'plan_alimentacion' | 'aviso_cloudbeds' | 'cloudbeds_grupo_ref' | 'room_id' | 'sin_cuenta_mesas'>
-  & { plan_alimentacion?: PlanReserva | null; aviso_cloudbeds?: AvisoCloudbeds | null; cloudbeds_grupo_ref?: string | null; room_id?: string | null; sin_cuenta_mesas?: boolean; cama?: string | null; venta_id?: string | null; cliente_id?: string | null; historial?: unknown; total_estadia: unknown; total_cloudbeds: unknown; extras: unknown };
+type FilaReserva = Omit<ReservaHotel, 'total_estadia' | 'total_cloudbeds' | 'extras' | 'venta_id' | 'cliente_id' | 'cama' | 'historial' | 'plan_alimentacion' | 'mascota' | 'aviso_cloudbeds' | 'cloudbeds_grupo_ref' | 'room_id' | 'sin_cuenta_mesas'>
+  & { mascota?: MascotaReserva | null; plan_alimentacion?: PlanReserva | null; aviso_cloudbeds?: AvisoCloudbeds | null; cloudbeds_grupo_ref?: string | null; room_id?: string | null; sin_cuenta_mesas?: boolean; cama?: string | null; venta_id?: string | null; cliente_id?: string | null; historial?: unknown; total_estadia: unknown; total_cloudbeds: unknown; extras: unknown };
 
 // Recibe `unknown` porque las columnas se eligen en tiempo de ejecución (con o sin las de conciliación).
 function normalizar(fila: unknown): ReservaHotel {
   const r = fila as FilaReserva;
-  return { venta_id: null, cliente_id: null, cama: null, cloudbeds_grupo_ref: null, room_id: null, sin_cuenta_mesas: false, plan_alimentacion: null, aviso_cloudbeds: null, ...r, historial: Array.isArray(r.historial) ? (r.historial as EventoHistorial[]) : [], notas_items: Array.isArray((r as { notas_items?: unknown }).notas_items) ? ((r as { notas_items?: unknown }).notas_items as NotaReserva[]) : [], total_estadia: Number(r.total_estadia) || 0, total_cloudbeds: r.total_cloudbeds == null ? null : Number(r.total_cloudbeds), extras: Array.isArray(r.extras) ? (r.extras as ExtraHotel[]) : [] };
+  return { venta_id: null, cliente_id: null, cama: null, cloudbeds_grupo_ref: null, room_id: null, sin_cuenta_mesas: false, plan_alimentacion: null, mascota: null, aviso_cloudbeds: null, ...r, historial: Array.isArray(r.historial) ? (r.historial as EventoHistorial[]) : [], notas_items: Array.isArray((r as { notas_items?: unknown }).notas_items) ? ((r as { notas_items?: unknown }).notas_items as NotaReserva[]) : [], total_estadia: Number(r.total_estadia) || 0, total_cloudbeds: r.total_cloudbeds == null ? null : Number(r.total_cloudbeds), extras: Array.isArray(r.extras) ? (r.extras as ExtraHotel[]) : [] };
 }
 
 /** Reservas que se solapan con el rango [desde, hasta] (AAAA-MM-DD), por llegada. */
@@ -219,6 +232,27 @@ export async function listarReservasHotel(desde: string, hasta: string): Promise
   for (let i = 0; i < 2 && columnaInexistente(error) && desactivarColumnaFaltante(error?.message ?? ''); i++) ({ data, error } = await consultar());
   if (error) throw new Error(error.message);
   return (data ?? []).map(normalizar);
+}
+
+/** Reservas tocadas desde `inicio` (ISO): creadas, cambiadas o con aviso de Cloudbeds hoy. Alimenta el centro de actividad. */
+export async function listarReservasHotelActividad(inicio: string): Promise<ReservaHotel[]> {
+  const consultar = () => supabase
+    .from('hotel_reservas')
+    .select(columnas())
+    .eq('organization_id', orgActiva())
+    .gte('updated_at', inicio)
+    .order('updated_at', { ascending: false })
+    .limit(200);
+  let { data, error } = await consultar();
+  for (let i = 0; i < 2 && columnaInexistente(error) && desactivarColumnaFaltante(error?.message ?? ''); i++) ({ data, error } = await consultar());
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(normalizar);
+}
+
+/** Anota en el historial de cada reserva que se hizo el check-in o el check-out en Cloudbeds desde el POS. */
+export function registrarCheckHotel(ids: string[], tipo: 'checkin' | 'checkout', usuario?: string): void {
+  const texto = tipo === 'checkin' ? 'Check-in hecho en Cloudbeds desde el POS' : 'Check-out hecho en Cloudbeds desde el POS';
+  for (const id of ids) void registrarEventoHotel(id, tipo, texto, usuario);
 }
 
 /** Una reserva, tal como está ahora en la base (para refrescar el panel de detalle tras un cambio). */
@@ -361,6 +395,8 @@ async function subirACloudbeds(r: ReservaHotel, rateID?: string | null, reintent
       cloudbeds_reservation_id: res.reservationID,
       sync_estado: 'sincronizada',
       sync_error: null,
+      // Un reintento tras un rechazo la había dejado cancelada en el POS: al subir, vuelve a estar vigente.
+      ...(reintento ? { estado: 'confirmada' as const } : {}),
       // Si la reserva ya existía en Cloudbeds (reintento tardío) no se conoce su total: se conserva el que había.
       ...(typeof res.grandTotal === 'number'
         ? { total_cloudbeds: res.grandTotal, ...(r.tarifa_manual ? {} : { total_estadia: res.grandTotal }) }
@@ -509,7 +545,7 @@ export async function crearGrupoReservasHotel(n: NuevoGrupoReservaHotel, alProgr
       return res;
     }),
   );
-  return { reservas: reservas.map((r, i) => ({ ...r, sync_estado: resultados[i].sync })), resultados };
+  return { reservas: reservas.map((r, i) => ({ ...r, sync_estado: resultados[i].sync, estado: 'confirmada' as const })), resultados };
 }
 
 /** Cancela todas las reservas vigentes de un grupo (una por una). Devuelve cuántas no se pudieron cancelar. */
@@ -730,13 +766,13 @@ async function modificarNotas(r: ReservaHotel, cambiar: (lista: NotaReserva[]) =
 }
 
 /** Añade una nota corta a la reserva, general o ligada a uno de sus extras. */
-export async function agregarNotaHotel(r: ReservaHotel, texto: string, extraId: string | null, usuario?: string): Promise<ReservaHotel> {
+export async function agregarNotaHotel(r: ReservaHotel, texto: string, extraId: string | null, usuario?: string, grupo = false): Promise<ReservaHotel> {
   const limpio = texto.trim().slice(0, NOTA_MAX_CARACTERES);
   if (!limpio) throw new Error('Escribe la nota.');
   const extra = extraId ? r.extras.find((e) => e.id === extraId) : undefined;
-  const nota: NotaReserva = { id: crypto.randomUUID(), texto: limpio, fecha: new Date().toISOString(), ...(usuario ? { usuario } : {}), ...(extra ? { extra_id: extra.id, extra: extra.descripcion } : {}) };
+  const nota: NotaReserva = { id: crypto.randomUUID(), texto: limpio, fecha: new Date().toISOString(), ...(usuario ? { usuario } : {}), ...(grupo && !extra ? { grupo: true } : {}), ...(extra ? { extra_id: extra.id, extra: extra.descripcion } : {}) };
   const nueva = await modificarNotas(r, (lista) => [...lista, nota].slice(-MAX_NOTAS));
-  void registrarEventoHotel(r.id, 'nota', `Nota${extra ? ` (${extra.descripcion})` : ''}: ${limpio}`, usuario);
+  void registrarEventoHotel(r.id, 'nota', `Nota${extra ? ` (${extra.descripcion})` : grupo ? ' (todo el grupo)' : ''}: ${limpio}`, usuario);
   return nueva;
 }
 
@@ -781,6 +817,21 @@ export async function cambiarPlanReservaHotel(r: ReservaHotel, plan: PlanReserva
   const extras = await sincronizarExtraPlanHotel({ ...r, plan_alimentacion: plan });
   void registrarEventoHotel(r.id, 'plan', plan ? `Plan de alimentación: ${plan.nombre}${r.plan_alimentacion ? ` (antes ${r.plan_alimentacion.nombre})` : ''}` : `Plan de alimentación quitado (era ${r.plan_alimentacion?.nombre ?? 'ninguno'})`, usuario);
   return { ...r, plan_alimentacion: plan, extras };
+}
+
+/** «2 perros · Mediano · comentario»: cantidad con el tipo en plural. */
+export function textoMascota(m: MascotaReserva): string {
+  const n = m.cantidad ?? 1;
+  const tipo = m.tipo === 'Perro' ? (n === 1 ? 'perro' : 'perros') : m.tipo === 'Gato' ? (n === 1 ? 'gato' : 'gatos') : (n === 1 ? 'mascota' : 'mascotas');
+  return `${n} ${tipo} · ${m.tamano}${m.comentario ? ` · ${m.comentario}` : ''}`;
+}
+
+/** Registra (o quita) la mascota de la reserva. Es solo del POS y no cambia importes. */
+export async function cambiarMascotaReservaHotel(r: ReservaHotel, mascota: MascotaReserva | null, usuario?: string): Promise<ReservaHotel> {
+  if (!mascotaDisponible) throw new Error('Para guardar la mascota ejecuta la migración 20261024000100_hotel_reservas_mascota.sql en Supabase');
+  await actualizar(r.id, { mascota });
+  void registrarEventoHotel(r.id, 'mascota', mascota ? `Mascota: ${textoMascota(mascota)}${mascota.comentario ? ` · ${mascota.comentario}` : ''}` : 'Mascota quitada', usuario);
+  return { ...r, mascota };
 }
 
 /** Cambia el tipo de cama. Es solo del POS (no va a Cloudbeds) y no afecta la disponibilidad. */
@@ -1200,76 +1251,63 @@ export async function adoptarGrupoCloudbeds(
 }
 
 /**
- * CONVIERTE un grupo de Cloudbeds (una reserva con varias habitaciones) en reservas individuales gestionadas desde el POS:
- * guarda una reserva por habitación como pendiente (nada se pierde), cancela la reserva original en Cloudbeds y sube cada habitación
- * como reserva propia (el Worker comprueba disponibilidad en vivo, por eso la cancelación va antes). Si la cancelación falla se
- * deshace lo guardado y no cambia nada. Si alguna subida es rechazada, esa habitación queda cancelada en el POS y la original ya
- * no existe en Cloudbeds: hay que avisar para que se cree de nuevo a mano. Cloudbeds crea con su tarifa estándar; el precio
- * real queda como tarifa manual del POS. Los cargos extra de Cloudbeds pasan a extras normales del POS (en la primera habitación).
+ * Separa un grupo ADOPTADO en reservas individuales, sin perder nada del POS: las filas del grupo (con su venta, cliente, extras,
+ * notas y tarifas) se conservan y se vuelven reservas propias del POS; se cancela el grupo original en Cloudbeds y cada fila se sube
+ * como reserva nueva, por lo que quedan enlazadas a la misma venta y al mismo grupo. Si algo falla, se deshace: se cancelan las que
+ * ya subieron, se reactiva el grupo original y las filas vuelven a ser las del grupo adoptado.
  */
-export async function convertirGrupoCloudbeds(
-  det: ReservaCloudbedsDetalle, lineas: LineaAdopcionGrupo[],
-  op: { clienteId?: string | null; huesped?: { nombre: string; apellido: string; email: string; telefono: string }; usuarioId?: string; usuarioNombre?: string } = {},
-  alProgreso?: (p: ProgresoCreacion) => void,
-): Promise<{ reservas: ReservaHotel[]; resultados: ResultadoSync[] }> {
-  if (det.estado === 'canceled' || det.estado === 'no_show') throw new Error('Esta reserva ya está cancelada en Cloudbeds.');
-  if (det.fuenteExterna) throw new Error('Una reserva de un canal externo no se puede convertir.');
-  if (lineas.length < 2) throw new Error('Un grupo necesita al menos dos habitaciones.');
-  const grupoId = crypto.randomUUID();
-  const etiqueta = `Grupo - ${lineas.map((l) => l.codigo || l.cabana).join(',')}`;
-  const h = op.huesped ?? det.huesped;
-  const pais = /^[A-Za-z]{2}$/.test(det.huesped.pais) ? det.huesped.pais.toUpperCase() : 'EC';
-  const fecha = new Date().toISOString();
-  // Los cargos de Cloudbeds desaparecen con la reserva cancelada: se conservan como extras normales del POS.
-  const extrasCb = extrasDeCloudbeds(det).filter((e) => e.monto > 0).map((e) => ({ id: crypto.randomUUID(), descripcion: e.descripcion, monto: e.monto, fecha, usuario: op.usuarioNombre }));
-  const filas = lineas.map((l, i) => ({
-    id: crypto.randomUUID(),
-    organization_id: orgActiva(),
-    room_type_id: l.roomTypeID,
-    ...(l.roomID && unidadReservaDisponible ? { room_id: l.roomID } : {}),
-    cabana: l.cabana,
-    llegada: det.llegada,
-    salida: det.salida,
-    adultos: Math.max(1, l.adultos),
-    ninos: Math.max(0, l.ninos),
-    huesped_nombre: h.nombre.trim() || 'Huésped',
-    huesped_apellido: h.apellido.trim() || '—',
-    huesped_email: h.email.trim(),
-    huesped_telefono: h.telefono.trim() || null,
-    huesped_pais: pais,
-    total_cloudbeds: Math.round(l.tarifa * 100) / 100,
-    total_estadia: Math.round(l.tarifa * 100) / 100,
-    tarifa_manual: true,
-    tarifa_motivo: 'Tarifa de la habitación verificada en Cloudbeds al convertir el grupo',
-    grupo_id: grupoId,
-    grupo_etiqueta: etiqueta,
-    ...(op.clienteId && conciliacionDisponible ? { cliente_id: op.clienteId } : {}),
-    extras: i === 0 ? extrasCb : [],
-    estado: 'confirmada' as const,
-    sync_estado: 'pendiente' as const,
-    usuario_id: op.usuarioId ?? null,
-    usuario_nombre: op.usuarioNombre ?? null,
-    ...(historialDisponible ? { historial: [{ ...eventoCreada(op.usuarioNombre), tipo: 'conciliacion' as const, texto: `Convertida desde la reserva ${det.reservationID} de Cloudbeds (grupo de ${lineas.length} habitaciones): se canceló allá y se creó una reserva por habitación` }] } : {}),
-  }));
-  const { data, error } = await supabase.from('hotel_reservas').insert(filas).select(columnas());
-  if (error) throw new Error(error.message);
-  const reservas = (data ?? []).map(normalizar);
-  alProgreso?.({ fase: 'guardado' });
+export async function separarGrupoAdoptado(grupo: ReservaHotel[], usuario?: string): Promise<ReservaHotel[]> {
+  const filas = grupo.filter((r) => r.estado === 'confirmada' && r.cloudbeds_grupo_ref);
+  const ref = filas[0]?.cloudbeds_grupo_ref;
+  if (!ref || filas.length < 2) throw new Error('Solo se separa un grupo adoptado de Cloudbeds con al menos dos habitaciones vigentes.');
+  if (filas.some((r) => r.cloudbeds_grupo_ref !== ref)) throw new Error('Las habitaciones no pertenecen al mismo grupo de Cloudbeds.');
 
-  // La original ocupa las habitaciones: se cancela antes de subir. Si no se puede, se deshace lo guardado.
+  const propias = (r: ReservaHotel): ReservaHotel => ({ ...r, cloudbeds_grupo_ref: null, cloudbeds_reservation_id: null, adoptada: false, fuente_externa: false, sync_estado: 'pendiente', sync_error: null, tarifa_manual: true });
+  const original = (r: ReservaHotel) => ({ cloudbeds_grupo_ref: r.cloudbeds_grupo_ref, cloudbeds_reservation_id: r.cloudbeds_reservation_id, adoptada: r.adoptada, fuente_externa: r.fuente_externa, sync_estado: r.sync_estado, sync_error: r.sync_error, tarifa_manual: r.tarifa_manual, estado: r.estado });
+  const restaurarFilas = () => Promise.all(filas.map((r) => actualizar(r.id, original(r)).catch(() => undefined)));
+
+  // 1) Las filas dejan de apuntar al grupo de Cloudbeds (siguen en el POS, con su venta y todo lo demás).
+  const nuevas = filas.map(propias);
+  for (const r of nuevas) {
+    await actualizar(r.id, { cloudbeds_grupo_ref: null, cloudbeds_reservation_id: null, adoptada: false, fuente_externa: false, sync_estado: 'pendiente', sync_error: null, tarifa_manual: true });
+  }
+
+  // 2) Cancelar el grupo original en Cloudbeds: si no se puede, todo vuelve a como estaba.
   try {
-    await cancelarReservaCloudbeds(det.reservationID);
+    await cancelarReservaCloudbeds(ref);
   } catch (e) {
-    await supabase.from('hotel_reservas').delete().in('id', reservas.map((r) => r.id)).eq('organization_id', orgActiva());
+    await restaurarFilas();
     throw new Error(`No se pudo cancelar la reserva original en Cloudbeds, así que no se cambió nada. ${e instanceof Error ? e.message : ''}`.trim());
   }
 
-  const resultados = await Promise.all(reservas.map(async (r) => {
-    const res = await subirACloudbeds(r);
-    alProgreso?.({ fase: 'cabana', roomTypeID: claveEnlace(r.room_type_id, r.room_id), sync: res.sync });
+  // 3) Subir cada fila como reserva nueva. Cloudbeds tarda un momento en liberar las habitaciones: un rechazo por disponibilidad se reintenta.
+  const esDisponibilidad = (m?: string) => /availab|disponib|occupied|ocupad|no room|sold out/i.test(m ?? '');
+  const subir = async (r: ReservaHotel): Promise<ResultadoSync> => {
+    let res = await subirACloudbeds(r);
+    for (let i = 1; i <= 2 && res.sync === 'error' && esDisponibilidad(res.mensaje); i++) {
+      await new Promise((ok) => setTimeout(ok, 3000 * i));
+      res = await subirACloudbeds(r, null, true);
+    }
     return res;
-  }));
-  return { reservas: reservas.map((r, i) => ({ ...r, sync_estado: resultados[i].sync, estado: resultados[i].sync === 'error' ? 'cancelada' as const : r.estado })), resultados };
+  };
+  const resultados = await Promise.all(nuevas.map(subir));
+
+  // 4) Si alguna sigue rechazada se deshace todo (las filas ya no se marcan canceladas: son las del grupo).
+  const fallo = resultados.find((x) => x.sync === 'error');
+  if (fallo) {
+    const subidas = await Promise.all(nuevas.filter((_, i) => resultados[i].sync === 'sincronizada').map((r) => leerReservaHotel(r.id).catch(() => null)));
+    for (const sub of subidas) if (sub?.cloudbeds_reservation_id) await cancelarReservaCloudbeds(sub.cloudbeds_reservation_id).catch(() => undefined);
+    let restaurada = true;
+    try { await reactivarReservaCloudbeds(ref); } catch { restaurada = false; }
+    await restaurarFilas();
+    throw new Error(restaurada
+      ? `Cloudbeds rechazó una habitación (${fallo.mensaje ?? 'sin detalle'}). Se restauró el grupo original: no cambió nada.`
+      : `Cloudbeds rechazó una habitación (${fallo.mensaje ?? 'sin detalle'}) y no se pudo restaurar el grupo original. Reactívalo a mano en Cloudbeds (reserva ${ref}); en el POS el grupo sigue como estaba.`);
+  }
+
+  for (const r of nuevas) void registrarEventoHotel(r.id, 'conciliacion', `Separada del grupo ${ref} de Cloudbeds: ahora es una reserva propia`, usuario);
+  const finales = await Promise.all(nuevas.map((r) => leerReservaHotel(r.id)));
+  return finales.filter((r): r is ReservaHotel => !!r);
 }
 
 export async function adoptarReservaHotel(det: ReservaCloudbedsDetalle, habitaciones: Array<{ nombre: string; cloudbeds_room_type_id: string | null; cloudbeds_room_id?: string | null }>, op: OpcionesAdopcion = {}): Promise<ReservaHotel> {

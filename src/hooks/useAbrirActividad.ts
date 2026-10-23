@@ -46,6 +46,15 @@ export function useAbrirActividad() {
       return;
     }
 
+    if (destino.tipo === 'reserva_hotel') {
+      try { sessionStorage.setItem('pos_reserva_hotel_a_abrir', destino.reservaId); } catch { /* sin storage */ }
+      setActividadOpen(false);
+      navigate('/v2/hotel');
+      // Si ya se está en el Hotel, la página no se vuelve a montar: se le avisa para que abra la reserva.
+      window.dispatchEvent(new Event('pos:abrir-reserva-hotel'));
+      return;
+    }
+
     if (destino.tipo === 'venta') {
       if (isMobile) { showToast.info('Esta venta se ve en Centro de Ventas', 'Disponible en la versión de escritorio.'); return; }
       try { sessionStorage.setItem('pos_venta_a_abrir', destino.ventaId); } catch { /* sin storage */ }

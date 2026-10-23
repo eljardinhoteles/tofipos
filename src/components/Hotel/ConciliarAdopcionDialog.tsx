@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { EstadoBadge } from '../Common/EstadoBadge';
 import { BannerEspera, Girando } from './Espera';
-import { useAuth } from '../../context/AuthContext';
+import { useUsuarioActual } from '../../hooks/useUsuarioActual';
 import { useRxClientes } from '../../hooks/useRxClientes';
 import { useVentasConMovimientos } from '../../hooks/useVentasConMovimientos';
 import { agregarVentaMovimiento, createRxCliente, createRxVenta, updateRxCliente, updateRxVenta, type RxCliente } from '../../db/rxdb';
@@ -42,7 +42,8 @@ interface Props {
  * Cloudbeds y Ventas no se cruzan (los saldos no se sincronizan).
  */
 export function ConciliarAdopcionDialog({ det, habitaciones, reservas, reserva, onClose, onHecha }: Props) {
-  const { currentMesero } = useAuth();
+  // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
+  const currentMesero = useUsuarioActual();
   const { clientes } = useRxClientes() as { clientes: RxCliente[] };
   const { items } = useVentasConMovimientos();
 
@@ -141,7 +142,7 @@ export function ConciliarAdopcionDialog({ det, habitaciones, reservas, reserva, 
           tipo: 'directa',
           cliente_id: clienteId ?? undefined,
           cliente_nombre: clienteNombre,
-          referencia: `Reserva de hotel — ${clienteNombre} · ${cabana}`,
+          referencia: [cabana, det.reservationID].filter(Boolean).join(' · '),
           llegada: det.llegada,
           salida: det.salida,
           organization_id: orgId,

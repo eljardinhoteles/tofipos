@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { Bed, ForkKnife, Hash, Info, Moon, Note, UserCircle, UsersThree, WarningCircle } from '@phosphor-icons/react';
+import { Bed, ForkKnife, Hash, Info, Moon, Note, PawPrint, UserCircle, UsersThree, WarningCircle } from '@phosphor-icons/react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { getReservaCloudbeds } from '../../lib/cloudbeds';
 import { estiloDe, pagoDeVenta, type EstiloReserva, type InfoPago } from './estiloReserva';
 import { useVentaDeReserva } from '../../hooks/useVentasHotel';
 import { planSeCobra } from '../../lib/hotelPlanesApi';
+import { textoMascota } from '../../lib/hotelReservasApi';
 import { categoriasDeExtras, useCategoriasExtras } from '../../hooks/useCategoriasExtrasHotel';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import type { VentaConMovimientos } from '../../lib/ventaConMovimientos';
@@ -145,7 +146,7 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
         >
           <span className="flex flex-col min-w-0 grow leading-tight">
             <span className="t-cuerpo-fuerte truncate">{t.nombre}</span>
-            <span className="t-meta overflow-hidden whitespace-nowrap opacity-80 flex items-center gap-1">{mov?.eje === 'h' && mov.dias !== 0 ? `${dayjs(t.desde).add(mov.dias, 'day').format('D MMM')} → ${dayjs(t.hasta).add(mov.dias, 'day').format('D MMM')}` : plural(noches, 'noche', 'noches')}{iconosExtras.map((c, i) => { const Ic = getCategoryIcon(c.icono); return Ic ? <Ic key={c.id} size={13} weight="bold" aria-label={c.nombre} className={cn('shrink-0', i > 0 && 'hidden @min-[9rem]:block')} /> : null; })}{pago && <span className="hidden @min-[9rem]:inline"> · {pago.etiqueta}</span>}</span>
+            <span className="t-meta overflow-hidden whitespace-nowrap opacity-80 flex items-center gap-1">{mov?.eje === 'h' && mov.dias !== 0 ? `${dayjs(t.desde).add(mov.dias, 'day').format('D MMM')} → ${dayjs(t.hasta).add(mov.dias, 'day').format('D MMM')}` : plural(noches, 'noche', 'noches')}{iconosExtras.map((c, i) => { const Ic = getCategoryIcon(c.icono); return Ic ? <Ic key={c.id} size={13} weight="fill" aria-label={c.nombre} className={cn('shrink-0', i > 0 && 'hidden @min-[9rem]:block')} /> : null; })}{t.local?.mascota && <PawPrint size={13} weight="fill" aria-label={`Mascota: ${textoMascota(t.local.mascota)}`} className="shrink-0 hidden @min-[6rem]:block" />}</span>
           </span>
           {/* El icono del canal solo cabe en las barras anchas; en las de una noche queda el nombre. */}
           <span className={cn('hidden @min-[6rem]:flex size-6 shrink-0 rounded-full items-center justify-center t-dato font-extrabold', estilo.circulo)}>
@@ -303,6 +304,7 @@ function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: Tar
               {cabana}{local?.grupo_id ? ' · grupo del POS' : ''}
               {local?.cama && <span className="block">Cama: {local.cama}</span>}
             </Fila>
+            {local?.mascota && <Fila icono={PawPrint}>{textoMascota(local.mascota)}</Fila>}
             {local?.plan_alimentacion && <Fila icono={ForkKnife}>{local.plan_alimentacion.nombre}<span className="text-muted-foreground"> · {planSeCobra(local.plan_alimentacion) ? 'con cargo' : 'incluido'}</span></Fila>}
             {notasLocal.length > 0 && (
               <Fila icono={Note}>

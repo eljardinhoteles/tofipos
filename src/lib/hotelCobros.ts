@@ -47,6 +47,17 @@ export function atribucionDePago(motivo: string | undefined): { destino: Destino
 export const motivoLegible = (motivo: string | undefined) => (motivo ? motivo.replace(ETIQUETA, '$2') : '');
 
 /**
+ * Texto de referencia de la venta de una reserva de hotel: solo lo que no está ya en la venta (el origen «Reserva hotel» y el
+ * cliente se ven aparte): habitación (o cuántas son, en un grupo), «Grupo» si son varias y el código de la reserva en Cloudbeds (si ya lo tiene).
+ */
+export function referenciaVentaHotel(miembros: ReservaHotel[]): string {
+  // Un grupo puede ser de muchas habitaciones: solo se cuenta cuántas, no se listan.
+  const cabanas = miembros.length > 1 ? `${miembros.length} habitaciones` : miembros[0].cabana;
+  const codigos = [...new Set(miembros.map((m) => m.cloudbeds_grupo_ref ?? m.cloudbeds_reservation_id).filter((c): c is string => !!c))].join(', ');
+  return [cabanas, miembros.length > 1 ? 'Grupo' : '', codigos].filter(Boolean).join(' · ');
+}
+
+/**
  * Garantiza que la reserva tenga su venta en el Centro de Ventas: si aún no la tiene, la crea (reserva de hotel, directa)
  * con el total del POS (tarifa + extras) y la enlaza. Si es de un grupo, UNA sola venta cubre todas las habitaciones: se crea con
  * la suma de sus totales y se enlaza a todas (o se reutiliza la que alguna ya tenga, sumándole las que faltan).
@@ -67,7 +78,7 @@ export async function asegurarVentaHotel(r: ReservaHotel, usuarioId?: string, gr
       tipo: 'directa',
       cliente_id: r.cliente_id ?? undefined,
       cliente_nombre: nombre,
-      referencia: miembros.length > 1 ? `Reserva de hotel — ${nombre} · ${miembros.length} habitaciones` : `Reserva de hotel — ${nombre} · ${r.cabana}`,
+      referencia: referenciaVentaHotel(miembros),
       llegada: miembros.map((m) => m.llegada).sort()[0],
       salida: miembros.map((m) => m.salida).sort().at(-1),
       organization_id: orgActiva(),

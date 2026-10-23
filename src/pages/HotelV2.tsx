@@ -16,7 +16,7 @@ import { ReservaDrawer, type PresetReserva } from '../components/Hotel/ReservaDr
 import { NuevaReservaDrawer } from '../components/Hotel/NuevaReservaDrawer';
 import { cloudbedsConfigurado, eliminarBloqueoCloudbeds, getReservaCloudbeds, type ReservaCloudbedsDetalle, type TarjetaCalendario } from '../lib/cloudbeds';
 import { listarHabitaciones, type HabitacionHotel } from '../lib/hotelHabitacionesApi';
-import { listarReservasRecientes, validarAdopcion, type ReservaHotel } from '../lib/hotelReservasApi';
+import { leerReservaHotel, listarReservasRecientes, validarAdopcion, type ReservaHotel } from '../lib/hotelReservasApi';
 import { usePermisos } from '../hooks/usePermisos';
 import { useCacheCalendario } from '../hooks/useMesesHotel';
 import { hayFalloConsulta, ultimaConsulta } from '../lib/hotelCalendarioCache';
@@ -79,6 +79,18 @@ export default function HotelV2() {
     try { setPlanes(await listarPlanes()); } catch (e) { setErrorCarga(e instanceof Error ? e.message : 'No se pudieron cargar los planes de alimentación'); }
   }, []);
   useEffect(() => { void cargar(); void cargarHabitaciones(); void cargarPlanes(); }, [cargar, cargarHabitaciones, cargarPlanes]);
+
+  // El centro de actividad abre una reserva: al entrar al Hotel o, si ya se está aquí, por aviso.
+  useEffect(() => {
+    const abrir = () => {
+      let id: string | null = null;
+      try { id = sessionStorage.getItem('pos_reserva_hotel_a_abrir'); sessionStorage.removeItem('pos_reserva_hotel_a_abrir'); } catch { /* sin storage */ }
+      if (id) void leerReservaHotel(id).then((r) => { if (r) setDetalle(r); }).catch(() => undefined);
+    };
+    abrir();
+    window.addEventListener('pos:abrir-reserva-hotel', abrir);
+    return () => window.removeEventListener('pos:abrir-reserva-hotel', abrir);
+  }, []);
 
   // Repintar cuando llegan tarjetas nuevas: de ellas sale la comparación con Cloudbeds.
   useCacheCalendario();

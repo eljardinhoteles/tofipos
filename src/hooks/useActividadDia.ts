@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import { listarCierresDelDia } from '../lib/cierresTurnoApi';
 import type { CierreTurno } from '../lib/cierreTurno';
 import { usePlanificacion } from '../lib/planificacion';
+import { listarReservasHotelActividad, type ReservaHotel } from '../lib/hotelReservasApi';
 
 type Colecciones = Record<'comandas' | 'items' | 'pagos' | 'ventas' | 'habitaciones' | 'mesas' | 'usuarios', any[]>;
 const VACIO: Colecciones = { comandas: [], items: [], pagos: [], ventas: [], habitaciones: [], mesas: [], usuarios: [] };
@@ -27,6 +28,8 @@ export function useActividadDia(activo: boolean) {
   const [actualizadoA, setActualizadoA] = useState<Date | null>(null);
   // Los cierres de turno viven en Supabase: se consultan aparte; sin conexión simplemente no aparecen.
   const [cierres, setCierres] = useState<CierreTurno[]>([]);
+  // Las reservas del Hotel también viven en Supabase: se consultan al abrir y al actualizar.
+  const [hotelReservas, setHotelReservas] = useState<ReservaHotel[]>([]);
   // Se recalcula al abrir y al actualizar: si la app quedó abierta pasada la medianoche, "hoy" cambia.
   const inicio = useMemo(() => (activo ? inicioDelDia() : ''), [activo, tick]);
 
@@ -73,6 +76,15 @@ export function useActividadDia(activo: boolean) {
     return () => { vivo = false; };
   }, [activo, inicio, tick]);
 
+  useEffect(() => {
+    if (!activo || !inicio) return;
+    let vivo = true;
+    listarReservasHotelActividad(inicio)
+      .then(r => { if (vivo) setHotelReservas(r); })
+      .catch(() => { if (vivo) setHotelReservas([]); });
+    return () => { vivo = false; };
+  }, [activo, inicio, tick]);
+
   // Pide a Supabase lo más reciente (movimientos de otros dispositivos) y vuelve a leer.
   // Lo que llegue después aparece solo: las consultas son en vivo.
   const refrescar = useCallback(async () => {
@@ -89,6 +101,6 @@ export function useActividadDia(activo: boolean) {
     }, 1200);
   }, []);
 
-  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio, cierres, planConfirmaciones, planCeldas }) : []), [activo, datos, inicio, cierres, planConfirmaciones, planCeldas]);
+  const eventos = useMemo(() => (activo ? construirActividad({ ...datos, inicio, cierres, planConfirmaciones, planCeldas, hotelReservas }) : []), [activo, datos, inicio, cierres, planConfirmaciones, planCeldas, hotelReservas]);
   return { eventos, cargando, refrescar, refrescando, actualizadoA };
 }

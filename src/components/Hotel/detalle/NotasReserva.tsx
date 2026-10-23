@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Note, PencilSimple, Plus, ShoppingBag, Trash, X } from '@phosphor-icons/react';
+import { Check, Note, PencilSimple, Plus, ShoppingBag, Trash, UsersThree, X } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,18 +12,21 @@ import {
 import { Seccion } from './comunes';
 
 const SIN_EXTRA = '__sin__';
+const TODO_GRUPO = '__grupo__';
 
 interface FormProps {
   r: ReservaHotel;
   /** Extra al que va ligada la nota. `undefined` = se puede elegir (o dejarla general); `null` = general. */
   extraFijo?: string | null;
+  /** La reserva es de un grupo: se ofrece una nota para todo el grupo (sin nombre de habitación en el documento). */
+  enGrupo?: boolean;
   usuario?: string;
   onGuardado: (r: ReservaHotel) => void;
   onCancelar: () => void;
 }
 
 /** Nota corta nueva: horario de un tour, una alergia… Ligada a un extra o general. */
-export function FormNota({ r, extraFijo, usuario, onGuardado, onCancelar }: FormProps) {
+export function FormNota({ r, extraFijo, enGrupo, usuario, onGuardado, onCancelar }: FormProps) {
   const [texto, setTexto] = useState('');
   const [extraId, setExtraId] = useState<string>(extraFijo ?? SIN_EXTRA);
   const [guardando, setGuardando] = useState(false);
@@ -33,7 +36,7 @@ export function FormNota({ r, extraFijo, usuario, onGuardado, onCancelar }: Form
     if (!texto.trim()) return;
     setGuardando(true);
     try {
-      onGuardado(await agregarNotaHotel(r, texto, extraId === SIN_EXTRA ? null : extraId, usuario));
+      onGuardado(await agregarNotaHotel(r, texto, extraId === SIN_EXTRA || extraId === TODO_GRUPO ? null : extraId, usuario, extraId === TODO_GRUPO));
       showToast.success('Nota añadida');
     } catch (e) {
       showToast.fallo('guardar la nota', e);
@@ -62,11 +65,12 @@ export function FormNota({ r, extraFijo, usuario, onGuardado, onCancelar }: Form
       <Input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={NOTA_MAX_CARACTERES} autoFocus
         placeholder="Ej. Salida del tour 09:30, martes 20 de octubre" aria-label="Nota de la reserva"
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void guardar(); } }} className="h-11 text-base" />
-      {extraFijo === undefined && extrasConImporte.length > 0 && (
+      {extraFijo === undefined && (extrasConImporte.length > 0 || enGrupo) && (
         <Select value={extraId} onValueChange={setExtraId}>
           <SelectTrigger className="data-[size=default]:h-11 w-full px-2.5 text-base rounded-2xl bg-card border-border shadow-xs" aria-label="Extra al que va ligada"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value={SIN_EXTRA} className="t-cuerpo">Nota general (sin extra)</SelectItem>
+            <SelectItem value={SIN_EXTRA} className="t-cuerpo">{enGrupo ? 'Solo esta habitación' : 'Nota general (sin extra)'}</SelectItem>
+            {enGrupo && <SelectItem value={TODO_GRUPO} className="t-cuerpo">Todo el grupo</SelectItem>}
             {extrasConImporte.map((e) => <SelectItem key={e.id} value={e.id} className="t-cuerpo">{e.descripcion}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -130,10 +134,11 @@ export function ItemNota({ r, nota, puedeEditar, usuario, mostrarExtra, destacad
       {destacada && <Note size={15} weight="fill" className="text-warning-foreground shrink-0 mt-1" aria-hidden />}
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className={destacada ? 't-cuerpo break-words text-foreground font-semibold' : 't-cuerpo break-words'}>{nota.texto}</span>
-        {((mostrarExtra && nota.extra) || nota.usuario) && (
+        {((mostrarExtra && (nota.extra || nota.grupo)) || nota.usuario) && (
           <span className="t-meta text-muted-foreground">
             {mostrarExtra && nota.extra && <><ShoppingBag size={12} className="inline -mt-0.5 mr-1" />{nota.extra}{extraVigente ? '' : ' (quitado)'}</>}
-            {mostrarExtra && nota.extra && nota.usuario ? ' · ' : ''}{nota.usuario ?? ''}
+            {mostrarExtra && nota.grupo && <><UsersThree size={12} className="inline -mt-0.5 mr-1" />Todo el grupo</>}
+            {mostrarExtra && (nota.extra || nota.grupo) && nota.usuario ? ' · ' : ''}{nota.usuario ?? ''}
           </span>
         )}
       </div>
@@ -150,12 +155,13 @@ export function ItemNota({ r, nota, puedeEditar, usuario, mostrarExtra, destacad
 interface SeccionProps {
   r: ReservaHotel;
   puedeEditar: boolean;
+  enGrupo?: boolean;
   usuario?: string;
   onCambio: (r: ReservaHotel) => void;
 }
 
 /** Todas las notas de la reserva (generales y ligadas a un extra), con su alta. */
-export function SeccionNotas({ r, puedeEditar, usuario, onCambio }: SeccionProps) {
+export function SeccionNotas({ r, puedeEditar, enGrupo, usuario, onCambio }: SeccionProps) {
   const [abierto, setAbierto] = useState(false);
   if (!notasReservaDisponible && r.notas_items.length === 0) return null;
   return (
@@ -169,7 +175,7 @@ export function SeccionNotas({ r, puedeEditar, usuario, onCambio }: SeccionProps
           {r.notas_items.map((n) => <li key={n.id}><ItemNota r={r} nota={n} puedeEditar={puedeEditar} usuario={usuario} mostrarExtra onCambio={onCambio} /></li>)}
         </ul>
       )}
-      {abierto && <FormNota r={r} usuario={usuario} onCancelar={() => setAbierto(false)} onGuardado={(n) => { setAbierto(false); onCambio(n); }} />}
+      {abierto && <FormNota r={r} enGrupo={enGrupo} usuario={usuario} onCancelar={() => setAbierto(false)} onGuardado={(n) => { setAbierto(false); onCambio(n); }} />}
     </Seccion>
   );
 }

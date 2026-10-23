@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ForkKnife, ChefHat, Receipt, CurrencyDollar, Bed, XCircle, Gift, ArrowUUpLeft,
   SignIn, SignOut, FileText, UsersThree, Pulse, ArrowsClockwise, X, CaretRight,
-  LockKey, CreditCard, ArrowDown, ChatText, CalendarStar,
+  LockKey, CreditCard, ArrowDown, ChatText, CalendarStar, CalendarPlus, BellRinging,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ const ICONOS: Record<ActividadTipo, React.ElementType> = {
   ajuste: ArrowDown,
   comentario: ChatText,
   planificador: CalendarStar,
+  reserva_hotel: CalendarPlus,
+  aviso_hotel: BellRinging,
 };
 
 const TONOS: Record<ActividadTono, string> = {
@@ -139,7 +141,7 @@ export function ActividadDrawer() {
                 {filtro === 'alertas' ? 'Sin alertas hoy' : 'Sin actividad todavía'}
               </span>
               <span className="t-meta text-muted-foreground">
-                {filtro === 'alertas' ? 'No hay anulaciones, cortesías, reembolsos, ajustes a la baja ni ventas a crédito.' : 'Aquí aparecerá lo que ocurra durante el día.'}
+                {filtro === 'alertas' ? 'No hay anulaciones, cortesías, reembolsos, ajustes a la baja, ventas a crédito ni avisos de Cloudbeds.' : 'Aquí aparecerá lo que ocurra durante el día.'}
               </span>
             </div>
           ) : (

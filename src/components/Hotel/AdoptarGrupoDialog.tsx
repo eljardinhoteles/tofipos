@@ -1,19 +1,18 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { ArrowsClockwise, Bed, Calculator, CheckCircle, UsersThree, WarningCircle } from '@phosphor-icons/react';
+import { Bed, Calculator, UsersThree } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showToast } from '@/lib/toast';
-import { useAuth } from '../../context/AuthContext';
+import { useUsuarioActual } from '../../hooks/useUsuarioActual';
 import { Girando } from './Espera';
 import { Contador } from './detalle/Contador';
 import { EPS, dinero, plural } from './detalle/formatos';
 import { getDisponibilidad, type ReservaCloudbedsDetalle } from '../../lib/cloudbeds';
 import { habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
-import { adoptarGrupoCloudbeds, convertirGrupoCloudbeds, type ReservaHotel } from '../../lib/hotelReservasApi';
+import { adoptarGrupoCloudbeds, type ReservaHotel } from '../../lib/hotelReservasApi';
 import { asegurarVentaHotel } from '../../lib/hotelCobros';
-import { evaluarConversionGrupo } from '../../lib/hotelConversionGrupo';
 
 interface Props {
   det: ReservaCloudbedsDetalle;
@@ -28,7 +27,8 @@ interface Props {
  * Se crea una reserva del POS por habitación (un grupo) y una sola venta que las cubre.
  */
 export function AdoptarGrupoDialog({ det, habitaciones, onClose, onHecha }: Props) {
-  const { currentMesero } = useAuth();
+  // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
+  const currentMesero = useUsuarioActual();
   const [filas, setFilas] = useState(() => {
     // Cloudbeds da el total de cada habitación dentro de la reserva (a veces con impuestos incluidos): se reparte el hospedaje
     // del desglose en proporción a esos totales, de modo que la suma cuadre. Sin totales por habitación, se escribe a mano.
@@ -54,7 +54,6 @@ export function AdoptarGrupoDialog({ det, habitaciones, onClose, onHecha }: Prop
   });
   const [tarifasDeCloudbeds] = useState(() => det.habitaciones.length > 0 && det.habitaciones.every((h) => (h.total ?? 0) > 0));
   const [guardando, setGuardando] = useState(false);
-  const [confirmandoConv, setConfirmandoConv] = useState(false);
   const [calculando, setCalculando] = useState(false);
 
   const cambiar = (i: number, patch: Partial<(typeof filas)[number]>) => setFilas((a) => a.map((f, j) => (j === i ? { ...f, ...patch } : f)));
@@ -85,7 +84,6 @@ export function AdoptarGrupoDialog({ det, habitaciones, onClose, onHecha }: Prop
     }
   };
 
-  const conversion = evaluarConversionGrupo(det, habitaciones);
   const llenas = filas.filter((f) => f.tarifa.trim() !== '').length;
   const [igual, setIgual] = useState('');
   const aplicarIgual = () => { if (Number.isFinite(parseFloat(igual))) setFilas((a) => a.map((f) => ({ ...f, tarifa: igual }))); };
@@ -111,34 +109,6 @@ export function AdoptarGrupoDialog({ det, habitaciones, onClose, onHecha }: Prop
       showToast.fallo('calcular las tarifas', e);
     } finally {
       setCalculando(false);
-    }
-  };
-
-  const convertir = async () => {
-    if (!completas) return;
-    setGuardando(true);
-    try {
-      const lineas = filas.map((f, i) => ({ roomTypeID: f.roomTypeID, roomID: f.roomID, cabana: f.cabana, codigo: habitacionDeUnidad(habitaciones, f.roomTypeID, f.roomID)?.codigo ?? null, adultos: f.adultos, ninos: f.ninos, tarifa: tarifas[i] }));
-      const { reservas, resultados } = await convertirGrupoCloudbeds(det, lineas, { usuarioId: currentMesero?.id, usuarioNombre: currentMesero?.nombre });
-      const vivas = reservas.filter((_, i) => resultados[i].sync !== 'error');
-      if (vivas.length > 1) {
-        try { await asegurarVentaHotel(vivas[0], currentMesero?.id, vivas); } catch (e) {
-          console.warn('No se pudo crear la venta del grupo convertido', e);
-          showToast.warning('El grupo se convirtió, pero no su venta', 'Se creará con el primer pago, o usa «Verificar enlace».');
-        }
-      }
-      const rechazadas = reservas.filter((_, i) => resultados[i].sync === 'error');
-      const pendientes = resultados.filter((r) => r.sync === 'pendiente').length;
-      if (rechazadas.length > 0) {
-        showToast.error(`Cloudbeds rechazó ${rechazadas.map((r) => r.cabana).join(', ')}`, 'La reserva original ya estaba cancelada: crea esas habitaciones de nuevo con «Nueva reserva».');
-      }
-      if (pendientes > 0) showToast.warning(`${plural(pendientes, 'habitación quedó', 'habitaciones quedaron')} sin subir a Cloudbeds`, 'Están guardadas en el POS y se reintentan solas. Revísalas en «Por sincronizar».');
-      if (rechazadas.length === 0 && pendientes === 0) showToast.success(`Grupo convertido · ${plural(vivas.length, 'reserva', 'reservas')}`, `${huesped} · ${dayjs(det.llegada).format('DD/MM')} al ${dayjs(det.salida).format('DD/MM')}`);
-      onHecha(vivas.length > 0 ? vivas : reservas);
-    } catch (e) {
-      showToast.fallo('convertir el grupo', e);
-      setGuardando(false);
-      setConfirmandoConv(false);
     }
   };
 
@@ -184,38 +154,6 @@ export function AdoptarGrupoDialog({ det, habitaciones, onClose, onHecha }: Prop
             ))}
           </ul>
         </div>
-
-        <details className="rounded-xl border border-border bg-card px-3 py-2 t-meta group/conv">
-          <summary className="flex items-center gap-2 cursor-pointer list-none t-cuerpo-fuerte">
-            <ArrowsClockwise size={16} aria-hidden className="text-muted-foreground shrink-0" />
-            <span className="flex-1">Convertir en reservas individuales (opcional)</span>
-            {conversion.convertible
-              ? <span className="flex items-center gap-1 text-success"><CheckCircle size={16} weight="fill" aria-hidden /> Se puede</span>
-              : <span className="flex items-center gap-1 text-warning-foreground"><WarningCircle size={16} weight="fill" aria-hidden /> No se puede</span>}
-          </summary>
-          <div className="flex flex-col gap-2 pt-2">
-            <p className="text-muted-foreground">Cancelaría esta reserva en Cloudbeds y crearía una reserva por habitación desde el POS, para gestionarlas una a una (habitación, fechas, personas, cancelar una sola). Escribe antes la tarifa de cada habitación.</p>
-            {conversion.bloqueos.length > 0 && (
-              <ul className="list-disc pl-5 text-destructive flex flex-col gap-0.5">{conversion.bloqueos.map((b) => <li key={b}>{b}</li>)}</ul>
-            )}
-            <ul className="list-disc pl-5 text-muted-foreground flex flex-col gap-0.5">{conversion.avisos.map((a) => <li key={a}>{a}</li>)}</ul>
-            {conversion.convertible && !confirmandoConv && (
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={() => setConfirmandoConv(true)} disabled={!completas || guardando} title={completas ? undefined : 'Escribe primero la tarifa de cada habitación'}>Convertir en reservas individuales…</Button>
-              </div>
-            )}
-            {conversion.convertible && confirmandoConv && (
-              <div className="flex flex-col gap-2 rounded-xl bg-destructive-soft p-3">
-                <span className="t-cuerpo-fuerte text-destructive">¿Cancelar la reserva {det.reservationID} en Cloudbeds y crear {plural(filas.length, 'reserva nueva', 'reservas nuevas')}?</span>
-                <span className="text-destructive">Se cancela primero en Cloudbeds y después se crea cada habitación. Esto no se puede deshacer. Si ya migraste los pagos al Centro de Ventas, continúa.</span>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setConfirmandoConv(false)} disabled={guardando}>No</Button>
-                  <Button type="button" variant="destructive" onClick={() => void convertir()} disabled={guardando}>{guardando ? <><Girando /> Convirtiendo…</> : 'Sí, convertir'}</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </details>
 
         <div className="flex flex-col gap-0.5 rounded-xl bg-muted/60 px-3 py-2 t-meta tabular-nums">
           <span className="flex justify-between"><span className="text-muted-foreground">Suma de tarifas</span><b className="text-foreground">{dinero(suma)}</b></span>

@@ -150,6 +150,11 @@ export function cancelarReservaCloudbeds(reservationId: string) {
   return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/cancel`, { method: 'POST' });
 }
 
+/** Reactiva una reserva cancelada en Cloudbeds (la vuelve a «confirmada»). */
+export function reactivarReservaCloudbeds(reservationId: string) {
+  return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/reactivate`, { method: 'POST' });
+}
+
 /** Check-in en Cloudbeds (la reserva pasa a «En casa»). */
 export function checkinReservaCloudbeds(reservationId: string) {
   return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/checkin`, { method: 'POST' });

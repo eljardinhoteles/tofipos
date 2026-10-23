@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useAuth } from '../../context/AuthContext';
+import { useUsuarioActual } from '../../hooks/useUsuarioActual';
 import { nombreHuesped, type ReservaHotel } from '../../lib/hotelReservasApi';
 import { EditorEstadia } from './detalle/EditorEstadia';
 
@@ -20,7 +20,8 @@ interface Props {
  * con las nuevas ya puestas: calcula la tarifa en Cloudbeds, comprueba que las noches nuevas estén libres y muestra antes y después.
  */
 export function MoverFechasDialog({ r, grupo, llegada, salida, onClose, onHecho }: Props) {
-  const { currentMesero } = useAuth();
+  // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
+  const currentMesero = useUsuarioActual();
   const f = (d: string) => dayjs(d).format('D MMM');
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>

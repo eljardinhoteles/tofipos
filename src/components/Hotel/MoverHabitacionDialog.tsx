@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useAuth } from '../../context/AuthContext';
+import { useUsuarioActual } from '../../hooks/useUsuarioActual';
 import type { HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 import { nombreHuesped, type ReservaHotel } from '../../lib/hotelReservasApi';
 import { EditorCabana } from './detalle/EditorCabana';
@@ -20,7 +20,8 @@ interface Props {
  * Cloudbeds que la habitación siga libre, muestra su tarifa y deja elegir cuál queda (la de la habitación nueva, la actual u otra).
  */
 export function MoverHabitacionDialog({ r, habitaciones, destino, nombreDestino, onClose, onHecho }: Props) {
-  const { currentMesero } = useAuth();
+  // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
+  const currentMesero = useUsuarioActual();
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-md">

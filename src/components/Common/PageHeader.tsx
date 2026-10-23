@@ -70,9 +70,10 @@ export function PageHeader({ title, badge, subtitle, search, actions, tabs, puls
         </div>
       ) : search && <div className="hidden md:flex justify-center min-w-0">{search}</div>}
       <div className="flex items-center justify-end gap-3 shrink-0">{actions}</div>
-      {pulso}
+      {/* Con secciones en celular el header no es lo último: el resplandor sale bajo las secciones, no encima de ellas. */}
+      {tabs ? <div className="hidden md:contents">{pulso}</div> : pulso}
     </header>
-    {tabs && <div className="md:hidden bg-nav px-4 pb-3 shrink-0 flex justify-center">{tabs}</div>}
+    {tabs && <div className="md:hidden relative bg-nav px-4 pb-3 shrink-0 flex justify-center">{tabs}{pulso && <div className="contents">{pulso}</div>}</div>}
     </>
   );
 }

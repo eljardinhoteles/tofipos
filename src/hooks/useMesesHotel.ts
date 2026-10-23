@@ -15,7 +15,7 @@ export function useCacheCalendario() {
  * plano. Se repinta solo cuando llegan datos (también los que el Worker refresca por detrás) y al volver a la pestaña.
  * Devuelve `recargar(true)` para forzar una consulta en vivo a Cloudbeds.
  */
-export function useMesesHotel(meses: string[], version: number, adelante = 2, atras = 1) {
+export function useMesesHotel(meses: string[], version: number, adelante = 1, atras = 1) {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [ahora, setAhora] = useState(() => Date.now());

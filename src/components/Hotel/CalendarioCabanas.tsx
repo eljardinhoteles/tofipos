@@ -1,7 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { MarcaFeriado } from '../Common/MarcaFeriado';
+import { useFeriados } from '../../lib/feriados';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import dayjs from 'dayjs';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { Bed, CalendarBlank, CaretLeft, CaretRight, CalendarPlus, Plus, Prohibit } from '@phosphor-icons/react';
+import { Bed, CalendarBlank, CaretLeft, CaretRight, CalendarPlus, Moon, Plus, Prohibit } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,7 +23,11 @@ import { nombreHuesped, type ReservaHotel } from '../../lib/hotelReservasApi';
 
 // Días que se ven a la vez. Las celdas se reparten TODO el ancho disponible, así que en una pantalla normal no hay
 // desplazamiento horizontal.
-const DIAS = 10;
+const DIAS_ESCRITORIO = 10;
+// En celular se ven menos días para que cada celda tenga más espacio.
+const DIAS_MOVIL = 7;
+// Ancho mínimo por día en celular: más holgado que en PC; los 7 días no caben juntos y se desliza de lado.
+const ANCHO_DIA_MIN_MOVIL = 64;
 // Columna de nombres: se adapta al ancho de la pantalla (entre 8,5 y 13 rem). En su esquina van los botones de navegación,
 // que necesitan unos 8 rem.
 const ANCHO_NOMBRE = 'clamp(8.5rem, 15vw, 13rem)';
@@ -35,7 +42,7 @@ const COLUMNA_REFERENCIA = 2;
 const conReferencia = (f: string | Date) => dayjs(f).subtract(COLUMNA_REFERENCIA, 'day').format('YYYY-MM-DD');
 // La rejilla es fija (sale del mapa de habitaciones) y solo las tarjetas viajan por la red. Cloudbeds tarda lo mismo
 // en dar un mes entero que dos semanas, así que se pide por MESES y se recortan los días que se ven.
-const MESES_ADELANTE = 2;
+const MESES_ADELANTE = 1;
 const MESES_ATRAS = 1;
 
 interface Props {
@@ -60,6 +67,11 @@ interface Props {
  * como tarjetas. Una casilla vacía no garantiza que esté libre: al crear la reserva se comprueba en vivo.
  */
 export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, version, onNueva, onBloquear, onAbrir, onAdoptar, onEliminarBloqueo, onMovida }: Props) {
+  const { nombreDe } = useFeriados();
+  const esMovil = useIsMobile();
+  const DIAS = esMovil ? DIAS_MOVIL : DIAS_ESCRITORIO;
+  // En celular, la columna de nombres es más angosta y cada día tiene un ancho mínimo mayor (se desliza de lado).
+  const anchoNombre = esMovil ? '6.5rem' : ANCHO_NOMBRE;
   // Selección por clics en una fila: el primero marca la llegada (`sel`), el segundo la última noche y abre el menú (`menu`).
   const [sel, setSel] = useState<{ hid: string; ini: string } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
@@ -85,7 +97,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   // Cada cambio de ventana invalida la precarga anterior para no acumular consultas.
   const ronda = useRef(0);
 
-  const dias = useMemo(() => Array.from({ length: DIAS }, (_, i) => dayjs(desde).add(i, 'day')), [desde]);
+  const dias = useMemo(() => Array.from({ length: DIAS }, (_, i) => dayjs(desde).add(i, 'day')), [desde, DIAS]);
   const fechas = useMemo(() => dias.map((d) => d.format('YYYY-MM-DD')), [dias]);
   const meses = useMemo(() => [...new Set(fechas.map(mesDe))], [fechas]);
 
@@ -323,12 +335,6 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
       )}
       {/* Guía flotante de la selección por clics: aparece solo mientras hay una llegada marcada, al centro y separada del
           borde superior. Es superpuesta (no ocupa espacio) y no intercepta clics. */}
-      {sel && (
-        <p role="status" aria-live="polite"
-          className="absolute left-1/2 -translate-x-1/2 top-0.5 z-50 max-w-[90%] truncate rounded-full bg-foreground text-background px-3.5 py-1 t-meta font-bold shadow-xl pointer-events-none animate-in fade-in-0 slide-in-from-top-1 duration-150">
-          Toca la última noche · otro toque en la misma casilla = 1 noche · Esc cancela
-        </p>
-      )}
       {error && <p className="t-meta text-destructive rounded-2xl bg-destructive-soft px-3 py-2 mx-6">{error}</p>}
 
       {filas.length === 0 ? (
@@ -337,10 +343,10 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-auto border-b border-border bg-card">
-          <div className="flex flex-col min-h-full" style={{ minWidth: `calc(8.5rem + ${DIAS * ANCHO_DIA_MIN}px)` }}>
+          <div className="flex flex-col min-h-full" style={{ minWidth: `calc(${anchoNombre} + ${DIAS * (esMovil ? ANCHO_DIA_MIN_MOVIL : ANCHO_DIA_MIN)}px)` }}>
             {/* Cabecera: arriba el mes y el año (un tramo por mes), abajo el día de la semana y su número (hoy resaltado). */}
             <div className="flex sticky top-0 z-30 shrink-0 bg-card border-b border-border">
-              <div className="sticky left-0 z-30 bg-card shrink-0 border-r border-border/80 flex flex-col items-center justify-center gap-1.5 px-1.5" style={{ width: ANCHO_NOMBRE }}>
+              <div className="sticky left-0 z-30 bg-card shrink-0 border-r border-border/80 flex flex-col items-center justify-center gap-1.5 px-1.5" style={{ width: anchoNombre }}>
                 <div className="flex w-full items-center gap-1">
                   <button type="button" aria-label="Retroceder 2 días" title="Retroceder 2 días" onClick={() => mover(-PASO_FLECHAS)} className="size-8 shrink-0 flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors"><CaretLeft size={14} weight="bold" /></button>
                   <button type="button" title="Ir a hoy" onClick={() => setDesde(conReferencia(hoy))} className="h-8 flex-1 min-w-0 t-dato flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors">Hoy</button>
@@ -372,7 +378,8 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                 </div>
                 <div className="grid" style={columnas}>
                   {dias.map((d, i) => (
-                    <div key={d.format('YYYY-MM-DD')} className={cn('flex flex-col items-center gap-0.5 py-2', lineaDia(d.format('YYYY-MM-DD'), i))}>
+                    <div key={d.format('YYYY-MM-DD')} className={cn('relative flex flex-col items-center gap-0.5 py-2', nombreDe(d.format('YYYY-MM-DD')) && 'bg-destructive/[0.06]', lineaDia(d.format('YYYY-MM-DD'), i))}>
+                      <MarcaFeriado fecha={d.format('YYYY-MM-DD')} posicion="top-1 right-1" />
                       <span className="t-etiqueta text-muted-foreground uppercase">{d.format('dd')}</span>
                       <span className={cn('t-fila min-w-8 text-center rounded-lg px-1.5', d.format('YYYY-MM-DD') === hoy ? 'bg-nav text-nav-foreground' : 'text-foreground')}>{d.format('D')}</span>
                     </div>
@@ -392,11 +399,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                 <Fragment key={h.id}>
                 {encabezadoTipo && (
                   <div className="flex min-h-7 border-b border-border/80 bg-muted/60">
-                    <span className="sticky left-0 z-20 px-4 flex items-center t-etiqueta text-muted-foreground uppercase tracking-wide" style={{ width: ANCHO_NOMBRE }}>{encabezadoTipo}</span>
+                    <span className="sticky left-0 z-20 px-4 flex items-center t-etiqueta text-muted-foreground uppercase tracking-wide" style={{ width: anchoNombre }}>{encabezadoTipo}</span>
                   </div>
                 )}
                 <div data-fila-id={h.id} className={cn('flex flex-1 min-h-16 border-b border-border/80 last:border-b-0 transition-colors', objetivo?.id === h.id && (objetivo.error ? 'bg-destructive/10 ring-2 ring-inset ring-destructive/40' : 'bg-primary/10 ring-2 ring-inset ring-primary/40'))}>
-                  <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-4 border-r border-border/80" style={{ width: ANCHO_NOMBRE }}>
+                  <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-4 border-r border-border/80" style={{ width: anchoNombre }}>
                     {sinAsignar
                       ? <span className="t-cuerpo text-muted-foreground italic leading-snug min-w-0" title="Reservas de este tipo que en Cloudbeds aún no tienen habitación asignada">{h.id.endsWith(':0') ? 'Sin asignar' : ''}</span>
                       : <span className="t-cuerpo-fuerte line-clamp-2 leading-snug break-words min-w-0" title={h.nombre}>{h.nombre}</span>}
@@ -420,7 +427,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                           setMenu({ hid: h.id, ini: sel.ini, fin: f }); setSel(null); setSobre(null);
                         };
                         return (
-                          <div key={f} className={cn(lineaDia(f, idx), f === hoy && 'bg-primary/[0.08]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
+                          <div key={f} className={cn(lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.08]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
                             title={h.cloudbeds_room_type_id ? undefined : 'Habitación sin enlazar con Cloudbeds'}>
                             {reservable && (
                               <Popover open={menu?.hid === h.id && menu.fin === f} onOpenChange={(o) => { if (!o) setMenu(null); }}>
@@ -439,7 +446,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                                       </div>
                                       <div className="flex items-start gap-3">
                                         <CalendarBlank size={18} weight="regular" className="text-muted-foreground shrink-0 mt-0.5" />
-                                        <span className="t-cuerpo text-muted-foreground capitalize">{dayjs(menu.ini).format('ddd D MMM')} → {dayjs(salida).format('ddd D MMM YYYY')} <span className="normal-case">· {nochesMenu} {nochesMenu === 1 ? 'noche' : 'noches'}</span></span>
+                                        <span className="t-cuerpo text-muted-foreground capitalize">{dayjs(menu.ini).format('ddd D MMM')} → {dayjs(salida).format('ddd D MMM YYYY')}</span>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <Moon size={18} weight="regular" className="text-muted-foreground shrink-0 mt-0.5" />
+                                        <span className="t-cuerpo text-muted-foreground">{nochesMenu} {nochesMenu === 1 ? 'noche' : 'noches'}</span>
                                       </div>
                                     </div>
                                     <div className="flex flex-col gap-2">

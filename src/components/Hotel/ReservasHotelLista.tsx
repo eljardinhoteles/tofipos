@@ -1,12 +1,13 @@
 import { useCallback, useContext, useMemo, useState, type KeyboardEvent } from 'react';
 import dayjs from 'dayjs';
-import { ArrowDown, ArrowUp, MagnifyingGlass, SignOut, SlidersHorizontal, WarningCircle, X } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, MagnifyingGlass, PawPrint, SignIn, SignOut, SlidersHorizontal, WarningCircle, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { pagoDeVenta } from './estiloReserva';
 import { TarjetaInfoDialog } from './TarjetaInfoDialog';
 import { ActividadKpis } from './reservas/ActividadKpis';
+import { detalleKpi, type DetalleKpi } from './reservas/detalleKpi';
 import { PanelDia } from './reservas/PanelDia';
 import { PESO_ESTADIA, VISTAS, construirFilas, enVista, estadiaDe, ocupacionDelDia, type Estadia, type Estado, type Fila, type Pago, type Vista } from './reservas/modelo';
 import { EstadoBadge } from '../Common/EstadoBadge';
@@ -16,8 +17,8 @@ import { VentasHotelContext } from '../../hooks/useVentasHotel';
 import { useMesesHotel } from '../../hooks/useMesesHotel';
 import { bloques, mesDe, tarjetasDeMeses } from '../../lib/hotelCalendarioCache';
 import type { TarjetaCalendario } from '../../lib/cloudbeds';
-import { totalConExtras, type ReservaHotel } from '../../lib/hotelReservasApi';
-import { checkoutReservaCloudbeds } from '../../lib/cloudbeds';
+import { registrarCheckHotel, textoMascota, totalConExtras, type ReservaHotel } from '../../lib/hotelReservasApi';
+import { checkinReservaCloudbeds, checkoutReservaCloudbeds } from '../../lib/cloudbeds';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { showToast } from '@/lib/toast';
 import { claveEnlace, habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
@@ -102,26 +103,51 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
   const [canales, setCanales] = useState<Set<string>>(new Set());
   const [cabanas, setCabanas] = useState<Set<string>>(new Set());
   const [porRevisar, setPorRevisar] = useState(!!inicial?.porRevisar);
+  const [conMascota, setConMascota] = useState(false);
   const [orden, setOrden] = useState<Orden>({ campo: 'relevancia', asc: true });
   const [pagina, setPagina] = useState(1);
   const [saliendo, setSaliendo] = useState<string | null>(null);
 
-  // Check-out en Cloudbeds. Antes se comprueba que la habitación en Mesas no tenga una cuenta abierta (consumos sin cobrar).
-  const hacerCheckout = async (f: Fila) => {
+  // Check-in en Cloudbeds desde la lista de llegadas (sin pasar por Mesas).
+  const hacerCheckin = async (f: Fila) => {
     if (!f.codigo || saliendo) return;
     setSaliendo(f.clave);
     try {
-      const hab = habitacionDeUnidad(habitaciones, f.roomTypeID, f.roomID);
-      if (hab?.mesa_id) {
+      await checkinReservaCloudbeds(f.codigo);
+      if (f.r) registrarCheckHotel([f.r.id], 'checkin');
+      showToast.success(`Check-in hecho: ${f.nombre}`);
+      onCambio?.();
+    } catch (e) {
+      showToast.fallo('hacer el check-in', e);
+    } finally {
+      setSaliendo(null);
+    }
+  };
+
+  // Check-out en Cloudbeds. Antes se comprueba que la habitación en Mesas no tenga una cuenta abierta (consumos sin cobrar).
+  // Un grupo adoptado de Cloudbeds es UNA reserva allá: su check-out sale para todas las habitaciones a la vez.
+  const idCloudbedsDe = (f: Fila) => f.r?.cloudbeds_grupo_ref ?? f.codigo;
+  const hermanasDeGrupo = (f: Fila) => (f.r?.cloudbeds_grupo_ref ? reservas.filter((x) => x.cloudbeds_grupo_ref === f.r!.cloudbeds_grupo_ref && x.estado === 'confirmada') : []);
+  const hacerCheckout = async (f: Fila) => {
+    const id = idCloudbedsDe(f);
+    if (!id || saliendo) return;
+    setSaliendo(f.clave);
+    try {
+      const grupo = hermanasDeGrupo(f);
+      const afectadas = grupo.length > 0 ? grupo : f.r ? [f.r] : [];
+      const habs = afectadas.map((x) => habitacionDeUnidad(habitaciones, x.room_type_id, x.room_id)).filter((h): h is HabitacionHotel => !!h?.mesa_id);
+      if (habs.length > 0) {
         const db = await initVerticalRxDb();
-        const abiertas = await db.habitacion_cuentas.find({ selector: { mesa_id: hab.mesa_id, estado: 'activa', _deleted: { $ne: true } } }).exec();
+        const abiertas = await db.habitacion_cuentas.find({ selector: { mesa_id: { $in: habs.map((h) => h.mesa_id) }, estado: 'activa', _deleted: { $ne: true } } }).exec();
         if (abiertas.length > 0) {
-          showToast.error(`${hab.nombre} tiene una cuenta abierta en Mesas`, 'Cóbrala y ciérrala en Mesas antes de hacer el check-out.');
+          const nombres = habs.filter((h) => abiertas.some((c) => c.mesa_id === h.mesa_id)).map((h) => h.nombre).join(', ');
+          showToast.error(`Cuenta abierta en Mesas: ${nombres}`, 'Cóbrala y ciérrala en Mesas antes de hacer el check-out.');
           return;
         }
       }
-      await checkoutReservaCloudbeds(f.codigo);
-      showToast.success(`Check-out hecho: ${f.nombre}`);
+      await checkoutReservaCloudbeds(id);
+      registrarCheckHotel(afectadas.map((x) => x.id), 'checkout');
+      showToast.success(grupo.length > 1 ? `Check-out del grupo hecho: ${f.nombre}` : `Check-out hecho: ${f.nombre}`);
       onCambio?.();
     } catch (e) {
       showToast.fallo('hacer el check-out', e);
@@ -144,6 +170,8 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
 
   // «Todas» cuenta lo vigente (lo que la tabla muestra por defecto); las canceladas y rechazadas se ven con el filtro de estado.
   const conteos = useMemo(() => Object.fromEntries(VISTAS.map((v) => [v, filas.filter((f) => enVista(f, v, fecha) && (v !== 'todas' || ESTADO_INICIAL.includes(f.estado))).length])) as Record<Vista, number>, [filas, fecha]);
+  // Detalle de cada tarjeta (huéspedes, noches, ingresos) sobre las reservas de esa vista en el día que se mira.
+  const detalles = useMemo(() => Object.fromEntries(VISTAS.map((v) => [v, detalleKpi(v, filas.filter((f) => enVista(f, v, fecha) && (v !== 'todas' || ESTADO_INICIAL.includes(f.estado))))])) as Record<Vista, DetalleKpi>, [filas, fecha]);
   const vista: Vista = vistaElegida ?? (conteos.llegadas > 0 ? 'llegadas' : 'todas');
   const ocupacion = useMemo(() => ocupacionDelDia(filas, tarjetas, habitaciones, fecha), [filas, tarjetas, habitaciones, fecha]);
   const filtraEstado = vista === 'todas'; // en las vistas del día, el estado ya lo define la vista
@@ -167,13 +195,14 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
 
   const nRevisar = filas.filter(revisar).length;
   // Check-outs por hacer hoy (o atrasados): en casa y con la salida de hoy o anterior.
-  const nSalidasPendientes = useMemo(() => filas.filter((f) => f.t?.estado === 'checked_in' && f.codigo && enVista(f, 'salidas', hoy)).length, [filas, hoy]);
+  const nSalidasPendientes = useMemo(() => filas.filter((f) => f.t?.estado === 'checked_in' && (f.r?.cloudbeds_grupo_ref ?? f.codigo) && enVista(f, 'salidas', hoy)).length, [filas, hoy]);
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     const lista = filas.filter((f) => {
       if (!enVista(f, vista, fecha)) return false;
       if (porRevisar && !revisar(f)) return false;
+      if (conMascota && !f.r?.mascota) return false;
       if (filtraEstado && estados.size && !estados.has(f.estado)) return false;
       if (filtraEstado && estadias.size && !estadias.has(estadiaDe(f, hoy))) return false;
       if (pagos.size && !pagos.has(pagoDe(f))) return false;
@@ -196,7 +225,7 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
     });
     // `pagoDe` y `revisar` dependen de `ventas` y `divergencias`, que ya están en la lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, vista, fecha, busqueda, porRevisar, filtraEstado, estados, estadias, pagos, canales, cabanas, claveDeFila, orden, hoy, ventas, divergencias]);
+  }, [filas, vista, fecha, busqueda, porRevisar, conMascota, filtraEstado, estados, estadias, pagos, canales, cabanas, claveDeFila, orden, hoy, ventas, divergencias]);
 
   const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, paginas);
@@ -208,10 +237,10 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
   const elegirFecha = (f: string) => { setFecha(f); setPagina(1); };
 
   const estadoPorDefecto = estados.size === ESTADO_INICIAL.length && ESTADO_INICIAL.every((e) => estados.has(e));
-  const hayFiltros = pagos.size > 0 || canales.size > 0 || cabanas.size > 0 || porRevisar || (filtraEstado && (estadias.size > 0 || !estadoPorDefecto));
+  const hayFiltros = pagos.size > 0 || canales.size > 0 || cabanas.size > 0 || porRevisar || conMascota || (filtraEstado && (estadias.size > 0 || !estadoPorDefecto));
   const limpiar = () => {
     setEstadias(new Set()); setEstados(new Set(ESTADO_INICIAL)); setPagos(new Set()); setCanales(new Set()); setCabanas(new Set());
-    setPorRevisar(false); onBusqueda(''); setPagina(1);
+    setPorRevisar(false); setConMascota(false); onBusqueda(''); setPagina(1);
   };
   const ordenarPor = (campo: Orden['campo']) => {
     setOrden((o) => (o.campo === campo ? { campo, asc: !o.asc } : { campo, asc: campo !== 'total' }));
@@ -228,6 +257,7 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
     ...[...pagos].map((v) => ({ clave: `p-${v}`, etiqueta: OPCIONES_PAGO.find((o) => o.value === v)?.label ?? v, quitar: () => cambiar(setPagos)(conjunto(pagos, v)) })),
     ...[...canales].map((v) => ({ clave: `c-${v}`, etiqueta: v, quitar: () => cambiar(setCanales)(conjunto(canales, v)) })),
     ...[...cabanas].map((v) => ({ clave: `b-${v}`, etiqueta: opcionesCabana.find((o) => o.value === v)?.label ?? v, quitar: () => cambiar(setCabanas)(conjunto(cabanas, v)) })),
+    ...(conMascota ? [{ clave: 'mascota', etiqueta: 'Con mascota', quitar: () => cambiar(setConMascota)(false) }] : []),
     ...(porRevisar ? [{ clave: 'revisar', etiqueta: 'Por revisar', quitar: () => cambiar(setPorRevisar)(false) }] : []),
   ];
 
@@ -257,12 +287,12 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
       <div className="flex flex-col min-w-0 lg:flex-1 lg:min-h-0">
         <div className="px-4 sm:px-6 pt-0 lg:pt-4 pb-3 shrink-0 flex flex-col gap-3">
           {puedeGestionar && nSalidasPendientes > 0 && (
-            <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-warning-soft text-warning-foreground px-4 py-2.5">
-              <span className="t-cuerpo-fuerte flex items-center gap-2"><SignOut size={18} weight="bold" aria-hidden /> {plural(nSalidasPendientes, 'huésped por hacer', 'huéspedes por hacer')} check-out</span>
-              <button type="button" onClick={() => { setFecha(hoy); elegirVista('salidas'); }} className="h-9 pointer-coarse:h-11 px-3 rounded-2xl bg-card border border-border t-cuerpo-fuerte cursor-pointer hover:bg-muted">Ver salidas</button>
+            <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-warning-soft text-warning-foreground pl-4 pr-2 py-1.5">
+              <span className="t-dato font-semibold flex items-center gap-2"><SignOut size={16} weight="bold" aria-hidden /> {plural(nSalidasPendientes, 'huésped por hacer', 'huéspedes por hacer')} check-out</span>
+              <button type="button" onClick={() => { setFecha(hoy); elegirVista('salidas'); }} className="h-8 pointer-coarse:h-11 px-3 rounded-xl bg-card border border-border t-dato cursor-pointer hover:bg-muted">Ver salidas</button>
             </div>
           )}
-          <ActividadKpis vista={vista} onVista={elegirVista} conteos={conteos} />
+          <ActividadKpis vista={vista} onVista={elegirVista} conteos={conteos} detalles={detalles} />
           {errorCarga && <p className="t-meta text-destructive rounded-2xl bg-destructive-soft px-3 py-2">{errorCarga}</p>}
 
           {/* Buscador a todo el ancho y el botón «Filtros» con todos los grupos. */}
@@ -288,6 +318,12 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
                 <GrupoFiltro titulo="Pago" opciones={OPCIONES_PAGO} seleccion={pagos} onToggle={(v) => cambiar(setPagos)(conjunto(pagos, v))} />
                 {opcionesCanal.length > 1 && <GrupoFiltro titulo="Canal" opciones={opcionesCanal} seleccion={canales} onToggle={(v) => cambiar(setCanales)(conjunto(canales, v))} />}
                 <GrupoFiltro titulo="Habitación" opciones={opcionesCabana} seleccion={cabanas} onToggle={(v) => cambiar(setCabanas)(conjunto(cabanas, v))} />
+                <div className="flex flex-col gap-2">
+                  <span className="t-etiqueta text-muted-foreground">Huésped</span>
+                  <div className="flex flex-wrap gap-2">
+                    <FiltroChip activo={conMascota} onClick={() => cambiar(setConMascota)(!conMascota)} title="Reservas que viajan con mascota"><PawPrint size={14} weight="bold" /> Con mascota</FiltroChip>
+                  </div>
+                </div>
                 {nRevisar > 0 && (
                   <div className="flex flex-col gap-2">
                     <span className="t-etiqueta text-muted-foreground">Atención</span>
@@ -344,7 +380,7 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
                   <th className="px-3 sm:px-6 py-3.5 hidden xl:table-cell">Canal</th>
                   <th className="px-3 sm:px-6 py-3.5">Estado</th>
                   <th className="px-3 sm:px-6 py-3.5 hidden xl:table-cell">Pago</th>
-                  {vista === 'salidas' && puedeGestionar && <th className="w-px px-3 sm:px-6 py-3.5"><span className="sr-only">Check-out</span></th>}
+                  {(vista === 'salidas' || vista === 'llegadas') && puedeGestionar && <th className="w-px px-3 sm:px-6 py-3.5"><span className="sr-only">Check-out</span></th>}
                   <th className="w-px whitespace-nowrap px-3 sm:px-6 py-3.5 text-right" aria-sort={orden.campo === 'total' ? (orden.asc ? 'ascending' : 'descending') : undefined}>
                     <BotonOrden activo={orden.campo === 'total'} asc={orden.asc} onClick={() => ordenarPor('total')} derecha>Total</BotonOrden>
                   </th>
@@ -367,7 +403,10 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
                     >
                       <td className="px-3 sm:px-6 py-3 h-14">
                         <div className="flex flex-col min-w-0">
-                          <span className={cn('t-fila text-foreground truncate', cancelada && 'line-through')}>{f.nombre}</span>
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className={cn('t-fila text-foreground truncate', cancelada && 'line-through')}>{f.nombre}</span>
+                            {f.r?.mascota && <PawPrint size={16} weight="fill" className="shrink-0 text-warning-foreground" aria-label={`Mascota: ${textoMascota(f.r.mascota)}`}><title>{textoMascota(f.r.mascota)}</title></PawPrint>}
+                          </span>
                           {/* En celular la habitación y las fechas van aquí; desde md tienen su columna. */}
                           <span className="t-meta text-muted-foreground truncate md:hidden">{f.cabana} · {fechas}</span>
                           <span className="t-meta text-muted-foreground truncate hidden md:block">
@@ -402,12 +441,17 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
                           <span className="t-meta text-muted-foreground">{venta?.anulado ? 'Venta anulada' : 'Sin venta'}</span>
                         )}
                       </td>
-                      {vista === 'salidas' && puedeGestionar && (
+                      {(vista === 'salidas' || vista === 'llegadas') && puedeGestionar && (
                         <td className="w-px whitespace-nowrap px-3 sm:px-6 py-3 text-right">
-                          {f.t?.estado === 'checked_in' && f.codigo ? (
+                          {vista === 'salidas' && f.t?.estado === 'checked_in' && idCloudbedsDe(f) && f.salida === hoy ? (
                             <button type="button" disabled={saliendo === f.clave} onClick={(e) => { e.stopPropagation(); void hacerCheckout(f); }}
                               className="h-9 pointer-coarse:h-11 px-3 rounded-2xl bg-primary text-primary-foreground t-cuerpo-fuerte inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 active:scale-95">
-                              <SignOut size={16} weight="bold" aria-hidden /> {saliendo === f.clave ? 'Saliendo…' : 'Check-out'}
+                              <SignOut size={16} weight="bold" aria-hidden /> {saliendo === f.clave ? 'Saliendo…' : f.r?.cloudbeds_grupo_ref ? 'Check-out grupo' : 'Check-out'}
+                            </button>
+                          ) : vista === 'llegadas' && f.t && f.codigo && f.estado === 'confirmada' && f.llegada <= hoy && !['checked_in', 'checked_out', 'canceled', 'no_show'].includes(f.t.estado ?? '') ? (
+                            <button type="button" disabled={saliendo === f.clave} onClick={(e) => { e.stopPropagation(); void hacerCheckin(f); }}
+                              className="h-9 pointer-coarse:h-11 px-3 rounded-2xl bg-primary text-primary-foreground t-cuerpo-fuerte inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 active:scale-95">
+                              <SignIn size={16} weight="bold" aria-hidden /> {saliendo === f.clave ? 'Ingresando…' : 'Check-in'}
                             </button>
                           ) : null}
                         </td>

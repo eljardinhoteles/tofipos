@@ -7,6 +7,8 @@ import nunitoLatinExt from "../../node_modules/@fontsource-variable/nunito-sans/
 // otro documento y no hereda las fuentes, por eso se declara aquí con la URL absoluta del archivo). Se imprime con el diálogo nativo del navegador, igual que el reporte de cocina.
 
 export interface DocReservaA4 {
+  /** Hoja para regalos y cortesías: sin importes, totales ni pagos (se omiten tarifas, extras con precio y cobros). */
+  sinImportes?: boolean;
   org: { nombre: string; ruc: string; telefono: string; direccion: string };
   /** Código de la reserva en Cloudbeds, si ya está allá. */
   codigo: string | null;
@@ -25,6 +27,8 @@ export interface DocReservaA4 {
   /** Observaciones generales: el texto libre de la reserva y las notas no ligadas a un extra. */
   notas: string | null;
   notasGenerales?: string[];
+  /** Mascotas registradas (una línea por habitación), ya en texto; salen en Observaciones. */
+  mascotas?: string[];
   /** Plan de alimentación de la reserva, si lo tiene. */
   /** Cuántos adultos y niños tiene el plan y qué incluye a cada grupo (los niños, igual que adultos si no se definió aparte). */
   plan?: { nombre: string; adultos: number; ninos: number; incluyeAdulto: string; incluyeNino: string; incluido: boolean } | null;
@@ -122,13 +126,14 @@ const ICONOS = {
 const par = (t: string, v: string, clase = "") => `<div class="${clase}"><span class="etq">${esc(t)}</span><b>${esc(v || "—")}</b></div>`;
 
 export function documentoReservaA4(d: DocReservaA4): string {
+  const si = !!d.sinImportes;
   const emitido = new Date().toLocaleString("es", { dateStyle: "long", timeStyle: "short" });
   const org = [d.org.ruc && `RUC ${d.org.ruc}`, d.org.direccion].filter(Boolean).map((t) => `<p>${esc(t as string)}</p>`).join("");
   const huespedes = d.cabanas.reduce((a, c) => a + c.adultos + c.ninos, 0);
   // Una sola fila por habitación: nombre (con noches), ocupación y cama, e importe.
   const detalleCabanas = d.cabanas.map((c) => `
-    <tr><td>${esc(c.nombre)}<div class="sub">${esc(plural(d.noches, "noche", "noches"))}${c.manual ? " · tarifa especial" : ""}</div></td><td>${esc(plural(c.adultos, "adulto", "adultos"))}${c.ninos ? `, ${esc(plural(c.ninos, "niño", "niños"))}` : ""}${c.cama ? ` · Cama <b>${esc(c.cama)}</b>` : ""}</td><td class="num">${dinero(c.tarifa)}</td></tr>`).join("");
-  const filasExtras = d.extras.map((e) => `<tr><td>${esc(e.descripcion)}${(e.notas ?? []).map((n) => `<div class="sub nota">${esc(n)}</div>`).join("")}</td><td class="num">${dinero(e.monto)}</td></tr>`).join("");
+    <tr><td>${esc(c.nombre)}<div class="sub">${esc(plural(d.noches, "noche", "noches"))}${c.manual && !si ? " · tarifa especial" : ""}</div></td><td>${esc(plural(c.adultos, "adulto", "adultos"))}${c.ninos ? `, ${esc(plural(c.ninos, "niño", "niños"))}` : ""}${c.cama ? ` · Cama <b>${esc(c.cama)}</b>` : ""}</td>${si ? "" : `<td class="num">${dinero(c.tarifa)}</td>`}</tr>`).join("");
+  const filasExtras = d.extras.map((e) => `<tr><td>${esc(e.descripcion)}${(e.notas ?? []).map((n) => `<div class="sub nota">${esc(n)}</div>`).join("")}</td>${si ? "" : `<td class="num">${dinero(e.monto)}</td>`}</tr>`).join("");
   const pagos = (d.cobros?.pagos ?? []).map((p) =>
     `<tr><td style="white-space:nowrap;width:28mm">${esc(p.fecha)}</td><td>${esc(p.texto)}</td><td class="num">${p.reembolso ? "−" : ""}${dinero(p.monto)}</td></tr>`).join("");
   const pagada = !!d.cobros && d.cobros.saldo <= 0.005 && d.total > 0.005;
@@ -146,28 +151,28 @@ export function documentoReservaA4(d: DocReservaA4): string {
     <div class="bloque primero"><h3>${ICONOS.huesped}Datos del huésped</h3>
       <div class="cuerpo"><div class="datos"><div class="grande"><span class="etq">Nombre</span><b>${esc(d.huesped.nombre || "—")}</b>${d.huesped.documento ? `<b class="dato2">${esc(d.huesped.documento)}</b>` : ""}</div><div><span class="etq">Contacto</span><b>${esc(d.huesped.telefono || "—")}</b>${d.huesped.email ? `<b class="dato2">${esc(d.huesped.email)}</b>` : ""}</div>${par("País · Origen", [d.huesped.pais, d.canal].filter(Boolean).join(" · "))}</div></div>
     </div>
-    ${d.notas || d.notasGenerales?.length ? `<div class="bloque"><h3>Observaciones</h3><div class="cuerpo">${d.notas ? `<p style="margin:0 0 2mm;white-space:pre-line">${esc(d.notas)}</p>` : ""}${(d.notasGenerales ?? []).map((n) => `<p style="margin:0 0 1.5mm">• ${esc(n)}</p>`).join("")}</div></div>` : ""}
+    ${d.notas || d.notasGenerales?.length || d.mascotas?.length ? `<div class="bloque"><h3>Observaciones</h3><div class="cuerpo">${(d.mascotas ?? []).map((m) => `<p style="margin:0 0 1.5mm"><b>Mascota:</b> ${esc(m)}</p>`).join("")}${d.notas ? `<p style="margin:0 0 2mm;white-space:pre-line">${esc(d.notas)}</p>` : ""}${(d.notasGenerales ?? []).map((n) => `<p style="margin:0 0 1.5mm">• ${esc(n)}</p>`).join("")}</div></div>` : ""}
 
     <div class="bloque"><h3>${ICONOS.estadia}Datos de la estadía</h3>
       <div class="cuerpo">
         <div class="panel">${par("Llegada", d.llegada)}${par("Salida", d.salida)}${par("Noches", String(d.noches))}${par("Huéspedes", String(huespedes))}</div>
         ${d.plan ? `<div class="plan"><div class="plan-col"><span class="etq">Plan de alimentación</span><b>${esc(d.plan.nombre)}</b><span class="sub"> · ${d.plan.incluido ? "incluido en la tarifa" : "se cobra aparte"}</span></div><div class="plan-col plan-gente">${[[d.plan.adultos, "adulto", "adultos", d.plan.incluyeAdulto, ICONO_ADULTO], [d.plan.ninos, "niño", "niños", d.plan.incluyeNino, ICONO_NINO]].filter((g) => (g[0] as number) > 0).map((g) => `<div class="sub gente">${g[4]}<span><b>${esc(plural(g[0] as number, g[1] as string, g[2] as string))}:</b> ${esc((g[3] as string) || "—")}</span></div>`).join("")}</div></div>` : ""}
         <div class="subtit">Detalle de alojamiento</div>
-        <table class="cabanas"><thead><tr><th>${d.cabanas.length > 1 ? "Habitaciones" : "Habitación"}</th><th>Ocupación</th><th class="num">Importe</th></tr></thead><tbody>${detalleCabanas}</tbody></table>
+        <table class="cabanas"><thead><tr><th>${d.cabanas.length > 1 ? "Habitaciones" : "Habitación"}</th><th>Ocupación</th>${si ? "" : '<th class="num">Importe</th>'}</tr></thead><tbody>${detalleCabanas}</tbody></table>
       </div>
     </div>
 
     <div class="bloque">
       <div class="cuerpo">
-        ${filasExtras ? `<table><thead><tr><th>Extras</th><th class="num">Importe</th></tr></thead><tbody>${filasExtras}</tbody></table>` : ""}
+        ${filasExtras ? `<table><thead><tr><th>Extras</th>${si ? "" : '<th class="num">Importe</th>'}</tr></thead><tbody>${filasExtras}</tbody></table>` : ""}
         <div class="fila-totales"><div class="nota-mano"><span>Notas de check in</span></div>
-        <div class="totales">
+        ${si ? "" : `<div class="totales">
           <div class="fila total"><span>Total</span><span>${dinero(d.total)}</span></div>
           ${d.cobros ? `<div class="fila"><span>Pagado</span><span>${dinero(d.cobros.pagado)}</span></div><div class="fila saldo"><span>Saldo</span><span>${dinero(d.cobros.saldo)}</span></div>` : ""}
+        </div>`}
         </div>
-        </div>
-        ${d.cobros ? `<div class="pie-cuenta"><span class="estado ${pagada ? "ok" : "pend"}">${pagada ? "Pagado en su totalidad" : "Saldo pendiente de pago"}</span></div>` : ""}
-        ${pagos ? `<div class="subtit">Pagos recibidos</div><table><thead><tr><th>Fecha</th><th>Detalle</th><th class="num">Monto</th></tr></thead><tbody>${pagos}</tbody></table>` : ""}
+        ${d.cobros && !si ? `<div class="pie-cuenta"><span class="estado ${pagada ? "ok" : "pend"}">${pagada ? "Pagado en su totalidad" : "Saldo pendiente de pago"}</span></div>` : ""}
+        ${pagos && !si ? `<div class="subtit">Pagos recibidos</div><table><thead><tr><th>Fecha</th><th>Detalle</th><th class="num">Monto</th></tr></thead><tbody>${pagos}</tbody></table>` : ""}
       </div>
     </div>
 

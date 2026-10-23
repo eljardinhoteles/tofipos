@@ -18,6 +18,7 @@ export function evaluarConversionGrupo(det: ReservaCloudbedsDetalle, habitacione
   const avisos: string[] = [];
 
   if (det.estado === 'canceled' || det.estado === 'no_show') bloqueos.push('La reserva ya está cancelada en Cloudbeds.');
+  if (det.estado === 'checked_in' || det.estado === 'checked_out') bloqueos.push('El grupo ya hizo el check-in: no se puede cancelar y recrear.');
   if (det.fuenteExterna) bloqueos.push(`Viene de un canal externo${det.fuente ? ` (${det.fuente})` : ''}: cancelarla allá tiene comisiones y penalidades del canal.`);
   if (det.llegada < dayjs().format('YYYY-MM-DD')) bloqueos.push('La llegada ya pasó: Cloudbeds no permite crear reservas con fecha pasada.');
   const sinCabana = det.habitaciones.filter((h) => !habitaciones.some((x) => x.activo && coincideUnidad(x, h.roomTypeID, h.roomID)));

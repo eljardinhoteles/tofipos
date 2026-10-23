@@ -51,6 +51,14 @@ export function useAvisosHotelEnVivo({ activo, onVer }: { activo: boolean; onVer
         }
         pedir();
       })
+      // Reservas de varias habitaciones que el POS no copia solo: el Worker deja un aviso para que se vean al momento.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'hotel_avisos', filter: `organization_id=eq.${org}` }, (p) => {
+        const a = p.new as { reserva_id: string; nombre: string; habitaciones: number; llegada?: string; salida?: string; fuente?: string | null };
+        if (avisados.has(`grupo:${a.reserva_id}`)) return;
+        avisados.add(`grupo:${a.reserva_id}`);
+        showToast.info(`Nuevo grupo en Cloudbeds: ${a.nombre}`, `${a.habitaciones} habitaciones${a.fuente ? ` · ${a.fuente}` : ''}. Adóptalo desde el calendario para gestionarlo.`, ver());
+        pedir();
+      })
       .subscribe();
     return () => {
       if (temporizador) clearTimeout(temporizador);

@@ -674,6 +674,14 @@ async function cambiarEstadia(x: Ctx, id: string, status: 'checked_in' | 'checke
   return json(x.env, { ok: true })
 }
 
+// Reactiva una reserva cancelada (deshacer una conversión de grupo que falló a medias). VERIFICAR con una reserva de prueba.
+async function reactivarReserva(x: Ctx, id: string): Promise<Response> {
+  await marcarPropio(x, id)
+  await cloudbeds(x, 'PUT', 'putReservation', { reservationID: id, status: 'confirmed' })
+  await bumpVersion(x)
+  return json(x.env, { ok: true })
+}
+
 interface ModificarBody {
   roomID?: string // unidad destino (tipos con varias unidades)
   subReservationID?: string
@@ -1630,12 +1638,28 @@ async function esNueva(x: Ctx, creada: string | null): Promise<boolean> {
 
 /** Crea en el POS una reserva nueva de otro canal (Booking, Expedia, web), ya enlazada y sin venta. */
 async function crearDesdeCloudbeds(x: Ctx, det: DetalleCloudbeds): Promise<ResultadoSync> {
-  if (ESTADOS_FUERA.has(det.estado) || det.salida < hoyUTC()) return 'omitida'
-  // Varias habitaciones en una reserva: el POS gestiona una por registro (se ve en el calendario y se maneja en Cloudbeds).
-  if (det.habitaciones.length !== 1) return 'omitida'
+  // Cada motivo de omisión se registra (sin datos de huéspedes) para poder explicar por qué una reserva nueva no llegó al POS.
+  const omitir = (motivo: string): ResultadoSync => {
+    console.log(JSON.stringify({ origen: 'sync-cloudbeds', omitida: det.reservationID, motivo, estado: det.estado, habitaciones: det.habitaciones.length, creada: det.creada, salida: det.salida }))
+    return 'omitida'
+  }
+  if (ESTADOS_FUERA.has(det.estado)) return omitir('cancelada o no presentada')
+  if (det.salida < hoyUTC()) return omitir('su salida ya pasó')
+  if (det.habitaciones.length === 0) return omitir('sin habitaciones')
   // La creó un POS (de otra organización, o se borró aquí): no se duplica.
-  if (det.externo && UUID_RE.test(det.externo)) return 'omitida'
-  if (!(await esNueva(x, det.creada))) return 'omitida'
+  if (det.externo && UUID_RE.test(det.externo)) return omitir('la creó un POS')
+  if (!(await esNueva(x, det.creada))) return omitir('se creó antes de activar la sincronización')
+  // Varias habitaciones en una reserva: el POS no la copia sola (cada habitación necesita su tarifa: se adopta a mano), pero sí se AVISA
+  // para que se vea al momento y se pueda adoptar. Se ve en el calendario y se maneja en Cloudbeds mientras tanto.
+  if (det.habitaciones.length > 1) {
+    const res = await supabaseAdmin(x.env, 'hotel_avisos', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ organization_id: x.c.orgId, reserva_id: det.reservationID, tipo: 'grupo_nuevo', nombre: `${det.huesped.nombre} ${det.huesped.apellido}`.trim() || 'Huésped', habitaciones: det.habitaciones.length, llegada: det.llegada, salida: det.salida, fuente: det.fuente ?? null }),
+    }).catch(() => null)
+    if (!res || !res.ok) console.error(JSON.stringify({ origen: 'sync-cloudbeds', aviso: 'grupo', error: res ? `HTTP ${res.status} (¿falta la migración 20261024000300_hotel_avisos?)` : 'sin respuesta de Supabase' }))
+    return omitir('tiene varias habitaciones (grupo): se avisó, se adopta a mano')
+  }
   const hab = det.habitaciones[0]
   const d = det.desglose
   const fecha = new Date().toISOString()
@@ -1680,11 +1704,15 @@ async function crearDesdeCloudbeds(x: Ctx, det: DetalleCloudbeds): Promise<Resul
 
 /** Trae la reserva de Cloudbeds y deja el POS igual. `filas`: las del POS ya leídas (la tarea programada las lee juntas). */
 async function sincronizarReserva(x: Ctx, id: string, filas?: FilaPos[]): Promise<ResultadoSync> {
-  if (!RESERVA_RE.test(id)) return 'omitida'
-  if (await leer(x, `propio:${id}`)) return 'omitida'
+  const saltar = (motivo: string): ResultadoSync => {
+    console.log(JSON.stringify({ origen: 'sync-cloudbeds', omitida: id, motivo }))
+    return 'omitida'
+  }
+  if (!RESERVA_RE.test(id)) return saltar('código de reserva inválido')
+  if (await leer(x, `propio:${id}`)) return saltar('la acaba de crear o cambiar este POS')
   // Una sola sincronización a la vez por reserva (llegan varios avisos juntos); la siguiente ronda recoge lo que falte.
   const candado = `sync:${id}`
-  if (!(await reclamar(x, candado, '1', 60))) return 'omitida'
+  if (!(await reclamar(x, candado, '1', 60))) return saltar('ya se estaba sincronizando (otro aviso)')
   try {
     const det = await leerDetalleCloudbeds(x, id)
     const lista = filas ?? (await filasPos(x, [id], det.externo ? [det.externo] : []))
@@ -1845,6 +1873,9 @@ export default {
       if (pathname === '/api/reservations' && req.method === 'POST') return fin(await crearReserva(req, x))
       if (/^\/api\/reservations\/[^/]+\/cancel$/.test(pathname) && req.method === 'POST') {
         return fin(await cancelarReserva(req, x, reservationId(pathname)))
+      }
+      if (/^\/api\/reservations\/[^/]+\/reactivate$/.test(pathname) && req.method === 'POST') {
+        return fin(await reactivarReserva(x, reservationId(pathname)))
       }
       if (/^\/api\/reservations\/[^/]+\/checkout$/.test(pathname) && req.method === 'POST') {
         return fin(await cambiarEstadia(x, reservationId(pathname), 'checked_out'))

@@ -10,13 +10,14 @@ import { folioLabel } from './folio'
 import { parseReparto } from './reparto';
 import { ORIGEN_CIERRE_TITULO, type CierreTurno } from './cierreTurno';
 import type { CeldaPlan, ConfirmacionPlan } from './planificacion';
+import { nombreHuesped, textoMascota, type ReservaHotel } from './hotelReservasApi';
 
 export type ActividadTono = 'primary' | 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export type ActividadTipo =
   | 'mesa_abierta' | 'cocina' | 'cuenta' | 'cobrada' | 'habitacion' | 'cobro'
   | 'anulacion' | 'cortesia' | 'reembolso' | 'checkin' | 'checkout' | 'venta' | 'reparto'
-  | 'cierre' | 'credito' | 'ajuste' | 'comentario' | 'planificador';
+  | 'cierre' | 'credito' | 'ajuste' | 'comentario' | 'planificador' | 'reserva_hotel' | 'aviso_hotel';
 
 /** A dónde lleva tocar el evento. */
 export type ActividadDestino =
@@ -26,7 +27,9 @@ export type ActividadDestino =
   /** Cierre de turno de hoy: abre su historial en Centro de Ventas. */
   | { tipo: 'cierre' }
   /** Menú del día en el Planificador. */
-  | { tipo: 'planificador' };
+  | { tipo: 'planificador' }
+  /** Detalle de una reserva en el módulo Hotel. */
+  | { tipo: 'reserva_hotel'; reservaId: string };
 
 export interface ActividadEvento {
   id: string;
@@ -57,6 +60,8 @@ interface Datos {
   /** Firmas del menú de cada día en el Planificador (viven en Supabase) y sus productos, para contar cuántos incluía. */
   planConfirmaciones?: ConfirmacionPlan[];
   planCeldas?: CeldaPlan[];
+  /** Reservas del Hotel tocadas hoy (viven en Supabase): altas, cambios, cancelaciones, check-in/out y avisos de Cloudbeds. */
+  hotelReservas?: ReservaHotel[];
 }
 
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -157,6 +162,64 @@ export function construirActividad(d: Datos): ActividadEvento[] {
     if (c.anulada_at && esHoy(c.anulada_at)) {
       push({ destino: { tipo: 'planificador' }, id: `plan-anulada-${c.id}`, ts: c.anulada_at, tipo: 'planificador', tono: 'warning', titulo: 'Confirmación del menú anulada',
         detalle: `Menú del ${diaPlan(c.fecha)} · hay que volver a firmarlo`, actor: c.anulada_por ?? undefined, alerta: true });
+    }
+  }
+
+  // Hotel: altas, cambios y cancelaciones de reservas, check-in/out en Cloudbeds y los avisos de lo que cambió allá.
+  const diaCorto = (f: string) => new Date(`${f}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  for (const r of d.hotelReservas ?? []) {
+    const destino: ActividadDestino = { tipo: 'reserva_hotel', reservaId: r.id };
+    const quien = nombreHuesped(r);
+    const base = [quien, r.cabana, `${diaCorto(r.llegada)} → ${diaCorto(r.salida)}`];
+    const hist = r.historial ?? [];
+    if (!hist.some(h => h.tipo === 'creada') && esHoy(r.created_at)) {
+      push({ destino, id: `hr-nueva-${r.id}`, ts: r.created_at, tipo: 'reserva_hotel', tono: 'primary', titulo: 'Reserva de hotel creada',
+        detalle: [...base, r.fuente_nombre].filter(Boolean).join(' · '), actor: r.usuario_nombre ?? undefined });
+    }
+    for (const h of hist) {
+      if (!esHoy(h.fecha)) continue;
+      const id = `hr-${r.id}-${h.id}`;
+      switch (h.tipo) {
+        case 'creada':
+          push({ destino, id, ts: h.fecha, tipo: 'reserva_hotel', tono: 'primary', titulo: 'Reserva de hotel creada', detalle: [...base, r.fuente_nombre].filter(Boolean).join(' · '), actor: h.usuario });
+          break;
+        case 'cancelada':
+          push({ destino, id, ts: h.fecha, tipo: 'anulacion', tono: 'danger', titulo: 'Reserva de hotel cancelada', alerta: true, detalle: base.join(' · '), actor: h.usuario });
+          break;
+        case 'cabana':
+          push({ destino, id, ts: h.fecha, tipo: 'reserva_hotel', tono: 'info', titulo: 'Cambio de habitación', detalle: [quien, h.texto].join(' · '), actor: h.usuario });
+          break;
+        case 'fechas':
+          push({ destino, id, ts: h.fecha, tipo: 'reserva_hotel', tono: 'info', titulo: 'Cambio de fechas', detalle: [quien, h.texto].join(' · '), actor: h.usuario });
+          break;
+        case 'tarifa':
+          push({ destino, id, ts: h.fecha, tipo: 'ajuste', tono: 'warning', titulo: 'Tarifa de reserva modificada', alerta: true, detalle: [quien, h.texto].join(' · '), actor: h.usuario });
+          break;
+        case 'extra':
+          push({ destino, id, ts: h.fecha, tipo: 'reserva_hotel', tono: 'neutral', titulo: 'Extra de reserva', detalle: [quien, h.texto].join(' · '), actor: h.usuario });
+          break;
+        case 'mascota':
+          push({ destino, id, ts: h.fecha, tipo: 'reserva_hotel', tono: 'neutral', titulo: r.mascota ? 'Mascota registrada' : 'Mascota quitada', detalle: [quien, r.mascota ? textoMascota(r.mascota) : ''].filter(Boolean).join(' · '), actor: h.usuario });
+          break;
+        case 'checkin':
+          push({ destino, id, ts: h.fecha, tipo: 'checkin', tono: 'info', titulo: 'Check-in en Cloudbeds', detalle: [quien, r.cabana].join(' · '), actor: h.usuario });
+          break;
+        case 'checkout':
+          push({ destino, id, ts: h.fecha, tipo: 'checkout', tono: 'info', titulo: 'Check-out en Cloudbeds', detalle: [quien, r.cabana].join(' · '), actor: h.usuario });
+          break;
+        default:
+          break; // plan, cama, notas, cobros (ya salen como pagos de venta), sincronización…
+      }
+    }
+    // Avisos de lo que cambió en Cloudbeds (cancelación, fechas, habitación) y que el POS ya aplicó: falta revisar la venta.
+    if (r.aviso_cloudbeds && esHoy(r.aviso_cloudbeds.fecha)) {
+      push({ destino, id: `hr-aviso-${r.id}`, ts: r.aviso_cloudbeds.fecha, tipo: 'aviso_hotel', tono: 'warning', titulo: 'Aviso de Cloudbeds', alerta: true,
+        detalle: [quien, r.aviso_cloudbeds.texto].filter(Boolean).join(' · ') });
+    }
+    // Cloudbeds rechazó la reserva (sin cupo, datos inválidos): no existe allá.
+    if (r.sync_estado === 'error' && esHoy(r.created_at) && !hist.some(h => h.tipo === 'cancelada')) {
+      push({ destino, id: `hr-rech-${r.id}`, ts: r.created_at, tipo: 'aviso_hotel', tono: 'danger', titulo: 'Reserva rechazada por Cloudbeds', alerta: true,
+        detalle: [...base, r.sync_error].filter(Boolean).join(' · '), actor: r.usuario_nombre ?? undefined });
     }
   }
 
