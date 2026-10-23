@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText, CaretDown, CloudCheck } from '@phosphor-icons/react';
+import { Paperclip, XCircle, Prohibit, UploadSimple, Trash, ChatText, CaretDown, CloudCheck, ClipboardText } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import dayjs from 'dayjs';
 import { showToast } from '@/lib/toast';
+import { archivoDePortapapeles } from '@/lib/pegarComprobante';
 import { useAuth } from '../../context/AuthContext';
 import { anularVentaMovimiento, adjuntarComprobanteMovimiento, marcarSinComprobanteMovimiento } from '../../db/rxdb';
 import { subirComprobante, eliminarComprobante, resolverComprobanteUrl, resolverComprobanteUrlAsync } from '@/lib/comprobantes';
@@ -388,6 +389,17 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
                 }}
               />
             </label>
+          )}
+          {admiteComprobante && !m.comprobante_url && (
+            <button type="button" disabled={uploading} title="Pegar la imagen copiada"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try { handleAdjuntarComprobante(await archivoDePortapapeles()); }
+                catch (err) { showToast.warning('No se pudo pegar', err instanceof Error ? err.message : undefined); }
+              }}
+              className={cn("min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation", uploading && "opacity-50 pointer-events-none")}>
+              <ClipboardText size={14} weight="bold" /> Pegar
+            </button>
           )}
           </div>
 

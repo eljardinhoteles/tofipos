@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Paperclip, Check, CircleNotch } from '@phosphor-icons/react';
+import { ComprobanteAdjunto } from '../../Common/ComprobanteAdjunto';
+import { Check, CircleNotch } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -145,11 +146,7 @@ export function SidebarReservaAbono({ nombre, saldoPendiente, pagos, onBack, onC
 
         <div className="flex flex-col gap-1.5">
           <Label className={etiqueta}>Comprobante de pago (opcional)</Label>
-          <label className="flex items-center gap-2 h-12 px-3 rounded-2xl border border-dashed border-border t-cuerpo text-muted-foreground cursor-pointer hover:bg-muted/60 hover:text-foreground transition-colors">
-            <Paperclip size={16} className="shrink-0" />
-            <span className="truncate">{comprobanteFile ? comprobanteFile.name : 'Adjuntar foto o PDF'}</span>
-            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => setComprobanteFile(e.target.files?.[0] ?? null)} />
-          </label>
+          <ComprobanteAdjunto file={comprobanteFile} onChange={setComprobanteFile} />
         </div>
 
         {/* Abonos ya registrados */}
