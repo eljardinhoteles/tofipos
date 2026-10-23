@@ -12,6 +12,7 @@ import { DatePickerField } from'@/components/ui/date-picker-field';
 import { EstadoBadge } from '../../components/Common/EstadoBadge';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from'@/components/ui/sheet';
 import { ReservaHeader } from'../../components/Mesas/Sidebar/ReservaHeader';
+import AjustesFeriados from './AjustesFeriados';
 import { Fila, Grupo, Seccion, TITULO_SECCION, Vacio } from'../../components/Ajustes/AjustesUI';
 
 // Ajustes → IVA: tasas de la organización, cuál está activa y las temporales (feriados).
@@ -134,10 +135,10 @@ export default function AjustesIva() {
   const etiquetaSwitch = 't-fila text-foreground cursor-pointer';
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Seccion
         titulo="IVA"
-        descripcion="Tasas de la organización: activa la que se aplica a las ventas. Las temporales (feriados) solo generan avisos."
+        descripcion="Tasas de la organización: activa la que se aplica a las ventas. Las temporales solo generan avisos."
         accion={
           <Button type="button" onClick={() => { resetModal(); setModalOpen(true); }} className="h-12 gap-1.5 px-5">
             <Plus size={18} weight="bold" /> Nueva tasa
@@ -182,6 +183,8 @@ export default function AjustesIva() {
           ))}
         </Grupo>
       </Seccion>
+
+      <AjustesFeriados />
 
       <Sheet open={modalOpen} onOpenChange={(open) => { if (!open) resetModal(); }}>
         <SheetContent showCloseButton={false} onOpenAutoFocus={(e) => e.preventDefault()}
@@ -237,6 +240,6 @@ export default function AjustesIva() {
           </footer>
         </SheetContent>
       </Sheet>
-    </>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { CalendarCheck, Users } from '@phosphor-icons/react';
 import { type Reserva, type Piso, type Mesa } from '../../db/database';
 import { isToday, isWeekend, toISO } from './reservaUtils';
 import { CalendarCell } from './CalendarCell';
+import { MarcaFeriado } from '../Common/MarcaFeriado';
 import { CalendarNav } from './CalendarToolbar';
 
 interface CalendarGridProps {
@@ -82,6 +83,7 @@ export function CalendarGrid({
                 key={date.toISOString()}
                 className={`sticky top-0 z-20 h-12 px-3 ${today ? 'bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))]' : 'bg-card'} border-b border-r border-border flex items-center justify-between ${today ? 'text-primary' : 'text-foreground'} ${monthEnd ? 'border-r-2 border-r-foreground/20' : ''}`}
               >
+                <MarcaFeriado fecha={ds} posicion="top-1 right-1" />
                 <div className="flex items-baseline gap-1">
                   <span className="t-etiqueta text-muted-foreground">
                     {date.toLocaleDateString('es-ES', { weekday: 'short' })}

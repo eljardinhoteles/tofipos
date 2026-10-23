@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { MarcaFeriado } from '../Common/MarcaFeriado';
 import { CheckCircle, SealCheck } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ export const CabeceraDia = memo(function CabeceraDia({
   return (
     <header className={cn('sticky top-0 z-10 flex items-center justify-between gap-2 pl-4 pr-2 py-2 border-b border-r border-border', minAncho,
       esHoy ? HOY_CABECERA : 'bg-card')}>
+      <MarcaFeriado fecha={fecha} posicion="top-1.5 left-1.5" />
       {/* El atenuado de días pasados va solo en el texto: en toda la cabecera la volvería transparente. */}
       <div className={cn('flex flex-col min-w-0', pasado && !confirmadoPor && 'opacity-80')}>
         {relativo && <span className={cn('t-dato leading-tight', esHoy ? HOY_TEXTO : 'text-foreground')}>{relativo}</span>}

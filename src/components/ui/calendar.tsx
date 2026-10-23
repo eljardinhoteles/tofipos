@@ -6,6 +6,7 @@ import {
   type Locale,
 } from "react-day-picker"
 import { es } from "date-fns/locale"
+import { useFeriados } from "@/lib/feriados"
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -23,14 +24,24 @@ function Calendar({
   locale = es,
   formatters,
   components,
+  modifiers,
+  modifiersClassNames,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
 }) {
   const defaultClassNames = getDefaultClassNames()
+  // Feriados de la organización: un punto bajo el número (solo visual) en todos los selectores de fecha.
+  const { feriados } = useFeriados()
+  const diasFeriado = React.useMemo(() => feriados.map((f) => { const [a, m, d] = f.fecha.split("-").map(Number); return new Date(a, m - 1, d) }), [feriados])
 
   return (
     <DayPicker
+      modifiers={{ feriado: diasFeriado, ...modifiers }}
+      modifiersClassNames={{
+        feriado: "after:absolute after:bottom-1 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-destructive after:content-['']",
+        ...modifiersClassNames,
+      }}
       showOutsideDays={showOutsideDays}
       className={cn(
         "group/calendar bg-background p-3 [--cell-radius:var(--radius-2xl)] [--cell-size:--spacing(8)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent",
