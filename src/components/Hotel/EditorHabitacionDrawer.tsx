@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Bed, Cloud, CloudSlash, Door, Plus, Power, X } from '@phosphor-icons/react';
+import { Bed, Cloud, CloudSlash, Door, Eye, Plus, Power, Sparkle, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,9 @@ export function EditorHabitacionDrawer({ valor, habitaciones, onClose, onGuardad
   const { mesas } = useRxMesas();
   const [camas, setCamas] = useState<string[]>([]);
   const [camaNueva, setCamaNueva] = useState('');
+  const [vista, setVista] = useState('');
+  const [amenidades, setAmenidades] = useState<string[]>([]);
+  const [amenidadNueva, setAmenidadNueva] = useState('');
   const [plantaNueva, setPlantaNueva] = useState('');
   const [inventario, setInventario] = useState<{ tipos: TipoHabitacionCloudbeds[]; unidades: UnidadCloudbeds[] }>({ tipos: [], unidades: [] });
   const [errorTipos, setErrorTipos] = useState('');
@@ -69,6 +72,7 @@ export function EditorHabitacionDrawer({ valor, habitaciones, onClose, onGuardad
     setEnlace(actual?.cloudbeds_room_type_id ? claveEnlace(actual.cloudbeds_room_type_id, actual.cloudbeds_room_id) : SIN_ENLACE);
     setMesaId(actual?.mesa_id ?? SIN_ENLACE);
     setCamas(actual?.camas ?? []); setCamaNueva(''); setPlantaNueva('');
+    setVista(actual?.vista ?? ''); setAmenidades(actual?.amenidades ?? []); setAmenidadNueva('');
     setErrorTipos('');
     getInventarioCloudbeds().then(setInventario).catch((e) => setErrorTipos(e instanceof Error ? e.message : 'No se pudo consultar Cloudbeds'));
   }, [abierto, actual]);
@@ -108,6 +112,8 @@ export function EditorHabitacionDrawer({ valor, habitaciones, onClose, onGuardad
       cloudbeds_room_id: enlace === SIN_ENLACE ? null : enlace.split('|')[1] ?? null,
       mesa_id: mesaId === SIN_ENLACE ? null : mesaId,
       camas: camaNueva.trim() && !camas.includes(componerCama(plantaNueva, camaNueva)) ? [...camas, componerCama(plantaNueva, camaNueva)] : camas,
+      vista: vista.trim() || null,
+      amenidades: amenidadNueva.trim() && !amenidades.some((x) => x.toLowerCase() === amenidadNueva.trim().toLowerCase()) ? [...amenidades, amenidadNueva.trim()] : amenidades,
     };
     setGuardando(true);
     try {
@@ -125,6 +131,15 @@ export function EditorHabitacionDrawer({ valor, habitaciones, onClose, onGuardad
     } finally {
       setGuardando(false);
     }
+  };
+
+  // Sugerencias para escribir rápido y igual en todas: lo que ya usan las demás habitaciones.
+  const vistasUsadas = [...new Set(habitaciones.map((h) => h.vista).filter((v): v is string => !!v))];
+  const amenidadesUsadas = [...new Set(habitaciones.flatMap((h) => h.amenidades))].filter((a) => !amenidades.some((x) => x.toLowerCase() === a.toLowerCase()));
+  const agregarAmenidad = (texto = amenidadNueva) => {
+    const a = texto.trim();
+    if (a && !amenidades.some((x) => x.toLowerCase() === a.toLowerCase())) setAmenidades((l) => [...l, a]);
+    setAmenidadNueva('');
   };
 
   // Camas agrupadas por planta si la habitación las usa; si no, una sola lista.
@@ -236,6 +251,45 @@ export function EditorHabitacionDrawer({ valor, habitaciones, onClose, onGuardad
               <Input value={plantaNueva} onChange={(e) => setPlantaNueva(e.target.value)} list="plantas-hab" placeholder="Planta (solo si la habitación tiene varias, p. ej. Planta 1)" aria-label="Planta de la cama" className="h-11 text-base"
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarCama(); } }} />
               <datalist id="plantas-hab">{(grupos ?? []).map((g) => <option key={g.planta} value={g.planta} />)}</datalist>
+            </div>
+          </Seccion>
+
+          <Seccion icono={<Eye size={14} weight="bold" aria-hidden />} titulo="Vista y amenidades" ayuda="Salen en las cotizaciones y en la hoja de la reserva. Es solo del POS: no va a Cloudbeds.">
+            <div className="flex flex-col gap-1.5">
+              <Label className={etiqueta} htmlFor="hab-vista">Vista</Label>
+              <Input id="hab-vista" value={vista} onChange={(e) => setVista(e.target.value)} list="vistas-hab" placeholder="Ej. Al río, Al jardín" className="h-12 text-base" />
+              <datalist id="vistas-hab">{vistasUsadas.map((v) => <option key={v} value={v} />)}</datalist>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-border pt-3.5">
+              <span className={etiqueta}>Amenidades</span>
+              {amenidades.length === 0 ? (
+                <p className="t-meta text-muted-foreground">Aún no hay amenidades. Añade las de esta habitación: Wifi ilimitado, Ventilador de techo…</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1.5" aria-label="Amenidades de la habitación">
+                  {amenidades.map((a) => (
+                    <li key={a} className="flex items-center gap-1 rounded-full bg-muted pl-3 pr-1 min-h-9">
+                      <span className="t-cuerpo">{a}</span>
+                      <button type="button" onClick={() => setAmenidades((l) => l.filter((x) => x !== a))} aria-label={`Quitar ${a}`}
+                        className="size-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"><X size={14} weight="bold" /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Input value={amenidadNueva} onChange={(e) => setAmenidadNueva(e.target.value)} placeholder="Ej. Wifi ilimitado" aria-label="Nueva amenidad" className="h-12 text-base"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarAmenidad(); } }} />
+                <Button type="button" variant="outline" className="h-12 gap-1.5" onClick={() => agregarAmenidad()} disabled={!amenidadNueva.trim()}><Plus size={16} weight="bold" /> Añadir</Button>
+              </div>
+              {amenidadesUsadas.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="t-meta text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="fill" aria-hidden /> Usadas en otras habitaciones</span>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {amenidadesUsadas.map((a) => (
+                      <li key={a}><button type="button" onClick={() => agregarAmenidad(a)} className="min-h-9 px-3 rounded-full border border-border bg-card t-cuerpo hover:bg-muted cursor-pointer">+ {a}</button></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </Seccion>
 

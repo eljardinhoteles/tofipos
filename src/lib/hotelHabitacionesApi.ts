@@ -22,6 +22,10 @@ export interface HabitacionHotel {
   mesa_id: string | null;
   /** Camas que puede llevar la habitación (información interna: no va a Cloudbeds). */
   camas: string[];
+  /** Vista de la habitación («Al río», «Al jardín»): sale en cotizaciones y en la hoja de la reserva. */
+  vista: string | null;
+  /** Amenidades de la habitación («Wifi ilimitado», «Ventilador de techo»…). */
+  amenidades: string[];
 }
 
 const COLUMNAS = 'id, nombre, codigo, capacidad, orden, activo, cloudbeds_room_type_id';
@@ -31,7 +35,9 @@ let camasDisponible = true;
 export let unidadesDisponible = true;
 // `mesa_id` viene de la migración 20261023000200 (enlace con la habitación de Mesas).
 export let mesaEnlazableDisponible = true;
-const columnasHab = () => `${COLUMNAS}${unidadesDisponible ? ', cloudbeds_room_id' : ''}${mesaEnlazableDisponible ? ', mesa_id' : ''}${camasDisponible ? ', camas' : ''}`;
+// `vista` y `amenidades` vienen de la migración 20261024000600: sin ella la página funciona igual, sin esos datos.
+export let detallesDisponible = true;
+const columnasHab = () => `${COLUMNAS}${unidadesDisponible ? ', cloudbeds_room_id' : ''}${mesaEnlazableDisponible ? ', mesa_id' : ''}${camasDisponible ? ', camas' : ''}${detallesDisponible ? ', vista, amenidades' : ''}`;
 
 /** ¿Esta habitación es la unidad `roomID` de ese tipo? Una habitación sin unidad (un tipo = una habitación) es la única de su tipo. */
 type ConUnidad = Pick<HabitacionHotel, 'cloudbeds_room_type_id'> & { cloudbeds_room_id?: string | null };
@@ -64,20 +70,22 @@ export async function listarHabitaciones(): Promise<HabitacionHotel[]> {
     .order('nombre', { ascending: true });
   let { data, error } = await consultar();
   for (let i = 0; i < 2 && error?.code === '42703'; i++) {
-    if (mesaEnlazableDisponible && /mesa_id/.test(error.message)) { console.warn('hotel_habitaciones sin columna mesa_id: falta la migración 20261023000200'); mesaEnlazableDisponible = false; }
+    if (detallesDisponible && /vista|amenidades/.test(error.message)) { console.warn('hotel_habitaciones sin columnas vista/amenidades: falta la migración 20261024000600'); detallesDisponible = false; }
+    else if (mesaEnlazableDisponible && /mesa_id/.test(error.message)) { console.warn('hotel_habitaciones sin columna mesa_id: falta la migración 20261023000200'); mesaEnlazableDisponible = false; }
     else if (unidadesDisponible && /cloudbeds_room_id/.test(error.message)) { console.warn('hotel_habitaciones sin columna cloudbeds_room_id: falta la migración 20261022000300'); unidadesDisponible = false; }
     else if (camasDisponible) { console.warn('hotel_habitaciones sin columna camas: falta la migración 20261018000300'); camasDisponible = false; }
     else break;
     ({ data, error } = await consultar());
   }
   if (error) throw new Error(error.message);
-  return ((data ?? []) as unknown as Array<Omit<HabitacionHotel, 'camas' | 'cloudbeds_room_id' | 'mesa_id'> & { camas?: unknown; cloudbeds_room_id?: string | null; mesa_id?: string | null }>).map((h) => ({ ...h, cloudbeds_room_id: h.cloudbeds_room_id ?? null, mesa_id: h.mesa_id ?? null, camas: Array.isArray(h.camas) ? (h.camas as string[]) : [] }));
+  return ((data ?? []) as unknown as Array<Omit<HabitacionHotel, 'camas' | 'cloudbeds_room_id' | 'mesa_id' | 'vista' | 'amenidades'> & { camas?: unknown; cloudbeds_room_id?: string | null; mesa_id?: string | null; vista?: string | null; amenidades?: unknown }>).map((h) => ({ ...h, cloudbeds_room_id: h.cloudbeds_room_id ?? null, mesa_id: h.mesa_id ?? null, camas: Array.isArray(h.camas) ? (h.camas as string[]) : [], vista: h.vista ?? null, amenidades: Array.isArray(h.amenidades) ? (h.amenidades as string[]) : [] }));
 }
 
-export type DatosHabitacion = Pick<HabitacionHotel, 'nombre' | 'codigo' | 'capacidad' | 'activo' | 'cloudbeds_room_type_id'> & { camas?: string[]; cloudbeds_room_id?: string | null; mesa_id?: string | null };
+export type DatosHabitacion = Pick<HabitacionHotel, 'nombre' | 'codigo' | 'capacidad' | 'activo' | 'cloudbeds_room_type_id'> & { camas?: string[]; cloudbeds_room_id?: string | null; mesa_id?: string | null; vista?: string | null; amenidades?: string[] };
 
 const errorColumna = (e: { code?: string; message: string }) =>
-  /mesa_id/.test(e.message) && e.code !== '23505' ? 'Para enlazar con Mesas ejecuta la migración 20261023000200_hotel_habitaciones_mesa.sql en Supabase'
+  /vista|amenidades/.test(e.message) ? 'Para guardar la vista y las amenidades ejecuta la migración 20261024000600_hotel_habitaciones_amenidades_vista.sql en Supabase'
+  : /mesa_id/.test(e.message) && e.code !== '23505' ? 'Para enlazar con Mesas ejecuta la migración 20261023000200_hotel_habitaciones_mesa.sql en Supabase'
   : /cloudbeds_room_id/.test(e.message) ? 'Para enlazar unidades ejecuta la migración 20261022000300_hotel_unidades.sql en Supabase'
   : e.code === '42703' || /camas/.test(e.message) ? 'Para guardar camas ejecuta la migración 20261018000300_hotel_camas.sql en Supabase' : e.message;
 const ENLAZADO = 'Esa unidad o tipo de Cloudbeds ya está enlazado a otra habitación';
@@ -88,6 +96,9 @@ const sinUnidadVacia = <T extends { cloudbeds_room_id?: string | null; mesa_id?:
   const r: T = { ...d };
   if (!unidadesDisponible && !r.cloudbeds_room_id) delete r.cloudbeds_room_id;
   if (!mesaEnlazableDisponible && !r.mesa_id) delete r.mesa_id;
+  // Sin la migración de vista y amenidades, vacíos no se envían (la columna no existe).
+  const x = r as { vista?: string | null; amenidades?: string[] };
+  if (!detallesDisponible) { if (!x.vista) delete x.vista; if (!x.amenidades?.length) delete x.amenidades; }
   return r;
 };
 

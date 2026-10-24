@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import {
-  Bed, CalendarBlank, CaretRight, Check, CheckCircle, ForkKnife, MagnifyingGlass, PencilSimple, ShoppingBag, Trash, User, Users,
+  Bed, CalendarBlank, CaretRight, Check, CheckCircle, ForkKnife, Gift, MagnifyingGlass, PencilSimple, Plus, ShoppingBag, Trash, User, Users,
   UserPlus, WarningCircle, X,
 } from '@phosphor-icons/react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -23,7 +23,10 @@ import { createRxCliente, updateRxCliente, type RxCliente } from '../../db/rxdb'
 import { SelectorProductos } from './SelectorProductos';
 import { SelectorPlan } from './detalle/SelectorPlan';
 import { usePlanesAlimentacion } from '../../hooks/usePlanesAlimentacion';
-import { copiaDePlan, planSeCobra } from '../../lib/hotelPlanesApi';
+import { copiaDePlan, importePlan, incluyeDelPlan, planSeCobra } from '../../lib/hotelPlanesApi';
+import { crearCotizacion, marcarConvertida, reemplazarCotizacion, type Cotizacion, type NuevaCotizacion } from '../../lib/hotelCotizacionesApi';
+import { ResultadoCotizacion } from './cotizaciones/ResultadoCotizacion';
+import { useExportarCotizacion } from './cotizaciones/useExportarCotizacion';
 import { PasoRevision } from './nueva/PasoRevision';
 import { ProgresoReserva } from './nueva/ProgresoReserva';
 import { PASOS, type Elegida, type EstadoLinea, type Linea, type Paso } from './nueva/tipos';
@@ -115,10 +118,21 @@ interface Props {
   version?: number;
   onClose: () => void;
   onCreada?: (reservas: ReservaHotel[]) => void;
+  /** `cotizacion`: los mismos pasos, pero en vez de crear la reserva se guarda una cotización (PDF o imagen) y no se toca Cloudbeds. */
+  modo?: 'reserva' | 'cotizacion';
+  /** Reserva creada a partir de esta cotización: precarga el cliente y, al crearse, la marca como convertida. */
+  desdeCotizacion?: Cotizacion | null;
+  /** Cotización guardada que se está editando: se reabre completa y al guardar se reemplaza (mismo número, vigencia renovada). */
+  editando?: Cotizacion | null;
+  /** Cotización guardada (para refrescar la lista). */
+  onCotizada?: (c: Cotizacion) => void;
 }
 
 /** Se monta solo mientras está abierto: cada apertura empieza limpia (con la habitación y fechas del calendario, si vienen). */
-export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose, onCreada }: Props) {
+export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose, onCreada, modo = 'reserva', desdeCotizacion = null, editando = null, onCotizada }: Props) {
+  const esCot = modo === 'cotizacion';
+  // De dónde se precarga el cliente y los huéspedes: la cotización que se edita o la que se convierte en reserva.
+  const origenCot = editando ?? desdeCotizacion;
   // Usuario que opera (el local o, si no hay, el administrador): firma pagos y movimientos en el Centro de Ventas.
   const currentMesero = useUsuarioActual();
   const { openConfirm } = useUI();
@@ -130,8 +144,8 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   // ---------- Paso 1: estadía ----------
   const [llegada, setLlegada] = useState(preset?.llegada ?? '');
   const [salida, setSalida] = useState(preset?.salida ?? (preset?.llegada ? dayjs(preset.llegada).add(1, 'day').format('YYYY-MM-DD') : ''));
-  const [adultos, setAdultos] = useState(2);
-  const [ninos, setNinos] = useState(0);
+  const [adultos, setAdultos] = useState(origenCot?.adultos ?? 2);
+  const [ninos, setNinos] = useState(origenCot?.ninos ?? 0);
   const [buscando, setBuscando] = useState(false);
   const [resultado, setResultado] = useState<DisponibilidadResp | null>(null);
   const [errorBusqueda, setErrorBusqueda] = useState('');
@@ -148,6 +162,10 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   // Habitaciones que no admiten el reparto que se les dio (por habitación, para marcarlas en su tarjeta).
   const [sinCupo, setSinCupo] = useState<Record<string, string>>({});
   const preelegir = useRef(preset?.roomTypeID ? claveEnlace(preset.roomTypeID, preset.roomID) : null);
+  // Al editar una cotización, las habitaciones que se eligieron (con su cama, huéspedes y tarifa) se vuelven a elegir al llegar la disponibilidad.
+  const edicion = useRef<Record<string, Linea> | null>(editando
+    ? Object.fromEntries(editando.lineas.filter((l) => l.clave).map((l) => [l.clave as string, { cama: l.cama ?? '', adultos: l.adultos, ninos: l.ninos, planRateID: l.rateID ?? null, manual: !!l.manual, monto: l.monto ?? '', motivo: l.motivo ?? '' }]))
+    : null);
 
   const noches = llegada && salida ? dayjs(salida).diff(dayjs(llegada), 'day') : 0;
   const fechasOk = noches >= 1 && noches <= MAX_NOCHES;
@@ -189,11 +207,21 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       // (El ref se lee y se limpia FUERA del actualizador: React puede ejecutarlo dos veces.)
       const pre = preelegir.current ? r.ofertas.find((o) => o.roomTypeID === preelegir.current && o.reservable) : undefined;
       preelegir.current = null;
+      // Se conserva hasta que llegue la lista REAL de Cloudbeds (la provisional del calendario puede no tener todas las habitaciones).
+      const previas = edicion.current;
+      if (real) {
+        edicion.current = null;
+        const ya = previas ? Object.keys(previas).filter((id) => !r.ofertas.some((o) => o.roomTypeID === id && o.reservable)) : [];
+        if (ya.length > 0) showToast.warning(ya.length === 1 ? 'Una de las habitaciones cotizadas ya no está disponible' : `${ya.length} de las habitaciones cotizadas ya no están disponibles`, 'Se quitó de la cotización: elige otra si hace falta.');
+      }
       setSel((prev) => {
         const next: Record<string, Linea> = {};
         for (const o of r.ofertas) if (o.reservable && prev[o.roomTypeID]) next[o.roomTypeID] = prev[o.roomTypeID];
         if (pre && !next[pre.roomTypeID]) next[pre.roomTypeID] = { ...LINEA_BASE, adultos, ninos };
-        return repartirSel(next, adultos, ninos, capsDe(r.ofertas, habitaciones));
+        if (previas) for (const o of r.ofertas) if (o.reservable && previas[o.roomTypeID] && !next[o.roomTypeID]) next[o.roomTypeID] = previas[o.roomTypeID];
+        const repartida = repartirSel(next, adultos, ninos, capsDe(r.ofertas, habitaciones));
+        // Lo editado conserva los huéspedes que tenía cada habitación.
+        return previas ? Object.fromEntries(Object.entries(repartida).map(([id, l]) => [id, previas[id] ? { ...l, adultos: previas[id].adultos, ninos: previas[id].ninos } : l])) : repartida;
       });
       if (primera) setCotizaciones({});
       if (!real) libresProvisionales = new Set(r.ofertas.filter((o) => o.reservable).map((o) => o.roomTypeID));
@@ -301,15 +329,15 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   // ---------- Paso 2: cliente ----------
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [cliente, setCliente] = useState<RxCliente | null>(null);
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
-  const [email, setEmail] = useState('');
-  const [telefono, setTelefono] = useState('');
+  const [nombre, setNombre] = useState(() => (origenCot ? partirNombre(origenCot.cliente.nombre).nombre : ''));
+  const [apellido, setApellido] = useState(() => (origenCot ? partirNombre(origenCot.cliente.nombre).apellido : ''));
+  const [email, setEmail] = useState(origenCot?.cliente.email ?? '');
+  const [telefono, setTelefono] = useState(origenCot?.cliente.telefono ?? '');
   const [pais, setPais] = useState('EC');
   // Documento del huésped: va a su ficha de Clientes (Cloudbeds no lo recibe).
   // Plan de alimentación: undefined = sin tocar (se usa el predeterminado, si hay); null = «Sin plan».
   const { planes, defecto: planDefecto } = usePlanesAlimentacion();
-  const [planElegido, setPlanElegido] = useState<string | null | undefined>(undefined);
+  const [planElegido, setPlanElegido] = useState<string | null | undefined>(editando ? (editando.plan?.id ?? (editando.lineas.some((l) => l.clave) ? null : undefined)) : undefined);
   const planId = planElegido === undefined ? planDefecto?.id ?? null : planElegido;
   const plan = planes.find((p) => p.id === planId) ?? null;
   const [tipoDoc, setTipoDoc] = useState<TipoDoc>('cedula');
@@ -331,6 +359,16 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   };
   const quitarCliente = () => { setCliente(null); setNombre(''); setApellido(''); setEmail(''); setTelefono(''); setPais('EC'); setTipoDoc('cedula'); setNumeroDoc(''); };
 
+  // ---------- Cotización: cortesías, notas para el cliente y la cotización ya guardada ----------
+  const [cortesias, setCortesias] = useState<Array<{ id: string; texto: string }>>(() => (editando?.cortesias ?? []).map((texto) => ({ id: crypto.randomUUID(), texto })));
+  const [cortesiaNueva, setCortesiaNueva] = useState('');
+  const [notasCot, setNotasCot] = useState(editando?.notas ?? '');
+  const [cotizada, setCotizada] = useState<Cotizacion | null>(null);
+  const [guardandoCot, setGuardandoCot] = useState(false);
+  // Sin fecha definida: se calcula con fechas de muestra y el documento no las muestra.
+  const [referencial, setReferencial] = useState(editando?.referencial ?? false);
+  const { docRef: docCotizacion, botones: botonesCotizacion } = useExportarCotizacion(cotizada);
+
   // ---------- Paso 3: extras ----------
   const ext = useExtrasSeleccion(elegidas[0]?.o.roomTypeID ?? '');
   const { items: extras, activos, categorias, cantidades: cantidadesPorProducto, tasaIva, preciosConIva, sumar: sumarProducto, restar: restarProducto, cambiar: cambiarExtra, quitar: quitarExtra, monto: montoExtra } = ext;
@@ -341,10 +379,12 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
 
   // ---------- Totales y validación ----------
   const totalEstadia = elegidas.reduce((a, e) => a + e.totalPOS, 0);
-  const total = totalEstadia + totalExtras;
 
   const sumaAdultos = elegidas.reduce((a, e) => a + e.l.adultos, 0);
   const sumaNinos = elegidas.reduce((a, e) => a + e.l.ninos, 0);
+  // El plan de alimentación con cargo se suma al crear la reserva; en una cotización el precio final ya lo incluye.
+  const totalPlan = esCot && plan && planSeCobra(plan) ? importePlan(plan, sumaAdultos, sumaNinos, noches) : 0;
+  const total = totalEstadia + totalExtras + totalPlan;
 
   // Paso 1: primero se reparte el grupo, luego se pulsa «Calcular tarifa» (una consulta por ocupación distinta) y recién
   // entonces se puede continuar. Cambiar el reparto invalida el cálculo.
@@ -371,7 +411,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
       fechasOk && !!resultado && !desactualizado && elegidas.length === 0 && 'Elige al menos una habitación',
       elegidas.some((e) => e.l.manual && !e.manualValida) && 'Escribe el total de la tarifa manual',
     ].filter(Boolean) as string[],
-    2: [
+    2: esCot ? [] : [
       !nombre.trim() && 'Falta el nombre',
       !apellido.trim() && 'Falta el apellido',
       !EMAIL_RE.test(email.trim()) && 'Falta un correo válido (Cloudbeds lo exige)',
@@ -444,6 +484,26 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     if (faltasReparto.length > 0) return;
     await cotizar();
   };
+
+  // Al editar una cotización: cuando llega la disponibilidad y se vuelven a elegir las habitaciones, se recalcula la tarifa solo.
+  const autoCalculado = useRef(false);
+  const extrasCargados = useRef(false);
+  useEffect(() => {
+    if (!editando) return;
+    if (!autoCalculado.current && !cotizando && resultado && elegidas.length > 0 && !todoCotizado && faltasReparto.length === 0) {
+      autoCalculado.current = true;
+      void calcularTarifa();
+    }
+    // Los extras se reabren cuando el catálogo ya cargó.
+    if (!extrasCargados.current && activos.length > 0) {
+      extrasCargados.current = true;
+      const items = editando.extras.flatMap((x) => {
+        const p = activos.find((a) => a.id === x.productoId);
+        return p ? [{ key: crypto.randomUUID(), producto: p, cantidad: x.cantidad ?? 1, precio: x.precio ?? String(p.precio ?? 0), roomTypeID: x.clave ?? '' }] : [];
+      });
+      if (items.length > 0) ext.reemplazar(items);
+    }
+  });
 
   const continuar = () => {
     setIntentado((a) => ({ ...a, [paso]: true }));
@@ -555,6 +615,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         if (ok > 0) showToast.success(`${plural(ok, 'habitación reservada', 'habitaciones reservadas')}`, rango);
       }
       if (extrasFallidos > 0) showToast.warning(`${plural(extrasFallidos, 'extra no se guardó', 'extras no se guardaron')}`, 'La reserva sí quedó creada. Agrégalos desde su detalle.');
+      if (desdeCotizacion) await marcarConvertida(desdeCotizacion.id, creadas.map((r) => r.id)).catch(() => undefined);
       onCreada?.(creadas);
       onClose();
     } catch (e) {
@@ -563,14 +624,41 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     }
   };
 
+  // Cotizar: se guarda una copia de lo elegido (cabañas, camas, plan, extras, cortesías) con el precio final, vigente 48 horas. No toca Cloudbeds.
+  const guardarCotizacion = async () => {
+    if (!resultado || guardandoCot || [1, 2, 3].some((n) => faltas[n as Paso].length > 0)) return;
+    setGuardandoCot(true);
+    try {
+      const datos: NuevaCotizacion = {
+        idioma: 'es', referencial,
+        cliente: { nombre: `${nombre} ${apellido}`.trim(), ...(email.trim() ? { email: email.trim() } : {}), ...(telefono.trim() ? { telefono: telefono.trim() } : {}) },
+        llegada, salida, adultos: sumaAdultos, ninos: sumaNinos,
+        lineas: elegidas.map((e) => ({ nombre: e.nombre, cama: e.l.cama || null, adultos: e.l.adultos, ninos: e.l.ninos, precio: e.totalPOS, clave: e.o.roomTypeID, rateID: e.l.planRateID, manual: e.l.manual, monto: e.l.monto, motivo: e.l.motivo, vista: e.hab?.vista ?? null, amenidades: e.hab?.amenidades ?? [] })),
+        plan: plan ? { id: plan.id, nombre: plan.nombre, incluye: incluyeDelPlan(plan, sumaNinos).map((l) => ({ quien: l.quien, texto: l.texto })), seCobra: planSeCobra(plan), importe: totalPlan } : null,
+        extras: extrasOk.map((x) => ({
+          descripcion: `${x.cantidad > 1 ? `${x.cantidad}× ` : ''}${x.producto.nombre}${esGrupo ? ` (${elegidas.find((e) => e.o.roomTypeID === x.roomTypeID)?.nombre ?? ''})` : ''}`,
+          monto: montoExtra(x), productoId: x.producto.id, cantidad: x.cantidad, precio: x.precio, clave: x.roomTypeID,
+        })),
+        cortesias: cortesias.map((c) => c.texto), notas: notasCot.trim() || null, total, usuario_nombre: currentMesero?.nombre ?? null,
+      };
+      const c = editando ? await reemplazarCotizacion(editando.id, datos) : await crearCotizacion(datos);
+      setCotizada(c);
+      onCotizada?.(c);
+    } catch (e) {
+      showToast.fallo('guardar la cotización', e);
+    } finally {
+      setGuardandoCot(false);
+    }
+  };
+
   // Hay algo que perder si ya se avanzó de paso o se cambió lo que traía el calendario (fechas, huéspedes, habitaciones).
   const salidaInicial = preset?.salida ?? (preset?.llegada ? dayjs(preset.llegada).add(1, 'day').format('YYYY-MM-DD') : '');
-  const hayCambios = paso > 1 || adultos !== 2 || ninos !== 0 || llegada !== (preset?.llegada ?? '') || salida !== salidaInicial
+  const hayCambios = paso > 1 || adultos !== (origenCot?.adultos ?? 2) || ninos !== (origenCot?.ninos ?? 0) || llegada !== (preset?.llegada ?? '') || salida !== salidaInicial
     || Object.keys(sel).length > (preset?.roomTypeID ? 1 : 0);
   const puedeIrA = (n: Paso) => n <= paso || PASOS.filter((p) => p.n < n).every((p) => faltas[p.n].length === 0);
   const cerrar = () => {
-    if (guardando) return;
-    if (hayCambios) openConfirm('¿Descartar la reserva?', 'Aún no se ha creado. Si sales ahora, se pierde lo que llenaste.', onClose);
+    if (guardando || guardandoCot) return;
+    if (hayCambios && !cotizada) openConfirm(esCot ? '¿Descartar la cotización?' : '¿Descartar la reserva?', esCot ? 'Aún no se ha guardado. Si sales ahora, se pierde lo que llenaste.' : 'Aún no se ha creado. Si sales ahora, se pierde lo que llenaste.', onClose);
     else onClose();
   };
 
@@ -578,12 +666,12 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     <Sheet open onOpenChange={(o) => { if (!o) cerrar(); }}>
       <SheetContent side="right" showCloseButton={false} className="data-[side=right]:w-full data-[side=right]:sm:max-w-2xl p-0 flex flex-col gap-0 data-[side=right]:border-l-0 bg-background shadow-2xl">
         <SheetHeader className="px-5 py-3 border-b border-border bg-card flex flex-row flex-wrap items-center gap-x-4 gap-y-1 text-left">
-          <SheetTitle className="t-titulo shrink-0">Nueva reserva</SheetTitle>
+          <SheetTitle className="t-titulo shrink-0">{cotizada ? `Cotización ${String(cotizada.numero).padStart(4, '0')}` : editando ? `Editar cotización ${String(editando.numero).padStart(4, '0')}` : esCot ? 'Nueva cotización' : 'Nueva reserva'}</SheetTitle>
           <SheetDescription className="sr-only">Paso {paso} de 4 · {PASOS[paso - 1].titulo}</SheetDescription>
           <div className="order-last basis-full sm:order-none sm:basis-auto sm:flex-1 min-w-0">
-            <Indicador paso={paso} puedeIrA={puedeIrA} completo={(n) => n < paso && faltas[n].length === 0} onIr={irA} deshabilitado={guardando} />
+            {cotizada ? botonesCotizacion : <Indicador paso={paso} puedeIrA={puedeIrA} completo={(n) => n < paso && faltas[n].length === 0} onIr={irA} deshabilitado={guardando || guardandoCot} />}
           </div>
-          <button type="button" onClick={cerrar} disabled={guardando} aria-label="Cerrar sin crear la reserva"
+          <button type="button" onClick={cerrar} disabled={guardando} aria-label={cotizada ? 'Cerrar' : esCot ? 'Cerrar sin guardar la cotización' : 'Cerrar sin crear la reserva'}
             className="ml-auto sm:ml-0 size-11 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-40 shrink-0">
             <X size={18} weight="bold" />
           </button>
@@ -592,7 +680,9 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         <div className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col gap-4">
           <h3 ref={tituloPaso} tabIndex={-1} className="sr-only">{`Paso ${paso}: ${PASOS[paso - 1].titulo}`}</h3>
 
-          {guardando ? (
+          {cotizada ? (
+            <ResultadoCotizacion cotizacion={cotizada} docRef={docCotizacion} />
+          ) : guardando ? (
             <ProgresoReserva avance={avance} />
           ) : paso === 1 ? (
             <>
@@ -602,6 +692,15 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                   <DateRangePickerField desde={llegada} hasta={salida} minimo={dayjs().format('YYYY-MM-DD')} maxNoches={MAX_NOCHES} sufijo={fechasOk ? plural(noches, 'noche', 'noches') : undefined} onChange={(d, h) => { setLlegada(d); setSalida(h); }} aria-label="Elegir llegada y salida" />
                   {intentado[1] && !fechasOk && <p className="t-meta text-destructive">Elige la llegada y la salida (de 1 a {MAX_NOCHES} noches).</p>}
                 </div>
+                {esCot && (
+                  <label className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2.5 cursor-pointer">
+                    <span className="flex flex-col">
+                      <span className="t-cuerpo-fuerte">Sin fecha definida</span>
+                      <span className="t-meta text-muted-foreground">Precio de referencia: elige fechas de muestra con disponibilidad; el documento no las muestra y vale 7 días</span>
+                    </span>
+                    <Switch checked={referencial} onCheckedChange={setReferencial} aria-label="Cotización sin fecha definida" />
+                  </label>
+                )}
                 <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
                   <Contador etiquetaTexto="Adultos total" valor={adultos} min={1} max={60} onCambio={(n) => cambiarGrupo(n, ninos)} />
                   <Contador etiquetaTexto="Niños total" valor={ninos} min={0} max={60} onCambio={(n) => cambiarGrupo(adultos, n)} />
@@ -709,21 +808,21 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                 </div>
               )}
 
-              <Seccion icono={cliente ? PencilSimple : UserPlus} titulo={cliente ? 'Datos para Cloudbeds' : 'Datos del huésped'}>
+              <Seccion icono={cliente ? PencilSimple : UserPlus} titulo={esCot ? 'Datos del cliente' : cliente ? 'Datos para Cloudbeds' : 'Datos del huésped'}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Campo label="Nombre" id="nr-nombre" requerido error={intentado[2] && !nombre.trim() ? 'Escribe el nombre' : ''}>
+                  <Campo label="Nombre" id="nr-nombre" requerido={!esCot} error={intentado[2] && !esCot && !nombre.trim() ? 'Escribe el nombre' : ''}>
                     <Input id="nr-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} autoComplete="given-name" aria-invalid={intentado[2] && !nombre.trim()} className="h-11 text-base" />
                   </Campo>
-                  <Campo label="Apellido" id="nr-apellido" requerido error={intentado[2] && !apellido.trim() ? 'Escribe el apellido' : ''}>
+                  {!esCot && <Campo label="Apellido" id="nr-apellido" requerido error={intentado[2] && !apellido.trim() ? 'Escribe el apellido' : ''}>
                     <Input id="nr-apellido" value={apellido} onChange={(e) => setApellido(e.target.value)} autoComplete="family-name" aria-invalid={intentado[2] && !apellido.trim()} className="h-11 text-base" />
-                  </Campo>
-                  <Campo label="Correo" id="nr-email" requerido error={intentado[2] && !EMAIL_RE.test(email.trim()) ? 'Escribe un correo válido: Cloudbeds lo exige' : ''}>
+                  </Campo>}
+                  <Campo label="Correo" id="nr-email" requerido={!esCot} error={intentado[2] && !esCot && !EMAIL_RE.test(email.trim()) ? 'Escribe un correo válido: Cloudbeds lo exige' : ''}>
                     <Input id="nr-email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" aria-invalid={intentado[2] && !EMAIL_RE.test(email.trim())} className="h-11 text-base" />
                   </Campo>
                   <Campo label="Teléfono" id="nr-tel">
                     <Input id="nr-tel" type="tel" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} autoComplete="tel" className="h-11 text-base" />
                   </Campo>
-                  <Campo label="Documento" id="nr-doc" requerido={!!(cliente || guardarCliente)} error={intentado[2] && (cliente || guardarCliente) && !numeroDoc.trim() ? 'Escribe la cédula, RUC o pasaporte' : ''}>
+                  {!esCot && <Campo label="Documento" id="nr-doc" requerido={!!(cliente || guardarCliente)} error={intentado[2] && (cliente || guardarCliente) && !numeroDoc.trim() ? 'Escribe la cédula, RUC o pasaporte' : ''}>
                     <div className="flex gap-2">
                       <Select value={tipoDoc} onValueChange={(v) => setTipoDoc(v as TipoDoc)}>
                         <SelectTrigger className="data-[size=default]:h-11 w-32 shrink-0 px-2.5 text-base rounded-2xl bg-card border-border shadow-xs" aria-label="Tipo de documento"><SelectValue /></SelectTrigger>
@@ -731,12 +830,12 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                       </Select>
                       <Input id="nr-doc" value={numeroDoc} onChange={(e) => setNumeroDoc(e.target.value)} placeholder={tipoDoc === 'pasaporte' ? 'N.º de pasaporte' : tipoDoc === 'ruc' ? '13 dígitos' : '10 dígitos'} aria-invalid={intentado[2] && (cliente || guardarCliente) && !numeroDoc.trim()} className="h-11 text-base" />
                     </div>
-                  </Campo>
-                  <Campo label="País (2 letras)" id="nr-pais" requerido error={intentado[2] && !/^[A-Za-z]{2}$/.test(pais.trim()) ? 'Usa el código de 2 letras: EC, US, CO…' : ''}>
+                  </Campo>}
+                  {!esCot && <Campo label="País (2 letras)" id="nr-pais" requerido error={intentado[2] && !/^[A-Za-z]{2}$/.test(pais.trim()) ? 'Usa el código de 2 letras: EC, US, CO…' : ''}>
                     <Input id="nr-pais" value={pais} maxLength={2} onChange={(e) => setPais(e.target.value.toUpperCase())} aria-invalid={intentado[2] && !/^[A-Za-z]{2}$/.test(pais.trim())} className="h-11 text-base uppercase w-24" />
-                  </Campo>
+                  </Campo>}
                 </div>
-                {!cliente && (
+                {!cliente && !esCot && (
                   <label className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2.5 cursor-pointer">
                     <span className="flex flex-col">
                       <span className="t-cuerpo-fuerte">Guardar en Clientes</span>
@@ -745,9 +844,9 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                     <Switch checked={guardarCliente} onCheckedChange={setGuardarCliente} aria-label="Guardar el huésped en Clientes" />
                   </label>
                 )}
-                <Campo label="Notas internas (solo POS)" id="nr-notas">
+                {!esCot && <Campo label="Notas internas (solo POS)" id="nr-notas">
                   <Textarea id="nr-notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Llegada tarde, alergias, celebración…" className="min-h-16 text-base" />
-                </Campo>
+                </Campo>}
               </Seccion>
             </>
           ) : paso === 3 ? (
@@ -757,18 +856,44 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                   <SelectorPlan planes={planes} valor={planId} onChange={setPlanElegido} adultos={sumaAdultos} ninos={sumaNinos} noches={noches} />
                 </Seccion>
               )}
+            {esCot && (
+              <Seccion icono={Gift} color="success" titulo="Cortesías y notas para el cliente">
+                <div className="flex flex-col gap-2">
+                  <span className={etiqueta}>Cortesías (sin costo)</span>
+                  {cortesias.length > 0 && (
+                    <ul className="flex flex-col gap-1.5">
+                      {cortesias.map((c) => (
+                        <li key={c.id} className="flex items-center gap-2 rounded-xl bg-muted px-3 min-h-10">
+                          <Gift size={15} weight="bold" className="text-muted-foreground shrink-0" aria-hidden />
+                          <span className="grow min-w-0 t-cuerpo break-words">{c.texto}</span>
+                          <button type="button" onClick={() => setCortesias((l) => l.filter((x) => x.id !== c.id))} aria-label={`Quitar la cortesía ${c.texto}`} className="size-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer shrink-0"><Trash size={15} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input value={cortesiaNueva} onChange={(e) => setCortesiaNueva(e.target.value)} maxLength={120} placeholder="Ej. Bienvenida con vino espumoso" aria-label="Nueva cortesía" className="h-11 text-base"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && cortesiaNueva.trim()) { e.preventDefault(); setCortesias((l) => [...l, { id: crypto.randomUUID(), texto: cortesiaNueva.trim() }]); setCortesiaNueva(''); } }} />
+                    <Button type="button" variant="outline" className="h-11 gap-1.5 shrink-0" disabled={!cortesiaNueva.trim()} onClick={() => { setCortesias((l) => [...l, { id: crypto.randomUUID(), texto: cortesiaNueva.trim() }]); setCortesiaNueva(''); }}><Plus size={16} weight="bold" /> Añadir</Button>
+                  </div>
+                </div>
+                <Campo label="Notas para el cliente" id="nr-notas-cot">
+                  <Textarea id="nr-notas-cot" value={notasCot} onChange={(e) => setNotasCot(e.target.value)} placeholder="Condiciones, anticipo, indicaciones de llegada…" className="min-h-20 text-base" />
+                </Campo>
+              </Seccion>
+            )}
             <SelectorProductos productos={activos} categorias={categorias} cantidades={cantidadesPorProducto} tasaIva={tasaIva} preciosConIva={preciosConIva} onSumar={sumarProducto} onRestar={restarProducto} />
             </>
           ) : (
             <PasoRevision
               llegada={llegada} salida={salida} noches={noches} elegidas={elegidas} esGrupo={esGrupo}
               huesped={{ nombre: `${nombre} ${apellido}`.trim(), email, telefono, pais, documento: numeroDoc.trim() ? `${ETIQUETA_DOC[tipoDoc]} ${numeroDoc.trim()}` : '' }} cliente={cliente} guardarCliente={guardarCliente} notas={notas}
-              plan={plan} extras={extrasOk} montoExtra={montoExtra} totalEstadia={totalEstadia} totalExtras={totalExtras} netoExtras={netoExtras} ivaExtras={ivaExtras} onEditar={irA}
+              plan={plan} extras={extrasOk} montoExtra={montoExtra} totalEstadia={totalEstadia} totalExtras={totalExtras} netoExtras={netoExtras} ivaExtras={ivaExtras} onEditar={irA} cotizacion={esCot} referencial={referencial} totalPlan={totalPlan}
             />
           )}
 
           {/* Gestión del grupo: píldora flotante al centro, sobre el pie (no ocupa una fila más). */}
-          {!guardando && paso === 1 && elegidas.length > 0 && (
+          {!guardando && !cotizada && paso === 1 && elegidas.length > 0 && (
             <div className="sticky bottom-0 -mb-2 pt-2 flex justify-center pointer-events-none shrink-0">
               <div
                 role="status" aria-live="polite"
@@ -783,13 +908,13 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
           )}
         </div>
 
-        {!guardando && intentado[paso] && avisos.length > 0 && (
+        {!guardando && !cotizada && intentado[paso] && avisos.length > 0 && (
           <div role="alert" className="border-t border-destructive/30 bg-destructive-soft text-destructive px-4 py-2.5 flex items-start gap-2 t-meta">
             <WarningCircle size={16} weight="fill" className="shrink-0 mt-0.5" />
             <span>{avisos.join(' · ')}</span>
           </div>
         )}
-        {!guardando && paso === 3 && extras.length > 0 && (
+        {!guardando && !cotizada && paso === 3 && extras.length > 0 && (
           <div className="border-t border-border bg-muted/40 px-4 py-2.5 flex flex-col gap-1.5 max-h-[34dvh] overflow-y-auto" aria-label="Extras añadidos">
             <span className="t-etiqueta text-muted-foreground flex items-center gap-1.5"><ShoppingBag size={14} /> Extras añadidos ({extras.length}) · toca uno para editarlo</span>
             <ul className="flex flex-col rounded-xl border border-border bg-card overflow-hidden shrink-0">
@@ -832,7 +957,13 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
             </ul>
           </div>
         )}
-        {!guardando && (
+        {cotizada && (
+          <div className="border-t border-border bg-card px-4 py-3 flex items-center justify-between gap-3">
+            <span className="t-meta text-muted-foreground">{editando ? 'Cotización actualizada.' : 'Guardada en Reservas › Cotizaciones.'} {referencial ? 'Vigente 7 días.' : 'Vigente 48 horas.'}</span>
+            <Button type="button" className="h-11 px-5" onClick={onClose}>Listo</Button>
+          </div>
+        )}
+        {!guardando && !cotizada && (
           <div className="border-t border-border bg-card flex flex-col">
             {/* Contexto de la reserva, siempre a la vista: fechas, huéspedes y habitaciones. */}
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2.5 t-cuerpo text-foreground border-b border-border" aria-label="Resumen de la reserva">
@@ -878,9 +1009,15 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                   <Button type="button" className="h-11 px-5" onClick={continuar}>{paso === 3 && extras.length === 0 ? 'Continuar sin extras' : 'Continuar'}</Button>
                 )
               ) : (
+                esCot ? (
+                  <Button type="button" className="h-11 px-5 gap-2" onClick={() => void guardarCotizacion()} disabled={guardandoCot}>
+                    {guardandoCot ? <><Girando /> Guardando…</> : <><Check size={16} weight="bold" /> Generar cotización</>}
+                  </Button>
+                ) : (
                 <Button type="button" className="h-11 px-5 gap-2" onClick={() => void confirmar()}>
                   <Check size={16} weight="bold" /> {esGrupo ? `Reservar ${elegidas.length} habitaciones` : 'Crear reserva'}
                 </Button>
+                )
               )}
               </div>
             </div>

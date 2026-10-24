@@ -18,7 +18,7 @@ export interface DocReservaA4 {
   llegada: string;
   salida: string;
   noches: number;
-  cabanas: Array<{ nombre: string; cama: string | null; adultos: number; ninos: number; tarifa: number; manual: boolean }>;
+  cabanas: Array<{ nombre: string; cama: string | null; adultos: number; ninos: number; tarifa: number; manual: boolean; vista?: string | null }>;
   /** `notas`: notas cortas ligadas a ese extra (horario del tour…). */
   extras: Array<{ descripcion: string; monto: number; notas?: string[] }>;
   total: number;
@@ -99,6 +99,7 @@ const ESTILOS = `
   .plan b { font-size: 12px; }
   .grupo td { padding: 1.6mm 3mm; background: #f7f8f5; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: #3a3a3a; }
 
+  .vista { color: #666; font-weight: 400; }
   .fila-totales { display: flex; align-items: stretch; gap: 5mm; margin-top: 3mm; break-inside: avoid; }
   .totales { margin: 0 0 0 auto; width: 58%; background: #eef2ee; border-radius: 4px; padding: 2.5mm 4mm; break-inside: avoid; }
   .totales .fila { display: flex; justify-content: space-between; padding: 1px 0; color: #444; font-variant-numeric: tabular-nums; }
@@ -132,7 +133,7 @@ export function documentoReservaA4(d: DocReservaA4): string {
   const huespedes = d.cabanas.reduce((a, c) => a + c.adultos + c.ninos, 0);
   // Una sola fila por habitación: nombre (con noches), ocupación y cama, e importe.
   const detalleCabanas = d.cabanas.map((c) => `
-    <tr><td>${esc(c.nombre)}<div class="sub">${esc(plural(d.noches, "noche", "noches"))}${c.manual && !si ? " · tarifa especial" : ""}</div></td><td>${esc(plural(c.adultos, "adulto", "adultos"))}${c.ninos ? `, ${esc(plural(c.ninos, "niño", "niños"))}` : ""}${c.cama ? ` · Cama <b>${esc(c.cama)}</b>` : ""}</td>${si ? "" : `<td class="num">${dinero(c.tarifa)}</td>`}</tr>`).join("");
+    <tr><td>${esc(c.nombre)}${c.vista ? `<span class="vista"> · ${esc(c.vista)}</span>` : ""}<div class="sub">${esc(plural(d.noches, "noche", "noches"))}${c.manual && !si ? " · tarifa especial" : ""}</div></td><td>${esc(plural(c.adultos, "adulto", "adultos"))}${c.ninos ? `, ${esc(plural(c.ninos, "niño", "niños"))}` : ""}${c.cama ? ` · Cama <b>${esc(c.cama)}</b>` : ""}</td>${si ? "" : `<td class="num">${dinero(c.tarifa)}</td>`}</tr>`).join("");
   const filasExtras = d.extras.map((e) => `<tr><td>${esc(e.descripcion)}${(e.notas ?? []).map((n) => `<div class="sub nota">${esc(n)}</div>`).join("")}</td>${si ? "" : `<td class="num">${dinero(e.monto)}</td>`}</tr>`).join("");
   const pagos = (d.cobros?.pagos ?? []).map((p) =>
     `<tr><td style="white-space:nowrap;width:28mm">${esc(p.fecha)}</td><td>${esc(p.texto)}</td><td class="num">${p.reembolso ? "−" : ""}${dinero(p.monto)}</td></tr>`).join("");

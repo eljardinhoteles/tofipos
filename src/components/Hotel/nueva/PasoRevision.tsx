@@ -9,17 +9,19 @@ import { importePlan, incluyeDelPlan, planSeCobra, type PlanAlimentacion } from 
 import type { Elegida, Paso } from './tipos';
 
 /** Último paso de crear una reserva: resumen de estadía, cliente y extras con el total, cada bloque con su «Editar». */
-export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesped, cliente, guardarCliente, notas, plan, extras, montoExtra, totalEstadia, totalExtras, netoExtras, ivaExtras, onEditar }: {
+export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesped, cliente, guardarCliente, notas, plan, extras, montoExtra, totalEstadia, totalExtras, netoExtras, ivaExtras, onEditar, cotizacion = false, referencial = false, totalPlan = 0 }: {
   llegada: string; salida: string; noches: number; elegidas: Elegida[]; esGrupo: boolean;
   huesped: { nombre: string; email: string; telefono: string; pais: string; documento?: string }; cliente: RxCliente | null; guardarCliente: boolean; notas: string;
   plan: PlanAlimentacion | null; extras: ItemExtra[]; montoExtra: (x: ItemExtra) => number; totalEstadia: number; totalExtras: number; netoExtras: number; ivaExtras: number; onEditar: (p: Paso) => void;
+  /** Se está cotizando: no hay ficha de cliente ni envío a Cloudbeds, y el precio final incluye el plan con cargo. */
+  cotizacion?: boolean; referencial?: boolean; totalPlan?: number;
 }) {
   const adultos = elegidas.reduce((n, e) => n + e.l.adultos, 0);
   const ninos = elegidas.reduce((n, e) => n + e.l.ninos, 0);
   return (
     <div className="flex flex-col gap-3">
       <Bloque titulo="Estadía" icono={Bed} color="info" onEditar={() => onEditar(1)}>
-        <p className="t-cuerpo">{fechaLarga(llegada)} → {fechaLarga(salida)} · {plural(noches, 'noche', 'noches')}</p>
+        <p className="t-cuerpo">{cotizacion && referencial ? <>Fechas por definir <span className="text-muted-foreground">(muestra: {fechaLarga(llegada)} → {fechaLarga(salida)})</span></> : <>{fechaLarga(llegada)} → {fechaLarga(salida)}</>} · {plural(noches, 'noche', 'noches')}</p>
         <ul className="flex flex-col gap-1.5">
           {elegidas.map((e) => (
             <li key={e.o.roomTypeID} className="flex items-baseline justify-between gap-3">
@@ -36,13 +38,13 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
             </li>
           ))}
         </ul>
-        {esGrupo && <p className="t-meta text-muted-foreground">Se crea una reserva por habitación en Cloudbeds, enlazadas como grupo en el POS.</p>}
+        {esGrupo && !cotizacion && <p className="t-meta text-muted-foreground">Se crea una reserva por habitación en Cloudbeds, enlazadas como grupo en el POS.</p>}
       </Bloque>
 
       <Bloque titulo="Cliente" icono={User} onEditar={() => onEditar(2)}>
         <p className="t-cuerpo-fuerte">{huesped.nombre}</p>
         <p className="t-meta text-muted-foreground">{[huesped.documento, huesped.email, huesped.telefono, huesped.pais].filter(Boolean).join(' · ')}</p>
-        <p className="t-meta text-muted-foreground">{cliente ? 'Enlazada a su ficha de Clientes' : guardarCliente ? 'Se guardará como cliente nuevo' : 'Sin ficha de cliente'}</p>
+        {!cotizacion && <p className="t-meta text-muted-foreground">{cliente ? 'Enlazada a su ficha de Clientes' : guardarCliente ? 'Se guardará como cliente nuevo' : 'Sin ficha de cliente'}</p>}
         {notas.trim() && <p className="t-meta text-muted-foreground">Nota: {notas.trim()}</p>}
       </Bloque>
 
@@ -74,9 +76,10 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
       </Bloque>
       )}
 
-      <Seccion icono={Wallet} color="success" titulo="Total en el POS">
+      <Seccion icono={Wallet} color="success" titulo={cotizacion ? 'Precio final' : 'Total en el POS'}>
         <div className="flex flex-col gap-1.5">
           <Linea2 t="Estadía" v={dinero(totalEstadia)} />
+          {totalPlan > 0 && <Linea2 t="Plan de alimentación" v={dinero(totalPlan)} />}
           {totalExtras > 0 && (
             <>
               <Linea2 t="Extras (sin IVA)" v={dinero(netoExtras)} />
@@ -84,11 +87,11 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
             </>
           )}
           <div className="flex items-baseline justify-between gap-3 pt-1">
-            <span className="t-cuerpo-fuerte">Total a cobrar</span>
-            <span className="t-valor text-lg text-primary tabular-nums">{dinero(totalEstadia + totalExtras)}</span>
+            <span className="t-cuerpo-fuerte">{cotizacion ? 'Precio final' : 'Total a cobrar'}</span>
+            <span className="t-valor text-lg text-primary tabular-nums">{dinero(totalEstadia + totalExtras + totalPlan)}</span>
           </div>
         </div>
-        <p className="t-meta text-muted-foreground">A Cloudbeds se sube con su tarifa estándar. Los cobros se registran en el Centro de Ventas.</p>
+        <p className="t-meta text-muted-foreground">{cotizacion ? `Impuestos incluidos. ${referencial ? 'Precio de referencia, sin fechas: vale 7 días' : 'La cotización vale 48 horas'} y no reserva las habitaciones.` : 'A Cloudbeds se sube con su tarifa estándar. Los cobros se registran en el Centro de Ventas.'}</p>
       </Seccion>
     </div>
   );

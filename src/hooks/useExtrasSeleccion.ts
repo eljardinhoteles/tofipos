@@ -46,5 +46,5 @@ export function useExtrasSeleccion(roomTypeIDNuevo = '') {
   const total = items.reduce((a, x) => a + monto(x), 0);
   const neto = items.reduce((a, x) => a + calculo(x).subtotalNeto, 0);
 
-  return { items, activos, categorias, cantidades, tasaIva, preciosConIva, sumar, restar, cambiar, quitar, monto, total, neto, iva: total - neto };
+  return { items, reemplazar: setItems, activos, categorias, cantidades, tasaIva, preciosConIva, sumar, restar, cambiar, quitar, monto, total, neto, iva: total - neto };
 }
