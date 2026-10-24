@@ -37,9 +37,6 @@ export default function ReservasV2() {
  const [vistaElegida, setVistaElegida] = useState<'calendario' | 'lista' | null>(null);
  const vista = vistaElegida ?? (isMobile ? 'lista' : 'calendario');
  const cambiarVista = () => setVistaElegida(vista === 'lista' ? 'calendario' : 'lista');
- const [search, setSearch] = useState('');
- const [searchOpen, setSearchOpen] = useState(false);
- const [highlightedId, setHighlightedId] = useState<string | null>(null);
  const [calendarAnimating, setCalendarAnimating] = useState(false);
 
  const [reservaToAssign, setReservaToAssign] = useState<Reserva | null>(null);
@@ -140,16 +137,6 @@ export default function ReservasV2() {
  });
  }, [reservas, registerAssignModal]);
 
- const handleResultClick = (r: Reserva) => {
- const fechaReserva = new Date(r.fecha +'T12:00:00');
- fechaReserva.setHours(0, 0, 0, 0);
- runCalendarTransition(0, () => setStartDate(fechaReserva));
- setHighlightedId(r.id);
- setTimeout(() => setHighlightedId(null), 3000);
- setSearch('');
- setSearchOpen(false);
- };
-
  const zonasRows = zonas.filter(z => z.nombre.toLowerCase() !=='habitaciones');
  if (!zonasRows.find(z => z.id ==='sin_zona')) {
  zonasRows.push({ id:'sin_zona', nombre:'Sin Zona', orden: 999 } as any);
@@ -160,12 +147,6 @@ export default function ReservasV2() {
  {!reservaProductosComandaId && (
  <CalendarHeader
  visibleDates={visibleDates}
- search={search}
- setSearch={setSearch}
- searchOpen={searchOpen}
- setSearchOpen={setSearchOpen}
- reservas={reservas}
- onResultClick={handleResultClick}
  onNewReserva={() => { setSelectedReservaId(null); setNuevaReservaPreset(null); setReservaView('nueva'); }}
  vista={vista}
  onCambiarVista={cambiarVista}
@@ -185,7 +166,6 @@ export default function ReservasV2() {
  <ReservasLista
  reservas={reservas}
  mesas={mesas}
- search={search}
  activaId={selectedReservaId}
  onCardClick={openDetail}
  onAssign={handleOpenAssign}
@@ -200,8 +180,8 @@ export default function ReservasV2() {
  reservas={reservas}
  zonasRows={zonasRows}
  mesas={mesas}
- search={search}
- highlightedId={selectedReservaId ?? highlightedId}
+ search=""
+ highlightedId={selectedReservaId}
  onCellClick={(date, zonaId) => {
  setSelectedReservaId(null);
  setNuevaReservaPreset({ fecha: date, zonaId });

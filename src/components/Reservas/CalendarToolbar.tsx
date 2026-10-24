@@ -1,30 +1,23 @@
 import { useState } from'react';
 import { CaretLeft, CaretRight, Plus, CalendarDot, Rows, CalendarBlank } from'@phosphor-icons/react';
-import { type Reserva } from'../../db/database';
-import { STATUS_LABEL } from'./reservaUtils';
 import { Button, ButtonGroup } from'@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar } from'@/components/ui/calendar';
 
 import { useUI } from'../../context/UIContext';
 import { cn } from'@/lib/utils';
-import { PageHeader, HeaderSearch, headerPrimaryButtonClass, headerIconButtonClass } from'../Common/PageHeader';
+import { SeccionesMesas } from'../Common/SeccionesMesas';
+import { PageHeader, headerPrimaryButtonClass, headerIconButtonClass } from'../Common/PageHeader';
 
 interface CalendarHeaderProps {
  visibleDates: Date[];
- search: string;
- setSearch: (s: string) => void;
- searchOpen: boolean;
- setSearchOpen: (o: boolean) => void;
- reservas: Reserva[];
- onResultClick: (r: Reserva) => void;
  onNewReserva: () => void;
  vista: 'calendario' | 'lista';
  onCambiarVista: () => void;
 }
 
-// Header de Reservas: título, buscador con resultados y la acción principal.
-export function CalendarHeader({ visibleDates, search, setSearch, searchOpen, setSearchOpen, reservas, onResultClick, onNewReserva, vista, onCambiarVista }: CalendarHeaderProps) {
+// Header de Reservas: título, secciones y la acción principal (el buscador está en la vista de lista).
+export function CalendarHeader({ visibleDates, onNewReserva, vista, onCambiarVista }: CalendarHeaderProps) {
  const mes = visibleDates[0]?.toLocaleDateString('es-ES', { month:'long', year:'numeric'}) ?? '';
  // Con el formulario de nueva reserva abierto en el sidebar, el botón sobra.
  const { reservaView, selectedReservaId } = useUI();
@@ -32,36 +25,8 @@ export function CalendarHeader({ visibleDates, search, setSearch, searchOpen, se
  return (
  <PageHeader
  title="Reservas"
+ tabs={<SeccionesMesas />}
  subtitle={<span className="inline-block first-letter:uppercase">{vista === 'lista' ? 'Próximas reservas' : mes}</span>}
- search={
- <div className="relative">
- <HeaderSearch
- value={search}
- placeholder="Buscar reserva..."
- onChange={(v) => { setSearch(v); setSearchOpen(v.trim().length > 1); }}
- />
- {searchOpen && vista === 'calendario' && (
- <div className="absolute top-11 left-0 w-96 max-w-full bg-card text-foreground rounded-2xl shadow-xl border border-border p-2 z-50 flex flex-col gap-1 max-h-60 overflow-y-auto">
- {reservas
- .filter(r => r.nombre.toLowerCase().includes(search.toLowerCase()))
- .map(r => (
- <div
- key={r.id}
- onClick={() => { onResultClick(r); setSearchOpen(false); }}
- className="min-h-11 px-3 py-2 rounded-2xl cursor-pointer hover:bg-muted flex flex-col justify-center gap-0.5">
- <span className="t-cuerpo-fuerte text-foreground">{r.nombre}</span>
- <div className="flex items-center justify-between t-meta text-muted-foreground">
- <span>{r.fecha} · {r.hora}</span>
- <span className="t-dato px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
- {STATUS_LABEL[r.estado] || r.estado}
- </span>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- }
  actions={(
  // Siempre montado: al cerrar el sidebar el contenido tarda 0.5 s en volver a su
  // ancho; si el botón apareciera de golpe se vería deslizarse. Se oculta al instante

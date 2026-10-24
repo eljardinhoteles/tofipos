@@ -7,7 +7,6 @@ import { SyncStatusModal } from '../Common/SyncStatusModal';
 import {
   SquaresFour,
   Receipt,
-  CalendarCheck,
   ShoppingCart,
   Gear,
   Users,
@@ -39,7 +38,6 @@ import { useActividadDia } from '../../hooks/useActividadDia';
 const navItemsV2 = [
   { label: 'Mesas', to: '/v2/mesas', icon: SquaresFour, accent: NAV_ACCENT['/v2/mesas'] },
   { label: 'Órdenes', to: '/v2/ordenes', icon: Receipt, accent: NAV_ACCENT['/v2/ordenes'] },
-  { label: 'Reservas', to: '/v2/reservas', icon: CalendarCheck, accent: NAV_ACCENT['/v2/reservas'] },
   { label: 'Hotel', to: '/v2/hotel', icon: Bed, accent: NAV_ACCENT['/v2/hotel'] },
   { label: 'Productos', to: '/v2/menu', icon: ShoppingCart, accent: NAV_ACCENT['/v2/menu'] },
   { label: 'Planificador', to: '/v2/planificacion', icon: CalendarStar, accent: NAV_ACCENT['/v2/planificacion'] },
@@ -127,7 +125,8 @@ export function MainSidebarV2() {
   const orgNombre = localStorage.getItem('pos_org_name_cached') || '';
   const userIniciales = userName.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join('') || 'U';
   const isActivePath = (to: string) =>
-    location.pathname === to || (to !== '/v2/mesas' && location.pathname.startsWith(to));
+    // Reservas ya no está en el sidebar: vive en las secciones del header de Mesas, así que ese módulo sigue marcado.
+    location.pathname === to || (to === '/v2/mesas' ? location.pathname.startsWith('/v2/reservas') : location.pathname.startsWith(to));
   const settingsActive = isActivePath(settingsItem.to);
 
   const syncLabel = !syncStatus.online
