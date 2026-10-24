@@ -8,19 +8,30 @@ import dayjs from 'dayjs';
 import { cargarMes, consultando, hace, hayFalloConsulta, refrescarCercanos, ultimaConsulta } from '../../lib/hotelCalendarioCache';
 
 /**
- * Estado de la última consulta a Cloudbeds y botón de actualizar, para el header del módulo Hotel (se ve en todas las
- * secciones). Actualiza en vivo lo que cuelga de Cloudbeds (mes actual y siguiente del calendario) y vuelve a leer lo
- * propio del POS con `onRecargar`.
+ * Texto de estado de la última consulta a Cloudbeds («Actualizando…» o «hace 2 min»), para el subtítulo del header del Hotel.
+ * Se repinta cuando llegan datos a la caché del calendario y cada 15 s para el «hace…».
  */
-export function SincronizarHotel({ version, onRecargar }: { version: number; onRecargar: () => Promise<unknown> | void }) {
-  // Se repinta cuando llegan datos a la caché del calendario (también los de fondo) y cada 15 s para el «hace…».
+export function TextoSincronizacion() {
   useCacheCalendario();
   const [ahora, setAhora] = useState(() => Date.now());
-  const [actualizando, setActualizando] = useState(false);
   useEffect(() => {
     const reloj = setInterval(() => setAhora(Date.now()), 15_000);
     return () => clearInterval(reloj);
   }, []);
+  const ultima = ultimaConsulta();
+  const texto = consultando() ? 'Actualizando…' : ultima !== null ? `hace ${hace(Math.max(0, ahora - ultima))}` : '';
+  return texto ? <span role="status" aria-live="polite" title="Última consulta a Cloudbeds">{texto}</span> : null;
+}
+
+/**
+ * Botón de actualizar desde Cloudbeds, para el header del módulo Hotel (se ve en todas las
+ * secciones). Actualiza en vivo lo que cuelga de Cloudbeds (mes actual y siguiente del calendario) y vuelve a leer lo
+ * propio del POS con `onRecargar`.
+ */
+export function SincronizarHotel({ version, onRecargar }: { version: number; onRecargar: () => Promise<unknown> | void }) {
+  // Se repinta cuando llegan datos a la caché del calendario (también los de fondo): el icono gira mientras se consulta.
+  useCacheCalendario();
+  const [actualizando, setActualizando] = useState(false);
 
   // Si aún no se ha consultado nada (p. ej. se entró por Reservas), se trae el mes actual: el Worker lo sirve guardado al instante.
   useEffect(() => {
@@ -30,7 +41,6 @@ export function SincronizarHotel({ version, onRecargar }: { version: number; onR
   }, []);
 
   const ocupado = actualizando || consultando();
-  const ultima = ultimaConsulta();
 
   const actualizar = async () => {
     setActualizando(true);
@@ -38,7 +48,6 @@ export function SincronizarHotel({ version, onRecargar }: { version: number; onR
       const [resultados] = await Promise.all([refrescarCercanos(version), Promise.resolve(onRecargar()).catch(() => undefined)]);
       const fallo = resultados.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (fallo) showToast.fallo('actualizar desde Cloudbeds', fallo.reason);
-      setAhora(Date.now());
     } finally {
       setActualizando(false);
     }
@@ -46,9 +55,6 @@ export function SincronizarHotel({ version, onRecargar }: { version: number; onR
 
   return (
     <>
-      <span className="hidden xl:inline t-dato text-nav-foreground/70 whitespace-nowrap" role="status" aria-live="polite" title="Última consulta a Cloudbeds">
-        {ocupado ? 'Actualizando…' : ultima !== null ? `Actualizado hace ${hace(Math.max(0, ahora - ultima))}` : ''}
-      </span>
       <button type="button" aria-label="Actualizar desde Cloudbeds" title="Actualizar ahora" onClick={() => void actualizar()} disabled={actualizando} className={cn(headerIconButtonClass, 'disabled:opacity-60')}>
         <ArrowsClockwise size={16} weight="bold" className={cn(ocupado && 'animate-spin')} />
       </button>

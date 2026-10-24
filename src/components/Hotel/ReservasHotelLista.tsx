@@ -1,15 +1,20 @@
 import { useCallback, useContext, useMemo, useState, type KeyboardEvent } from 'react';
 import dayjs from 'dayjs';
-import { ArrowDown, ArrowUp, MagnifyingGlass, PawPrint, SignIn, SignOut, SlidersHorizontal, WarningCircle, X } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, MagnifyingGlass, PawPrint, Plus, SignIn, SignOut, SlidersHorizontal, WarningCircle, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { pagoDeVenta } from './estiloReserva';
 import { TarjetaInfoDialog } from './TarjetaInfoDialog';
 import { ActividadKpis } from './reservas/ActividadKpis';
 import { detalleKpi, type DetalleKpi } from './reservas/detalleKpi';
+import { ListaCotizaciones } from './cotizaciones/ListaCotizaciones';
+import { TarjetaCotizaciones } from './cotizaciones/TarjetaCotizaciones';
+import { estadoEfectivo, type Cotizacion } from '../../lib/hotelCotizacionesApi';
 import { PanelDia } from './reservas/PanelDia';
-import { PESO_ESTADIA, VISTAS, construirFilas, enVista, estadiaDe, ocupacionDelDia, type Estadia, type Estado, type Fila, type Pago, type Vista } from './reservas/modelo';
+import { CheckoutsAtrasados } from './reservas/CheckoutsAtrasados';
+import { PESO_ESTADIA, VISTAS, construirFilas, enVista, esAtrasada, estadiaDe, ocupacionDelDia, type Estadia, type Estado, type Fila, type Pago, type Vista } from './reservas/modelo';
 import { EstadoBadge } from '../Common/EstadoBadge';
 import { FiltroChip, FiltroLimpiarTodo, type OpcionFiltro } from '../Common/FiltroChip';
 import { Paginacion } from '../Common/Paginacion';
@@ -43,6 +48,12 @@ interface Props {
   onEliminarBloqueo: (t: TarjetaCalendario) => Promise<void>;
   /** Algo cambió en Cloudbeds desde aquí (p. ej. un check-out): recargar. */
   onCambio?: () => void;
+  /** Cotizaciones guardadas: se ven en la tarjeta «Cotizaciones» (vigentes 48 horas). */
+  cotizaciones?: Cotizacion[];
+  onAbrirCotizacion?: (c: Cotizacion) => void;
+  onBorrarCotizacion?: (c: Cotizacion) => void;
+  /** Crear una cotización nueva (botón bajo la tarjeta de cotizaciones). */
+  onNuevaCotizacion?: () => void;
 }
 
 export interface FiltroInicialReservas { estados?: Array<'confirmada' | 'pendiente' | 'rechazada' | 'cancelada'>; porRevisar?: boolean }
@@ -89,7 +100,7 @@ const dinero = (n: number) => `$${n.toFixed(2)}`;
  * salidas, en casa, pernoctan, nuevas, canceladas o todas), buscador, «Filtros» y la tabla. Tocar una fila abre su detalle.
  * La actividad de un día une lo de Cloudbeds con lo del POS; «Todas» son las reservas del POS de cualquier fecha.
  */
-export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergencias, busqueda, onBusqueda, inicial, version, puedeGestionar, onAdoptar, onEliminarBloqueo, onCambio }: Props) {
+export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergencias, busqueda, onBusqueda, inicial, version, puedeGestionar, onAdoptar, onEliminarBloqueo, onCambio, cotizaciones, onAbrirCotizacion, onBorrarCotizacion, onNuevaCotizacion }: Props) {
   const ventas = useContext(VentasHotelContext);
   const hoy = dayjs().format('YYYY-MM-DD');
 
@@ -163,6 +174,7 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `firma` cambia cuando llegan tarjetas nuevas a la caché del módulo
   const tarjetas = useMemo(() => tarjetasDeMeses(meses), [meses, firma]);
 
+  const vistaDe = (f: Fila) => habitacionDeUnidad(habitaciones, f.roomTypeID, f.roomID)?.vista ?? null;
   const nombreCabana = useCallback((roomTypeID: string, roomID?: string | null) => habitacionDeUnidad(habitaciones, roomTypeID, roomID)?.nombre ?? '—', [habitaciones]);
   // Clave de filtro de una fila: la de SU habitación del POS (cada unidad es una), o la del tipo si no está en el mapa.
   const claveDeFila = useCallback((f: Fila) => { const h = habitacionDeUnidad(habitaciones, f.roomTypeID, f.roomID); return h ? claveEnlace(h.cloudbeds_room_type_id, h.cloudbeds_room_id) : f.roomTypeID; }, [habitaciones]);
@@ -195,6 +207,8 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
 
   const nRevisar = filas.filter(revisar).length;
   // Check-outs por hacer hoy (o atrasados): en casa y con la salida de hoy o anterior.
+  const atrasadas = useMemo(() => filas.filter((f) => esAtrasada(f, hoy) && (f.r?.cloudbeds_grupo_ref ?? f.codigo)), [filas, hoy]);
+  const [verAtrasadas, setVerAtrasadas] = useState(false);
   const nSalidasPendientes = useMemo(() => filas.filter((f) => f.t?.estado === 'checked_in' && (f.r?.cloudbeds_grupo_ref ?? f.codigo) && enVista(f, 'salidas', hoy)).length, [filas, hoy]);
 
   const filtradas = useMemo(() => {
@@ -233,7 +247,10 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
 
   // Cualquier cambio de filtro, de vista o de día vuelve a la primera página.
   const cambiar = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPagina(1); };
-  const elegirVista = (v: Vista) => { setVistaElegida(v); setPagina(1); };
+  const [verCot, setVerCot] = useState(false);
+  const elegirVista = (v: Vista) => { setVerCot(false); setVistaElegida(v); setPagina(1); };
+  const vigentes = (cotizaciones ?? []).filter((c) => estadoEfectivo(c) === 'vigente');
+  const porVencer = vigentes.filter((c) => Date.parse(c.vence_at) - Date.now() < 12 * 3600_000).length;
   const elegirFecha = (f: string) => { setFecha(f); setPagina(1); };
 
   const estadoPorDefecto = estados.size === ESTADO_INICIAL.length && ESTADO_INICIAL.every((e) => estados.has(e));
@@ -280,19 +297,31 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
       {/* El día que se mira y su ocupación: a la izquierda en PC, arriba en pantallas angostas. */}
-      <aside className="shrink-0 p-4 sm:px-6 lg:w-72 lg:pr-0 lg:overflow-y-auto">
+      <aside className="shrink-0 p-4 sm:px-6 lg:w-72 lg:pr-0 lg:overflow-y-auto flex flex-col gap-3">
         <PanelDia fecha={fecha} hoy={hoy} onFecha={elegirFecha} ocupacion={ocupacion} />
+        {cotizaciones && <TarjetaCotizaciones vigentes={vigentes.length} porVencer={porVencer} activa={verCot} onClick={() => setVerCot((v) => !v)} />}
+        {cotizaciones && onNuevaCotizacion && (
+          <Button type="button" variant="outline" className="w-full h-11 gap-2" onClick={onNuevaCotizacion} title="Crea una cotización en PDF o imagen">
+            <Plus size={16} weight="bold" /> Nueva cotización
+          </Button>
+        )}
       </aside>
 
       <div className="flex flex-col min-w-0 lg:flex-1 lg:min-h-0">
         <div className="px-4 sm:px-6 pt-0 lg:pt-4 pb-3 shrink-0 flex flex-col gap-3">
+          {puedeGestionar && atrasadas.length > 0 && (
+            <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-destructive-soft text-destructive pl-4 pr-2 py-1.5">
+              <span className="t-dato font-semibold flex items-center gap-2"><SignOut size={16} weight="bold" aria-hidden /> {plural(atrasadas.length, 'check-out atrasado', 'check-outs atrasados')}: debían salir antes de hoy</span>
+              <button type="button" onClick={() => setVerAtrasadas(true)} className="h-8 pointer-coarse:h-11 px-3 rounded-xl bg-card border border-border text-foreground t-dato cursor-pointer hover:bg-muted">Revisar</button>
+            </div>
+          )}
           {puedeGestionar && nSalidasPendientes > 0 && (
             <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-warning-soft text-warning-foreground pl-4 pr-2 py-1.5">
               <span className="t-dato font-semibold flex items-center gap-2"><SignOut size={16} weight="bold" aria-hidden /> {plural(nSalidasPendientes, 'huésped por hacer', 'huéspedes por hacer')} check-out</span>
               <button type="button" onClick={() => { setFecha(hoy); elegirVista('salidas'); }} className="h-8 pointer-coarse:h-11 px-3 rounded-xl bg-card border border-border t-dato cursor-pointer hover:bg-muted">Ver salidas</button>
             </div>
           )}
-          <ActividadKpis vista={vista} onVista={elegirVista} conteos={conteos} detalles={detalles} />
+          <ActividadKpis vista={verCot ? null : vista} onVista={elegirVista} conteos={conteos} detalles={detalles} />
           {errorCarga && <p className="t-meta text-destructive rounded-2xl bg-destructive-soft px-3 py-2">{errorCarga}</p>}
 
           {/* Buscador a todo el ancho y el botón «Filtros» con todos los grupos. */}
@@ -356,6 +385,9 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
         </div>
 
         {/* La lista es una tarjeta propia bajo el buscador: encabezado fijo, filas y paginación dentro, con el mismo margen que las tarjetas de arriba. */}
+        {verCot && cotizaciones ? (
+          <ListaCotizaciones cotizaciones={cotizaciones} busqueda={busqueda} onAbrir={(c) => onAbrirCotizacion?.(c)} onBorrar={(c) => onBorrarCotizacion?.(c)} />
+        ) : (
         <section aria-label="Lista de reservas" className="mx-4 sm:mx-6 mb-[calc(env(safe-area-inset-bottom)+96px)] md:mb-4 lg:mb-6 rounded-2xl border border-border bg-card overflow-hidden flex flex-col lg:flex-1 lg:min-h-0">
         <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
           {filtradas.length === 0 ? (
@@ -416,7 +448,7 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
                       </td>
                       <td className="px-3 sm:px-6 py-3 hidden md:table-cell">
                         <div className="flex flex-col">
-                          <span className="t-cuerpo-fuerte text-foreground">{f.cabana}</span>
+                          <span className="t-cuerpo-fuerte text-foreground">{f.cabana}{vistaDe(f) && <span className="t-cuerpo text-muted-foreground font-normal"> · {vistaDe(f)}</span>}</span>
                           <span className="t-meta text-muted-foreground">{huespedes}</span>
                         </div>
                       </td>
@@ -468,8 +500,10 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
         </div>
         <Paginacion page={paginaActual} totalPages={paginas} total={filtradas.length} pageSize={POR_PAGINA} onPageChange={setPagina} />
         </section>
+        )}
       </div>
 
+      {verAtrasadas && <CheckoutsAtrasados filas={atrasadas} haciendo={saliendo} onCheckout={(f) => void hacerCheckout(f)} onClose={() => setVerAtrasadas(false)} />}
       <TarjetaInfoDialog info={info} habitaciones={habitaciones} onClose={() => setInfo(null)} puedeGestionar={puedeGestionar} onAdoptar={onAdoptar} onEliminarBloqueo={onEliminarBloqueo} />
     </div>
   );

@@ -14,7 +14,8 @@ const VISTAS_ACTIVIDAD: Array<{ id: Vista; etiqueta: string; icono: Icon; ayuda:
 ];
 
 interface Props {
-  vista: Vista;
+  /** Vista elegida; null cuando se está mirando la lista de cotizaciones. */
+  vista: Vista | null;
   onVista: (v: Vista) => void;
   conteos: Record<Vista, number>;
   /** Personas de cada vista (adultos y niños) y el detalle completo para el tooltip. */

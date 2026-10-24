@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import { ArrowsClockwise, ArrowsLeftRight, Bed, Broadcast, CheckCircle, CloudArrowUp, CloudCheck, PlugsConnected, WarningCircle, XCircle, type Icon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,10 @@ interface Props {
   ahora: number;
   /** El Worker mismo no respondió (sin red, sesión vencida…). */
   error: string;
+  /** Hubo un fallo reciente y se está reintentando: se muestra «reconectando» en vez de una falla. */
+  reconectando?: boolean;
+  /** Hora (ms) del próximo reintento automático, si hay uno programado. */
+  proximoIntento?: number | null;
   comprobando: boolean;
   onComprobar: () => void;
   pendientes: number;
@@ -44,13 +49,25 @@ interface Dato { icono: Icon; titulo: string; nivel: Nivel; valor: string; detal
  * Salud de la integración con Cloudbeds: un resumen arriba (verde, naranja o rojo) con su botón de comprobar, las tres
  * conexiones que sostienen la integración, y las cosas que requieren una acción con su botón «Ver».
  */
-export function EstadoIntegracion({ salud, ahora, error, comprobando, onComprobar, pendientes, divergentes, sinEnlazar, puedeConfigurar, onIrA }: Props) {
+export function EstadoIntegracion({ salud, ahora, error, reconectando = false, proximoIntento = null, comprobando, onComprobar, pendientes, divergentes, sinEnlazar, puedeConfigurar, onIrA }: Props) {
+  // Cuenta regresiva del próximo reintento (un tic por segundo solo mientras se reconecta).
+  const [reloj, setReloj] = useState(() => Date.now());
+  useEffect(() => {
+    if (!reconectando) return;
+    const t = setInterval(() => setReloj(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [reconectando]);
+  const segundos = proximoIntento ? Math.max(0, Math.ceil((proximoIntento - reloj) / 1000)) : null;
+  const textoReintento = segundos === null ? 'Reintentando…' : segundos === 0 ? 'Reintentando ahora…' : `Reintentando en ${segundos} s`;
+
   const ultimo = salud?.ultimoAvisoWebhook ?? null;
   const antiguoAviso = ultimo !== null && ahora - ultimo > AVISO_VIEJO_MS;
   const sync = salud?.sincronizacion;
 
   // ---- Conexiones ----
-  const conexion: Dato = error
+  const conexion: Dato = reconectando
+    ? { icono: PlugsConnected, titulo: 'Cloudbeds', nivel: 'aviso', valor: 'Reconectando…', detalle: `${textoReintento}. Suele ser pasajero: Cloudbeds tarda en responder.` }
+    : error
     ? { icono: PlugsConnected, titulo: 'Servidor del POS', nivel: 'mal', valor: 'No responde', detalle: error }
     : !salud
       ? { icono: PlugsConnected, titulo: 'Cloudbeds', nivel: 'aviso', valor: 'Comprobando…', detalle: 'Un momento' }
@@ -91,21 +108,21 @@ export function EstadoIntegracion({ salud, ahora, error, comprobando, onComproba
   ];
 
   // ---- Resumen ----
-  const hayMal = conexiones.some((c) => c.nivel === 'mal');
+  const hayMal = !reconectando && conexiones.some((c) => c.nivel === 'mal');
   const nTareas = tareas.filter((t) => t.n > 0).length;
   const nAvisos = conexiones.filter((c) => c.nivel === 'aviso').length + nTareas;
   const global: Nivel = hayMal ? 'mal' : nAvisos > 0 ? 'aviso' : 'ok';
   // La primera comprobación aún no terminó: no se alarma con avisos que son solo «sin datos todavía».
   const inicial = !salud && !error;
   const IconoGlobal = ICONO_NIVEL[global];
-  const titulo = inicial ? 'Comprobando la conexión…' : global === 'mal' ? (error ? 'No se pudo comprobar la conexión' : 'Cloudbeds no responde') : global === 'aviso' ? (nAvisos === 1 ? 'Hay 1 cosa por revisar' : `Hay ${nAvisos} cosas por revisar`) : 'Todo funciona correctamente';
-  const subtitulo = comprobando ? 'Comprobando…' : salud ? `Comprobado a las ${dayjs(ahora).format('HH:mm')} · se repite cada 5 minutos` : 'Comprobando la conexión…';
+  const titulo = reconectando ? 'Reconectando con Cloudbeds…' : inicial ? 'Comprobando la conexión…' : global === 'mal' ? (error ? 'No se pudo comprobar la conexión' : 'Cloudbeds no responde') : global === 'aviso' ? (nAvisos === 1 ? 'Hay 1 cosa por revisar' : `Hay ${nAvisos} cosas por revisar`) : 'Todo funciona correctamente';
+  const subtitulo = reconectando ? `${textoReintento}. Suele ser pasajero.` : comprobando ? 'Comprobando…' : salud ? `Comprobado a las ${dayjs(ahora).format('HH:mm')} · se repite cada 5 minutos` : 'Comprobando la conexión…';
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-5xl w-full mx-auto">
       <section className={cn('flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5', inicial ? 'border-border' : TONO[global].borde)} aria-live="polite">
         <span className={cn('size-14 shrink-0 rounded-2xl flex items-center justify-center', inicial ? 'bg-muted text-muted-foreground' : TONO[global].caja)}>
-          {inicial ? <Girando size={30} /> : <IconoGlobal size={30} weight="fill" aria-hidden />}
+          {inicial || reconectando ? <Girando size={30} /> : <IconoGlobal size={30} weight="fill" aria-hidden />}
         </span>
         <div className="flex flex-col min-w-0 grow">
           <h2 className="t-titulo">{titulo}</h2>

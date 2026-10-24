@@ -17,14 +17,17 @@ import { updateRxHabitacionCuenta } from '../../db/rxdb';
 import { showToast } from '@/lib/toast';
 import { useLlegadasHotel } from '../../hooks/useLlegadasHotel';
 import { usePermisos } from '../../hooks/usePermisos';
-import { nombreHuesped, omitirLlegadaMesas, type ReservaHotel } from '../../lib/hotelReservasApi';
+import { nombreHuesped, omitirLlegadaMesas, restaurarLlegadaMesas, type ReservaHotel } from '../../lib/hotelReservasApi';
 
 // El detalle de la reserva es el mismo panel del módulo Hotel; se carga solo al abrirlo para no engordar la pantalla de Mesas.
 const ReservaDrawer = lazy(() => import('../Hotel/ReservaDrawer').then((m) => ({ default: m.ReservaDrawer })));
 
 type Dia = 'hoy' | 'manana';
 
-interface CuentaLlegada { id: string; mesa_id: string; huesped: string; check_in: string; estado: 'activa' | 'cerrada'; reserva_hotel_id?: string | null; venta_id?: string | null }
+interface CuentaLlegada { id: string; mesa_id: string; huesped: string; check_in: string; check_out?: string | null; estado: 'activa' | 'cerrada'; reserva_hotel_id?: string | null; venta_id?: string | null }
+// Tamaño de una tarjeta de llegada (y de sus marcadores): la fila no cambia de alto al cargar ni cuando no hay llegadas.
+const TAMANO_TARJETA = 'h-[12.25rem] w-[16rem] shrink-0';
+
 // Una cuenta antigua se da por la de una reserva si su ingreso es del mismo día (o ±1) y el nombre del huésped coincide.
 const UMBRAL_NOMBRE = 0.5;
 
@@ -39,7 +42,7 @@ export function LlegadasHotel() {
   const { llegadaCheckin, setLlegadaCheckin, setSelectedMesaEsHabitacion, setViewingComandaId, setSelectedMesaId } = useUI();
   const { mesas } = useRxMesas();
   const [dia, setDia] = useState<Dia>('hoy');
-  const { reservas, habitaciones, recargar } = useLlegadasHotel();
+  const { reservas, habitaciones, recargar, cargado } = useLlegadasHotel();
   const permisos = usePermisos();
   // Reserva abierta en el panel de detalle del Hotel (la «i» de cada tarjeta).
   const [detalle, setDetalle] = useState<ReservaHotel | null>(null);
@@ -70,10 +73,13 @@ export function LlegadasHotel() {
     clienteId: r.cliente_id ?? undefined, llegada: r.llegada, salida: r.salida,
   });
 
+  const nombreMesa = (id: string) => (mesas as Array<{ id: string; nombre: string }>).find((m) => m.id === id)?.nombre ?? 'Habitación';
   const hoy = dayjs().format('YYYY-MM-DD');
   const manana = dayjs().add(1, 'day').format('YYYY-MM-DD');
 
-  const { delDia, deManana, candidatasPara } = useMemo(() => {
+  const { delDia, deManana, candidatasPara, ocultas } = useMemo(() => {
+    // Las llegadas que NO se listan, con el motivo: así nunca desaparece una sin explicación.
+    const ocultas: Array<{ r: ReservaHotel; motivo: string; restaurable: boolean }> = [];
     const ordenadas = [...reservas].sort((a, b) => a.llegada.localeCompare(b.llegada) || a.cabana.localeCompare(b.cabana, 'es', { numeric: true }));
     const porReserva = new Set(cuentas.map((c) => c.reserva_hotel_id).filter((x): x is string => !!x));
     const ventasDeReservas = new Set(reservas.map((r) => r.venta_id).filter((x): x is string => !!x));
@@ -88,11 +94,15 @@ export function LlegadasHotel() {
     const cercana = (c: CuentaLlegada, r: ReservaHotel) => Math.abs(dayjs(c.check_in).diff(dayjs(r.llegada), 'day')) <= 1;
 
     const pendientes = ordenadas.filter((r) => {
-      if (r.sin_cuenta_mesas || porReserva.has(r.id)) return false;
+      if (r.sin_cuenta_mesas) { ocultas.push({ r, motivo: 'La ocultaste: no se abrirá cuenta', restaurable: true }); return false; }
+      if (porReserva.has(r.id)) { ocultas.push({ r, motivo: 'Ya tiene una cuenta de habitación', restaurable: false }); return false; }
       const porVenta = r.venta_id ? restantes.get(r.venta_id) ?? 0 : 0;
-      if (porVenta > 0 && r.venta_id) { restantes.set(r.venta_id, porVenta - 1); return false; }
-      const i = libres.findIndex((c) => cercana(c, r) && (similitud(c, r) >= UMBRAL_NOMBRE || (!!mesaDe(r) && mesaDe(r) === c.mesa_id)));
-      if (i >= 0) { libres.splice(i, 1); return false; }
+      if (porVenta > 0 && r.venta_id) { restantes.set(r.venta_id, porVenta - 1); ocultas.push({ r, motivo: 'Una cuenta antigua comparte su venta', restaurable: false }); return false; }
+      // Una cuenta sin enlace se da por la de esta reserva si el nombre coincide, o si es de la MISMA habitación e ingresó el mismo día de la llegada
+      // y no es de un huésped anterior que sale ese día: sin esa salvedad, el huésped que se va tapaba a quien llega a su misma habitación.
+      const i = libres.findIndex((c) => cercana(c, r) && (similitud(c, r) >= UMBRAL_NOMBRE
+        || (!!mesaDe(r) && mesaDe(r) === c.mesa_id && c.check_in === r.llegada && !(c.check_out && c.check_out <= r.llegada))));
+      if (i >= 0) { ocultas.push({ r, motivo: `Se tomó por la cuenta de ${libres[i].huesped} (${nombreMesa(libres[i].mesa_id)})`, restaurable: false }); libres.splice(i, 1); return false; }
       return true;
     });
     // Para vincular a mano: las cuentas ACTIVAS que siguen sin reserva, las más parecidas primero.
@@ -101,15 +111,14 @@ export function LlegadasHotel() {
       .map((c) => ({ c, puntos: similitud(c, r) + (cercana(c, r) ? 0.5 : 0) }))
       .sort((x, y) => y.puntos - x.puntos)
       .map((x) => x.c);
-    return { delDia: pendientes.filter((r) => r.llegada <= hoy), deManana: pendientes.filter((r) => r.llegada === manana), candidatasPara };
-  }, [reservas, cuentas, habitaciones, hoy, manana]);
+    return { delDia: pendientes.filter((r) => r.llegada <= hoy), deManana: pendientes.filter((r) => r.llegada === manana), candidatasPara, ocultas };
+  }, [reservas, cuentas, habitaciones, hoy, manana, mesas]);
 
   // Solo se puede elegir una llegada de hoy (o atrasada): si lo elegido ya no está ahí (se abrió su cuenta, se canceló la reserva), se suelta.
   useEffect(() => {
     if (llegadaCheckin && !delDia.some((r) => r.id === llegadaCheckin.reservaId)) setLlegadaCheckin(null);
   }, [llegadaCheckin, delDia, setLlegadaCheckin]);
 
-  if (delDia.length === 0 && deManana.length === 0) return null;
   const lista = dia === 'hoy' ? delDia : deManana;
 
   const cambiarDia = (valor: Dia) => {
@@ -118,13 +127,36 @@ export function LlegadasHotel() {
     if (valor === 'manana') setLlegadaCheckin(null);
   };
 
-  const nombreMesa = (id: string) => (mesas as Array<{ id: string; nombre: string }>).find((m) => m.id === id)?.nombre ?? 'Habitación';
 
   return (
     <section aria-label="Llegadas de hotel" className="hidden md:flex mb-5 flex-col gap-2">
       {/* items-start: el título arranca a la misma altura que el de la primera zona; el control segmentado cuelga a la derecha. */}
       <div className="flex items-start justify-between gap-3">
-        <h2 className="t-etiqueta flex items-center gap-1.5 text-muted-foreground"><SignIn size={13} weight="bold" /> Llegadas</h2>
+        {/* items-start: el título queda siempre en el mismo sitio, aparezca o no el botón de «ocultas» (más alto que él), que se sube para centrarse con el texto. */}
+        <div className="flex items-start gap-3 min-w-0">
+          <h2 className="t-etiqueta flex items-center gap-1.5 text-muted-foreground"><SignIn size={13} weight="bold" /> Llegadas</h2>
+          {ocultas.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="-mt-1.5 h-7 px-2.5 rounded-full border border-border bg-card t-meta text-muted-foreground hover:bg-muted cursor-pointer inline-flex items-center gap-1.5" title="Llegadas del Hotel que no se listan y por qué">
+                  <EyeSlash size={13} weight="bold" aria-hidden /> {ocultas.length} {ocultas.length === 1 ? 'oculta' : 'ocultas'}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-2 flex flex-col gap-1">
+                <span className="t-etiqueta text-muted-foreground px-2 pt-1">No se listan porque…</span>
+                {ocultas.map(({ r, motivo, restaurable }) => (
+                  <div key={r.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-muted/60">
+                    <span className="flex flex-col min-w-0 grow">
+                      <span className="t-cuerpo-fuerte truncate">{nombreHuesped(r)} · {r.cabana}</span>
+                      <span className="t-meta text-muted-foreground">{motivo}</span>
+                    </span>
+                    {restaurable && <Button type="button" variant="outline" className="h-9 shrink-0" onClick={() => { void restaurarLlegadaMesas(r).then(() => { showToast.success('Llegada vuelta a mostrar'); recargar(); }).catch((e) => showToast.fallo('mostrar la llegada', e)); }}>Mostrar</Button>}
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
         {/* Control segmentado del UI kit (distinto de los chips de zonas). */}
         <Tabs value={dia} onValueChange={(v) => cambiarDia(v as Dia)}>
           <TabsList aria-label="Día de llegada" className="w-auto h-9">
@@ -133,8 +165,17 @@ export function LlegadasHotel() {
           </TabsList>
         </Tabs>
       </div>
-      {lista.length === 0 ? (
-        <p className="t-meta text-muted-foreground">{dia === 'hoy' ? 'No hay llegadas pendientes hoy.' : 'No hay llegadas registradas para mañana.'}</p>
+      {!cargado ? (
+        // Leyendo las reservas: tarjetas grises del mismo tamaño, para que lo de abajo no salte.
+        <div className="flex items-stretch gap-2.5" aria-busy="true" aria-label="Cargando llegadas">
+          {[0, 1].map((i) => <div key={i} className={`${TAMANO_TARJETA} rounded-2xl bg-muted/70 animate-pulse`} />)}
+        </div>
+      ) : lista.length === 0 ? (
+        <div className={`${TAMANO_TARJETA} rounded-2xl border border-dashed border-border bg-card/60 flex flex-col items-center justify-center gap-1.5 text-center px-4`}>
+          <SignIn size={22} weight="bold" className="text-muted-foreground" aria-hidden />
+          <span className="t-cuerpo-fuerte text-muted-foreground">{dia === 'hoy' ? 'No hay reservas que lleguen hoy' : 'No hay reservas que lleguen mañana'}</span>
+          {ocultas.length > 0 && <span className="t-meta text-muted-foreground">Hay {ocultas.length} oculta{ocultas.length === 1 ? '' : 's'}: revísalas arriba.</span>}
+        </div>
       ) : (
         <div className="flex items-stretch gap-2.5 overflow-x-auto hide-scrollbar py-1.5 -my-1.5 -mx-5 px-5">
           {lista.map((l) => {

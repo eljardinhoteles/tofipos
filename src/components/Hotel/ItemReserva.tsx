@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { Popover as PopoverPrimitive } from 'radix-ui';
-import { Bed, ForkKnife, Hash, Info, Moon, Note, PawPrint, UserCircle, UsersThree, WarningCircle } from '@phosphor-icons/react';
+import { Baby, Bed, ForkKnife, Hash, Info, Moon, PawPrint, User, UsersThree, WarningCircle } from '@phosphor-icons/react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,8 @@ interface Props {
   tarjeta: TarjetaVista;
   /** Nombre de la habitación de la fila. */
   cabana: string;
+  /** Vista de la habitación («Al río»): sale junto a su nombre en el popover. */
+  vista?: string | null;
   /** Posición dentro de la fila (el calendario la calcula): borde izquierdo y ancho, en CSS. */
   left: string;
   width: string;
@@ -55,7 +57,7 @@ interface Props {
  * popover y desde él se abre la ficha. También aparece al enfocar con teclado.
  */
 // Con `memo`: el calendario se repinta con el reloj y con cada aviso de la caché, y la barra solo debe hacerlo si cambian sus datos.
-export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left, width, cortaIzq, cortaDer, onAbrir, arrastrable, filaId, diasVisibles, onArrastreMover, onSoltar, onArrastreFin }: Props) {
+export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, vista, left, width, cortaIzq, cortaDer, onAbrir, arrastrable, filaId, diasVisibles, onArrastreMover, onSoltar, onArrastreFin }: Props) {
   const estilo = estiloDe(t);
   // Estado de pago: solo de la venta conciliada en el Centro de Ventas.
   const venta = useVentaDeReserva(t.local?.venta_id);
@@ -66,6 +68,17 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
   // Iconos de las categorías de los extras de la reserva (spa, tours…), junto al número de noches.
   const categoriasExtras = useCategoriasExtras();
   const iconosExtras = categoriasDeExtras(t.local?.extras ?? [], categoriasExtras).slice(0, 3);
+
+  // El popover hereda el color del estado de pago (o, sin venta, el del canal): base de color con los datos en una tarjeta blanca encima.
+  // Sin venta (p. ej. una reserva aún no adoptada) el estilo es blanco: blanco sobre blanco no se distingue, así que la base toma un tinte del color del canal.
+  const hexCanal = estilo.circulo.match(/bg-\[(#[0-9A-Fa-f]{3,8})\]/)?.[1];
+  const tinte = !pago && /\bbg-card\b/.test(estilo.fondo)
+    ? { fondo: hexCanal ? `color-mix(in oklab, ${hexCanal} 15%, white)` : 'var(--muted)', borde: hexCanal ? `color-mix(in oklab, ${hexCanal} 40%, white)` : 'var(--border)' }
+    : null;
+  const baseFondo = tinte ? '' : (pago?.fondo ?? estilo.fondo).split(' ').filter((c) => !c.startsWith('border')).join(' ');
+  const bordeBase = (pago?.fondo ?? estilo.fondo).split(' ').find((c) => c.startsWith('border-'));
+  const colorBase = baseFondo.match(/bg-\[(#[0-9A-Fa-f]{3,8})\]/)?.[1];
+  const colorBorde = bordeBase?.match(/border-\[(#[0-9A-Fa-f]{3,8})\]/)?.[1];
 
   const [abierto, setAbierto] = useState(false);
   const [tactil, setTactil] = useState(false);
@@ -159,10 +172,17 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left,
           side="top" align="center" sideOffset={8} collisionPadding={12}
           onOpenAutoFocus={(e) => e.preventDefault()}
           // Con mouse es solo informativo: no debe interceptar el cursor ni mantenerse abierto al salir de la barra.
-          className={cn('w-[22.5rem] max-w-[calc(100vw-1.5rem)] p-0 overflow-visible', !tactil && 'pointer-events-none')}
+          className={cn('w-[22.5rem] max-w-[calc(100vw-1.5rem)] p-0 overflow-visible shadow-[0_18px_44px_-10px_rgba(15,23,42,0.35),0_6px_16px_-4px_rgba(15,23,42,0.18)]', !tinte && bordeBase, !tactil && 'pointer-events-none')}
+          style={tinte ? { borderColor: tinte.borde } : undefined}
         >
-          <Contenido t={t} estilo={estilo} venta={venta} pago={pago} cabana={cabana} tactil={tactil} onAbrir={() => { setAbierto(false); onAbrir(t); }} />
-          <PopoverPrimitive.Arrow className="fill-popover drop-shadow-sm" width={16} height={8} />
+          <Contenido t={t} estilo={estilo} venta={venta} pago={pago} base={baseFondo} fondoPropio={tinte?.fondo} cabana={cabana} vista={vista} tactil={tactil} onAbrir={() => { setAbierto(false); onAbrir(t); }} />
+          {/* Flecha del color de la base, con solo sus dos lados en el color del borde, y subida 1 px para tapar la línea del borde en su arranque. */}
+          <PopoverPrimitive.Arrow asChild width={18} height={9}>
+            <svg viewBox="0 0 18 9" className="drop-shadow-md overflow-visible" style={{ transform: 'translateY(-1px)' }} aria-hidden>
+              <path d="M0 0 L9 9 L18 0 Z" fill={tinte?.fondo ?? colorBase ?? 'var(--muted)'} />
+              <path d="M0 0 L9 9 L18 0" fill="none" stroke={tinte?.borde ?? colorBorde ?? 'var(--border)'} strokeWidth="1.5" strokeLinejoin="round" />
+            </svg>
+          </PopoverPrimitive.Arrow>
         </PopoverContent>
       )}
     </Popover>
@@ -234,9 +254,7 @@ function CobrosVenta({ venta, pago }: { venta: VentaConMovimientos; pago: InfoPa
             <span className="t-cuerpo-fuerte text-warning-foreground shrink-0 font-semibold">
               Saldo {dinero(venta.saldo)}
             </span>
-          ) : (
-            <span className="t-meta text-success font-medium shrink-0">Pagado</span>
-          )}
+          ) : null}
         </div>
         <div role="progressbar" aria-valuenow={Math.round(avance)} aria-valuemin={0} aria-valuemax={100} aria-label="Avance del pago" className="h-1 rounded-full bg-muted overflow-hidden">
           <div className={cn('h-full rounded-full transition-all', pago.barra)} style={{ width: `${avance}%` }} />
@@ -246,7 +264,7 @@ function CobrosVenta({ venta, pago }: { venta: VentaConMovimientos; pago: InfoPa
   );
 }
 
-function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: TarjetaVista; estilo: EstiloReserva; venta?: VentaConMovimientos; pago: InfoPago | null; cabana: string; tactil: boolean; onAbrir: () => void }) {
+function Contenido({ t, estilo, venta, pago, base, fondoPropio, cabana, vista, tactil, onAbrir }: { t: TarjetaVista; estilo: EstiloReserva; venta?: VentaConMovimientos; pago: InfoPago | null; base: string; fondoPropio?: string; cabana: string; vista?: string | null; tactil: boolean; onAbrir: () => void }) {
   const Icono = estilo.icono;
   const noches = dayjs(t.hasta).diff(dayjs(t.desde), 'day');
   const local = t.local;
@@ -263,9 +281,14 @@ function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: Tar
   const notasLocal = local?.notas_items ?? [];
   const tarifaCloudbeds = useTarifaCloudbeds(t, !esBloqueo && !local);
 
+  const lineasCama = (local?.cama ?? '').split(' · ').map((l) => l.trim()).filter(Boolean);
+  const planTexto = local?.plan_alimentacion ? `${local.plan_alimentacion.nombre} · ${planSeCobra(local.plan_alimentacion) ? 'con cargo' : 'incluido'}` : '';
+
+  // Una sola jerarquía: canal y pago arriba, fechas, huésped, habitación, notas y cobros, separados por líneas finas (sin cajas ni píldoras).
   return (
-    <div className="flex flex-col gap-2.5 p-3">
-      <section className="rounded-xl bg-muted p-2.5 flex flex-col gap-2">
+    <div className={cn('flex flex-col rounded-[inherit]', base)} style={fondoPropio ? { backgroundColor: fondoPropio } : undefined}>
+      {/* Base gris con la cabecera (canal, pago, noches, estado y fechas); los datos van en una tarjeta blanca encima */}
+      <section className="px-4 py-3 flex flex-col gap-2">
         <div className="flex items-center gap-2.5">
           <span className={cn('size-6 rounded-full flex items-center justify-center shrink-0 t-dato font-extrabold', estilo.circulo)}>
             {estilo.letra ?? (Icono ? <Icono size={13} weight="bold" /> : null)}
@@ -273,7 +296,7 @@ function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: Tar
           <span className="t-fila truncate">{esBloqueo ? estilo.etiqueta : (t.fuente ?? local?.fuente_nombre ?? estilo.etiqueta)}</span>
           {pago && <span className="ml-auto shrink-0"><EstadoBadge tono={pago.tono}>{pago.etiqueta}</EstadoBadge></span>}
         </div>
-        <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-border/50">
+        <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 t-meta font-medium">
             <Moon size={14} weight="bold" className="text-primary shrink-0" />
             {plural(noches, 'noche', 'noches')} · {estado}
@@ -284,48 +307,54 @@ function Contenido({ t, estilo, venta, pago, cabana, tactil, onAbrir }: { t: Tar
         </div>
       </section>
 
-      <div className="flex flex-col gap-2.5">
-        {esBloqueo ? (
-          <>
-            {t.motivo && <Fila icono={Info}><span className="whitespace-pre-line">{t.motivo}</span></Fila>}
-            <Fila icono={Bed}>{cabana}</Fila>
-          </>
-        ) : (
-          <>
-            <Fila icono={UserCircle}>
-              <span className="block text-foreground t-fila">{t.nombre}</span>
-              {adultos != null && (
-                <span className="block">
-                  {plural(adultos, 'adulto', 'adultos')}{ninos > 0 ? `, ${plural(ninos, 'niño', 'niños')}` : ''}
+      <div className="flex flex-col gap-3 p-3.5 m-1.5 mt-0 rounded-xl bg-card text-foreground">
+      {esBloqueo ? (
+        <>
+          {t.motivo && <Fila icono={Info}><span className="whitespace-pre-line">{t.motivo}</span></Fila>}
+          <Fila icono={Bed}>{cabana}</Fila>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1">
+            <span className="t-titulo leading-tight truncate">{t.nombre}</span>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 t-cuerpo text-muted-foreground">
+              {adultos != null && <span className="inline-flex items-center gap-1"><User size={15} weight="bold" aria-hidden />{plural(adultos, 'adulto', 'adultos')}</span>}
+              {ninos > 0 && <span className="inline-flex items-center gap-1"><Baby size={15} weight="bold" aria-hidden />{plural(ninos, 'niño', 'niños')}</span>}
+              {local?.grupo_id && <span className="inline-flex items-center gap-1"><UsersThree size={15} weight="bold" aria-hidden />Grupo</span>}
+            </span>
+            {planTexto && <span className="inline-flex items-center gap-1 t-cuerpo text-muted-foreground"><ForkKnife size={15} weight="bold" aria-hidden />{planTexto}</span>}
+            {local?.mascota && <span className="inline-flex items-center gap-1 t-cuerpo text-muted-foreground"><PawPrint size={15} weight="fill" aria-hidden />{textoMascota(local.mascota)}</span>}
+          </div>
+
+          <Fila icono={Bed}>
+            <span className="block text-foreground t-fila">{cabana}{vista && <span className="text-muted-foreground font-normal"> · {vista}</span>}</span>
+            {lineasCama.map((l) => <span key={l} className="block t-meta">{l}</span>)}
+          </Fila>
+
+          {notasLocal.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="t-etiqueta text-muted-foreground">{plural(notasLocal.length, 'nota', 'notas')}</span>
+              {notasLocal.slice(0, 3).map((n) => (
+                <span key={n.id} className="flex items-start gap-2 t-meta text-foreground">
+                  <span aria-hidden className="size-1.5 rounded-full bg-warning shrink-0 mt-[0.4rem]" />
+                  <span className="line-clamp-2 min-w-0">{n.extra ? <b>{n.extra}: </b> : null}{n.texto}</span>
                 </span>
-              )}
-            </Fila>
-            <Fila icono={Bed}>
-              {cabana}{local?.grupo_id ? ' · grupo del POS' : ''}
-              {local?.cama && <span className="block">Cama: {local.cama}</span>}
-            </Fila>
-            {local?.mascota && <Fila icono={PawPrint}>{textoMascota(local.mascota)}</Fila>}
-            {local?.plan_alimentacion && <Fila icono={ForkKnife}>{local.plan_alimentacion.nombre}<span className="text-muted-foreground"> · {planSeCobra(local.plan_alimentacion) ? 'con cargo' : 'incluido'}</span></Fila>}
-            {notasLocal.length > 0 && (
-              <Fila icono={Note}>
-                <span className="block text-foreground t-fila">{plural(notasLocal.length, 'nota', 'notas')}</span>
-                {notasLocal.slice(0, 3).map((n) => <span key={n.id} className="block line-clamp-2">{n.extra ? `${n.extra}: ` : ''}{n.texto}</span>)}
-                {notasLocal.length > 3 && <span className="block">y {notasLocal.length - 3} más…</span>}
-              </Fila>
-            )}
-            {local?.grupo_id && <Fila icono={UsersThree}>Parte de un grupo; cada habitación es independiente</Fila>}
-            {pendiente && <Fila icono={WarningCircle}><span className="text-warning-foreground">Aún no está en Cloudbeds: se reintenta sola</span></Fila>}
-            {!local && <Fila icono={Hash}>Código {t.id}</Fila>}
-            {venta && pago
-              ? <CobrosVenta venta={venta} pago={pago} />
-              : <Importes local={local} tarifaCloudbeds={tarifaCloudbeds} saldoCloudbeds={t.saldo ?? null} />}
-          </>
-        )}
-      </div>
+              ))}
+              {notasLocal.length > 3 && <span className="t-meta text-muted-foreground pl-3.5">y {notasLocal.length - 3} más…</span>}
+            </div>
+          )}
+          {pendiente && <Fila icono={WarningCircle}><span className="text-warning-foreground">Aún no está en Cloudbeds: se reintenta sola</span></Fila>}
+          {!local && <Fila icono={Hash}>Código {t.id}</Fila>}
+          {venta && pago
+            ? <CobrosVenta venta={venta} pago={pago} />
+            : <Importes local={local} tarifaCloudbeds={tarifaCloudbeds} saldoCloudbeds={t.saldo ?? null} />}
+        </>
+      )}
 
       {tactil
         ? <Button type="button" onClick={onAbrir} className="w-full">{local || esBloqueo ? 'Abrir' : 'Ver detalle'}</Button>
         : <p className="t-meta text-muted-foreground text-center">Clic para abrir</p>}
+      </div>
     </div>
   );
 }

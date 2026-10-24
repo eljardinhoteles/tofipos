@@ -1411,6 +1411,12 @@ export const totalConExtras = (r: Pick<ReservaHotel, 'total_estadia' | 'extras'>
   r.total_estadia + r.extras.reduce((a, e) => a + e.monto, 0);
 
 /** Marca que a esta reserva no se le abrirá cuenta de habitación en Mesas: la tira de llegadas deja de mostrarla. */
+/** Deshace «ocultar en Mesas»: la llegada vuelve a la lista de Llegadas de Mesas. */
+export async function restaurarLlegadaMesas(r: ReservaHotel, usuario?: string): Promise<void> {
+  await actualizar(r.id, { sin_cuenta_mesas: false });
+  void registrarEventoHotel(r.id, 'conciliacion', 'Llegada vuelta a mostrar en Mesas', usuario);
+}
+
 export async function omitirLlegadaMesas(r: ReservaHotel, usuario?: string): Promise<void> {
   if (!sinCuentaMesasDisponible) throw new Error('Para ocultar llegadas ejecuta la migración 20261023000300_hotel_reservas_sin_cuenta_mesas.sql en Supabase');
   await actualizar(r.id, { sin_cuenta_mesas: true });

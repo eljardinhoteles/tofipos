@@ -60,6 +60,9 @@ export const PESO_ESTADIA: Record<Estadia, number> = { llegan_hoy: 0, salen_hoy:
 /** Reserva viva: ni cancelada ni rechazada. */
 export const esViva = (f: Pick<Fila, 'estado'>) => f.estado !== 'cancelada' && f.estado !== 'rechazada';
 
+/** Debía salir antes de hoy y Cloudbeds la sigue teniendo «en casa»: falta su check-out. */
+export const esAtrasada = (f: Fila, hoy: string) => esViva(f) && f.t?.estado === 'checked_in' && f.salida < hoy;
+
 function filaDeReserva(r: ReservaHotel, t?: TarjetaCalendario): Fila {
   return {
     clave: `r:${r.id}`, r, t, nombre: nombreHuesped(r), roomTypeID: r.room_type_id, roomID: r.room_id, cabana: r.cabana, llegada: r.llegada, salida: r.salida,
@@ -99,7 +102,9 @@ export function enVista(f: Fila, vista: Vista, fecha: string): boolean {
     // Hoy, una llegada que ya hizo el check-in (o salió) pasa a «En casa» y deja de estar en Llegadas; en otros días se ven todas.
     case 'llegadas': return esViva(f) && f.llegada === fecha && !(fecha === dayjs().format('YYYY-MM-DD') && (f.t?.estado === 'checked_in' || f.t?.estado === 'checked_out'));
     // Una reserva en casa que debió salir antes y sigue sin check-out se queda en Salidas hasta hacerlo.
-    case 'salidas': return esViva(f) && (f.salida === fecha || (f.t?.estado === 'checked_in' && f.salida < fecha));
+    // Solo las que salen ESE día. Hoy, quien ya hizo el check-out deja de estar en Salidas (como en Llegadas tras el check-in). Quien debía salir
+    // antes y sigue «en casa» en Cloudbeds no es de hoy: se avisa aparte como «atrasadas» (ver `esAtrasada`).
+    case 'salidas': return esViva(f) && f.salida === fecha && !(fecha === dayjs().format('YYYY-MM-DD') && f.t?.estado === 'checked_out');
     // «En casa»: ya llegaron (hicieron check-in, o llegaron un día anterior). «Pernoctaciones»: todas las que duermen esa noche.
     case 'in_house': return esViva(f) && duerme && (f.t?.estado === 'checked_in' || f.llegada < fecha);
     case 'pernoctaciones': return esViva(f) && duerme;

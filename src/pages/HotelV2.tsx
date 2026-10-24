@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Bed, CalendarBlank, ForkKnife, ListBullets, Plus, Pulse, type Icon } from '@phosphor-icons/react';
 import { PageFrame, PageHeader, PageContent, HeaderTabs, HeaderTab, headerPrimaryButtonClass } from '../components/Common/PageHeader';
 import { CalendarioCabanas } from '../components/Hotel/CalendarioCabanas';
-import { PulsoSincronizacion, SincronizarHotel, type NivelHotel } from '../components/Hotel/SincronizarHotel';
+import { PulsoSincronizacion, SincronizarHotel, TextoSincronizacion, type NivelHotel } from '../components/Hotel/SincronizarHotel';
 import { SkeletonFilas } from '../components/Hotel/Espera';
 import { EstadoIntegracion } from '../components/Hotel/EstadoIntegracion';
 import { HabitacionesHotel } from '../components/Hotel/HabitacionesHotel';
@@ -14,6 +14,9 @@ import { ConciliarAdopcionDialog } from '../components/Hotel/ConciliarAdopcionDi
 import { AdoptarGrupoDialog } from '../components/Hotel/AdoptarGrupoDialog';
 import { ReservaDrawer, type PresetReserva } from '../components/Hotel/ReservaDrawer';
 import { NuevaReservaDrawer } from '../components/Hotel/NuevaReservaDrawer';
+import { useUI } from '../context/UIContext';
+import { CotizacionDrawer } from '../components/Hotel/cotizaciones/CotizacionDrawer';
+import { borrarCotizacion, listarCotizaciones, numeroCotizacion, type Cotizacion } from '../lib/hotelCotizacionesApi';
 import { cloudbedsConfigurado, eliminarBloqueoCloudbeds, getReservaCloudbeds, type ReservaCloudbedsDetalle, type TarjetaCalendario } from '../lib/cloudbeds';
 import { listarHabitaciones, type HabitacionHotel } from '../lib/hotelHabitacionesApi';
 import { leerReservaHotel, listarReservasRecientes, validarAdopcion, type ReservaHotel } from '../lib/hotelReservasApi';
@@ -55,7 +58,16 @@ export default function HotelV2() {
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
   const [version, setVersion] = useState(0);
-  const [nueva, setNueva] = useState<{ abierta: boolean; preset: PresetReserva | null }>({ abierta: false, preset: null });
+  // `modo: 'cotizacion'` usa los mismos pasos para cotizar; `desdeCotizacion` es la cotización que se está convirtiendo en reserva.
+  const [nueva, setNueva] = useState<{ abierta: boolean; preset: PresetReserva | null; modo?: 'reserva' | 'cotizacion'; desdeCotizacion?: Cotizacion | null; editando?: Cotizacion | null }>({ abierta: false, preset: null });
+  const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
+  const [cotizacionAbierta, setCotizacionAbierta] = useState<Cotizacion | null>(null);
+  const { openConfirm } = useUI();
+  const pedirBorrarCotizacion = (c: Cotizacion) => openConfirm('¿Borrar la cotización?', `Se borra ${numeroCotizacion(c.numero)}${c.cliente.nombre ? ` de ${c.cliente.nombre}` : ''}. No se puede deshacer.`, () => {
+    void borrarCotizacion(c.id)
+      .then(() => { setCotizaciones((l) => l.filter((x) => x.id !== c.id)); setCotizacionAbierta((a) => (a?.id === c.id ? null : a)); showToast.success('Cotización borrada'); })
+      .catch((e) => showToast.fallo('borrar la cotización', e));
+  });
   const [detalle, setDetalle] = useState<ReservaHotel | null>(null);
   const [bloqueo, setBloqueo] = useState(false);
   const [presetBloqueo, setPresetBloqueo] = useState<{ desde: string; roomTypeID: string; roomID?: string; hasta?: string } | null>(null);
@@ -75,10 +87,15 @@ export default function HotelV2() {
     try { setHabitaciones(await listarHabitaciones()); } catch (e) { setErrorCarga(e instanceof Error ? e.message : 'No se pudo cargar el mapa de habitaciones'); }
   }, []);
 
+  // Sin la tabla (migración pendiente) la lista queda vacía y el aviso sale al guardar la primera cotización.
+  const cargarCotizaciones = useCallback(async () => {
+    try { setCotizaciones(await listarCotizaciones()); } catch { /* se avisa al intentar guardar */ }
+  }, []);
+
   const cargarPlanes = useCallback(async () => {
     try { setPlanes(await listarPlanes()); } catch (e) { setErrorCarga(e instanceof Error ? e.message : 'No se pudieron cargar los planes de alimentación'); }
   }, []);
-  useEffect(() => { void cargar(); void cargarHabitaciones(); void cargarPlanes(); }, [cargar, cargarHabitaciones, cargarPlanes]);
+  useEffect(() => { void cargar(); void cargarHabitaciones(); void cargarPlanes(); void cargarCotizaciones(); }, [cargar, cargarHabitaciones, cargarPlanes, cargarCotizaciones]);
 
   // El centro de actividad abre una reserva: al entrar al Hotel o, si ya se está aquí, por aviso.
   useEffect(() => {
@@ -159,7 +176,8 @@ export default function HotelV2() {
   const ultimaOk = ultimaConsulta();
   const consultaReciente = ultimaOk !== null && Date.now() - ultimaOk < 10 * 60_000 && !hayFalloConsulta();
   const saludMal = estado.salud?.cloudbeds.ok === false;
-  const nivelHotel: NivelHotel = estado.error || (saludMal && !consultaReciente) ? 'error'
+  // Un fallo suelto es «reconectando» (naranja): solo varios seguidos pasan a rojo.
+  const nivelHotel: NivelHotel = estado.reconectando ? 'aviso' : estado.error || (saludMal && !consultaReciente) ? 'error'
     : saludMal || reservasPendientes > 0 || divergencias.size > 0 || sinEnlazarHab > 0 ? 'aviso' : 'ok';
 
   return (
@@ -168,10 +186,17 @@ export default function HotelV2() {
     <PageFrame>
       <PageHeader
         title="Hotel"
-        subtitle={!cloudbedsConfigurado ? 'Cloudbeds no está configurado'
-          : estado.error ? 'Sin conexión con Cloudbeds'
-          : !estado.salud ? 'Comprobando Cloudbeds…'
-          : estado.salud.cloudbeds.ok ? 'Conectado con Cloudbeds' : consultaReciente ? 'Cloudbeds responde lento' : 'Cloudbeds no responde'}
+        // Debajo de «Hotel»: cómo está la conexión con Cloudbeds y cuándo se consultó por última vez.
+        subtitle={(
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="truncate">{!cloudbedsConfigurado ? 'Cloudbeds sin configurar'
+              : estado.reconectando ? 'Reconectando…'
+              : estado.error ? 'Sin conexión'
+              : !estado.salud ? 'Comprobando…'
+              : estado.salud.cloudbeds.ok ? 'Conectado' : consultaReciente ? 'Conexión lenta' : 'Sin respuesta'}</span>
+            <span className="hidden md:contents">{cloudbedsConfigurado && <><span aria-hidden>·</span><TextoSincronizacion /></>}</span>
+          </span>
+        )}
         // Estado de la última consulta a Cloudbeds y botón de actualizar: visibles en todas las secciones.
         actions={(
           <>
@@ -205,7 +230,7 @@ export default function HotelV2() {
           ) : vista === 'estado' ? (
             <EstadoIntegracion
               puedeConfigurar={permisos.esAdmin}
-              salud={estado.salud} ahora={estado.ahora} error={estado.error} comprobando={estado.comprobando} onComprobar={() => void estado.comprobar()}
+              salud={estado.salud} ahora={estado.ahora} error={estado.error} reconectando={estado.reconectando} proximoIntento={estado.proximoIntento} comprobando={estado.comprobando} onComprobar={() => void estado.comprobar()}
               pendientes={reservasPendientes}
               divergentes={divergencias.size} sinEnlazar={habitaciones.filter((h) => h.activo && !h.cloudbeds_room_type_id).length}
               onIrA={irA}
@@ -221,6 +246,9 @@ export default function HotelV2() {
               key={filtroLista?.n ?? 0} inicial={filtroLista?.filtro}
               reservas={reservas} habitaciones={habitaciones} onAbrir={setDetalle} divergencias={divergencias}
               busqueda={search} onBusqueda={setSearch}
+              cotizaciones={cotizaciones} onAbrirCotizacion={setCotizacionAbierta}
+              onNuevaCotizacion={() => setNueva({ abierta: true, preset: null, modo: 'cotizacion' })}
+              onBorrarCotizacion={(c) => pedirBorrarCotizacion(c)}
               version={version} puedeGestionar={permisos.gestionarHotel} onAdoptar={adoptar} onEliminarBloqueo={eliminarBloqueo}
               onCambio={() => recargarTodo()}
             />
@@ -231,14 +259,27 @@ export default function HotelV2() {
       {nueva.abierta && (
         <NuevaReservaDrawer
           preset={nueva.preset}
+          modo={nueva.modo}
+          desdeCotizacion={nueva.desdeCotizacion}
+          editando={nueva.editando}
+          onCotizada={() => void cargarCotizaciones()}
           habitaciones={habitaciones}
           version={version}
-          onClose={() => setNueva({ abierta: false, preset: null })}
+          onClose={() => { setNueva({ abierta: false, preset: null }); void cargarCotizaciones(); }}
           onCreada={(rs) => {
             recargarTodo(true);
             if (rs.some((r) => r.sync_estado === 'pendiente')) irA('pendientes');
             else if (rs.some((r) => r.sync_estado === 'error')) showToast.info('Las reservas rechazadas quedan en «Canceladas»');
           }}
+        />
+      )}
+      {cotizacionAbierta && (
+        <CotizacionDrawer
+          cotizacion={cotizacionAbierta}
+          onClose={() => setCotizacionAbierta(null)}
+          onBorrar={(c) => pedirBorrarCotizacion(c)}
+          onEditar={(c) => { setCotizacionAbierta(null); setNueva({ abierta: true, preset: { llegada: c.llegada, salida: c.salida }, modo: 'cotizacion', editando: c }); }}
+          onConvertir={(c) => { setCotizacionAbierta(null); setNueva({ abierta: true, preset: c.referencial ? null : { llegada: c.llegada, salida: c.salida }, modo: 'reserva', desdeCotizacion: c }); }}
         />
       )}
       {conciliar && (

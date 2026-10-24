@@ -182,6 +182,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const noches = r ? dayjs(r.salida).diff(dayjs(r.llegada), 'day') : 0;
   const totalPos = r ? totalConExtras(r) : 0;
   const cabana = r ? habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.nombre ?? r.cabana : '';
+  const vistaHab = r ? habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.vista ?? null : null;
 
   /** Trae la reserva como está ahora en la base, y avisa a la página para que refresque lo que corresponda. */
   const refrescar = useCallback(async (afectaCalendario: boolean, nueva?: ReservaHotel) => {
@@ -343,7 +344,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
       cancelada: r.estado === 'cancelada',
       huesped: { nombre: nombreHuesped(r), documento: cliente ? documentoCliente(cliente) : null, email: r.huesped_email, telefono: r.huesped_telefono ?? '', pais: r.huesped_pais },
       llegada: fechaLarga(r.llegada), salida: fechaLarga(r.salida), noches,
-      cabanas: filas.map((f) => ({ nombre: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.nombre ?? f.cabana, cama: f.cama, adultos: f.adultos, ninos: f.ninos, tarifa: f.total_estadia, manual: f.tarifa_manual })),
+      cabanas: filas.map((f) => ({ nombre: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.nombre ?? f.cabana, cama: f.cama, adultos: f.adultos, ninos: f.ninos, tarifa: f.total_estadia, manual: f.tarifa_manual, vista: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.vista ?? null })),
       extras: filas.flatMap((f) => f.extras.filter((e) => sinImportes || e.monto > 0).map((e) => ({ descripcion: filas.length > 1 ? `${e.descripcion} (${f.cabana})` : e.descripcion, monto: e.monto, notas: f.notas_items.filter((n) => n.extra_id === e.id).map((n) => n.texto) }))),
       sinImportes,
       mascotas: filas.filter((f) => f.mascota).map((f) => (filas.length > 1 ? `${textoMascota(f.mascota!)} (${f.cabana})` : textoMascota(f.mascota!))),
@@ -439,7 +440,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                 </>
               ) : (
                 <>
-                  <FilaHeader icono={Bed}>{cabana}{r.cama ? <span className="text-muted-foreground"> · {r.cama}</span> : null}</FilaHeader>
+                  <FilaHeader icono={Bed}>{cabana}{vistaHab ? <span className="text-muted-foreground"> · {vistaHab}</span> : null}</FilaHeader>
                   <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(r.llegada).format('ddd D MMM')} → {dayjs(r.salida).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
                   <FilaHeader icono={UserCircle}>{plural(r.adultos, 'adulto', 'adultos')}{r.ninos > 0 ? `, ${plural(r.ninos, 'niño', 'niños')}` : ''}</FilaHeader>
                 </>
@@ -571,7 +572,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                   </div>
                 ) : undefined}>
                 <div className="grid grid-cols-2 gap-3">
-                  <Dato t="Habitación" v={cabana} />
+                  <Dato t="Habitación" v={<>{cabana}{vistaHab ? <span className="text-muted-foreground font-normal"> · {vistaHab}</span> : null}</>} />
                   <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar={puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)} usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">

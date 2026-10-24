@@ -72,10 +72,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   const DIAS = esMovil ? DIAS_MOVIL : DIAS_ESCRITORIO;
   // En celular, la columna de nombres es más angosta y cada día tiene un ancho mínimo mayor (se desliza de lado).
   const anchoNombre = esMovil ? '6.5rem' : ANCHO_NOMBRE;
-  // Selección por clics en una fila: el primero marca la llegada (`sel`), el segundo la última noche y abre el menú (`menu`).
+  // Selección por clics en una fila: el primero marca la llegada (`sel`), el segundo el día de SALIDA (hoy → mañana = 1 noche; un segundo toque en la
+  // misma casilla también es 1 noche) y abre el menú (`menu`).
   const [sel, setSel] = useState<{ hid: string; ini: string } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ hid: string; ini: string; fin: string } | null>(null);
+  const [menu, setMenu] = useState<{ hid: string; ini: string; fin: string; ancla: string } | null>(null); // `fin` = última noche; `ancla` = casilla tocada
   const [desde, setDesde] = useState(() => conReferencia(dayjs().toDate()));
   const [error, setError] = useState('');
   const [info, setInfo] = useState<TarjetaVista | null>(null);
@@ -229,7 +230,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
     return puedeGestionar && t.tipo === 'reserva' && !!r && r.estado === 'confirmada' && !r.fuente_externa && !r.cloudbeds_grupo_ref && t.hasta > hoy && t.estado !== 'checked_out';
   };
   const barra = (t: TarjetaVista, cabana: string, filaId: string) => (
-    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}-${t.roomID ?? ''}`} tarjeta={t} cabana={cabana} onAbrir={abrir} {...posicion(t)}
+    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}-${t.roomID ?? ''}`} tarjeta={t} cabana={cabana} vista={habitacionDeUnidad(habitaciones, t.roomTypeID, t.roomID)?.vista ?? null} onAbrir={abrir} {...posicion(t)}
       arrastrable={sePuedeMover(t)} filaId={filaId} diasVisibles={DIAS} onArrastreMover={arrastreMover} onSoltar={soltar} onArrastreFin={finArrastre} />
   );
 
@@ -403,7 +404,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                   </div>
                 )}
                 <div data-fila-id={h.id} className={cn('flex flex-1 min-h-16 border-b border-border/80 last:border-b-0 transition-colors', objetivo?.id === h.id && (objetivo.error ? 'bg-destructive/10 ring-2 ring-inset ring-destructive/40' : 'bg-primary/10 ring-2 ring-inset ring-primary/40'))}>
-                  <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-4 border-r border-border/80" style={{ width: anchoNombre }}>
+                  <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-3 md:px-4 border-r border-border/80" style={{ width: anchoNombre }}>
                     {sinAsignar
                       ? <span className="t-cuerpo text-muted-foreground italic leading-snug min-w-0" title="Reservas de este tipo que en Cloudbeds aún no tienen habitación asignada">{h.id.endsWith(':0') ? 'Sin asignar' : ''}</span>
                       : <span className="t-cuerpo-fuerte line-clamp-2 leading-snug break-words min-w-0" title={h.nombre}>{h.nombre}</span>}
@@ -413,32 +414,34 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                     <div className="absolute inset-0 grid" style={columnas}>
                       {fechas.map((f, idx) => {
                         const reservable = !!h.cloudbeds_room_type_id && !sinAsignar && puedeGestionar && f >= hoy;
-                        const finSel = sel?.hid === h.id ? (sobre && sobre >= sel.ini ? sobre : sel.ini) : null;
+                        // Mientras se elige, se resaltan las noches: de la llegada hasta el día anterior al que está bajo el cursor (la salida no es noche).
+                        const finSel = sel?.hid === h.id ? (sobre && sobre > sel.ini ? dayjs(sobre).subtract(1, 'day').format('YYYY-MM-DD') : sel.ini) : null;
                         const enRango = (sel?.hid === h.id && f >= sel.ini && f <= finSel!) || (menu?.hid === h.id && f >= menu.ini && f <= menu.fin);
                         const salida = menu ? dayjs(menu.fin).add(1, 'day').format('YYYY-MM-DD') : '';
                         const nochesMenu = menu ? dayjs(menu.fin).diff(dayjs(menu.ini), 'day') + 1 : 0;
                         const alClic = () => {
                           if (!sel || sel.hid !== h.id || f < sel.ini) { setSel({ hid: h.id, ini: f }); setMenu(null); return; }
-                          const sal = dayjs(f).add(1, 'day').format('YYYY-MM-DD');
+                          // La casilla tocada es la SALIDA; en la misma casilla de la llegada, 1 noche.
+                          const sal = f === sel.ini ? dayjs(f).add(1, 'day').format('YYYY-MM-DD') : f;
                           if (tarjetas.some((t) => t.desde < sal && t.hasta > sel.ini)) {
-                            showToast.warning('Hay una reserva o bloqueo en esas fechas', 'Elige otra llegada y otra última noche.');
+                            showToast.warning('Hay una reserva o bloqueo en esas fechas', 'Elige otra llegada y otra salida.');
                             setSel({ hid: h.id, ini: f }); return;
                           }
-                          setMenu({ hid: h.id, ini: sel.ini, fin: f }); setSel(null); setSobre(null);
+                          setMenu({ hid: h.id, ini: sel.ini, fin: dayjs(sal).subtract(1, 'day').format('YYYY-MM-DD'), ancla: f }); setSel(null); setSobre(null);
                         };
                         return (
                           <div key={f} className={cn(lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.08]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
                             title={h.cloudbeds_room_type_id ? undefined : 'Habitación sin enlazar con Cloudbeds'}>
                             {reservable && (
-                              <Popover open={menu?.hid === h.id && menu.fin === f} onOpenChange={(o) => { if (!o) setMenu(null); }}>
+                              <Popover open={menu?.hid === h.id && menu.ancla === f} onOpenChange={(o) => { if (!o) setMenu(null); }}>
                                 <PopoverAnchor asChild>
                                   <button type="button" aria-label={`Elegir ${h.nombre} el ${f}`} onClick={alClic} onMouseEnter={() => { if (sel) setSobre(f); }}
                                     className="group size-full flex items-center justify-center cursor-pointer hover:bg-primary/5 transition-colors">
                                     <Plus size={14} weight="bold" className="text-primary opacity-0 group-hover:opacity-50 transition-opacity" />
                                   </button>
                                 </PopoverAnchor>
-                                {menu?.hid === h.id && menu.fin === f && (
-                                  <PopoverContent side="bottom" align="center" sideOffset={6} collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-3 flex flex-col gap-3 overflow-visible">
+                                {menu?.hid === h.id && menu.ancla === f && (
+                                  <PopoverContent side="bottom" align="center" sideOffset={6} collisionPadding={12} className="w-72 max-w-[calc(100vw-1.5rem)] p-3 flex flex-col gap-3 overflow-visible shadow-[0_18px_44px_-10px_rgba(15,23,42,0.35),0_6px_16px_-4px_rgba(15,23,42,0.18)]">
                                     <div className="flex flex-col gap-2.5 px-1 pt-1">
                                       <div className="flex items-start gap-3">
                                         <Bed size={18} weight="regular" className="text-muted-foreground shrink-0 mt-0.5" />
@@ -461,7 +464,12 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                                         <Prohibit size={16} weight="bold" />Bloqueo
                                       </Button>
                                     </div>
-                                    <PopoverPrimitive.Arrow className="fill-popover drop-shadow-sm" width={16} height={8} />
+                                    <PopoverPrimitive.Arrow asChild width={18} height={9}>
+                                      <svg viewBox="0 0 18 9" className="drop-shadow-md overflow-visible" style={{ transform: 'translateY(-1px)' }} aria-hidden>
+                                        <path d="M0 0 L9 9 L18 0 Z" fill="var(--popover)" />
+                                        <path d="M0 0 L9 9 L18 0" fill="none" stroke="var(--border)" strokeWidth="1.5" strokeLinejoin="round" />
+                                      </svg>
+                                    </PopoverPrimitive.Arrow>
                                   </PopoverContent>
                                 )}
                               </Popover>
@@ -481,7 +489,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
       )}
 
       {/* Leyenda de lo que se ve en pantalla. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 shrink-0">
+      <div className="hidden md:flex flex-wrap items-center gap-x-4 gap-y-1 px-6 shrink-0">
         {leyenda.map((e) => {
           const Icono = e.icono;
           return (
@@ -493,7 +501,6 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
             </span>
           );
         })}
-        <span className="t-etiqueta text-muted-foreground ml-2">Pago (Centro de Ventas)</span>
         {ESTADOS_PAGO.map((p) => (
           <span key={p.clave} className="inline-flex items-center gap-1.5 t-meta text-muted-foreground">
             <span className={cn('w-4 h-4 rounded border', p.fondo)} />{p.etiqueta}
