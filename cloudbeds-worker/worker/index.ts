@@ -669,6 +669,21 @@ async function cancelarReserva(req: Request, x: Ctx, id: string): Promise<Respon
 // VERIFICAR con una reserva de prueba: se asume que putReservation acepta status 'checked_in' / 'checked_out'.
 async function cambiarEstadia(x: Ctx, id: string, status: 'checked_in' | 'checked_out'): Promise<Response> {
   await marcarPropio(x, id)
+  // Cloudbeds no deja hacer el check-out con saldo pendiente («There is still a balance remaining for this reservation»), y los
+  // pagos viven en el POS, no allá. Se salda el saldo de Cloudbeds con un pago de cierre. Se lee el saldo en cada intento: si un
+  // intento anterior ya envió el pago pero falló el check-out, el saldo es 0 y no se vuelve a enviar.
+  if (status === 'checked_out') {
+    const r = await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
+    const saldo = Number(r.data?.balance ?? 0)
+    if (Number.isFinite(saldo) && saldo > 0.005) {
+      // VERIFICAR con una reserva de prueba: se asume que postPayment acepta type 'cash' y description.
+      const pago = await cloudbeds(x, 'POST', 'postPayment', { reservationID: id, type: 'cash', amount: saldo.toFixed(2), description: 'Cobrado en POS (cierre de check-out)' })
+      const tras = await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
+      console.log('checkout: saldo', saldo, 'pago', JSON.stringify(pago), 'saldo tras pago', tras.data?.balance, 'detalle', JSON.stringify(tras.data?.balanceDetailed))
+    } else {
+      console.log('checkout sin pago: saldo leído', r.data?.balance, 'detalle', JSON.stringify(r.data?.balanceDetailed))
+    }
+  }
   await cloudbeds(x, 'PUT', 'putReservation', { reservationID: id, status })
   await bumpVersion(x)
   return json(x.env, { ok: true })
