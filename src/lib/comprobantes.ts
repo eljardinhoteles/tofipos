@@ -81,6 +81,17 @@ async function subirDirectoAR2(file: File, uploadUrl: string): Promise<void> {
 }
 
 /**
+ * Sube una imagen pública tal cual (sin convertir a WebP ni dejarla en cola offline) y devuelve su URL https. Es para lo
+ * que debe verse fuera del POS, como el logo de los correos: falla si no hay red o no se pudo subir.
+ */
+export async function subirImagenPublica(file: File, organizationId: string, registroId: string): Promise<string> {
+  if (!navigator.onLine) throw new Error('Sin conexión: conéctate para subir la imagen.');
+  const { uploadUrl, publicUrl } = await obtenerPresignedR2Url(file, organizationId, registroId);
+  await subirDirectoAR2(file, uploadUrl);
+  return publicUrl;
+}
+
+/**
  * Sube un comprobante/documento:
  * 1. Intenta subida directa a Cloudflare R2 si hay internet.
  * 2. Si está offline o falla la red/Edge Function, guarda en IndexedDB local

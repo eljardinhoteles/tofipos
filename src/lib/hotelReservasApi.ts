@@ -63,7 +63,7 @@ export interface MascotaReserva { cantidad?: number; tipo: (typeof TIPOS_MASCOTA
 export interface EventoHistorial {
   id: string;
   fecha: string;
-  tipo: 'creada' | 'plan' | 'cabana' | 'cama' | 'fechas' | 'tarifa' | 'extra' | 'cliente' | 'mascota' | 'checkin' | 'checkout' | 'conciliacion' | 'cobro' | 'sync' | 'cancelada' | 'nota';
+  tipo: 'creada' | 'plan' | 'cabana' | 'cama' | 'fechas' | 'tarifa' | 'extra' | 'cliente' | 'mascota' | 'checkin' | 'checkout' | 'conciliacion' | 'cobro' | 'sync' | 'cancelada' | 'nota' | 'correo';
   texto: string;
   usuario?: string;
 }
