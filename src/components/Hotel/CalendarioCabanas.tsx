@@ -17,6 +17,8 @@ import type { TarjetaCalendario } from '../../lib/cloudbeds';
 import { bloques, cargarMes, mesDe, mesMas, oyentes, tarjetasDeMeses, vigente, type TarjetaVista } from '../../lib/hotelCalendarioCache';
 import { claveEnlace, habitacionDeUnidad, type HabitacionHotel } from '../../lib/hotelHabitacionesApi';
 import { buscadorDeReservaLocal } from '../../lib/hotelUnidades';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { construirFilas, ocupacionDelDia } from './reservas/modelo';
 import { MoverHabitacionDialog } from './MoverHabitacionDialog';
 import { MoverFechasDialog } from './MoverFechasDialog';
 import { nombreHuesped, type ReservaHotel } from '../../lib/hotelReservasApi';
@@ -36,7 +38,12 @@ const ANCHO_DIA_MIN = 56;
 // Alto mínimo de cada fila (clase `min-h-16` = 4 rem = 64 px, en la fila de habitaciones): si la ventana es tan baja que no caben todas
 // con ese alto, la rejilla se desplaza en vertical (la cabecera queda fija) en lugar de aplastar las barras.
 // Días que avanzan o retroceden las flechas.
+// Alto (borde inferior incluido) de la fila de meses de la cabecera; la mitad de arriba de la esquina (rango de fechas) mide lo mismo.
+const ALTO_FILA_MES = 'h-11';
 const PASO_FLECHAS = 2;
+// Controles flotantes de borde: días que avanzan por pulsación y ancho (px) de la zona que los hace aparecer.
+const PASO_BORDE = PASO_FLECHAS;
+const ZONA_BORDE = 56;
 /** El día de referencia (hoy, o la fecha elegida) va en la 3.ª columna: se ven dos días anteriores y los siguientes. */
 const COLUMNA_REFERENCIA = 2;
 const CLAVE_DESDE = 'pos_hotel_calendario_desde';
@@ -211,6 +218,33 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
 
   const mover = (d: number) => setDesde(dayjs(desde).add(d, 'day').format('YYYY-MM-DD'));
 
+  // Controles de borde (solo con ratón): aparecen al acercar el puntero al borde izquierdo (junto a la columna de
+  // nombres) o derecho, avanzan lo mismo que las flechas (2 días) y, si se mantienen pulsados, siguen avanzando.
+  const [bordeCerca, setBordeCerca] = useState<'izq' | 'der' | null>(null);
+  const moverRef = useRef(mover);
+  moverRef.current = mover;
+  const repetir = useRef<{ espera?: number; ritmo?: number }>({});
+  const soltarBorde = useCallback(() => {
+    window.clearTimeout(repetir.current.espera);
+    window.clearInterval(repetir.current.ritmo);
+    repetir.current = {};
+  }, []);
+  useEffect(() => soltarBorde, [soltarBorde]);
+  const pulsarBorde = (dir: 1 | -1) => {
+    soltarBorde();
+    moverRef.current(dir * PASO_BORDE);
+    repetir.current.espera = window.setTimeout(() => {
+      repetir.current.ritmo = window.setInterval(() => moverRef.current(dir * PASO_BORDE), 350);
+    }, 450);
+  };
+  const alMoverPuntero = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const inicio = e.currentTarget.querySelector<HTMLElement>('[data-esquina]')?.offsetWidth ?? 0;
+    setBordeCerca(r.width - px <= ZONA_BORDE ? 'der' : px >= inicio && px - inicio <= ZONA_BORDE ? 'izq' : null);
+  };
+
   const abrir = useCallback((t: TarjetaVista) => {
     if (t.local) onAbrir(t.local);
     else setInfo(t);
@@ -269,6 +303,17 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
     });
     return { filasVista, porFila };
   }, [filas, porHabitacion, sinUnidad, primera, ultimaExcl]);
+
+  // Ocupación de hoy: el mismo cálculo de la página de Reservas (`ocupacionDelDia`). Solo si hoy está en la ventana, que es
+  // donde están cargados sus datos.
+  const ocupacionHoy = useMemo(() => {
+    if (hoy < primera || hoy >= ultimaExcl) return null;
+    const tarjetas = tarjetasDeMeses(meses);
+    const nombreCabana = (roomTypeID: string, roomID?: string | null) => habitacionDeUnidad(habitaciones, roomTypeID, roomID)?.nombre ?? '—';
+    const o = ocupacionDelDia(construirFilas(tarjetas, reservas, nombreCabana), tarjetas, habitaciones, hoy);
+    return o.total > 0 ? o : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `datos` y `version` marcan que la caché del módulo cambió
+  }, [meses, reservas, habitaciones, hoy, primera, ultimaExcl, datos, version]);
 
   // Arrastre: los manejadores son estables (leen la vista actual de estos refs) para no romper el `memo` de las barras.
   const vistaRef = useRef({ filasVista, porFila });
@@ -354,48 +399,75 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
           Aún no hay habitaciones activas. Crea el mapa en la pestaña «Habitaciones» (puedes importarlo de Cloudbeds).
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-auto border-b border-border bg-card">
+        <div
+          className="relative flex-1 min-h-0 flex flex-col border-b border-border"
+          onPointerMove={esMovil ? undefined : alMoverPuntero} onPointerLeave={() => { setBordeCerca(null); soltarBorde(); }}
+        >
+        <div className="flex-1 min-h-0 overflow-auto bg-card">
           <div className="flex flex-col min-h-full" style={{ minWidth: `calc(${anchoNombre} + ${DIAS * (esMovil ? ANCHO_DIA_MIN_MOVIL : ANCHO_DIA_MIN)}px)` }}>
             {/* Cabecera: arriba el mes y el año (un tramo por mes), abajo el día de la semana y su número (hoy resaltado). */}
             <div className="flex sticky top-0 z-30 shrink-0 bg-card border-b border-border">
-              <div className="sticky left-0 z-30 bg-card shrink-0 border-r border-border/80 flex flex-col items-center justify-center gap-1.5 px-1.5" style={{ width: anchoNombre }}>
-                <div className="flex w-full items-center gap-1">
-                  <button type="button" aria-label="Retroceder 2 días" title="Retroceder 2 días" onClick={() => mover(-PASO_FLECHAS)} className="size-8 shrink-0 flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors"><CaretLeft size={14} weight="bold" /></button>
-                  <button type="button" title="Ir a hoy" onClick={() => setDesde(conReferencia(hoy))} className="h-8 flex-1 min-w-0 t-dato flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors">Hoy</button>
-                  <button type="button" aria-label="Avanzar 2 días" title="Avanzar 2 días" onClick={() => mover(PASO_FLECHAS)} className="size-8 shrink-0 flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors"><CaretRight size={14} weight="bold" /></button>
+              {/* Esquina: dos filas que siguen las de la cabecera. Arriba (alto del mes) el rango visible, que abre el calendario;
+                  abajo (alto de los días) ‹ Hoy ›. Cada control es una celda entera, no un botón dentro de una celda. */}
+              <div data-esquina className="sticky left-0 z-30 after:content-[''] after:absolute after:-top-px after:-bottom-px after:left-full after:w-2.5 after:pointer-events-none after:bg-linear-to-r after:from-black/[0.09] after:to-transparent bg-card shrink-0 flex flex-col" style={{ width: anchoNombre }}>
+                {esMovil ? (
+                  <button type="button" title="Ir a hoy" onClick={() => setDesde(conReferencia(hoy))} className={cn('w-full shrink-0 border-b border-border/70 bg-primary/15 hover:bg-primary/25 t-dato', ALTO_FILA_MES, 'flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted')}>Hoy</button>
+                ) : (
+                  <Popover open={saltoAbierto} onOpenChange={setSaltoAbierto}>
+                    <PopoverTrigger asChild>
+                      <button type="button" aria-label="Ir a una fecha" title="Ir a una fecha" className={cn('w-full min-w-0 shrink-0 gap-1.5 px-2 border-b border-border/70 bg-muted/60 hover:bg-muted t-dato whitespace-nowrap', ALTO_FILA_MES, 'flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted')}>
+                        <CalendarBlank size={14} weight="bold" className="shrink-0" />
+                        <span className="truncate">{dayjs(primera).format('D MMM')} – {dayjs(ultimaExcl).subtract(1, 'day').format('D MMM')}</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      {/* La fecha elegida queda como primer día visible. */}
+                      <Calendar mode="single" selected={dayjs(desde).add(COLUMNA_REFERENCIA, 'day').toDate()} onSelect={(d) => { if (d) { setDesde(conReferencia(d)); setSaltoAbierto(false); } }} />
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <div className="flex-1 flex divide-x divide-border/70">
+                  <button type="button" aria-label="Retroceder 2 días" title="Retroceder 2 días" onClick={() => mover(-PASO_FLECHAS)} className={cn('flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted hover:bg-muted', esMovil ? 'flex-1' : 'w-11 shrink-0')}><CaretLeft size={16} weight="bold" /></button>
+                  {!esMovil && <button type="button" title="Ir a hoy" onClick={() => setDesde(conReferencia(hoy))} className="flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted flex-1 min-w-0 bg-primary/15 hover:bg-primary/25 t-dato">Hoy</button>}
+                  <button type="button" aria-label="Avanzar 2 días" title="Avanzar 2 días" onClick={() => mover(PASO_FLECHAS)} className={cn('flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted hover:bg-muted', esMovil ? 'flex-1' : 'w-11 shrink-0')}><CaretRight size={16} weight="bold" /></button>
                 </div>
-                <Popover open={saltoAbierto} onOpenChange={setSaltoAbierto}>
-                  <PopoverTrigger asChild>
-                    <button type="button" title="Ir a una fecha" className="h-8 w-full gap-1.5 t-dato whitespace-nowrap flex items-center justify-center rounded-xl border border-border bg-card cursor-pointer hover:bg-muted transition-colors">
-                      <CalendarBlank size={14} weight="bold" /> Ir a fecha
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    {/* La fecha elegida queda como primer día visible. */}
-                    <Calendar mode="single" selected={dayjs(desde).add(COLUMNA_REFERENCIA, 'day').toDate()} onSelect={(d) => { if (d) { setDesde(conReferencia(d)); setSaltoAbierto(false); } }} />
-                  </PopoverContent>
-                </Popover>
               </div>
               <div className="grow flex flex-col">
-                <div className="grid border-b border-border/70" style={columnas}>
+                <div className="grid" style={columnas}>
                   {tramosMes.map((m, k) => (
                     <div
                       key={m.clave} style={{ gridColumn: `${m.inicio + 1} / span ${m.cuantos}` }}
-                      className={cn('px-3 py-1.5 t-etiqueta truncate text-foreground', k > 0 && 'border-l-2 border-border', k % 2 === 0 ? 'bg-muted/60' : 'bg-muted')}
+                      className={cn('px-3 flex items-center border-b border-border/70 t-etiqueta text-foreground', ALTO_FILA_MES, k > 0 && 'border-l-2 border-border', k % 2 === 0 ? 'bg-muted/60' : 'bg-muted')}
                     >
                       {/* Con pocos días visibles el nombre completo no cabe: se abrevia. */}
-                      {dayjs(`${m.clave}-01`).format(m.cuantos >= 4 ? 'MMMM YYYY' : m.cuantos >= 2 ? 'MMM YYYY' : 'MMM')}
+                      <span className="truncate">{dayjs(`${m.clave}-01`).format(m.cuantos >= 4 ? 'MMMM YYYY' : m.cuantos >= 2 ? 'MMM YYYY' : 'MMM')}</span>
                     </div>
                   ))}
                 </div>
                 <div className="grid" style={columnas}>
-                  {dias.map((d, i) => (
-                    <div key={d.format('YYYY-MM-DD')} className={cn('relative flex flex-col items-center gap-0.5 py-2', nombreDe(d.format('YYYY-MM-DD')) && 'bg-destructive/[0.06]', lineaDia(d.format('YYYY-MM-DD'), i))}>
-                      <MarcaFeriado fecha={d.format('YYYY-MM-DD')} posicion="top-1 right-1" />
-                      <span className="t-etiqueta text-muted-foreground uppercase">{d.format('dd')}</span>
-                      <span className={cn('t-fila min-w-8 text-center rounded-lg px-1.5', d.format('YYYY-MM-DD') === hoy ? 'bg-nav text-nav-foreground' : 'text-foreground')}>{d.format('D')}</span>
-                    </div>
-                  ))}
+                  {dias.map((d, i) => {
+                    const f = d.format('YYYY-MM-DD');
+                    const esHoy = f === hoy;
+                    const celda = (
+                      <div className={cn('relative flex flex-col items-center gap-0.5 py-2', nombreDe(f) && 'bg-destructive/[0.06]', esHoy && 'bg-primary/20', lineaDia(f, i))}>
+                        <MarcaFeriado fecha={f} posicion="top-1 right-1" />
+                        <span className={cn('t-etiqueta uppercase max-w-full truncate px-0.5', esHoy ? 'text-foreground' : 'text-muted-foreground')}>{d.format(esHoy ? 'dddd' : 'dd')}</span>
+                        {/* La ocupación (habitaciones ocupadas a la izquierda y porcentaje a la derecha) va al lado del número, sin línea propia, para que todas las celdas midan lo mismo. */}
+                        <span className="relative">
+                          <span className={cn('t-fila block min-w-8 text-center rounded-lg px-1.5', esHoy ? 'bg-nav text-nav-foreground' : 'text-foreground')}>{d.format('D')}</span>
+                          {esHoy && !esMovil && ocupacionHoy && <span className="absolute right-full top-1/2 -translate-y-1/2 mr-1 inline-flex items-center gap-0.5 t-meta font-semibold text-foreground tabular-nums"><Bed size={12} weight="bold" />{ocupacionHoy.ocupadas}</span>}
+                          {esHoy && !esMovil && ocupacionHoy && <span className="absolute left-full top-1/2 -translate-y-1/2 ml-1 t-meta font-semibold text-foreground tabular-nums">{Math.round(ocupacionHoy.tasa)}%</span>}
+                        </span>
+                      </div>
+                    );
+                    // El tooltip de la ocupación sale al pasar por toda la celda de hoy, no solo por el texto.
+                    return esHoy && !esMovil && ocupacionHoy ? (
+                      <Tooltip key={f}>
+                        <TooltipTrigger asChild>{celda}</TooltipTrigger>
+                        <TooltipContent>Ocupación de hoy: {ocupacionHoy.ocupadas} de {ocupacionHoy.total} habitaciones</TooltipContent>
+                      </Tooltip>
+                    ) : <Fragment key={f}>{celda}</Fragment>;
+                  })}
                 </div>
               </div>
             </div>
@@ -411,11 +483,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                 <Fragment key={h.id}>
                 {encabezadoTipo && (
                   <div className="flex min-h-7 border-b border-border/80 bg-muted/60">
-                    <span className="sticky left-0 z-20 px-4 flex items-center t-etiqueta text-muted-foreground uppercase tracking-wide" style={{ width: anchoNombre }}>{encabezadoTipo}</span>
+                    <span className="sticky left-0 z-20 after:content-[''] after:absolute after:-top-px after:-bottom-px after:left-full after:w-2.5 after:pointer-events-none after:bg-linear-to-r after:from-black/[0.09] after:to-transparent px-4 flex items-center t-etiqueta text-muted-foreground uppercase tracking-wide" style={{ width: anchoNombre }}>{encabezadoTipo}</span>
                   </div>
                 )}
                 <div data-fila-id={h.id} className={cn('flex flex-1 min-h-16 border-b border-border/80 last:border-b-0 transition-colors', objetivo?.id === h.id && (objetivo.error ? 'bg-destructive/10 ring-2 ring-inset ring-destructive/40' : 'bg-primary/10 ring-2 ring-inset ring-primary/40'))}>
-                  <div className="sticky left-0 z-20 bg-card shrink-0 flex items-center px-3 md:px-4 border-r border-border/80" style={{ width: anchoNombre }}>
+                  <div className="sticky left-0 z-20 after:content-[''] after:absolute after:-top-px after:-bottom-px after:left-full after:w-2.5 after:pointer-events-none after:bg-linear-to-r after:from-black/[0.09] after:to-transparent bg-card shrink-0 flex items-center px-3 md:px-4" style={{ width: anchoNombre }}>
                     {sinAsignar
                       ? <span className="t-cuerpo text-muted-foreground italic leading-snug min-w-0" title="Reservas de este tipo que en Cloudbeds aún no tienen habitación asignada">{h.id.endsWith(':0') ? 'Sin asignar' : ''}</span>
                       : <span className="t-cuerpo-fuerte line-clamp-2 leading-snug break-words min-w-0" title={h.nombre}>{h.nombre}</span>}
@@ -441,7 +513,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                           setMenu({ hid: h.id, ini: sel.ini, fin: dayjs(sal).subtract(1, 'day').format('YYYY-MM-DD'), ancla: f }); setSel(null); setSobre(null);
                         };
                         return (
-                          <div key={f} className={cn(lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.08]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
+                          <div key={f} className={cn(lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.14]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
                             title={h.cloudbeds_room_type_id ? undefined : 'Habitación sin enlazar con Cloudbeds'}>
                             {reservable && (
                               <Popover open={menu?.hid === h.id && menu.ancla === f} onOpenChange={(o) => { if (!o) setMenu(null); }}>
@@ -496,6 +568,24 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
               );
             })}
           </div>
+        </div>
+        {!esMovil && (['izq', 'der'] as const).map((lado) => (
+          <div
+            key={lado} aria-hidden={bordeCerca !== lado}
+            className={cn('absolute top-1/2 -translate-y-1/2 z-40 transition-opacity duration-150', bordeCerca === lado ? 'opacity-100' : 'opacity-0 pointer-events-none')}
+            style={lado === 'der' ? { right: 8 } : { left: `calc(${anchoNombre} + 8px)` }}
+          >
+            <button
+              type="button" tabIndex={bordeCerca === lado ? 0 : -1}
+              aria-label={lado === 'der' ? 'Avanzar 2 días' : 'Retroceder 2 días'} title={lado === 'der' ? 'Avanzar 2 días' : 'Retroceder 2 días'}
+              onPointerDown={(e) => { if (e.button === 0) pulsarBorde(lado === 'der' ? 1 : -1); }}
+              onPointerUp={soltarBorde} onPointerCancel={soltarBorde} onPointerLeave={soltarBorde}
+              className="size-11 flex items-center justify-center rounded-full bg-nav text-nav-foreground shadow-lg cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {lado === 'der' ? <CaretRight size={20} weight="bold" /> : <CaretLeft size={20} weight="bold" />}
+            </button>
+          </div>
+        ))}
         </div>
       )}
 
