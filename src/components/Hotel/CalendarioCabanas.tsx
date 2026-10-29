@@ -39,6 +39,7 @@ const ANCHO_DIA_MIN = 56;
 const PASO_FLECHAS = 2;
 /** El día de referencia (hoy, o la fecha elegida) va en la 3.ª columna: se ven dos días anteriores y los siguientes. */
 const COLUMNA_REFERENCIA = 2;
+const CLAVE_DESDE = 'pos_hotel_calendario_desde';
 const conReferencia = (f: string | Date) => dayjs(f).subtract(COLUMNA_REFERENCIA, 'day').format('YYYY-MM-DD');
 // La rejilla es fija (sale del mapa de habitaciones) y solo las tarjetas viajan por la red. Cloudbeds tarda lo mismo
 // en dar un mes entero que dos semanas, así que se pide por MESES y se recortan los días que se ven.
@@ -77,7 +78,17 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   const [sel, setSel] = useState<{ hid: string; ini: string } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ hid: string; ini: string; fin: string; ancla: string } | null>(null); // `fin` = última noche; `ancla` = casilla tocada
-  const [desde, setDesde] = useState(() => conReferencia(dayjs().toDate()));
+  // La fecha a la que se navegó se recuerda al cambiar de pestaña (solo el mismo día: al día siguiente se vuelve a hoy).
+  const [desde, setDesde] = useState(() => {
+    try {
+      const g = JSON.parse(localStorage.getItem(CLAVE_DESDE) ?? 'null') as { desde?: string; dia?: string } | null;
+      if (g?.desde && g.dia === dayjs().format('YYYY-MM-DD') && dayjs(g.desde).isValid()) return g.desde;
+    } catch { /* sin almacenamiento: empieza en hoy */ }
+    return conReferencia(dayjs().toDate());
+  });
+  useEffect(() => {
+    try { localStorage.setItem(CLAVE_DESDE, JSON.stringify({ desde, dia: dayjs().format('YYYY-MM-DD') })); } catch { /* opcional */ }
+  }, [desde]);
   const [error, setError] = useState('');
   const [info, setInfo] = useState<TarjetaVista | null>(null);
   const [saltoAbierto, setSaltoAbierto] = useState(false);
