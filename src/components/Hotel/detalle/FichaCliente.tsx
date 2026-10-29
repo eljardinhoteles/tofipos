@@ -9,7 +9,7 @@ import { Dato } from './comunes';
 const TIPO: Record<string, string> = { persona_natural: 'Persona', juridico: 'Empresa', extranjero: 'Extranjero', agencia: 'Agencia' };
 
 /** Datos completos de la ficha de Clientes enlazada a la reserva (documento, dirección, facturación…), en un bloque que se despliega. */
-export function FichaCliente({ clienteId }: { clienteId: string | null }) {
+export function FichaCliente({ clienteId, ocultarDireccion = false }: { clienteId: string | null; ocultarDireccion?: boolean }) {
   const { clientes } = useRxClientes() as { clientes: RxCliente[] };
   const [abierta, setAbierta] = useState(false);
   const c = clienteId ? clientes.find((x) => x.id === clienteId) : undefined;
@@ -20,7 +20,8 @@ export function FichaCliente({ clienteId }: { clienteId: string | null }) {
   const filas: Array<[string, string | undefined]> = [
     ['Documento', documento ?? undefined],
     ['Tipo de cliente', c.tipo_cliente ? TIPO[c.tipo_cliente] ?? c.tipo_cliente : undefined],
-    ['Dirección', c.direccion],
+    // Si la reserva ya trae su propia dirección (se muestra arriba), la de la ficha no se repite.
+    ['Dirección', ocultarDireccion ? undefined : c.direccion],
     ['Nombre de facturación', c.nombre_factura],
     ['Dirección fiscal', c.direccion_fiscal],
     ['Correo de facturación', c.email_factura],

@@ -11,7 +11,7 @@ import type { Elegida, Paso } from './tipos';
 /** Último paso de crear una reserva: resumen de estadía, cliente y extras con el total, cada bloque con su «Editar». */
 export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesped, cliente, guardarCliente, notas, plan, extras, montoExtra, totalEstadia, totalExtras, netoExtras, ivaExtras, onEditar, cotizacion = false, referencial = false, totalPlan = 0 }: {
   llegada: string; salida: string; noches: number; elegidas: Elegida[]; esGrupo: boolean;
-  huesped: { nombre: string; email: string; telefono: string; pais: string; documento?: string }; cliente: RxCliente | null; guardarCliente: boolean; notas: string;
+  huesped: { nombre: string; email: string; telefono: string; pais: string; direccion?: string; documento?: string }; cliente: RxCliente | null; guardarCliente: boolean; notas: string;
   plan: PlanAlimentacion | null; extras: ItemExtra[]; montoExtra: (x: ItemExtra) => number; totalEstadia: number; totalExtras: number; netoExtras: number; ivaExtras: number; onEditar: (p: Paso) => void;
   /** Se está cotizando: no hay ficha de cliente ni envío a Cloudbeds, y el precio final incluye el plan con cargo. */
   cotizacion?: boolean; referencial?: boolean; totalPlan?: number;
@@ -43,7 +43,7 @@ export function PasoRevision({ llegada, salida, noches, elegidas, esGrupo, huesp
 
       <Bloque titulo="Cliente" icono={User} onEditar={() => onEditar(2)}>
         <p className="t-cuerpo-fuerte">{huesped.nombre}</p>
-        <p className="t-meta text-muted-foreground">{[huesped.documento, huesped.email, huesped.telefono, huesped.pais].filter(Boolean).join(' · ')}</p>
+        <p className="t-meta text-muted-foreground">{[huesped.documento, huesped.email, huesped.telefono, huesped.pais, huesped.direccion?.trim()].filter(Boolean).join(' · ')}</p>
         {!cotizacion && <p className="t-meta text-muted-foreground">{cliente ? 'Enlazada a su ficha de Clientes' : guardarCliente ? 'Se guardará como cliente nuevo' : 'Sin ficha de cliente'}</p>}
         {notas.trim() && <p className="t-meta text-muted-foreground">Nota: {notas.trim()}</p>}
       </Bloque>

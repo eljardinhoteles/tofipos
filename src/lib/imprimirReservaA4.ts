@@ -14,7 +14,7 @@ export interface DocReservaA4 {
   codigo: string | null;
   canal: string | null;
   cancelada: boolean;
-  huesped: { nombre: string; documento: string | null; email: string; telefono: string; pais: string };
+  huesped: { nombre: string; documento: string | null; email: string; telefono: string; pais: string; direccion?: string };
   llegada: string;
   salida: string;
   noches: number;
@@ -150,7 +150,7 @@ export function documentoReservaA4(d: DocReservaA4): string {
     </div>
 
     <div class="bloque primero"><h3>${ICONOS.huesped}Datos del huésped</h3>
-      <div class="cuerpo"><div class="datos"><div class="grande"><span class="etq">Nombre</span><b>${esc(d.huesped.nombre || "—")}</b>${d.huesped.documento ? `<b class="dato2">${esc(d.huesped.documento)}</b>` : ""}</div><div><span class="etq">Contacto</span><b>${esc(d.huesped.telefono || "—")}</b>${d.huesped.email ? `<b class="dato2">${esc(d.huesped.email)}</b>` : ""}</div>${par("País · Origen", [d.huesped.pais, d.canal].filter(Boolean).join(" · "))}</div></div>
+      <div class="cuerpo"><div class="datos"><div class="grande"><span class="etq">Nombre</span><b>${esc(d.huesped.nombre || "—")}</b>${d.huesped.documento ? `<b class="dato2">${esc(d.huesped.documento)}</b>` : ""}</div><div><span class="etq">Contacto</span><b>${esc(d.huesped.telefono || "—")}</b>${d.huesped.email ? `<b class="dato2">${esc(d.huesped.email)}</b>` : ""}${d.huesped.direccion ? `<b class="dato2">${esc(d.huesped.direccion)}</b>` : ""}</div>${par("País · Origen", [d.huesped.pais, d.canal].filter(Boolean).join(" · "))}</div></div>
     </div>
     ${d.notas || d.notasGenerales?.length || d.mascotas?.length ? `<div class="bloque"><h3>Observaciones</h3><div class="cuerpo">${(d.mascotas ?? []).map((m) => `<p style="margin:0 0 1.5mm"><b>Mascota:</b> ${esc(m)}</p>`).join("")}${d.notas ? `<p style="margin:0 0 2mm;white-space:pre-line">${esc(d.notas)}</p>` : ""}${(d.notasGenerales ?? []).map((n) => `<p style="margin:0 0 1.5mm">• ${esc(n)}</p>`).join("")}</div></div>` : ""}
 

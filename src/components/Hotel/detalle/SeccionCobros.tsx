@@ -37,9 +37,8 @@ interface Props {
   grupo: ReservaHotel[];
   puedeGestionar: boolean;
   usuario: { id?: string; nombre?: string };
-  abierto: boolean;
+  /** Abre la página de «Registrar pago» del panel. */
   onAbrir: (abierto: boolean) => void;
-  onSucio: (sucio: boolean) => void;
   /** Tras registrar un anticipo o ajustar la venta (la reserva puede haber ganado su venta). */
   onCambio: (r: ReservaHotel) => void;
   onConciliar?: (r: ReservaHotel) => void;
@@ -49,14 +48,13 @@ interface Props {
  * Cobros de la reserva. Los pagos viven en el Centro de Ventas (la venta de la reserva): desde aquí se registran ahí mismo,
  * con su método, banco/red y comprobante, y Ventas sigue siendo la fuente de todo. Sin venta, el primer anticipo la crea.
  */
-export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, puedeGestionar, usuario, abierto, onAbrir, onSucio, onCambio, onConciliar }: Props) {
+export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, puedeGestionar, usuario, onAbrir, onCambio, onConciliar }: Props) {
   const pago = pagoDeVenta(venta);
   const enGrupo = grupo.length > 1;
   const totalPos = enGrupo ? grupo.reduce((a, g) => a + totalConExtras(g), 0) : totalConExtras(r);
   const dif = venta && !venta.anulado ? Math.round((totalPos - venta.montoTotal) * 100) / 100 : 0;
   const descuadre = Math.abs(dif) > EPS;
   const movimientos = (venta?.movimientos ?? []).filter((m) => (m.tipo === 'pago' || m.tipo === 'reembolso') && !m.anulado);
-  const saldo = venta && !venta.anulado ? venta.saldo : totalPos;
   const [ajustando, setAjustando] = useState(false);
   const [verificando, setVerificando] = useState(false);
   const navigate = useNavigate();
@@ -189,7 +187,7 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
             </PopoverContent>
           </Popover>
         )}
-        {puedeGestionar && !abierto && r.estado === 'confirmada' && !venta?.anulado && (
+        {puedeGestionar && r.estado === 'confirmada' && !venta?.anulado && (
           <Button type="button" variant="default" className="h-9 gap-1.5" onClick={() => onAbrir(true)} disabled={!!venta && venta.saldo <= EPS && venta.montoTotal > EPS}><Plus size={14} weight="bold" /> Añadir pago</Button>
         )}
       </div>}>
@@ -294,7 +292,6 @@ export function SeccionCobros({ r, venta, ventaPerdida, onDesenlazar, grupo, pue
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {abierto && <FormAbono r={r} grupo={grupo} saldo={saldo} usuario={usuario} onCancelar={() => onAbrir(false)} onSucio={onSucio} onRegistrado={(n) => { onAbrir(false); onCambio(n); }} />}
     </Seccion>
   );
 }
@@ -322,7 +319,7 @@ function Cifra({ t, v, tono }: { t: string; v: string; tono?: 'ok' | 'pendiente'
   );
 }
 
-function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado }: {
+export function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado }: {
   r: ReservaHotel; grupo: ReservaHotel[]; saldo: number; usuario: { id?: string; nombre?: string };
   onCancelar: () => void; onSucio: (s: boolean) => void; onRegistrado: (r: ReservaHotel) => void;
 }) {
@@ -365,7 +362,7 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
   };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border pt-4">
+    <div className="flex flex-col gap-3">
       <span className="t-cuerpo-fuerte">Añadir pago · saldo {dinero(Math.max(0, saldo))}</span>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="ab-monto" className={etiquetaCampo}>Monto</Label>
@@ -416,13 +413,19 @@ function FormAbono({ r, grupo, saldo, usuario, onCancelar, onSucio, onRegistrado
         </div>
       )}
       {metodo === 'tarjeta' && (
-        <div className="flex flex-col gap-1.5">
-          <Label className={etiquetaCampo}>Red de cobro *</Label>
-          <Select value={red || undefined} onValueChange={(v) => cambiar(setRed)(v)}>
-            <SelectTrigger className={cn(selectClass, intentado && faltas.red && 'border-destructive/60')}><SelectValue placeholder={redesTarjeta.length ? 'Selecciona (obligatorio)' : 'Sin redes configuradas'} /></SelectTrigger>
-            <SelectContent>{redesTarjeta.map((x) => <SelectItem key={x} value={x} className="t-cuerpo">{x}</SelectItem>)}</SelectContent>
-          </Select>
-          {intentado && faltas.red && <p className="t-meta text-destructive">Elige la red de cobro de la tarjeta.</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label className={etiquetaCampo}>Red de cobro *</Label>
+            <Select value={red || undefined} onValueChange={(v) => cambiar(setRed)(v)}>
+              <SelectTrigger className={cn(selectClass, intentado && faltas.red && 'border-destructive/60')}><SelectValue placeholder={redesTarjeta.length ? 'Selecciona (obligatorio)' : 'Sin redes configuradas'} /></SelectTrigger>
+              <SelectContent>{redesTarjeta.map((x) => <SelectItem key={x} value={x} className="t-cuerpo">{x}</SelectItem>)}</SelectContent>
+            </Select>
+            {intentado && faltas.red && <p className="t-meta text-destructive">Elige la red de cobro de la tarjeta.</p>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ab-num" className={etiquetaCampo}>N.º de comprobante</Label>
+            <Input id="ab-num" value={numero} onChange={(e) => cambiar(setNumero)(e.target.value)} placeholder="Ej. voucher 000123" className="h-11 text-base" />
+          </div>
         </div>
       )}
       <div className="flex flex-col gap-1.5">

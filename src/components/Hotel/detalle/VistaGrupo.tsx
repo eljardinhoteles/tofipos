@@ -27,24 +27,27 @@ export function VistaGrupo({ filas, ventas, onElegir }: Props) {
         const noches = dayjs(f.salida).diff(dayjs(f.llegada), 'day');
         return (
           <li key={f.id}>
-            <button type="button" onClick={() => onElegir(f)} className="w-full text-left rounded-2xl border border-border bg-card px-4 py-3 flex flex-col gap-2 cursor-pointer hover:border-primary transition-colors">
+            <button type="button" onClick={() => onElegir(f)} className="w-full text-left rounded-2xl bg-card px-4 py-3.5 flex flex-col gap-2.5 cursor-pointer hover:bg-primary-soft transition-colors">
+              {/* Misma presentación que las tarjetas del detalle: ícono a la izquierda, dato principal y, debajo, el detalle tenue. */}
               <span className="flex items-start justify-between gap-3">
-                <span className="flex items-center gap-2 min-w-0">
-                  <Bed size={18} className="text-muted-foreground shrink-0" aria-hidden />
-                  <span className="t-fila break-words">{f.cabana}</span>
-                  {f.cama && <span className="t-meta text-muted-foreground break-words">· {f.cama}</span>}
+                <span className="flex items-start gap-3 min-w-0">
+                  <Bed size={20} className="text-muted-foreground shrink-0 mt-0.5" aria-hidden />
+                  <span className="flex flex-col min-w-0">
+                    <span className="t-cuerpo-fuerte break-words">{f.cabana}</span>
+                    {f.cama && <span className="t-meta text-muted-foreground break-words">{f.cama}</span>}
+                  </span>
                 </span>
                 <span className="t-valor tabular-nums shrink-0">{dinero(total)}</span>
               </span>
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1 t-meta text-muted-foreground">
-                <span className="flex items-center gap-1"><CalendarBlank size={14} aria-hidden /><span className="capitalize">{dayjs(f.llegada).format('ddd D MMM')} → {dayjs(f.salida).format('ddd D MMM')}</span> · {plural(noches, 'noche', 'noches')}</span>
-                <span className="flex items-center gap-1" aria-label={plural(f.adultos, 'adulto', 'adultos')}><User size={14} aria-hidden />{f.adultos}</span>
-                {f.ninos > 0 && <span className="flex items-center gap-1" aria-label={plural(f.ninos, 'niño', 'niños')}><Baby size={14} aria-hidden />{f.ninos}</span>}
-                {f.plan_alimentacion && <span className="flex items-center gap-1"><ForkKnife size={14} aria-hidden />{f.plan_alimentacion.nombre}</span>}
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1 t-meta text-muted-foreground pl-8">
+                <span className="flex items-center gap-1.5"><CalendarBlank size={16} aria-hidden /><span className="capitalize">{dayjs(f.llegada).format('ddd D MMM')} → {dayjs(f.salida).format('ddd D MMM')}</span> · {plural(noches, 'noche', 'noches')}</span>
+                <span className="flex items-center gap-1.5" aria-label={plural(f.adultos, 'adulto', 'adultos')}><User size={16} aria-hidden />{f.adultos}</span>
+                {f.ninos > 0 && <span className="flex items-center gap-1.5" aria-label={plural(f.ninos, 'niño', 'niños')}><Baby size={16} aria-hidden />{f.ninos}</span>}
+                {f.plan_alimentacion && <span className="flex items-center gap-1.5"><ForkKnife size={16} aria-hidden />{f.plan_alimentacion.nombre}</span>}
                 {extras > 0 && <span>{plural(extras, 'extra', 'extras')}</span>}
               </span>
               {(pagado > EPS || f.sync_estado !== 'sincronizada') && (
-                <span className="flex flex-wrap items-center gap-1.5">
+                <span className="flex flex-wrap items-center gap-1.5 pl-8">
                   {pagado > EPS && <EstadoBadge tono={pagado + EPS >= total ? 'success' : 'warning'}>{pagado + EPS >= total ? 'Pagada' : `Pagó ${dinero(pagado)}`}</EstadoBadge>}
                   {f.sync_estado === 'pendiente' && <EstadoBadge tono="warning">Sin subir a Cloudbeds</EstadoBadge>}
                   {f.sync_estado === 'error' && <EstadoBadge tono="destructive">Error en Cloudbeds</EstadoBadge>}

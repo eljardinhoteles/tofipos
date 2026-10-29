@@ -97,11 +97,13 @@ interface ItemProps {
   mostrarExtra?: boolean;
   /** Nota con relevancia: recuadro ámbar y acciones solo al pasar el cursor (dentro de un extra). */
   destacada?: boolean;
+  /** No muestra quién añadió la nota (la lista de la pestaña Reserva). */
+  ocultarUsuario?: boolean;
   onCambio: (r: ReservaHotel) => void;
 }
 
 /** Una nota con su texto, y —si se puede editar— sus acciones de editar y quitar. */
-export function ItemNota({ r, nota, puedeEditar, usuario, mostrarExtra, destacada, onCambio }: ItemProps) {
+export function ItemNota({ r, nota, puedeEditar, usuario, mostrarExtra, destacada, ocultarUsuario, onCambio }: ItemProps) {
   const { openConfirm } = useUI();
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(nota.texto);
@@ -134,18 +136,18 @@ export function ItemNota({ r, nota, puedeEditar, usuario, mostrarExtra, destacad
       {destacada && <Note size={15} weight="fill" className="text-warning-foreground shrink-0 mt-1" aria-hidden />}
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className={destacada ? 't-cuerpo break-words text-foreground font-semibold' : 't-cuerpo break-words'}>{nota.texto}</span>
-        {((mostrarExtra && (nota.extra || nota.grupo)) || nota.usuario) && (
+        {((mostrarExtra && ((nota.extra && extraVigente) || nota.grupo)) || (nota.usuario && !ocultarUsuario)) && (
           <span className="t-meta text-muted-foreground">
-            {mostrarExtra && nota.extra && <><ShoppingBag size={12} className="inline -mt-0.5 mr-1" />{nota.extra}{extraVigente ? '' : ' (quitado)'}</>}
+            {mostrarExtra && nota.extra && extraVigente && <><ShoppingBag size={12} className="inline -mt-0.5 mr-1" />{nota.extra}</>}
             {mostrarExtra && nota.grupo && <><UsersThree size={12} className="inline -mt-0.5 mr-1" />Todo el grupo</>}
-            {mostrarExtra && (nota.extra || nota.grupo) && nota.usuario ? ' · ' : ''}{nota.usuario ?? ''}
+            {mostrarExtra && ((nota.extra && extraVigente) || nota.grupo) && nota.usuario && !ocultarUsuario ? ' · ' : ''}{ocultarUsuario ? '' : nota.usuario ?? ''}
           </span>
         )}
       </div>
       {puedeEditar && (
         <div className={destacada ? 'flex items-center shrink-0 -my-1.5 -mr-1.5 '+'[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/nota:opacity-100 [@media(hover:hover)]:group-focus-within/nota:opacity-100 transition-opacity' : 'flex items-center shrink-0 -my-1'}>
-          <button type="button" onClick={() => setEditando(true)} aria-label="Editar nota" className="size-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"><PencilSimple size={15} /></button>
-          <button type="button" onClick={quitar} aria-label="Quitar nota" className="size-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"><Trash size={15} /></button>
+          <button type="button" onClick={() => setEditando(true)} aria-label="Editar nota" className="size-9 pointer-coarse:size-11 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"><PencilSimple size={15} /></button>
+          <button type="button" onClick={quitar} aria-label="Quitar nota" className="size-9 pointer-coarse:size-11 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"><Trash size={15} /></button>
         </div>
       )}
     </div>
@@ -172,7 +174,7 @@ export function SeccionNotas({ r, puedeEditar, enGrupo, usuario, onCambio }: Sec
       )}
       {r.notas_items.length > 0 && (
         <ul className="flex flex-col" aria-label="Notas de la reserva">
-          {r.notas_items.map((n) => <li key={n.id}><ItemNota r={r} nota={n} puedeEditar={puedeEditar} usuario={usuario} mostrarExtra onCambio={onCambio} /></li>)}
+          {r.notas_items.map((n) => <li key={n.id}><ItemNota r={r} nota={n} puedeEditar={puedeEditar} usuario={usuario} mostrarExtra ocultarUsuario onCambio={onCambio} /></li>)}
         </ul>
       )}
       {abierto && <FormNota r={r} enGrupo={enGrupo} usuario={usuario} onCancelar={() => setAbierto(false)} onGuardado={(n) => { setAbierto(false); onCambio(n); }} />}

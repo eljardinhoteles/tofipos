@@ -1,9 +1,12 @@
+import { avisarPorCorreo, correoYaEnviado } from '../../lib/correoReserva';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import dayjs from 'dayjs';
 import {
-  ArrowLeft, ArrowsLeftRight, Bed, CalendarBlank, Copy, Gift, Hash, Plus, Printer, PencilSimple, Prohibit, User, UserCircle, UsersThree, WarningCircle, X,
+  ArrowLeft, ArrowsLeftRight, Baby, Bed, CalendarBlank, CaretDown, ClipboardText, ClockCounterClockwise, Copy, Gift, IdentificationCard, Wallet, Hash, Plus, Printer, PencilSimple, Prohibit, DotsThreeVertical, EnvelopeSimple, MapPin, Note, Phone, User, UserCircle, UsersThree, WarningCircle, X,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -23,6 +26,7 @@ import {
   leerReservaHotel,
   nombreHuesped,
   quitarExtraHotel,
+  quitarNotaHotel,
   reintentarSincronizacion,
   revisarAvisoCloudbedsHotel,
   totalConExtras,
@@ -42,7 +46,7 @@ import { EditorCliente } from './detalle/EditorCliente';
 import { EditorCabana } from './detalle/EditorCabana';
 import { EditorEstadia } from './detalle/EditorEstadia';
 import { EditorExtras } from './detalle/EditorExtras';
-import { SeccionCobros } from './detalle/SeccionCobros';
+import { SeccionCobros, FormAbono } from './detalle/SeccionCobros';
 import { SeccionCuenta, type EditorCuenta } from './detalle/SeccionCuenta';
 import { FichaCliente } from './detalle/FichaCliente';
 import { SeccionNotas } from './detalle/NotasReserva';
@@ -51,10 +55,11 @@ import { usePlanesAlimentacion } from '../../hooks/usePlanesAlimentacion';
 import { incluyePorPersona, planSeCobra } from '../../lib/hotelPlanesApi';
 import { GrupoResumen } from './detalle/GrupoResumen';
 import { SelectorCama } from './detalle/SelectorCama';
+import { FilaInfo } from './detalle/comunes';
 import { VistaGrupo } from './detalle/VistaGrupo';
 import { SeparadorGrupo } from './detalle/SeparadorGrupo';
 import { SeccionHistorial } from './detalle/SeccionHistorial';
-import { Dato, Seccion } from './detalle/comunes';
+import { Seccion } from './detalle/comunes';
 import { EPS, dinero, fechaLarga, plural, totalesGrupo } from './detalle/formatos';
 
 export interface PresetReserva {
@@ -171,6 +176,13 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const pago = pagoDeVenta(venta);
   const estiloHeader = r ? estiloDe({ tipo: 'reserva', id: r.cloudbeds_reservation_id ?? r.id, roomTypeID: r.room_type_id, nombre: nombreHuesped(r), desde: r.llegada, hasta: r.salida, fuente: r.fuente_nombre, local: r }) : null;
   const vigente = r?.estado === 'confirmada';
+  const clienteFicha = r?.cliente_id ? clientes.find((c) => c.id === r.cliente_id) : undefined;
+  // El encabezado toma el color del estado de pago (el mismo de la tarjeta en el calendario); sin venta o cancelada queda neutro.
+  // Lo secundario se atenúa sobre el color en lugar de usar el gris del tema, que no contrasta bien sobre fondos tintados.
+  const encabezadoTinte = !!r && vigente && !!pago;
+  const colorEncabezado = encabezadoTinte
+    ? `${pago!.fondo} [&_.text-muted-foreground]:text-current/70 [&_li_svg]:text-current/70`
+    : r?.estado === 'cancelada' ? 'border-border bg-muted' : 'border-border bg-card';
   const puedeEditar = puedeGestionar && vigente;
   const enGrupo = vigentesDelGrupo.length > 1;
   useEffect(() => { if (pestana === 'grupo' && !enGrupo) setPestana('reserva'); }, [pestana, enGrupo]);
@@ -181,6 +193,8 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const textoSinCobros = !r?.venta_id ? 'Sin cobros registrados' : venta?.anulado ? 'Venta anulada' : sinVenta ? 'Venta no encontrada' : 'Cargando cobros…';
   const noches = r ? dayjs(r.salida).diff(dayjs(r.llegada), 'day') : 0;
   const totalPos = r ? totalConExtras(r) : 0;
+  // Saldo a cobrar en el formulario de pago: el de la venta si existe; si no, el total de la reserva (o del grupo).
+  const saldoAbono = venta && !venta.anulado ? venta.saldo : enGrupo ? totGrupo.total : totalPos;
   const cabana = r ? habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.nombre ?? r.cabana : '';
   const vistaHab = r ? habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.vista ?? null : null;
 
@@ -273,10 +287,17 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
     const texto = e.origen === 'cloudbeds'
       ? `Se quita «${e.descripcion}» (${dinero(e.monto)}) del POS, no de Cloudbeds. Después añade los productos reales como extras; la conciliación no volverá a traer este importe mientras Cloudbeds lo mantenga igual. El total del POS baja ${dinero(e.monto)} hasta que añadas los productos.`
       : `Se quita «${e.descripcion}» (${dinero(e.monto)}) de la reserva en el POS. La nota que ya se anotó en Cloudbeds no se puede borrar desde aquí.`;
-    openConfirm('Quitar extra', texto, () => {
+    // Las notas ligadas a este extra se quitan primero: si no, quedarían sueltas como notas generales sin contexto.
+    const notasLigadas = r.notas_items.filter((n) => n.extra_id === extraId);
+    const aviso = notasLigadas.length > 0
+      ? ` Tiene ${notasLigadas.length === 1 ? 'una nota ligada' : `${notasLigadas.length} notas ligadas`} que también se ${notasLigadas.length === 1 ? 'quitará' : 'quitarán'}: ${notasLigadas.map((n) => `«${n.texto}»`).join(', ')}.`
+      : '';
+    openConfirm(notasLigadas.length > 0 ? 'Quitar extra y sus notas' : 'Quitar extra', `${texto}${aviso}`, () => {
       void correr('Quitando el extra…', async () => {
-        await refrescar(false, await quitarExtraHotel(r, extraId, usuarioNombre));
-        showToast.success('Extra quitado');
+        let actual = r;
+        for (const n of notasLigadas) actual = await quitarNotaHotel(actual, n.id, usuarioNombre);
+        await refrescar(false, await quitarExtraHotel(actual, extraId, usuarioNombre));
+        showToast.success(notasLigadas.length > 0 ? 'Extra y notas quitados' : 'Extra quitado');
       });
     });
   };
@@ -287,6 +308,22 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
     openConfirm('Cancelar reserva',
       `Se cancelará la reserva de ${nombreHuesped(r)}${r.cloudbeds_reservation_id ? ' también en Cloudbeds' : r.cloudbeds_grupo_ref ? ' solo en el POS (esta habitación viene de una reserva de Cloudbeds con varias habitaciones: quítala o cancélala allá a mano)' : ''} y se liberan sus fechas.${cobros} Esta acción no se puede deshacer.`,
       () => { void correr('Cancelando la reserva…', async () => { await cancelarReservaHotel(r); showToast.success('Reserva cancelada'); onCambio?.(true); onClose(); }); });
+  };
+
+  const tipoCorreo = r?.estado === 'cancelada' ? 'cancelacion' : 'confirmacion';
+  const enviarCorreo = () => {
+    if (!r) return;
+    const tipo = tipoCorreo;
+    const nombreCorreo = tipo === 'cancelacion' ? 'cancelación' : 'confirmación';
+    const yaEnviado = correoYaEnviado(r.historial, tipo);
+    openConfirm(yaEnviado ? 'Reenviar correo' : 'Enviar correo',
+      `${yaEnviado ? `Ya se envió el correo de ${nombreCorreo} antes. ` : ''}Se enviará el correo de ${nombreCorreo} a ${r.huesped_email}.`,
+      () => { void correr('Enviando el correo…', async () => {
+        const res = await avisarPorCorreo(tipo, enGrupo && r.estado !== 'cancelada' ? vigentesDelGrupo : [r], usuarioNombre);
+        if (res.enviado) showToast.success('Correo enviado', r.huesped_email);
+        else showToast.warning('No se envió el correo', res.motivo ?? 'Revisa el correo del huésped.');
+        await refrescar(false);
+      }); });
   };
 
   const cancelarGrupo = () => {
@@ -342,7 +379,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
       codigo: r.cloudbeds_reservation_id,
       canal: r.fuente_nombre,
       cancelada: r.estado === 'cancelada',
-      huesped: { nombre: nombreHuesped(r), documento: cliente ? documentoCliente(cliente) : null, email: r.huesped_email, telefono: r.huesped_telefono ?? '', pais: r.huesped_pais },
+      huesped: { nombre: nombreHuesped(r), documento: cliente ? documentoCliente(cliente) : null, email: r.huesped_email, telefono: r.huesped_telefono ?? '', pais: r.huesped_pais, direccion: cliente?.direccion ?? '' },
       llegada: fechaLarga(r.llegada), salida: fechaLarga(r.salida), noches,
       cabanas: filas.map((f) => ({ nombre: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.nombre ?? f.cabana, cama: f.cama, adultos: f.adultos, ninos: f.ninos, tarifa: f.total_estadia, manual: f.tarifa_manual, vista: habitacionDeUnidad(habitaciones, f.room_type_id, f.room_id)?.vista ?? null })),
       extras: filas.flatMap((f) => f.extras.filter((e) => sinImportes || e.monto > 0).map((e) => ({ descripcion: filas.length > 1 ? `${e.descripcion} (${f.cabana})` : e.descripcion, monto: e.monto, notas: f.notas_items.filter((n) => n.extra_id === e.id).map((n) => n.texto) }))),
@@ -377,21 +414,40 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   };
 
   const abrirAbono = () => {
-    if (pestana !== 'cuenta') {
-      if (sucio) { cambiarPestana('cuenta'); return; }
-      setPestana('cuenta');
+    if (sucio) {
+      openConfirm('¿Descartar los cambios?', 'Tienes cambios sin guardar. Si abres el pago, se pierden.', () => { setSucio(false); setPestana('cuenta'); setEditor('abono'); });
+      return;
     }
+    setPestana('cuenta');
     setEditor('abono');
-    setTimeout(() => cobrosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
 
+  // Añadir extras y registrar un pago abren una página propia dentro del panel (sin pestañas ni pie), no un formulario en línea.
+  const enPagina = editor === 'extras' || editor === 'abono';
   const editorCuenta: EditorCuenta = editor === 'tarifa' || editor === 'extras' || editor === 'cloudbeds' ? editor : null;
+
+  // Origen, estado de sincronización y código: en celular van en su propia fila a todo el ancho (junto al nombre se apilaban en 3 líneas).
+  const insignias = r ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <EstadoBadge tono="neutral">{r.fuente_nombre ?? estiloHeader?.etiqueta ?? 'Reserva'}</EstadoBadge>
+                <SyncBadge r={r} />
+                <span className="flex items-center gap-1 t-meta text-muted-foreground font-mono ml-1">
+                  <Hash size={14} aria-hidden />
+                  {r.cloudbeds_reservation_id ? (
+                    <>
+                      {r.cloudbeds_reservation_id}
+                      <button type="button" onClick={() => copiarCodigo(r.cloudbeds_reservation_id!)} title="Copiar código" aria-label="Copiar código de Cloudbeds" className="size-8 pointer-coarse:size-11 -my-2 flex items-center justify-center hover:bg-muted rounded-md hover:text-foreground transition-colors cursor-pointer"><Copy size={14} /></button>
+                    </>
+                  ) : 'POS'}
+                </span>
+              </div>
+  ) : null;
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) intentarCerrar(); }}>
       <SheetContent side="right" showCloseButton={false}
         className="data-[side=right]:w-full data-[side=right]:sm:max-w-2xl p-0 flex flex-col gap-0 data-[side=right]:border-l-0 bg-background shadow-2xl">
-        <SheetHeader className="px-5 pt-4 pb-0 border-b border-border bg-card flex flex-col gap-3.5 text-left select-text">
+        <SheetHeader className={cn('px-5 pt-4 border-b flex flex-col gap-3 sm:gap-3.5 text-left select-text transition-colors', r && !enPagina ? 'pb-0' : 'pb-4', colorEncabezado)}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {r && estiloHeader && (
@@ -400,86 +456,84 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                 </span>
               )}
               <div className="flex flex-col min-w-0">
-                <SheetTitle className="t-titulo uppercase truncate">{r ? nombreHuesped(r) : 'Detalle'}</SheetTitle>
-                {r && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <EstadoBadge tono="neutral">{r.fuente_nombre ?? estiloHeader?.etiqueta ?? 'Reserva'}</EstadoBadge>
-                    <SyncBadge r={r} />
-                    <span className="flex items-center gap-1 t-meta text-muted-foreground font-mono ml-1">
-                      <Hash size={14} aria-hidden />
-                      {r.cloudbeds_reservation_id ? (
-                        <>
-                          {r.cloudbeds_reservation_id}
-                          <button type="button" onClick={() => copiarCodigo(r.cloudbeds_reservation_id!)} title="Copiar código" aria-label="Copiar código de Cloudbeds" className="size-8 -my-2 flex items-center justify-center hover:bg-muted rounded-md hover:text-foreground transition-colors cursor-pointer"><Copy size={14} /></button>
-                        </>
-                      ) : 'POS'}
-                    </span>
-                  </div>
-                )}
+                <SheetTitle className="font-redonda t-titulo uppercase line-clamp-2 break-words">{r ? nombreHuesped(r) : 'Detalle'}</SheetTitle>
+                <div className="hidden sm:block mt-1.5">{insignias}</div>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-            <button type="button" onClick={() => imprimir(false)} disabled={!r} title="Imprimir la reserva" aria-label="Imprimir la reserva"
-              className="size-11 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-40">
-              <Printer size={18} weight="bold" />
-            </button>
+            {r && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" aria-label="Más acciones" title="Más acciones" disabled={ocupado}
+                    className="size-10 pointer-coarse:size-11 rounded-xl border border-border bg-card/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-colors cursor-pointer disabled:opacity-40 shrink-0">
+                    <DotsThreeVertical size={20} weight="bold" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onSelect={() => imprimir(false)}><Printer size={18} aria-hidden /> Imprimir la reserva</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => imprimir(true)}><Gift size={18} aria-hidden /> Imprimir hoja de regalo</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {r.huesped_email ? (
+                    <DropdownMenuItem onSelect={enviarCorreo}>
+                      <EnvelopeSimple size={18} aria-hidden /> {correoYaEnviado(r.historial, tipoCorreo) ? 'Reenviar' : 'Enviar'} correo de {tipoCorreo === 'cancelacion' ? 'cancelación' : 'confirmación'}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onSelect={() => setPestana('cliente')}><EnvelopeSimple size={18} aria-hidden /> Añadir correo del huésped</DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <button type="button" onClick={intentarCerrar} disabled={ocupado} aria-label="Cerrar panel"
-              className="size-11 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-40 shrink-0">
+              className="size-10 pointer-coarse:size-11 rounded-xl border border-border bg-card/70 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-colors cursor-pointer disabled:opacity-40 shrink-0">
               <X size={18} weight="bold" />
             </button>
             </div>
           </div>
+          <div className="sm:hidden -mt-1">{insignias}</div>
           <SheetDescription className="sr-only">Detalle y edición de la reserva</SheetDescription>
           {r && (
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 t-cuerpo text-foreground" aria-label="Resumen de la reserva">
               {enGrupo ? (
                 <>
-                  <FilaHeader icono={Bed}>{plural(vigentesDelGrupo.length, 'habitación', 'habitaciones')}</FilaHeader>
                   <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(vigentesDelGrupo.map((g) => g.llegada).sort()[0]).format('ddd D MMM')} → {dayjs(vigentesDelGrupo.map((g) => g.salida).sort().at(-1)).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
+                  <FilaHeader icono={Bed}>{plural(vigentesDelGrupo.length, 'habitación', 'habitaciones')}</FilaHeader>
                   <FilaHeader icono={UserCircle}>{plural(vigentesDelGrupo.reduce((a, g) => a + g.adultos, 0), 'adulto', 'adultos')}{vigentesDelGrupo.some((g) => g.ninos > 0) ? `, ${plural(vigentesDelGrupo.reduce((a, g) => a + g.ninos, 0), 'niño', 'niños')}` : ''}</FilaHeader>
                 </>
               ) : (
                 <>
-                  <FilaHeader icono={Bed}>{cabana}{vistaHab ? <span className="text-muted-foreground"> · {vistaHab}</span> : null}</FilaHeader>
                   <FilaHeader icono={CalendarBlank}><span className="capitalize">{dayjs(r.llegada).format('ddd D MMM')} → {dayjs(r.salida).format('ddd D MMM')}</span> <span className="text-muted-foreground">· {plural(noches, 'noche', 'noches')}</span></FilaHeader>
+                  <FilaHeader icono={Bed}>{cabana}</FilaHeader>
                   <FilaHeader icono={UserCircle}>{plural(r.adultos, 'adulto', 'adultos')}{r.ninos > 0 ? `, ${plural(r.ninos, 'niño', 'niños')}` : ''}</FilaHeader>
                 </>
               )}
             </ul>
           )}
-          {/* Pestañas subrayadas, pegadas al borde inferior del encabezado. */}
-          {r && editor !== 'extras' && (
-            <div role="tablist" aria-label="Secciones de la reserva" className="flex items-center gap-5 -mb-px">
-              {([...(enGrupo ? [['grupo', 'Grupo'] as const] : []), ['reserva', 'Reserva'], ['cliente', 'Cliente'], ['cuenta', 'Cuenta'], ['historial', 'Historial']] as const).map(([id, label]) => {
-                const tieneAviso = id === 'reserva' && !!divergencia && vigente;
-                const tieneSaldo = id === 'cuenta' && !!cifrasCobro && cifrasCobro.saldo > EPS;
-                const pagadoCompleto = id === 'cuenta' && pagadaPorCompleto;
-                const nHistorial = id === 'historial' ? r.historial?.length ?? 0 : 0;
-                return (
-                  <button
-                    key={id}
-                    id={`tab-${id}`}
-                    type="button"
-                    role="tab"
-                    aria-controls={`tabpanel-${id}`}
-                    aria-selected={pestana === id}
-                    onClick={() => cambiarPestana(id)}
-                    className={cn(
-                      'min-h-11 px-1 t-cuerpo-fuerte border-b-2 cursor-pointer transition-colors flex items-center gap-1.5',
-                      pestana === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    <span>{label}</span>
-                    {tieneAviso && <span className="size-2 rounded-full bg-warning animate-pulse" title="Cambió en Cloudbeds" aria-label="Cambió en Cloudbeds" />}
-                    {tieneSaldo && <span className="size-2 rounded-full bg-warning-foreground" title="Saldo pendiente" aria-label="Saldo pendiente" />}
-                    {!tieneSaldo && pagadoCompleto && <span className="size-2 rounded-full bg-success" title="Pagada por completo" aria-label="Pagada por completo" />}
-                    {nHistorial > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground tabular-nums font-normal">{nHistorial}</span>}
-                  </button>
-                );
-              })}
+          {/* Pestañas subrayadas (el componente Tabs del kit sin su pista): heredan el color del encabezado y la activa lleva una línea inferior. Si no caben, se deslizan de lado (sin recortar el texto). La franja va un tono más oscuro que el encabezado (bg-black/5 sirve con cualquier color del estado de pago); sin color de pago queda blanca como el encabezado, para no parecerse al fondo gris del contenido. */}
+          {r && !enPagina && (
+            <div className={cn('-mx-5', encabezadoTinte && 'bg-black/5 dark:bg-white/5')}>
+              <Tabs value={pestana} onValueChange={(v) => cambiarPestana(v as Pestana)} className="gap-0">
+                <TabsList aria-label="Secciones de la reserva" className="h-auto w-full justify-start gap-0 sm:gap-1 overflow-x-auto rounded-none bg-transparent px-5 py-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {([...(enGrupo ? [['grupo', 'Grupo', UsersThree] as const] : []), ['reserva', 'Reserva', ClipboardText], ['cliente', 'Cliente', IdentificationCard], ['cuenta', 'Cuenta', Wallet], ['historial', 'Historial', ClockCounterClockwise]] as const).map(([id, label, Icono]) => {
+                    const tieneAviso = id === 'reserva' && vigente && (!!divergencia || !!r.aviso_cloudbeds || r.sync_estado !== 'sincronizada');
+                    const tieneSaldo = id === 'cuenta' && !!cifrasCobro && cifrasCobro.saldo > EPS;
+                    const pagadoCompleto = id === 'cuenta' && pagadaPorCompleto;
+                    const nHistorial = id === 'historial' ? r.historial?.length ?? 0 : 0;
+                    return (
+                      <TabsTrigger key={id} value={id} id={`tab-${id}`} aria-controls={`tabpanel-${id}`} className="font-redonda h-10 pointer-coarse:h-11 min-w-fit sm:flex-none rounded-none border-b-2 border-transparent bg-transparent px-3 sm:px-4 data-[state=active]:border-current data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:!text-foreground">
+                        {/* Ícono solo en pantallas medianas y grandes (desde 640 px): en celular quitan espacio al texto. Distintos a los de la fila de resumen para no repetirlos. */}
+                        <Icono size={16} weight="bold" className="hidden sm:block shrink-0" aria-hidden />
+                        <span>{label}</span>
+                        {tieneAviso && <span className="size-2 rounded-full bg-warning animate-pulse" title="Cambió en Cloudbeds" aria-label="Cambió en Cloudbeds" />}
+                        {tieneSaldo && <span className="size-2 rounded-full bg-warning-foreground" title="Saldo pendiente" aria-label="Saldo pendiente" />}
+                        {!tieneSaldo && pagadoCompleto && <span className="size-2 rounded-full bg-success" title="Pagada por completo" aria-label="Pagada por completo" />}
+                        {nHistorial > 0 && <span className="text-xs px-1.5 rounded-full bg-muted text-muted-foreground tabular-nums font-normal shrink-0">{nHistorial}</span>}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </Tabs>
             </div>
           )}
-          {r && editor === 'extras' && <div className="pb-3" />}
         </SheetHeader>
 
         {enProceso && <BannerEspera texto={enProceso} detalle="No cierres este panel" className="shadow-xs" />}
@@ -495,7 +549,22 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
           </>
         )}
 
-        {editor !== 'extras' && (
+        {r && editor === 'abono' && (
+          <>
+            <div className="flex items-center gap-2 px-3 py-2 bg-card">
+              <button type="button" onClick={cerrarEditorConfirmando} aria-label="Volver a la reserva" className="size-11 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"><ArrowLeft size={20} /></button>
+              <span className="font-redonda t-fila">Registrar pago · {enGrupo ? plural(vigentesDelGrupo.length, 'habitación', 'habitaciones') : cabana}</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 select-text">
+              <div className="rounded-2xl bg-card p-4">
+                <FormAbono r={r} grupo={enGrupo ? vigentesDelGrupo : []} saldo={saldoAbono} usuario={{ id: currentMesero?.id, nombre: usuarioNombre }} onCancelar={cerrarEditorConfirmando} onSucio={setSucio}
+                  onRegistrado={(n) => { setEditor(null); setSucio(false); void refrescar(false, n); }} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {!enPagina && (
           <div
             role="tabpanel"
             id={`tabpanel-${pestana}`}
@@ -504,6 +573,8 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
           >
           {r && (
             <>
+              {/* Avisos: solo en la pestaña Reserva (con un punto en la pestaña) para no empujar el contenido de las demás. */}
+              {pestana === 'reserva' && (<>
               {r.aviso_cloudbeds && (
                 <Seccion icono={WarningCircle} titulo={r.aviso_cloudbeds.tipo === 'cancelada' ? 'Se canceló en Cloudbeds' : 'Cambió en Cloudbeds'} tono="aviso">
                   <span className="t-cuerpo">
@@ -550,6 +621,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                   )}
                 </div>
               )}
+              </>)}
 
               {enGrupo && pestana !== 'historial' && pestana !== 'grupo' && (
                 <GrupoResumen filas={vigentesDelGrupo} seleccionada={r.id} ventas={ventas} onElegir={elegirCabana} />
@@ -566,18 +638,25 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
               {pestana === 'reserva' && (<>
               <Seccion icono={Bed} color="info" titulo={`Estadía · ${plural(noches, 'noche', 'noches')}`}
                 accion={puedeEditar && !r.fuente_externa && editor !== 'estadia' && editor !== 'cabana' ? (
-                  <div className="flex items-center gap-2">
-                    {!r.cloudbeds_grupo_ref && <Button type="button" variant="ghost" className="h-9 gap-1.5" onClick={() => abrirEditor('cabana')}><ArrowsLeftRight size={14} /> Habitación</Button>}
-                    <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('estadia')}><PencilSimple size={14} /> Editar</Button>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="suave" className="h-9 pointer-coarse:h-11 gap-1.5" aria-label="Opciones de la estadía">Opciones <CaretDown size={14} weight="bold" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onSelect={() => abrirEditor('estadia')}><PencilSimple size={18} aria-hidden /> Editar fechas</DropdownMenuItem>
+                      {!r.cloudbeds_grupo_ref && <DropdownMenuItem onSelect={() => abrirEditor('cabana')}><ArrowsLeftRight size={18} aria-hidden /> Cambiar habitación</DropdownMenuItem>}
+                      <DropdownMenuSeparator />
+                      {vigentesDelGrupo.length > 1 && <DropdownMenuItem variant="destructive" onSelect={cancelarGrupo}><Prohibit size={18} aria-hidden /> Cancelar todo el grupo</DropdownMenuItem>}
+                      <DropdownMenuItem variant="destructive" onSelect={cancelar}><Prohibit size={18} aria-hidden /> {r.grupo_id ? 'Cancelar solo esta habitación' : 'Cancelar reserva'}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : undefined}>
-                <div className="grid grid-cols-2 gap-3">
-                  <Dato t="Habitación" v={<>{cabana}{vistaHab ? <span className="text-muted-foreground font-normal"> · {vistaHab}</span> : null}</>} />
-                  <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar={puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)} usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Dato t="Llegada" v={<span className="capitalize">{fechaLarga(r.llegada)}</span>} />
-                  <Dato t="Salida" v={<span className="capitalize">{fechaLarga(r.salida)}</span>} />
+                <div className="flex flex-col gap-3">
+                  <FilaInfo icono={Bed} sub={!(puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)) ? r.cama : undefined}>{cabana}{vistaHab ? <span className="text-muted-foreground font-normal"> · {vistaHab}</span> : null}</FilaInfo>
+                  {(puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)) && (
+                    <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
+                  )}
+                  <FilaInfo icono={CalendarBlank}><span className="capitalize">{fechaLarga(r.llegada)}</span> → <span className="capitalize">{fechaLarga(r.salida)}</span></FilaInfo>
                 </div>
                 {editor === 'cabana' && (
                   <EditorCabana r={r} habitaciones={habitaciones} usuario={usuarioNombre} onCancelar={cerrarEditor} onSucio={setSucio}
@@ -592,16 +671,12 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
               <Seccion icono={UsersThree} titulo="Huéspedes"
                 accion={puedeEditar && (!r.fuente_externa || planes.length > 0) && editor !== 'huespedes' ? <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('huespedes')}><PencilSimple size={14} /> Editar</Button> : undefined}>
                 {editor !== 'huespedes' && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-3">
                   {/* Cada grupo con lo que incluye su plan, para leer de corrido «cuántos» y «qué reciben». */}
-                  <div className="flex flex-col gap-0.5">
-                    <Dato t="Adultos" v={r.adultos} />
-                    {r.plan_alimentacion && incluyePorPersona(r.plan_alimentacion).adulto && <span className="t-cuerpo text-muted-foreground">{incluyePorPersona(r.plan_alimentacion).adulto}</span>}
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <Dato t="Niños" v={r.ninos} />
-                    {r.plan_alimentacion && r.ninos > 0 && incluyePorPersona(r.plan_alimentacion).nino && <span className="t-cuerpo text-muted-foreground">{incluyePorPersona(r.plan_alimentacion).nino}</span>}
-                  </div>
+                  <FilaInfo icono={User} sub={r.plan_alimentacion ? incluyePorPersona(r.plan_alimentacion).adulto || undefined : undefined}>{plural(r.adultos, 'adulto', 'adultos')}</FilaInfo>
+                  {r.ninos > 0 && (
+                    <FilaInfo icono={Baby} sub={r.plan_alimentacion ? incluyePorPersona(r.plan_alimentacion).nino || undefined : undefined}>{plural(r.ninos, 'niño', 'niños')}</FilaInfo>
+                  )}
                   <SeccionPlan r={r} hayPlanes={planes.length > 0} />
                 </div>
                 )}
@@ -616,36 +691,37 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
               {pestana === 'cliente' && (<>
               <Seccion icono={User} titulo="Cliente"
-                accion={puedeGestionar && editor !== 'cliente' ? <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('cliente')}><PencilSimple size={14} /> Editar</Button> : undefined}>
-                <div className="grid grid-cols-2 gap-3">
-                  <Dato t="Nombre" v={nombreHuesped(r)} />
-                  <Dato
-                    t="Teléfono"
-                    v={
-                      r.huesped_telefono ? (
-                        <span className="flex items-center gap-1.5">
-                          <a href={`tel:${r.huesped_telefono}`} className="hover:underline text-foreground">{r.huesped_telefono}</a>
-                          <button type="button" onClick={() => copiarCodigo(r.huesped_telefono!)} title="Copiar teléfono" aria-label="Copiar teléfono" className="size-6 inline-flex items-center justify-center hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer"><Copy size={12} /></button>
-                        </span>
-                      ) : '—'
-                    }
-                  />
-                  <div className="col-span-2">
-                    <Dato
-                      t="Correo"
-                      v={
-                        r.huesped_email ? (
-                          <span className="flex items-center gap-1.5">
-                            <a href={`mailto:${r.huesped_email}`} className="hover:underline text-foreground break-all">{r.huesped_email}</a>
-                            <button type="button" onClick={() => copiarCodigo(r.huesped_email)} title="Copiar correo" aria-label="Copiar correo" className="size-6 inline-flex items-center justify-center hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer shrink-0"><Copy size={12} /></button>
-                          </span>
-                        ) : '—'
-                      }
-                    />
+                accion={editor !== 'cliente' ? (
+                  <div className="flex items-center gap-2">
+                    {r.huesped_email && <Button type="button" variant="ghost" className="h-9 gap-1.5" disabled={ocupado} onClick={enviarCorreo}><EnvelopeSimple size={14} /> {correoYaEnviado(r.historial, tipoCorreo) ? 'Reenviar correo' : 'Enviar correo'}</Button>}
+                    {puedeGestionar && <Button type="button" variant="suave" className="h-9 gap-1.5" onClick={() => abrirEditor('cliente')}><PencilSimple size={14} /> Editar</Button>}
                   </div>
-                  {r.notas && <div className="col-span-2"><Dato t="Notas internas" v={r.notas} /></div>}
+                ) : undefined}>
+                {/* Misma presentación que la pestaña Reserva: una fila por dato, con ícono. */}
+                {editor !== 'cliente' && (
+                <div className="flex flex-col gap-3">
+                  <FilaInfo icono={UserCircle} sub={r.huesped_pais ? `País: ${r.huesped_pais}` : undefined}>{nombreHuesped(r)}</FilaInfo>
+                  <FilaInfo icono={Phone}>
+                    {r.huesped_telefono ? (
+                      <span className="flex items-center gap-1.5">
+                        <a href={`tel:${r.huesped_telefono}`} className="hover:underline text-foreground">{r.huesped_telefono}</a>
+                        <button type="button" onClick={() => copiarCodigo(r.huesped_telefono!)} title="Copiar teléfono" aria-label="Copiar teléfono" className="size-6 pointer-coarse:size-10 inline-flex items-center justify-center hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer shrink-0"><Copy size={12} /></button>
+                      </span>
+                    ) : <span className="text-muted-foreground font-normal">Sin teléfono</span>}
+                  </FilaInfo>
+                  <FilaInfo icono={EnvelopeSimple}>
+                    {r.huesped_email ? (
+                      <span className="flex items-center gap-1.5">
+                        <a href={`mailto:${r.huesped_email}`} className="hover:underline text-foreground break-all">{r.huesped_email}</a>
+                        <button type="button" onClick={() => copiarCodigo(r.huesped_email)} title="Copiar correo" aria-label="Copiar correo" className="size-6 pointer-coarse:size-10 inline-flex items-center justify-center hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer shrink-0"><Copy size={12} /></button>
+                      </span>
+                    ) : <span className="text-muted-foreground font-normal">Sin correo</span>}
+                  </FilaInfo>
+                  {clienteFicha?.direccion && <FilaInfo icono={MapPin}>{clienteFicha.direccion}</FilaInfo>}
+                  {r.notas && <FilaInfo icono={Note} sub="Nota interna">{r.notas}</FilaInfo>}
                 </div>
-                {editor !== 'cliente' && <FichaCliente clienteId={r.cliente_id} />}
+                )}
+                {editor !== 'cliente' && <FichaCliente clienteId={r.cliente_id} ocultarDireccion />}
                 {editor === 'cliente' && (
                   <EditorCliente r={r} usuario={usuarioNombre} onCancelar={cerrarEditor} onSucio={setSucio}
                     onGuardado={(n) => { setEditor(null); void refrescar(false, n); }} />
@@ -661,7 +737,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
               <div ref={cobrosRef} className="scroll-mt-4">
                 <SeccionCobros r={r} venta={venta} ventaPerdida={sinVenta} onDesenlazar={desenlazarVenta} grupo={enGrupo ? vigentesDelGrupo : []} puedeGestionar={puedeGestionar} usuario={{ id: currentMesero?.id, nombre: usuarioNombre }}
-                  abierto={editor === 'abono'} onAbrir={(a) => (a ? abrirEditor('abono') : cerrarEditor())} onSucio={setSucio}
+                  onAbrir={(a) => (a ? abrirAbono() : cerrarEditor())}
                   onCambio={(n) => { setEditor(null); setSucio(false); void refrescar(false, n); }} onConciliar={onConciliar} />
               </div>
               </>)}
@@ -669,32 +745,16 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
               {pestana === 'historial' && (<>
               <SeccionHistorial historial={r.historial} cargando={historialDe !== r.id && r.historial.length === 0} />
 
-              <Seccion icono={Gift} color="info" titulo="Documentos">
-                <p className="t-meta text-muted-foreground">Hoja de la reserva sin importes, totales ni pagos: para check-ins de certificados o confirmaciones de regalo.</p>
-                <Button type="button" variant="outline" className="h-11 gap-2 self-start" onClick={() => imprimir(true)} disabled={!r}>
-                  <Gift size={16} weight="bold" /> Imprimir hoja de regalo
-                </Button>
-              </Seccion>
-
-              {puedeGestionar && vigente && !r.fuente_externa && (
-                <Seccion icono={Prohibit} color="destructive" titulo="Cancelar">
-                  <p className="t-meta text-muted-foreground">Cancela la reserva{r.cloudbeds_reservation_id ? ' también en Cloudbeds' : ''} y libera las fechas. Los cobros de la venta no se tocan: se deja un comentario para que revises si corresponde un reembolso.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {vigentesDelGrupo.length > 1 && <Button type="button" variant="outline" className="h-11 text-destructive" onClick={cancelarGrupo} disabled={ocupado}>Cancelar todo el grupo</Button>}
-                    <Button type="button" variant="outline" className="h-11 text-destructive" onClick={cancelar} disabled={ocupado}>{r.grupo_id ? 'Cancelar solo esta habitación' : 'Cancelar reserva'}</Button>
-                  </div>
-                </Seccion>
-              )}
               </>)}
             </>
           )}
         </div>
       )}
 
-        {r && editor !== 'extras' && (
-          <div className="border-t border-border bg-card px-5 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        {r && !enPagina && (
+          <div className="bg-card px-5 py-3 flex items-center justify-between gap-3">
             {/* Cifras: total, pagado y saldo en columnas con su rótulo; sin venta utilizable, el estado en texto. */}
-            <dl className={cn('grid gap-x-6 gap-y-0.5 min-w-0 items-end', cifrasCobro ? 'grid-cols-[auto_auto_auto]' : 'grid-cols-[auto_auto]')}>
+            <dl className={cn('grid gap-x-5 gap-y-0.5 min-w-0 items-end', cifrasCobro ? 'grid-cols-[auto_auto_auto]' : 'grid-cols-[auto_auto]')}>
               <dt className="t-meta text-muted-foreground">{enGrupo ? 'Total del grupo' : 'Total'}</dt>
               {cifrasCobro ? <dt className="t-meta text-muted-foreground">Pagado</dt> : <dt aria-hidden />}
               {cifrasCobro ? <dt className="t-meta text-muted-foreground">Saldo</dt> : null}
@@ -708,10 +768,11 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                 <dd className="t-meta text-muted-foreground">{textoSinCobros}</dd>
               )}
             </dl>
-            <div className="flex items-center gap-3 ml-auto">
-              {pago && <EstadoBadge tono={pago.tono}>{pago.etiqueta}</EstadoBadge>}
-              {puedeGestionar && vigente && editor !== 'abono' && !venta?.anulado && !sinVenta && (
-                <Button type="button" variant={pagadaPorCompleto ? 'outline' : 'default'} className="h-11 px-5 shrink-0 gap-1.5" onClick={abrirAbono} disabled={pagadaPorCompleto} title={pagadaPorCompleto ? 'La reserva ya está pagada por completo' : undefined}><Plus size={16} weight="bold" /> Añadir pago</Button>
+            <div className="flex items-center gap-3 ml-auto shrink-0">
+              {/* En celular el estado ya se lee en los colores de Pagado y Saldo: se oculta para que el pie quede en una sola fila. */}
+              {pago && <EstadoBadge tono={pago.tono} className="hidden sm:inline-flex">{pago.etiqueta}</EstadoBadge>}
+              {puedeGestionar && vigente && !venta?.anulado && !sinVenta && (
+                <Button type="button" variant={pagadaPorCompleto ? 'outline' : 'default'} className="h-11 min-w-11 px-0 sm:px-4 gap-1.5 shrink-0" onClick={abrirAbono} disabled={pagadaPorCompleto} aria-label="Añadir pago" title={pagadaPorCompleto ? 'La reserva ya está pagada por completo' : 'Añadir pago'}><Plus size={20} weight="bold" /><span className="hidden sm:inline">Añadir pago</span></Button>
               )}
             </div>
           </div>

@@ -5,7 +5,7 @@ import { Seccion } from './comunes';
 /** Línea de tiempo de la reserva: creación, cambios, cobros, conciliación y cancelación, con fecha y usuario. */
 export function SeccionHistorial({ historial, cargando = false }: { historial: EventoHistorial[]; cargando?: boolean }) {
   return (
-  <Seccion icono={Clock} color="info" titulo="Historial">
+  <Seccion icono={Clock} color="info" titulo="Registro de cambios">
     {!historialDisponible ? (
       <p className="t-meta text-muted-foreground">Para ver el historial de cambios, ejecuta la migración <b>20261018000200_hotel_reservas_historial.sql</b> en Supabase.</p>
     ) : cargando ? (

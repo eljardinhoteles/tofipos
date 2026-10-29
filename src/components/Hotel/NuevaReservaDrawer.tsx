@@ -334,6 +334,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
   const [email, setEmail] = useState(origenCot?.cliente.email ?? '');
   const [telefono, setTelefono] = useState(origenCot?.cliente.telefono ?? '');
   const [pais, setPais] = useState('EC');
+  const [direccion, setDireccion] = useState('');
   // Documento del huésped: va a su ficha de Clientes (Cloudbeds no lo recibe).
   // Plan de alimentación: undefined = sin tocar (se usa el predeterminado, si hay); null = «Sin plan».
   const { planes, defecto: planDefecto } = usePlanesAlimentacion();
@@ -352,12 +353,13 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
     setApellido(n.apellido);
     setEmail(c.email ?? '');
     setTelefono(c.telefono ?? '');
+    setDireccion(c.direccion ?? '');
     if (c.tipo_cliente === 'extranjero' && pais === 'EC') setPais('');
     setTipoDoc(c.tipo_doc && c.tipo_doc !== 'otro' ? c.tipo_doc : c.tipo_cliente === 'extranjero' ? 'pasaporte' : 'cedula');
     setNumeroDoc((c.numero_doc || c.dni || '').trim());
     setBusquedaCliente('');
   };
-  const quitarCliente = () => { setCliente(null); setNombre(''); setApellido(''); setEmail(''); setTelefono(''); setPais('EC'); setTipoDoc('cedula'); setNumeroDoc(''); };
+  const quitarCliente = () => { setCliente(null); setNombre(''); setApellido(''); setEmail(''); setTelefono(''); setDireccion(''); setPais('EC'); setTipoDoc('cedula'); setNumeroDoc(''); };
 
   // ---------- Cotización: cortesías, notas para el cliente y la cotización ya guardada ----------
   const [cortesias, setCortesias] = useState<Array<{ id: string; texto: string }>>(() => (editando?.cortesias ?? []).map((texto) => ({ id: crypto.randomUUID(), texto })));
@@ -535,6 +537,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
           nombre: `${nombre.trim()} ${apellido.trim()}`.trim(),
           email: email.trim() || undefined,
           telefono: telefono.trim() || undefined,
+          direccion: direccion.trim() || undefined,
           tipo_cliente: tipoDoc === 'pasaporte' || pais.trim().toUpperCase() !== 'EC' ? 'extranjero' : 'persona_natural',
           dni: numeroDoc.trim() || undefined,
           tipo_doc: numeroDoc.trim() ? tipoDoc : undefined,
@@ -545,6 +548,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
         const patch: Partial<RxCliente> = {};
         if (!cliente.email && email.trim()) patch.email = email.trim();
         if (!cliente.telefono && telefono.trim()) patch.telefono = telefono.trim();
+        if (!cliente.direccion && direccion.trim()) patch.direccion = direccion.trim();
         if (!(cliente.dni || cliente.numero_doc) && numeroDoc.trim()) { patch.dni = numeroDoc.trim(); patch.numero_doc = numeroDoc.trim(); patch.tipo_doc = tipoDoc; }
         if (Object.keys(patch).length > 0) await updateRxCliente(cliente.id, patch);
       }
@@ -834,6 +838,10 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
                   {!esCot && <Campo label="País (2 letras)" id="nr-pais" requerido error={intentado[2] && !/^[A-Za-z]{2}$/.test(pais.trim()) ? 'Usa el código de 2 letras: EC, US, CO…' : ''}>
                     <Input id="nr-pais" value={pais} maxLength={2} onChange={(e) => setPais(e.target.value.toUpperCase())} aria-invalid={intentado[2] && !/^[A-Za-z]{2}$/.test(pais.trim())} className="h-11 text-base uppercase w-24" />
                   </Campo>}
+                  {/* La dirección se guarda en la ficha de Clientes (no en la reserva): solo se pide si habrá ficha. */}
+                  {!esCot && (cliente || guardarCliente) && <div className="sm:col-span-2"><Campo label="Dirección" id="nr-dir">
+                    <Input id="nr-dir" value={direccion} onChange={(e) => setDireccion(e.target.value)} autoComplete="street-address" placeholder="Calle, ciudad…" className="h-11 text-base" />
+                  </Campo></div>}
                 </div>
                 {!cliente && !esCot && (
                   <label className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2.5 cursor-pointer">
@@ -887,7 +895,7 @@ export function NuevaReservaDrawer({ preset, habitaciones, version = 0, onClose,
           ) : (
             <PasoRevision
               llegada={llegada} salida={salida} noches={noches} elegidas={elegidas} esGrupo={esGrupo}
-              huesped={{ nombre: `${nombre} ${apellido}`.trim(), email, telefono, pais, documento: numeroDoc.trim() ? `${ETIQUETA_DOC[tipoDoc]} ${numeroDoc.trim()}` : '' }} cliente={cliente} guardarCliente={guardarCliente} notas={notas}
+              huesped={{ nombre: `${nombre} ${apellido}`.trim(), email, telefono, pais, direccion: cliente || guardarCliente ? direccion : '', documento: numeroDoc.trim() ? `${ETIQUETA_DOC[tipoDoc]} ${numeroDoc.trim()}` : '' }} cliente={cliente} guardarCliente={guardarCliente} notas={notas}
               plan={plan} extras={extrasOk} montoExtra={montoExtra} totalEstadia={totalEstadia} totalExtras={totalExtras} netoExtras={netoExtras} ivaExtras={ivaExtras} onEditar={irA} cotizacion={esCot} referencial={referencial} totalPlan={totalPlan}
             />
           )}

@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { showToast } from '@/lib/toast';
 import { Girando } from '../Espera';
 import { useRxClientes } from '../../../hooks/useRxClientes';
-import type { RxCliente } from '../../../db/rxdb';
+import { updateRxCliente, type RxCliente } from '../../../db/rxdb';
 import { partirNombre } from '../../../lib/hotelConciliacion';
 import { ClienteSelector } from '../../Common/ClienteSelector';
 import { actualizarDatosHuespedHotel, conciliacionDisponible, type ReservaHotel } from '../../../lib/hotelReservasApi';
@@ -31,6 +31,9 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
   const [email, setEmail] = useState(r.huesped_email);
   const [telefono, setTelefono] = useState(r.huesped_telefono ?? '');
   const [pais, setPais] = useState(r.huesped_pais);
+  // La dirección vive solo en la ficha de Clientes (una sola fuente): se lee y se guarda allí, no en la reserva.
+  const [direccion, setDireccion] = useState('');
+  const [direccionTocada, setDireccionTocada] = useState(false);
   const [notas, setNotas] = useState(r.notas ?? '');
   const [clienteId, setClienteId] = useState<string | null>(r.cliente_id);
   const [busqueda, setBusqueda] = useState('');
@@ -38,8 +41,11 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
   const [guardando, setGuardando] = useState(false);
 
   const enlazado = clientes.find((c) => c.id === clienteId);
+  // La ficha puede cargar después de abrir el editor: se rellena una vez, mientras nadie haya escrito.
+  useEffect(() => { if (!direccionTocada) setDireccion(enlazado?.direccion ?? ''); }, [enlazado?.id, enlazado?.direccion, direccionTocada]);
+  const direccionCambio = !!enlazado && direccion.trim() !== (enlazado.direccion ?? '').trim();
   const hayCambios = nombre !== r.huesped_nombre || apellido !== r.huesped_apellido || email !== r.huesped_email
-    || telefono !== (r.huesped_telefono ?? '') || pais !== r.huesped_pais || notas !== (r.notas ?? '') || clienteId !== r.cliente_id;
+    || telefono !== (r.huesped_telefono ?? '') || pais !== r.huesped_pais || direccionCambio || notas !== (r.notas ?? '') || clienteId !== r.cliente_id;
   useEffect(() => { onSucio(hayCambios); }, [hayCambios, onSucio]);
 
   const faltas = {
@@ -53,6 +59,8 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
     setNombre(n.nombre); setApellido(n.apellido);
     if (c.email) setEmail(c.email);
     if (c.telefono) setTelefono(c.telefono);
+    setDireccionTocada(false);
+    setDireccion(c.direccion ?? '');
     setBusqueda('');
   };
 
@@ -62,6 +70,7 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
     setGuardando(true);
     try {
       const nueva = await actualizarDatosHuespedHotel(r, { nombre, apellido, email, telefono, pais, notas, clienteId }, usuario);
+      if (direccionCambio && clienteId) await updateRxCliente(clienteId, { direccion: direccion.trim() || undefined });
       showToast.success('Datos del huésped actualizados', 'Solo en el POS: Cloudbeds conserva los suyos.');
       onSucio(false);
       onGuardado(nueva);
@@ -82,7 +91,6 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
               <User size={18} className="text-primary shrink-0" />
               <span className="flex-1 min-w-0 flex flex-col">
                 <span className="t-cuerpo-fuerte truncate">{enlazado.nombre}</span>
-                <span className="t-meta text-muted-foreground truncate">{[enlazado.email, enlazado.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}</span>
               </span>
               <button type="button" onClick={() => setClienteId(null)} aria-label="Quitar el enlace con la ficha" className="size-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted cursor-pointer"><X size={16} /></button>
             </div>
@@ -111,6 +119,13 @@ export function EditorCliente({ r, usuario, onCancelar, onGuardado, onSucio }: P
           <Input id="ec-pais" value={pais} maxLength={2} onChange={(e) => setPais(e.target.value.toUpperCase())} aria-invalid={intentado && faltas.pais} className="h-11 text-base uppercase w-24" />
         </Campo>
       </div>
+      {enlazado ? (
+        <Campo label="Dirección (de la ficha del cliente)" id="ec-dir">
+          <Input id="ec-dir" value={direccion} onChange={(e) => { setDireccionTocada(true); setDireccion(e.target.value); }} autoComplete="street-address" placeholder="Calle, ciudad…" className="h-11 text-base" />
+        </Campo>
+      ) : (
+        <p className="t-meta text-muted-foreground">La dirección se guarda en la ficha de Clientes: enlaza una ficha para añadirla.</p>
+      )}
       <Campo label="Notas internas" id="ec-notas">
         <Textarea id="ec-notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Llegada tarde, alergias, celebración…" className="min-h-16 text-base" />
       </Campo>
