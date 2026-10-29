@@ -96,9 +96,15 @@ const CP850_MAP = {
   'ü': 0x81, 'Ü': 0x9a,
   '¿': 0xa8, '¡': 0xad,
   '€': 0xd5,
+  '·': 0xfa, '—': 0x2d, '–': 0x2d, '‘': 0x27, '’': 0x27, '“': 0x22, '”': 0x22,
+  '°': 0xf8, '×': 0x78,
 };
 
 function encodeCp850(text) {
+  // NFC: une letra + tilde combinada (NFD) en un solo carácter mapeable.
+  // ESC @ (INIT) reinicia la página de códigos de la impresora, así que
+  // volvemos a seleccionar CP850 justo después de cada uno.
+  text = text.normalize('NFC').replace(/\x1b@/g, '\x1b@\x1bt\x02');
   const out = Buffer.alloc(text.length);
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
