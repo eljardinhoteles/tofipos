@@ -100,11 +100,18 @@ const CP850_MAP = {
   '°': 0xf8, '×': 0x78,
 };
 
+// FS . (1C 2E) cancela el modo de caracteres chinos (GBK) de las impresoras
+// clon: sin esto, un byte alto (Ñ, tildes) se funde con el siguiente y sale
+// un ideograma. Luego ESC t n elige la página (PRINT_CODEPAGE: 2=CP850,
+// 19=CP858, 16=WPC1252, 0=CP437).
+const CODEPAGE = parseInt(process.env.PRINT_CODEPAGE || '2', 10);
+const CODEPAGE_SEQ = '\x1c.\x1bt' + String.fromCharCode(CODEPAGE);
+
 function encodeCp850(text) {
   // NFC: une letra + tilde combinada (NFD) en un solo carácter mapeable.
   // ESC @ (INIT) reinicia la página de códigos de la impresora, así que
   // volvemos a seleccionar CP850 justo después de cada uno.
-  text = text.normalize('NFC').replace(/\x1b@/g, '\x1b@\x1bt\x02');
+  text = text.normalize('NFC').replace(/\x1b@/g, '\x1b@' + CODEPAGE_SEQ);
   const out = Buffer.alloc(text.length);
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
@@ -124,7 +131,7 @@ function printRawToPrinterName(printerName, content) {
   return new Promise((resolve, reject) => {
     const tmpFile = path.join(os.tmpdir(), `pos-print-${Date.now()}-${Math.random().toString(36).slice(2)}.bin`);
     // ESC/POS: reset size, feed 5 lines then full cut (GS V 65 5)
-    const selectCp850 = Buffer.from([0x1b, 0x74, 0x02]); // ESC t 2 — página CP850
+    const selectCp850 = Buffer.from([0x1c, 0x2e, 0x1b, 0x74, CODEPAGE]); // FS . + ESC t n
     const resetAndCut = Buffer.from([
       0x1b, 0x21, 0x00,  // SIZE_NORMAL
       0x1b, 0x45, 0x00,  // BOLD_OFF
