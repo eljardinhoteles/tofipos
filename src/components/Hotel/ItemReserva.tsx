@@ -28,7 +28,6 @@ interface Props {
   /** Nombre de la habitación de la fila. */
   cabana: string;
   /** Vista de la habitación («Al río»): sale junto a su nombre en el popover. */
-  vista?: string | null;
   /** Posición dentro de la fila (el calendario la calcula): borde izquierdo y ancho, en CSS. */
   left: string;
   width: string;
@@ -57,7 +56,7 @@ interface Props {
  * popover y desde él se abre la ficha. También aparece al enfocar con teclado.
  */
 // Con `memo`: el calendario se repinta con el reloj y con cada aviso de la caché, y la barra solo debe hacerlo si cambian sus datos.
-export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, vista, left, width, cortaIzq, cortaDer, onAbrir, arrastrable, filaId, diasVisibles, onArrastreMover, onSoltar, onArrastreFin }: Props) {
+export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, left, width, cortaIzq, cortaDer, onAbrir, arrastrable, filaId, diasVisibles, onArrastreMover, onSoltar, onArrastreFin }: Props) {
   const estilo = estiloDe(t);
   // Estado de pago: solo de la venta conciliada en el Centro de Ventas.
   const venta = useVentaDeReserva(t.local?.venta_id);
@@ -175,7 +174,7 @@ export const ItemReserva = memo(function ItemReserva({ tarjeta: t, cabana, vista
           className={cn('w-[22.5rem] max-w-[calc(100vw-1.5rem)] p-0 overflow-visible shadow-[0_18px_44px_-10px_rgba(15,23,42,0.35),0_6px_16px_-4px_rgba(15,23,42,0.18)]', !tinte && bordeBase, !tactil && 'pointer-events-none')}
           style={tinte ? { borderColor: tinte.borde } : undefined}
         >
-          <Contenido t={t} estilo={estilo} venta={venta} pago={pago} base={baseFondo} fondoPropio={tinte?.fondo} cabana={cabana} vista={vista} tactil={tactil} onAbrir={() => { setAbierto(false); onAbrir(t); }} />
+          <Contenido t={t} estilo={estilo} venta={venta} pago={pago} base={baseFondo} fondoPropio={tinte?.fondo} cabana={cabana} tactil={tactil} onAbrir={() => { setAbierto(false); onAbrir(t); }} />
           {/* Flecha del color de la base, con solo sus dos lados en el color del borde, y subida 1 px para tapar la línea del borde en su arranque. */}
           <PopoverPrimitive.Arrow asChild width={18} height={9}>
             <svg viewBox="0 0 18 9" className="drop-shadow-md overflow-visible" style={{ transform: 'translateY(-1px)' }} aria-hidden>
@@ -264,7 +263,7 @@ function CobrosVenta({ venta, pago }: { venta: VentaConMovimientos; pago: InfoPa
   );
 }
 
-function Contenido({ t, estilo, venta, pago, base, fondoPropio, cabana, vista, tactil, onAbrir }: { t: TarjetaVista; estilo: EstiloReserva; venta?: VentaConMovimientos; pago: InfoPago | null; base: string; fondoPropio?: string; cabana: string; vista?: string | null; tactil: boolean; onAbrir: () => void }) {
+function Contenido({ t, estilo, venta, pago, base, fondoPropio, cabana, tactil, onAbrir }: { t: TarjetaVista; estilo: EstiloReserva; venta?: VentaConMovimientos; pago: InfoPago | null; base: string; fondoPropio?: string; cabana: string; tactil: boolean; onAbrir: () => void }) {
   const Icono = estilo.icono;
   const noches = dayjs(t.hasta).diff(dayjs(t.desde), 'day');
   const local = t.local;
@@ -327,7 +326,7 @@ function Contenido({ t, estilo, venta, pago, base, fondoPropio, cabana, vista, t
           </div>
 
           <Fila icono={Bed}>
-            <span className="block text-foreground t-fila">{cabana}{vista && <span className="text-muted-foreground font-normal"> · {vista}</span>}</span>
+            <span className="block text-foreground t-fila">{cabana}</span>
             {lineasCama.map((l) => <span key={l} className="block t-meta">{l}</span>)}
           </Fila>
 

@@ -241,7 +241,7 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
     return puedeGestionar && t.tipo === 'reserva' && !!r && r.estado === 'confirmada' && !r.fuente_externa && !r.cloudbeds_grupo_ref && t.hasta > hoy && t.estado !== 'checked_out';
   };
   const barra = (t: TarjetaVista, cabana: string, filaId: string) => (
-    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}-${t.roomID ?? ''}`} tarjeta={t} cabana={cabana} vista={habitacionDeUnidad(habitaciones, t.roomTypeID, t.roomID)?.vista ?? null} onAbrir={abrir} {...posicion(t)}
+    <ItemReserva key={`${t.tipo}-${t.id}-${t.roomTypeID}-${t.roomID ?? ''}`} tarjeta={t} cabana={cabana} onAbrir={abrir} {...posicion(t)}
       arrastrable={sePuedeMover(t)} filaId={filaId} diasVisibles={DIAS} onArrastreMover={arrastreMover} onSoltar={soltar} onArrastreFin={finArrastre} />
   );
 
