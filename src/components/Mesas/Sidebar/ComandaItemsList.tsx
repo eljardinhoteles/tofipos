@@ -11,6 +11,8 @@ interface FilaProps {
   item: Item;
   index: number;
   selected: boolean;
+  /** Hay otro producto seleccionado: este baja su opacidad para que se distinga cuál es el elegido. */
+  atenuada: boolean;
   locked: boolean;
   pendiente: boolean;
   onSelect: (item: Item) => void;
@@ -18,9 +20,13 @@ interface FilaProps {
 
 // Un ítem sin cambios no se vuelve a renderizar al abrir diálogos, escribir un
 // motivo, etc.: el onClick se estabiliza aquí en vez de crearse en cada render.
-const Fila = memo(function Fila({ item, index, selected, locked, pendiente, onSelect }: FilaProps) {
+const Fila = memo(function Fila({ item, index, selected, atenuada, locked, pendiente, onSelect }: FilaProps) {
   const handleClick = useCallback(() => onSelect(item), [onSelect, item]);
-  return <ComandaItemRow item={item} index={index} isSelected={selected} isLocked={locked} pendiente={pendiente} onClick={handleClick} />;
+  return (
+    <div className={cn('transition-opacity duration-200', atenuada && 'opacity-40')}>
+      <ComandaItemRow item={item} index={index} isSelected={selected} isLocked={locked} pendiente={pendiente} onClick={handleClick} />
+    </div>
+  );
 });
 
 interface ComandaItemsListProps {
@@ -77,6 +83,7 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items: itemsSin
           item={item}
           index={index}
           selected={selectedId === item.id}
+          atenuada={!!selectedId && selectedId !== item.id}
           locked={estaBloqueado(item, confirmada, confirmadaAt)}
           pendiente={tienePendiente(item, confirmada ? confirmadaAt : null, snapshot)}
           onSelect={onSelect}
