@@ -30,6 +30,9 @@ import { useTableActions } from '../hooks/useTableActions';
 import { fechaLocal } from '../lib/fechaLocal';
 import { esMesaBarra, obtenerOCrearMesaBarra, NOMBRE_MESA_BARRA, PISO_BARRA } from '../lib/mesaBarra';
 
+// Pantalla especial del celular: las mesas de restaurante con cuenta abierta, de todas las zonas juntas.
+const PISO_ACTIVAS = '__activas__';
+
 export default function MesasV2() {
     const navigate = useNavigate();
     const permisos = usePermisos();
@@ -157,6 +160,14 @@ export default function MesasV2() {
         [allMesas]
     );
 
+    // Mesas de restaurante con cuenta abierta (las habitaciones del Hotel van aparte, en su botón). Solo en celular se ofrece
+    // la pantalla «Activas», y solo mientras haya alguna.
+    const activasCount = useMemo(
+        () => allMesas.filter(m => m.piso?.toLowerCase() !== 'habitaciones' && m.estado !== 'libre').length,
+        [allMesas]
+    );
+    const hayActivas = isMobile && activasCount > 0;
+
     // Lista ordenada de pisos para navegación por gestos (Hotel/Habitaciones siempre al inicio)
     const allSelectablePisos = useMemo(() => {
         const list = dbPisos.map(p => p.nombre);
@@ -164,10 +175,10 @@ export default function MesasV2() {
         const filtered = list.filter(p => p.toLowerCase() !== 'habitaciones');
         if (hasHotel) {
             const hotelPisoName = list.find(p => p.toLowerCase() === 'habitaciones')!;
-            return [hotelPisoName, ...filtered];
+            return [hotelPisoName, ...(hayActivas ? [PISO_ACTIVAS] : []), ...filtered];
         }
-        return filtered;
-    }, [dbPisos, hayHabitaciones]);
+        return [...(hayActivas ? [PISO_ACTIVAS] : []), ...filtered];
+    }, [dbPisos, hayHabitaciones, hayActivas]);
 
     // Gesto swipe horizontal nativo
     const touchStartX = useRef(0);
@@ -243,16 +254,18 @@ export default function MesasV2() {
     // flujo de filtro), se muestran TODAS las mesas de TODOS los pisos en una
     // sola página con scroll continuo; los chips pasan a ser anclas. En móvil
     // (o dentro de Habitaciones) se mantiene el filtro estricto por piso.
-    const showAllPisos = !isMobile && !isHabitacionesSeleccionado;
+    const vistaActivas = hayActivas && selectedPiso === PISO_ACTIVAS;
+    // «Activas» reutiliza la presentación por secciones (una por zona) para que cada mesa conserve su zona a la vista.
+    const showAllPisos = (!isMobile && !isHabitacionesSeleccionado) || vistaActivas;
 
     const mesasToShow = useMemo(
         () => allMesas
             .filter(m => showAllPisos
-                ? m.piso?.toLowerCase() !== 'habitaciones' : m.piso === selectedPiso)
+                ? m.piso?.toLowerCase() !== 'habitaciones' && (!vistaActivas || m.estado !== 'libre') : m.piso === selectedPiso)
             .sort((a, b) =>
                 (showAllPisos ? (a.piso || '').localeCompare(b.piso || '') : 0) ||
                 a.nombre.localeCompare(b.nombre, undefined, { numeric: true, sensitivity: 'base' })),
-        [allMesas, selectedPiso, showAllPisos]
+        [allMesas, selectedPiso, showAllPisos, vistaActivas]
     );
 
     // Mesas agrupadas por piso, en el orden de`availablePisos`, para renderizar
@@ -418,12 +431,13 @@ export default function MesasV2() {
 
     useEffect(() => {
         if (dbPisos.length === 0) return;
+        if (selectedPiso === PISO_ACTIVAS && hayActivas) return;
         if (selectedPiso && dbPisos.some(p => p.nombre === selectedPiso)) return;
         const firstNonHotel = dbPisos
             .map(p => p.nombre)
             .find(p => p.toLowerCase() !== 'habitaciones');
         setSelectedPiso(firstNonHotel ?? dbPisos[0].nombre);
-    }, [dbPisos, selectedPiso]);
+    }, [dbPisos, selectedPiso, hayActivas]);
 
     return (
         <div className="flex h-full w-full relative">
@@ -504,8 +518,8 @@ export default function MesasV2() {
                             <div className="flex items-center gap-3 min-w-max w-full">
                                 {hayHabitaciones && (
                                     <>
-                                    <button
-                                        type="button" ref={(el) => { chipsRefs.current['Habitaciones'] = el; }}
+                                    <Button
+                                        type="button" variant="infoSoft" ref={(el) => { chipsRefs.current['Habitaciones'] = el; }}
                                         onClick={() => {
                                             const habitacionesPiso = availablePisos.find(p => p.toLowerCase() === 'habitaciones');
                                             if (habitacionesPiso) {
@@ -524,8 +538,9 @@ export default function MesasV2() {
                                                     .catch(err => console.warn('Error creando Habitaciones:', err));
                                             }
                                         }}
-                                        className={cn("font-redonda px-3.5 py-1.5 rounded-full flex items-center gap-1.5 t-meta transition-all cursor-pointer shrink-0 whitespace-nowrap",
-                                            selectedPiso.toLowerCase() === 'habitaciones' ? "bg-info text-white font-extrabold shadow-xs" : "bg-transparent text-foreground font-extrabold hover:text-info-foreground")}
+                                        // Misma altura que los chips de pisos también en táctil (el Button sube a 44 px y desproporciona la fila).
+                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer",
+                                            selectedPiso.toLowerCase() === 'habitaciones' && "bg-info text-white border-info hover:bg-info hover:brightness-110")}
                                     >
                                         {habitacionesActivasCount > 0 && (
                                             <span
@@ -538,8 +553,27 @@ export default function MesasV2() {
                                         )}
                                         <Bed size={18} weight="bold" />
                                         HOTEL
-                                    </button>
+                                    </Button>
 
+                                    <div className="w-[1px] h-6 bg-border shrink-0" />
+                                    </>
+                                )}
+
+                                {hayActivas && (
+                                    <>
+                                    <Button
+                                        type="button" variant="primarySoft" ref={(el) => { chipsRefs.current[PISO_ACTIVAS] = el; }}
+                                        onClick={() => setSelectedPiso(PISO_ACTIVAS)}
+                                        title={`${activasCount} mesa${activasCount === 1 ? '' : 's'} con cuenta abierta`}
+                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer",
+                                            vistaActivas && "bg-primary text-primary-foreground border-primary hover:bg-primary hover:brightness-110")}
+                                    >
+                                        <span className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center t-dato leading-none",
+                                            vistaActivas ? "bg-white text-primary shadow-xs" : "bg-primary text-primary-foreground")}>
+                                            {activasCount}
+                                        </span>
+                                        Activas
+                                    </Button>
                                     <div className="w-[1px] h-6 bg-border shrink-0" />
                                     </>
                                 )}
