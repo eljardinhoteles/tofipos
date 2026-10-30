@@ -31,11 +31,13 @@ import {
  SignOut,
  X,
  Bed,
+ CaretDown,
 } from'@phosphor-icons/react';
 import { cn } from'@/lib/utils';
 import { useAuth } from'../../context/AuthContext';
 import type { SyncStatus } from'../../db/rxdb';
 import { getPrintServerStatus } from'../../lib/printServerClient';
+import { setZonasAbiertas, useZonaEtiqueta } from'../../lib/zonasMovil';
 
 export interface MobileCartInfo {
  mesaNombre: string;
@@ -136,6 +138,9 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  }, [carritoActivo]);
 
  const isMesasActive = location.pathname ==='/v2/mesas'|| location.pathname.startsWith('/v2/mesas');
+ // En Mesas, el botón central muestra la zona actual y abre la hoja de zonas; en el resto de pantallas lleva a Mesas.
+ const zonaActual = useZonaEtiqueta();
+ const abreZonas = isMesasActive && !!zonaActual;
 
  return (
  <>
@@ -178,13 +183,14 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  </Button>
 
  <Button
- type="button" onClick={() => navigate('/v2/mesas')} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
- title="Mesas"
- className={cn("flex-1 h-[52px] rounded-full gap-2 t-cuerpo-fuerte drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "translate-y-28 pointer-events-none")}
+ type="button" onClick={() => (abreZonas ? setZonasAbiertas(true) : navigate('/v2/mesas'))} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
+ title={abreZonas ? 'Zonas' : 'Mesas'} aria-haspopup={abreZonas ? 'dialog' : undefined}
+ className={cn("flex-1 h-[52px] min-w-0 rounded-full gap-2 t-cuerpo-fuerte drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "translate-y-28 pointer-events-none")}
  style={{ transitionDelay: menuCapasAbierto ? '90ms' : '0ms' }}
  >
- <SquaresFour size={20} weight={isMesasActive ?'fill':'regular'} />
- Mesas
+ <SquaresFour size={20} weight={isMesasActive ?'fill':'regular'} className="shrink-0" />
+ <span className="truncate">{abreZonas ? zonaActual : 'Mesas'}</span>
+ {abreZonas && <CaretDown size={16} weight="bold" className="shrink-0" />}
  </Button>
 
  <Button

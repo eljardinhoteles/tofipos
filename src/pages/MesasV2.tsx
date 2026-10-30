@@ -1,5 +1,5 @@
 import { imprimirConAviso } from '../lib/imprimir';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
 import { type Comanda, type Piso, type HabitacionCuenta } from '../db/database';
 import { isOperativeComanda, pickComandaActiva } from '../db/comandaState';
 import { TableNode } from '../components/Mesas/TableNode';
@@ -12,6 +12,8 @@ import { useSheetMovilListo } from '../lib/sheetMovil';
 import { useRxMesas } from '../hooks/useRxMesas';
 import { ReservasDelDia } from '../components/Mesas/ReservasDelDia';
 import { LlegadasHotel } from '../components/Mesas/LlegadasHotel';
+import { ZonasSheet, type ZonaOpcion } from '../components/Mesas/ZonasSheet';
+import { setZonaEtiqueta, setZonasAbiertas, useZonasAbiertas } from '../lib/zonasMovil';
 import { useRxPisos } from '../hooks/useRxPisos';
 import { useRxComandas } from '../hooks/useRxComandas';
 import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront, PresentationChart } from '@phosphor-icons/react';
@@ -439,8 +441,61 @@ export default function MesasV2() {
         setSelectedPiso(firstNonHotel ?? dbPisos[0].nombre);
     }, [dbPisos, selectedPiso, hayActivas]);
 
+    // Celular: al abrir Mesas, si hay mesas activas se entra directo a «Activas». Los datos llegan de a poco (las cuentas después
+    // que las mesas), así que se espera unos segundos; pasado ese margen ya no se salta sola, para no cambiarle la zona a quien trabaja.
+    const activasPorDefectoAplicado = useRef(false);
+    const montadaEn = useRef(Date.now());
+    useEffect(() => {
+        if (!isMobile || activasPorDefectoAplicado.current || !hayActivas || Date.now() - montadaEn.current > 5000) return;
+        activasPorDefectoAplicado.current = true;
+        setSelectedPiso(PISO_ACTIVAS);
+    }, [isMobile, hayActivas]);
+
+    // Celular: la barra inferior muestra la zona actual y abre esta hoja con las zonas como tarjetas (la fila de chips de arriba se oculta).
+    const zonasAbiertas = useZonasAbiertas();
+    const etiquetaZona = vistaActivas ? 'Activas' : isHabitacionesSeleccionado ? 'Hotel' : selectedPiso;
+    useEffect(() => {
+        if (!isMobile || !etiquetaZona) return;
+        setZonaEtiqueta(etiquetaZona);
+        return () => { setZonaEtiqueta(null); setZonasAbiertas(false); };
+    }, [isMobile, etiquetaZona]);
+
+    const opcionesZonas = useMemo<ZonaOpcion[]>(() => {
+        if (!isMobile) return [];
+        const ocupadasDe = (piso: string) => allMesas.filter(m => m.piso === piso && m.estado !== 'libre').length;
+        const opciones: ZonaOpcion[] = [];
+        for (const piso of availablePisos.filter(p => p.toLowerCase() !== 'habitaciones')) {
+            const total = allMesas.filter(m => m.piso === piso).length;
+            const ocupadas = ocupadasDe(piso);
+            opciones.push({
+                clave: piso, titulo: piso, tono: 'primario', activa: !vistaActivas && !isHabitacionesSeleccionado && piso === selectedPiso,
+                contador: ocupadas, detalle: `${ocupadas} de ${total} ocupadas`,
+            });
+        }
+        return opciones;
+    }, [isMobile, allMesas, availablePisos, vistaActivas, isHabitacionesSeleccionado, selectedPiso]);
+
+    // La zona cambia al instante, pero dentro de una transición: React monta la cuadrícula de mesas sin bloquear la animación
+    // de la hoja al cerrarse (sin esperar a que termine, que se notaba como un retraso).
+    const elegirZona = (clave: string) => {
+        const destino = clave === 'Habitaciones'
+            ? availablePisos.find(p => p.toLowerCase() === 'habitaciones')
+            : clave;
+        if (!destino) return;
+        setZonasAbiertas(false);
+        startTransition(() => setSelectedPiso(destino));
+    };
+
     return (
         <div className="flex h-full w-full relative">
+            {isMobile && (
+                <ZonasSheet
+                    abierta={zonasAbiertas} onClose={() => setZonasAbiertas(false)} opciones={opcionesZonas} onElegir={elegirZona}
+                    hotel={hayHabitaciones ? { cantidad: habitacionesActivasCount, activa: isHabitacionesSeleccionado, onClick: () => elegirZona('Habitaciones') } : undefined}
+                    activas={activasCount > 0 ? { cantidad: activasCount, activa: vistaActivas, onClick: () => elegirZona(PISO_ACTIVAS) } : undefined}
+                    onAnadir={() => { setZonasAbiertas(false); setConfigView('pisos'); }}
+                />
+            )}
 
             {/* ÁREA PRINCIPAL */}
             <div className="flex-1 overflow-hidden relative min-w-0 flex flex-col bg-nav">
@@ -514,8 +569,8 @@ export default function MesasV2() {
                         {/* Selector de pisos / chips */}
                         <div
                             ref={scrollContainerRef}
-                            className="h-13 px-6 flex items-center shrink-0 z-10 overflow-x-auto hide-scrollbar">
-                            <div className="flex items-center gap-3 min-w-max w-full">
+                            className={cn("h-13 px-6 flex items-center shrink-0 z-10 overflow-x-auto hide-scrollbar", (isMobile && !hayHabitaciones && !hayActivas) && "hidden", isMobile && "px-4")}>
+                            <div className={cn("flex items-center gap-3 w-full", isMobile ? "min-w-0" : "min-w-max")}>
                                 {hayHabitaciones && (
                                     <>
                                     <Button
@@ -539,7 +594,7 @@ export default function MesasV2() {
                                             }
                                         }}
                                         // Misma altura que los chips de pisos también en táctil (el Button sube a 44 px y desproporciona la fila).
-                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer",
+                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer", isMobile && "flex-1 min-w-0",
                                             selectedPiso.toLowerCase() === 'habitaciones' && "bg-info text-white border-info hover:bg-info hover:brightness-110")}
                                     >
                                         {habitacionesActivasCount > 0 && (
@@ -555,7 +610,7 @@ export default function MesasV2() {
                                         HOTEL
                                     </Button>
 
-                                    <div className="w-[1px] h-6 bg-border shrink-0" />
+                                    {!isMobile && <div className="w-[1px] h-6 bg-border shrink-0" />}
                                     </>
                                 )}
 
@@ -565,7 +620,7 @@ export default function MesasV2() {
                                         type="button" variant="primarySoft" ref={(el) => { chipsRefs.current[PISO_ACTIVAS] = el; }}
                                         onClick={() => setSelectedPiso(PISO_ACTIVAS)}
                                         title={`${activasCount} mesa${activasCount === 1 ? '' : 's'} con cuenta abierta`}
-                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer",
+                                        className={cn("h-8 pointer-coarse:min-h-8 px-3.5 t-meta gap-1.5 cursor-pointer", isMobile && "flex-1 min-w-0",
                                             vistaActivas && "bg-primary text-primary-foreground border-primary hover:bg-primary hover:brightness-110")}
                                     >
                                         <span className={cn("min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center t-dato leading-none",
@@ -574,11 +629,11 @@ export default function MesasV2() {
                                         </span>
                                         Activas
                                     </Button>
-                                    <div className="w-[1px] h-6 bg-border shrink-0" />
+                                    {!isMobile && <div className="w-[1px] h-6 bg-border shrink-0" />}
                                     </>
                                 )}
 
-                                <div className="flex items-center gap-2 min-w-max flex-1">
+                                <div className={cn("flex items-center gap-2 min-w-max flex-1", isMobile && "hidden")}>
                                     {availablePisos.filter(p => p.toLowerCase() !== 'habitaciones').map(piso => {
                                         const active = piso === selectedPiso;
                                         return (
@@ -724,6 +779,9 @@ export default function MesasV2() {
                                     ))}
                                 </div>
                             ) : (
+                                <>
+                                {/* Celular: el nombre de la zona sobre sus mesas (en escritorio cada sección lleva el suyo). */}
+                                {isMobile && !isHabitacionesSeleccionado && <h2 className="t-etiqueta text-muted-foreground mb-4">{selectedPiso}</h2>}
                                 <div className="pos-tables-grid">
                                     {mesasToShow.map((mesa) => {
                                         const derived = mesaDerivedData.get(mesa.id);
@@ -749,6 +807,7 @@ export default function MesasV2() {
                                         );
                                     })}
                                 </div>
+                                </>
                             )}
                         </div>
                     )}
