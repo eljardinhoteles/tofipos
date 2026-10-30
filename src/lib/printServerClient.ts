@@ -495,9 +495,11 @@ export async function queueKitchenPrint(params: {
   itemsAnulados?: ComandaItem[];
   /** Líneas extra bajo la fecha del encabezado (datos de una reserva). */
   infoExtra?: string;
+  /** Nota impresa al final de la comanda (nota de la reserva). */
+  notaFinal?: string;
 }) {
-  const { comanda, items, mesaNombre, esAdicional = false, habitacionNombre, itemsAnulados = [], infoExtra } = params;
-  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre, true, itemsAnulados as any, infoExtra);
+  const { comanda, items, mesaNombre, esAdicional = false, habitacionNombre, itemsAnulados = [], infoExtra, notaFinal } = params;
+  const rawText = generarComandaCocina(comanda, items as any, mesaNombre, esAdicional, habitacionNombre, true, itemsAnulados as any, infoExtra, notaFinal);
   return enqueueJob({
       kind: 'kitchen',
       title: `Cocina - ${mesaNombre}`,

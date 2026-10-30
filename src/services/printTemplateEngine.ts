@@ -169,6 +169,8 @@ export function generarComandaCocina(
   itemsAnulados?: PrintableItem[],
   /** Líneas extra bajo la fecha del encabezado (p. ej. datos de una reserva). */
   infoExtra?: string,
+  /** Nota que se imprime al final de la comanda (p. ej. la nota de una reserva). */
+  notaFinal?: string,
 ): string {
   // Shorthand: only emit ESC/POS sequences when printing
   const p = (cmd: string) => forPrinter ? cmd : '';
@@ -269,6 +271,9 @@ export function generarComandaCocina(
   const notasBlock = () => {
     let n = '\n\n';
     n += `Notas:\n`;
+    if (notaFinal?.trim()) {
+      n += p(POS.BOLD_ON) + `${notaFinal.trim().toUpperCase()}\n` + p(POS.BOLD_OFF);
+    }
     n += `${'-'.repeat(48)}\n`;
     n += `${'-'.repeat(48)}\n`;
     n += '\n\n\n';
@@ -784,24 +789,6 @@ export function generarTicketPago(
   t += p(POS.BOLD_ON);
   t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
   t += p(POS.BOLD_OFF);
-
-  // ── Desglose de pagos (solo si hay pagos registrados) ───────────
-  if (pagos.length > 0) {
-    t += `${'-'.repeat(W)}\n`;
-    t += `DESGLOSE DE PAGO:\n`;
-  }
-  let totalPagado = 0;
-  pagos.forEach(pago => {
-    // metodo_pago puede venir null: el checkout ya no elige método al
-    // cerrar, se define después al anclar en Centro de Ventas.
-    const metodoLabel = pago.metodo_pago ? pago.metodo_pago.toUpperCase() : 'PENDIENTE DE DEFINIR';
-    t += justifyBetween(`${metodoLabel}:`, `$${pago.monto.toFixed(2)}`, W) + '\n';
-    totalPagado += pago.monto;
-  });
-  if (totalPagado > total) {
-    const cambio = totalPagado - total;
-    t += justifyBetween('CAMBIO / VUELTO:', `$${cambio.toFixed(2)}`, W) + '\n';
-  }
 
   // ── Pie ─────────────────────────────────────────────────────────
   t += `\n${'-'.repeat(W)}\n`;

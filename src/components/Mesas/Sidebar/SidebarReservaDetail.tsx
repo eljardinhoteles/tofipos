@@ -66,6 +66,8 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  const [previewTitle, setPreviewTitle] = useState('');
  const [previewContent, setPreviewContent] = useState('');
  const [isCreatingComanda, setIsCreatingComanda] = useState(false);
+ const [editandoNota, setEditandoNota] = useState(false);
+ const [notaDraft, setNotaDraft] = useState('');
  const [abonoModalOpen, setAbonoModalOpen] = useState(false);
  const [showContacto, setShowContacto] = useState(false);
  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
@@ -285,10 +287,10 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  const nombreCocina = numeroReserva ? `Reserva #${numeroReserva}` : 'Reserva';
  const infoCocina = `Cliente: ${reserva.nombre}\nReserva: ${reserva.fecha} ${reserva.hora}\nPersonas: ${reserva.personas}${zonaNombre ? `\nZona: ${zonaNombre}` : ''}\n`;
  const kitchenContent = comanda && itemsCocina.length > 0
- ? generarComandaCocina(comanda, itemsCocina as any, nombreCocina, false, undefined, false, undefined, infoCocina)
+ ? generarComandaCocina(comanda, itemsCocina as any, nombreCocina, false, undefined, false, undefined, infoCocina, reserva.nota)
  : undefined;
  const handleConfirmPrintKitchen = () => {
- imprimirConAviso(() => queueKitchenPrint({ comanda, items: itemsCocina as any, mesaNombre: nombreCocina, infoExtra: infoCocina }), 'Comanda de cocina');
+ imprimirConAviso(() => queueKitchenPrint({ comanda, items: itemsCocina as any, mesaNombre: nombreCocina, infoExtra: infoCocina, notaFinal: reserva.nota }), 'Comanda de cocina');
  };
 
  const handleDescargarImagen = async () => {
@@ -529,8 +531,38 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  </div>
  ))}
  </div>
- {reserva.nota && (
- <div className="mx-4 mb-3 p-3 rounded-2xl bg-warning-soft t-meta text-warning-foreground">"{reserva.nota}"</div>
+ {editandoNota ? (
+ <div className="mx-4 mb-3 flex flex-col gap-2">
+ <textarea
+ autoFocus
+ value={notaDraft}
+ onChange={e => setNotaDraft(e.target.value)}
+ rows={3}
+ placeholder="Nota de la reserva (se imprime al final de la comanda de cocina)"
+ className="w-full p-3 rounded-2xl border border-border bg-background t-meta text-foreground resize-none"
+ />
+ <div className="flex justify-end gap-2">
+ <Button variant="outline" size="sm" onClick={() => setEditandoNota(false)}>Cancelar</Button>
+ <Button size="sm" onClick={async () => {
+ try {
+ await updateRxReserva(reserva.id, { nota: notaDraft.trim() });
+ setEditandoNota(false);
+ } catch (e) {
+ console.error(e);
+ showToast.fallo('guardar la nota', e);
+ }
+ }}>Guardar</Button>
+ </div>
+ </div>
+ ) : (
+ <button
+ type="button"
+ onClick={() => { setNotaDraft(reserva.nota || ''); setEditandoNota(true); }}
+ className={cn('mx-4 mb-3 p-3 rounded-2xl t-meta text-left w-[calc(100%-2rem)] flex items-start gap-2 min-h-[44px]', reserva.nota ? 'bg-warning-soft text-warning-foreground' : 'bg-muted/40 text-muted-foreground')}
+ >
+ <PencilSimple size={14} className="shrink-0 mt-0.5" />
+ <span className="select-text">{reserva.nota ? `"${reserva.nota}"` : 'Añadir nota'}</span>
+ </button>
  )}
 
  <div className="flex items-center justify-between px-4 py-2 border-y border-border bg-muted/40">
