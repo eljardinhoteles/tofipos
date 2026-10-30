@@ -1,7 +1,7 @@
 import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise, Tag, CalendarStar } from'@phosphor-icons/react';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, Minus, ForkKnife, ClockCounterClockwise, Tag, CalendarStar } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersSheet } from'../Products/ProductModifiersSheet';
@@ -9,6 +9,8 @@ import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
 import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts';
+import { cantidadEnviada } from '@/lib/itemPendiente';
+import { esParteRepartida } from '@/lib/reparto';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { cn } from '@/lib/utils';
@@ -346,6 +348,33 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  setRecentProductIds(getRecentProductIds());
  }, [activeComanda]);
 
+ // Quita UNA unidad del producto (si era la única de su línea, la línea se elimina): la de la línea añadida más recientemente que aún no se haya enviado a cocina ni tenga pagos. Lo ya
+ // enviado no se toca desde aquí (se anula desde la comanda), igual que al editar la cantidad en el lateral.
+ const quitarUnidad = useCallback(async (item: MenuItem) => {
+ if (!activeComanda) return;
+ const rxDb = await initVerticalRxDb();
+ let snapshot: Record<string, number> = {};
+ try { snapshot = activeComanda.cantidades_snapshot ? JSON.parse(activeComanda.cantidades_snapshot) : {}; } catch { /* sin snapshot */ }
+ const lineas = (await rxDb.comanda_items
+ .find({ selector: { comanda_id: activeComanda.id, item_id: item.id, _deleted: { $ne: true } } })
+ .exec()).map((d) => d.toJSON());
+ const objetivo = lineas
+ .filter(ci => !ci.anulado
+ && !(ci.pagado_cantidad && ci.pagado_cantidad > 0)
+ && !esParteRepartida(ci)
+ && ci.cantidad > (activeComanda.confirmada ? cantidadEnviada(ci, activeComanda.confirmada_at, snapshot) : 0))
+ .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0];
+ if (!objetivo) {
+ showToast.warning('No se puede quitar', 'Esas unidades ya se enviaron a cocina o tienen pagos. Usa «Anular ítem» en la comanda.');
+ return;
+ }
+ const doc = await rxDb.comanda_items.findOne(objetivo.id).exec(true);
+ const now = new Date().toISOString();
+ await doc.incrementalModify((d) => (objetivo.cantidad > 1
+ ? { ...d, cantidad: (d.cantidad ?? objetivo.cantidad) - 1, updated_at: now, _modified: now }
+ : { ...d, _deleted: true, updated_at: now, _modified: now }));
+ }, [activeComanda]);
+
  const handleAddProduct = useCallback(async (item: MenuItem) => {
  if (!activeComanda) {
  showToast.warning('Primero abre una mesa', 'Selecciona o abre una mesa para añadir productos.');
@@ -476,6 +505,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     key={item.id}
                     item={item}
                     onAdd={handleAddProduct}
+                    onRemove={quitarUnidad}
                     currentQty={itemQuantities[item.id] || 0}
                     ivaPorcentaje={ivaPorcentaje}
                     preciosConIva={preciosConIva}
@@ -595,6 +625,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                       key={item.id}
                       item={item}
                       onAdd={handleAddProduct}
+                      onRemove={quitarUnidad}
                       currentQty={itemQuantities[item.id] || 0}
                       ivaPorcentaje={ivaPorcentaje}
                       preciosConIva={preciosConIva}
@@ -732,6 +763,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 interface ProductCardProps {
   item: MenuItem;
   onAdd: (item: MenuItem) => void;
+  /** Quita una unidad (con una sola, quita el producto de la comanda). */
+  onRemove: (item: MenuItem) => void;
   currentQty: number;
   ivaPorcentaje: number;
   preciosConIva: boolean;
@@ -746,7 +779,7 @@ interface ProductCardProps {
 // cuando el panel es angosto, card cuando hay espacio. Así nunca se
 // duplica el render entre "mobile" y "desktop" — solo existe una versión
 // del producto en el DOM en todo momento.
-const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, ivaPorcentaje, preciosConIva, categoryIcon: CategoryIcon, isPlanItem, etiquetas }: ProductCardProps) {
+const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, onRemove, currentQty, ivaPorcentaje, preciosConIva, categoryIcon: CategoryIcon, isPlanItem, etiquetas }: ProductCardProps) {
   const isSelected = currentQty > 0;
 
   const finalPrice = !preciosConIva && item.iva_modalidad === 'sistema'
@@ -760,12 +793,15 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
   };
 
   const precio = `$${finalPrice.toFixed(2)}`;
+  const quitar = (e: React.MouseEvent) => { e.stopPropagation(); onRemove(item); };
+  const puedeQuitar = currentQty > 0;
 
   return (
+    <div className="flex items-center gap-2">
     <div
       onClick={() => onAdd(item)}
       className={cn(
-        "border cursor-pointer select-none active:scale-98 transform-gpu",
+        "flex-1 min-w-0 border cursor-pointer select-none active:scale-98 transform-gpu",
         "flex items-center gap-3 px-3 py-3 rounded-2xl",
         "@md:flex-col @md:items-stretch @md:gap-3 @md:p-4 @md:rounded-2xl @md:min-h-36",
         isSelected
@@ -828,6 +864,15 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, currentQty, iva
           </span>
         )}
       </div>
+    </div>
+    {/* El «−» va FUERA de la tarjeta (a la derecha): dentro de ella se tocaría por error al querer sumar. */}
+    {puedeQuitar && (
+      <button
+        type="button" onClick={quitar} aria-label={`Quitar una unidad de ${item.nombre}`} title="Quitar una unidad"
+        className="shrink-0 size-11 rounded-full bg-destructive/10 text-destructive flex items-center justify-center cursor-pointer active:scale-90 transition-transform hover:bg-destructive/20">
+        <Minus size={20} weight="bold" />
+      </button>
+    )}
     </div>
   );
 });
