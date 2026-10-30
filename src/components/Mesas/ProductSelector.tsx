@@ -210,10 +210,10 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const matchesSearch = !searchQueryDebounced ||
  item.nombre.toLowerCase().includes(searchQueryDebounced.toLowerCase());
 
- // En PC la búsqueda es global: la categoría elegida en la columna izquierda
- // no debe limitar los resultados (antes buscar dentro de una categoría
- // parecía que el buscador no encontraba nada).
- if (!isMobile && searchQueryDebounced) return matchesSearch;
+ // La búsqueda es global, en PC y en celular: la categoría elegida no debe
+ // limitar los resultados (antes buscar dentro de una categoría parecía que
+ // el buscador no encontraba nada). Los resultados salen agrupados por categoría.
+ if (searchQueryDebounced) return matchesSearch;
 
  if (selectedCategory === 'Favoritos') {
  return matchesSearch && item.favorito;
@@ -242,7 +242,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  
  return a.nombre.localeCompare(b.nombre);
  });
- }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, isMobile, gruposPlan, disponible]);
+ }, [safeMenuItems, searchQueryDebounced, selectedCategory, safeDbCategorias, gruposPlan, disponible]);
 
  const groupedItems = useMemo(() => {
  const groups: { category: string; items: typeof filteredItems }[] = [];
