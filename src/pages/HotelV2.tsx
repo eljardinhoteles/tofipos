@@ -21,6 +21,7 @@ import { cloudbedsConfigurado, eliminarBloqueoCloudbeds, getReservaCloudbeds, ty
 import { listarHabitaciones, type HabitacionHotel } from '../lib/hotelHabitacionesApi';
 import { leerReservaHotel, listarReservasRecientes, validarAdopcion, type ReservaHotel } from '../lib/hotelReservasApi';
 import { usePermisos } from '../hooks/usePermisos';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useCacheCalendario } from '../hooks/useMesesHotel';
 import { hayFalloConsulta, ultimaConsulta } from '../lib/hotelCalendarioCache';
 import { useEstadoIntegracion } from '../hooks/useEstadoIntegracion';
@@ -42,12 +43,16 @@ const VISTAS: { id: Vista; label: string; icono: Icon }[] = [
   { id: 'estado', label: 'Estado', icono: Pulse },
 ];
 
+// En celular el header solo ofrece estas secciones; Habitaciones y Planes (configuración) quedan para PC.
+const VISTAS_MOVIL: Vista[] = ['reservas', 'calendario', 'estado'];
+
 /**
  * Página «Hotel»: disponibilidad y reservas sincronizadas con Cloudbeds. Es independiente del resto del sistema
  * (tabla propia `hotel_reservas`, sin ventas ni cierres); el cobro se sigue registrando en Ventas.
  */
 export default function HotelV2() {
   const permisos = usePermisos();
+  const isMobile = useIsMobile();
   const [vista, setVista] = useState<Vista>('reservas');
   // Filtro con el que se abre la lista (desde «Estado» › Ver o tras crear); `n` la vuelve a montar para aplicarlo.
   const [filtroLista, setFiltroLista] = useState<{ filtro: FiltroInicialReservas; n: number } | null>(null);
@@ -211,7 +216,7 @@ export default function HotelV2() {
         // Las secciones van en el header, centradas bajo el buscador: así no se confunden con los filtros de la lista.
         tabs={(
           <HeaderTabs label="Secciones del hotel">
-            {VISTAS.map((v) => <HeaderTab key={v.id} activa={vista === v.id} icono={v.icono} onClick={() => setVista(v.id)}>{v.label}</HeaderTab>)}
+            {VISTAS.filter((v) => !isMobile || VISTAS_MOVIL.includes(v.id)).map((v) => <HeaderTab key={v.id} activa={vista === v.id} icono={v.icono} onClick={() => setVista(v.id)}>{v.label}</HeaderTab>)}
           </HeaderTabs>
         )}
         // Línea verde que sale del borde inferior del header mientras se consulta Cloudbeds.
