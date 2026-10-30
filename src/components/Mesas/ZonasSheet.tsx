@@ -1,6 +1,7 @@
 import type { Icon } from '@phosphor-icons/react';
 import { Bed, Plus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
+import { FondoHoja } from '@/components/Common/FondoHoja';
 import { Drawer, DrawerPortal, DrawerContent, DrawerTitle, DrawerDescription, DrawerHandle } from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
 
@@ -31,8 +32,7 @@ interface Props {
 export function ZonasSheet({ abierta, onClose, opciones, onElegir, hotel, activas, onAnadir }: Props) {
   return (
     <>
-    {/* El overlay del Drawer del sistema es transparente y no recibe toques; este atenúa el fondo y cierra al tocar fuera. */}
-    {abierta && <div aria-hidden className="fixed inset-0 z-[45] bg-black/30" onClick={onClose} />}
+    <FondoHoja abierto={abierta} onClose={onClose} />
     <Drawer open={abierta} onOpenChange={(o) => { if (!o) onClose(); }} dismissible>
       <DrawerPortal>
         <DrawerContent className="fixed bottom-0 left-0 right-0 max-h-[80dvh] bg-card rounded-t-marco shadow-[0_-8px_30px_rgba(0,0,0,0.25)] z-50 flex flex-col overflow-hidden p-0 border-0 before:hidden">

@@ -14,7 +14,7 @@ import { SidebarPagosModal } from'./SidebarPagosModal';
 import { SidebarCobrarCuenta } from'./SidebarCobrarCuenta';
 import { generarComandaCocina } from'../../../services/printTemplateEngine';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
-import { ProductModifiersModal } from'../../Products/ProductModifiersModal';
+import { ProductModifiersSheet } from'../../Products/ProductModifiersSheet';
 import { createRxVenta, agregarVentaMovimiento, updateRxComanda, updateRxComandaItem, updateRxMesa, liberarMesaSiSinOperativas, anularComandaItem, aplicarCortesiaItem, moverItemASubcomanda } from'../../../db/rxdb';
 import { isOperativeComanda } from'../../../db/comandaState';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
@@ -1309,11 +1309,12 @@ export function SidebarDetails({
  avisoSinImprimir={previewAviso}
  />
 
- <ProductModifiersModal
- key={editingItem?.id}
+ <ProductModifiersSheet
+ mode="editar"
  opened={editingModifiers}
  onClose={() => setEditingModifiers(false)}
  product={editingMenuItem}
+ iniciales={editingItem?.modificadores}
  onConfirm={handleUpdateModifiers}
  />
  </div>

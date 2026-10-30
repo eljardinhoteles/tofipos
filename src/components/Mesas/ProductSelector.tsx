@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft, MagnifyingGlass, X, Star, Plus, ForkKnife, ClockCounterClockwise, Tag, CalendarStar } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
-import { ProductModifiersModal } from'../Products/ProductModifiersModal';
+import { ProductModifiersSheet } from'../Products/ProductModifiersSheet';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
@@ -290,7 +290,12 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  const orgId = localStorage.getItem('pos_active_org_id') || activeComanda.organization_id ||'';
  if (!orgId) return;
 
- const existing = rxComandaItems.find(ci => {
+ // Se busca en la base y no en el estado de React: con varios «Agregar» seguidos (hoja de modificadores) el estado aún no
+ // refleja la línea recién insertada y se crearía una duplicada en vez de sumar cantidad.
+ const lineasDelProducto = (await rxDb.comanda_items
+ .find({ selector: { comanda_id: activeComanda.id, item_id: item.id, _deleted: { $ne: true } } })
+ .exec()).map((d) => d.toJSON());
+ const existing = lineasDelProducto.find(ci => {
  if (ci.item_id !== item.id) return false;
  // Precio variable: cada toque es una línea propia (su precio se ajusta
  // por separado); sumar cantidad aplicaría un precio ya cambiado a todo.
@@ -339,7 +344,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
 
  registerRecentProduct(item.id);
  setRecentProductIds(getRecentProductIds());
- }, [activeComanda, rxComandaItems]);
+ }, [activeComanda]);
 
  const handleAddProduct = useCallback(async (item: MenuItem) => {
  if (!activeComanda) {
@@ -704,18 +709,19 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  </DialogContent>
  </Dialog>
 
- <ProductModifiersModal
- key={modifyingItem?.id}
+ <ProductModifiersSheet
  opened={!!modifyingItem}
  onClose={() => setModifyingItem(null)}
  product={modifyingItem}
- onConfirm={(selected) => {
+ onConfirm={async (selected) => {
  const item = modifyingItem;
- if (item) {
- performAddToCart(item, selected).catch(err => {
+ if (!item) return;
+ try {
+ await performAddToCart(item, selected);
+ } catch (err) {
  console.error('[ProductSelector] error añadiendo item con modificadores:', err);
  showToast.fallo('añadir el producto', err);
- });
+ throw err;
  }
  }}
  />
