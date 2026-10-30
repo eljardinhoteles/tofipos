@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { SquaresFour, CalendarCheck, CalendarStar, PresentationChart } from '@phosphor-icons/react';
+import { SquaresFour, ForkKnife, CalendarStar, PresentationChart } from '@phosphor-icons/react';
 import { HeaderTabs, HeaderTab } from './PageHeader';
 import { usePermisos } from '../../hooks/usePermisos';
 
@@ -10,7 +10,8 @@ export function SeccionesMesas() {
   const permisos = usePermisos();
   const secciones = [
     { to: '/v2/mesas', label: 'Mesas', icono: SquaresFour, visible: true },
-    { to: '/v2/reservas', label: 'Reservas', icono: CalendarCheck, visible: true },
+    // Cubiertos y no calendario: así no se confunde con el módulo Hotel, que también tiene reservas y calendario.
+    { to: '/v2/reservas', label: 'Reservas', icono: ForkKnife, visible: true },
     { to: '/v2/planificacion', label: 'Planificador', icono: CalendarStar, visible: true },
     { to: '/v2/metricas', label: 'Métricas', icono: PresentationChart, visible: permisos.verMetricas },
   ].filter((s) => s.visible);

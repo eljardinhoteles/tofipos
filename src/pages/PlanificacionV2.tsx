@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageFrame, PageHeader, PageContent } from '../components/Common/PageHeader';
 import { SeccionesMesas } from '../components/Common/SeccionesMesas';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { CabeceraDia } from '../components/Planificacion/CabeceraDia';
 import { CeldaDia, EtiquetaFila } from '../components/Planificacion/CeldaDia';
 import { NavegacionPlan } from '../components/Planificacion/NavegacionPlan';
@@ -27,6 +28,8 @@ import {
 const SIN_ITEMS: CeldaPlan[] = [];
 
 export default function PlanificacionV2() {
+  // Las secciones de Mesas son de PC: en celular se navega con la barra inferior.
+  const isMobile = useIsMobile();
   const { menuItems } = useRxMenuCatalog();
   const { etiquetas, celdas, confirmaciones } = usePlanificacion();
   const { currentMesero, adminUser } = useAuth();
@@ -92,7 +95,7 @@ export default function PlanificacionV2() {
     <PageFrame>
       <PageHeader
         title="Planificador"
-        tabs={<SeccionesMesas />}
+        tabs={isMobile ? undefined : <SeccionesMesas />}
         subtitle={<span className="inline-block first-letter:uppercase">{inicio.toLocaleDateString('es', { month: 'long', year: 'numeric' })}</span>}
       />
 

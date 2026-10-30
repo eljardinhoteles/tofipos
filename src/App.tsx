@@ -11,7 +11,7 @@ import {
   SignOut,
   SquaresFour,
   Receipt,
-  CalendarCheck,
+  ForkKnife,
   CurrencyDollar,
   Users,
   Bag,
@@ -33,7 +33,7 @@ import { appVersionLabel } from './lib/appVersion';
 const brandModules = [
   { label: 'Mesas', icon: SquaresFour },
   { label: 'Órdenes', icon: Receipt },
-  { label: 'Reservas', icon: CalendarCheck },
+  { label: 'Reservas', icon: ForkKnife },
   { label: 'Centro de Ventas', icon: CurrencyDollar },
   { label: 'Clientes', icon: Users },
   { label: 'Productos', icon: Bag },

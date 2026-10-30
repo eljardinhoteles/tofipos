@@ -18,6 +18,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { cn } from'@/lib/utils';
 import { PageFrame, PageHeader, PageContent, PageToolbar, headerIconButtonClass, toolbarChipClass } from'../components/Common/PageHeader';
 import { SeccionesMesas } from '../components/Common/SeccionesMesas';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 type DatesRange = [Date | null, Date | null];
 
@@ -103,6 +104,8 @@ const weekdayChartConfig = {
 } satisfies ChartConfig;
 
 export default function MetricasV2() {
+  // Las secciones de Mesas son de PC: en celular se navega con la barra inferior.
+  const isMobile = useIsMobile();
  // Categorías elegidas para filtrar las métricas (vacío = todas).
  const [catFiltro, setCatFiltro] = useState<string[]>([]);
  const [catOpen, setCatOpen] = useState(false);
@@ -509,7 +512,7 @@ comandaItems.forEach((item) => {
  <PageFrame>
  <PageHeader
  title="Métricas"
- tabs={<SeccionesMesas />}
+ tabs={isMobile ? undefined : <SeccionesMesas />}
  subtitle={`${etiquetaPeriodo}${filtrando ? ` · ${catFiltro.length} ${catFiltro.length === 1 ? 'categoría' : 'categorías'}` : ''}`}
  actions={
  <button type="button" title="Recargar datos" aria-label="Recargar datos" onClick={handleForceSync} disabled={syncing}
