@@ -13,6 +13,7 @@ import { useRxMesas } from '../hooks/useRxMesas';
 import { ReservasDelDia } from '../components/Mesas/ReservasDelDia';
 import { LlegadasHotel } from '../components/Mesas/LlegadasHotel';
 import { ZonasSheet, type ZonaOpcion } from '../components/Mesas/ZonasSheet';
+import { leerEstadoUI, guardarEstadoUI } from '../lib/estadoUI';
 import { setZonaEtiqueta, setZonasAbiertas, useZonasAbiertas } from '../lib/zonasMovil';
 import { useRxPisos } from '../hooks/useRxPisos';
 import { useRxComandas } from '../hooks/useRxComandas';
@@ -39,7 +40,10 @@ export default function MesasV2() {
     const navigate = useNavigate();
     const permisos = usePermisos();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [selectedPiso, setSelectedPiso] = useState<string>('');
+    // Si Android mató la app en segundo plano, se vuelve a la zona en que se estaba (ver estadoUI).
+    const [pisoInicial] = useState(() => leerEstadoUI().piso ?? '');
+    const [selectedPiso, setSelectedPiso] = useState<string>(pisoInicial);
+    useEffect(() => { if (selectedPiso) guardarEstadoUI({ piso: selectedPiso }); }, [selectedPiso]);
     const dbEpoch = useDbEpoch();
     const isMobile = useIsMobile();
     const {
@@ -443,7 +447,7 @@ export default function MesasV2() {
 
     // Celular: al abrir Mesas, si hay mesas activas se entra directo a «Activas». Los datos llegan de a poco (las cuentas después
     // que las mesas), así que se espera unos segundos; pasado ese margen ya no se salta sola, para no cambiarle la zona a quien trabaja.
-    const activasPorDefectoAplicado = useRef(false);
+    const activasPorDefectoAplicado = useRef(pisoInicial !== '');
     const montadaEn = useRef(Date.now());
     useEffect(() => {
         if (!isMobile || activasPorDefectoAplicado.current || !hayActivas || Date.now() - montadaEn.current > 5000) return;

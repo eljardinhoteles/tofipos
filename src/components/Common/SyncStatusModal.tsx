@@ -10,6 +10,7 @@ import {
 import type { SyncStatus } from '../../db/rxdb';
 import { cn } from '@/lib/utils';
 import { appVersionLabel, appBuildDateLabel } from '@/lib/appVersion';
+import { reiniciosRecientes } from '@/lib/reinicios';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -43,6 +44,15 @@ const COLLECTION_LABELS: Record<string, string> = {
   usuarios: 'Usuarios',
   menuItems: 'Productos',
 };
+
+/** «Arranques en 24 h: 3 · el último tras 25 min fuera». Sirve para ver si Android mata la app en segundo plano. */
+function textoReinicios() {
+  const lista = reiniciosRecientes(24);
+  if (lista.length === 0) return 'Arranques en 24 h: 0';
+  const ultimo = lista[0];
+  const fuera = ultimo.fueraMin === null ? '' : ultimo.fueraMin < 1 ? ' · el último tras menos de 1 min' : ` · el último tras ${ultimo.fueraMin} min fuera`;
+  return `Arranques en 24 h: ${lista.length}${fuera}${ultimo.descartada ? ' (descartada por el sistema)' : ''}`;
+}
 
 export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing }: {
   opened: boolean;
@@ -178,6 +188,8 @@ export function SyncStatusModal({ opened, onClose, status, onForceSync, syncing 
           Versión {appVersionLabel()}
         </span>
         <span className="t-meta text-muted-foreground">Compilado: {appBuildDateLabel()}</span>
+        {/* Diagnóstico: cuántas veces arrancó la app en 24 h y cuánto estuvo fuera la última (si Android la mata en segundo plano). */}
+        <span className="t-meta text-muted-foreground">{textoReinicios()}</span>
       </div>
     </>
   );

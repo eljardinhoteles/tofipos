@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { leerEstadoUI, guardarEstadoUI } from '../lib/estadoUI';
 
 /** Llegada de hotel elegida en Mesas › Hotel: la próxima habitación libre que se abra toma sus datos y queda ligada a su reserva (y a su venta). */
 export interface LlegadaCheckin {
@@ -83,10 +84,12 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [isPinned, setIsPinned] = useState(() => {
     return localStorage.getItem('pos_sidebar_pinned') === 'true';
   });
-  const [selectedMesaId, setSelectedMesaId] = useState<string | null>(null);
+  // Si Android mató la app en segundo plano, se vuelve a la mesa y la vista en que se estaba (ver estadoUI). AppLayoutV2 valida que la mesa siga ahí.
+  const [restaurado] = useState(() => leerEstadoUI());
+  const [selectedMesaId, setSelectedMesaId] = useState<string | null>(restaurado.mesaId ?? null);
   const [configView, setConfigView] = useState<'none' | 'pisos' | 'mesas' | 'nueva_mesa'>('none');
   const [selectedConfigPiso, setSelectedConfigPiso] = useState<string | null>(null);
-  const [mesaView, setMesaView] = useState<'mapa' | 'productos'>('mapa');
+  const [mesaView, setMesaView] = useState<'mapa' | 'productos'>(restaurado.mesaId ? restaurado.mesaView ?? 'mapa' : 'mapa');
   const [actividadOpen, setActividadOpen] = useState(false);
   const [llegadaCheckin, setLlegadaCheckin] = useState<LlegadaCheckin | null>(null);
   const [checkoutView, setCheckoutView] = useState(false);
@@ -98,7 +101,10 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [nuevaReservaPreset, setNuevaReservaPreset] = useState<{ fecha?: Date; zonaId?: string } | null>(null);
   const [menuView, setMenuView] = useState<'none' | 'producto'>('none');
   const [selectedMenuProductId, setSelectedMenuProductId] = useState<string | null>(null);
-  const [selectedMesaEsHabitacion, setSelectedMesaEsHabitacion] = useState(false);
+  const [selectedMesaEsHabitacion, setSelectedMesaEsHabitacion] = useState(restaurado.mesaId ? restaurado.mesaEsHabitacion ?? false : false);
+  useEffect(() => {
+    guardarEstadoUI({ mesaId: selectedMesaId, mesaView: selectedMesaId ? mesaView : undefined, mesaEsHabitacion: selectedMesaId ? selectedMesaEsHabitacion : undefined });
+  }, [selectedMesaId, mesaView, selectedMesaEsHabitacion]);
   const [confirmModal, setConfirmModal] = useState({
     opened: false,
     title: '',

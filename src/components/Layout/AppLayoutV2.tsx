@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { leerEstadoUI, guardarEstadoUI } from '../../lib/estadoUI';
 
 import { MainSidebarV2 } from './MainSidebarV2';
 import { MobileNavbar, MenuCapaMovil } from './MobileNavbar';
@@ -162,6 +163,19 @@ export function AppLayoutV2() {
   useAvisosHotelEnVivo({ activo: permisos.gestionarHotel, onVer: currentPath.includes('/hotel') ? undefined : () => navigate('/v2/hotel') });
   const [selectedMesa, setSelectedMesa] = useState<any | null>(null);
 
+  // Si Android mató la app en segundo plano, al volver arranca de cero en la pantalla de inicio: se regresa a la última pantalla en la que se estaba
+  // (vigencia corta, ver estadoUI). Va ANTES del guardado de abajo para leer lo anterior. Solo al montar.
+  useEffect(() => {
+    const alInicio = location.pathname === '/' || location.pathname === '/v2' || location.pathname === '/v2/';
+    const ruta = leerEstadoUI().ruta;
+    if (alInicio && ruta && ruta !== '/v2/mesas' && ruta.startsWith('/v2/')) navigate(ruta, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar
+  }, []);
+  useEffect(() => { guardarEstadoUI({ ruta: currentPath }); }, [currentPath]);
+
+  // La mesa que se restauró del arranque anterior se valida al cargarla: si ya no existe o quedó libre, se descarta.
+  const mesaRestaurada = useRef(selectedMesaId !== null);
+
   useEffect(() => {
     let alive = true;
     let sub: { unsubscribe: () => void } | null = null;
@@ -177,14 +191,19 @@ export function AppLayoutV2() {
       }
       sub = rxDb.mesas.findOne(selectedMesaId).$.subscribe((doc: any) => {
         if (!alive) return;
-        setSelectedMesa(doc ? doc.toJSON() : null);
+        const m = doc ? doc.toJSON() : null;
+        if (mesaRestaurada.current) {
+          mesaRestaurada.current = false;
+          if (!m || m.estado === 'libre') { setSelectedMesaId(null); setMesaView('mapa'); setSelectedMesa(null); return; }
+        }
+        setSelectedMesa(m);
       });
     })().catch(() => { });
     return () => {
       alive = false;
       sub?.unsubscribe();
     };
-  }, [isMesasPage, selectedMesaId]);
+  }, [isMesasPage, selectedMesaId, setSelectedMesaId, setMesaView]);
 
   // Comanda activa de la mesa seleccionada, usada para el carrito flotante en mobile
   // mientras el mesero está agregando productos (mesaView === 'productos').

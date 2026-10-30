@@ -104,6 +104,7 @@ import './index.css';
 import {
   restaurarSesionSiHaceFalta, pedirAlmacenamientoPersistente, mantenerRespaldo,
 } from './lib/persistenciaSesion';
+import { registrarArranque, mantenerLatido } from './lib/reinicios';
 
 // La app se importa DESPUÉS de restaurar el respaldo: el cliente de Supabase lee la
 // sesión del localStorage en cuanto se importa, así que tiene que estar ya restaurada.
@@ -124,6 +125,9 @@ async function arrancar() {
 
   (window as any).__diagnosSync = rxdb.diagnoseSyncState;
   mantenerRespaldo();
+  // Diagnóstico: anota este arranque (y cuánto estuvo fuera la app) para ver si Android la mata en segundo plano.
+  registrarArranque();
+  mantenerLatido();
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
