@@ -84,13 +84,21 @@ function documento(mesas: MesaReporteA4[]) {
 }
 
 /** Abre el diálogo de impresión del navegador con un documento HTML ya armado (hoja A4), usando un iframe oculto. */
-export function imprimirHtmlA4(html: string, titulo: string) {
+/**
+ * `nombreArchivo`: nombre que el navegador propone al elegir «Guardar como PDF». Chrome y Edge lo toman del título de la página principal
+ * (no del marco que se imprime), así que se pone ahí mientras dura la impresión y se restaura después. Es solo una sugerencia: la persona
+ * puede cambiarlo en el diálogo.
+ */
+export function imprimirHtmlA4(html: string, titulo: string, nombreArchivo?: string) {
+  const tituloOriginal = document.title;
+  if (nombreArchivo) document.title = nombreArchivo;
+  const restaurarTitulo = () => { if (nombreArchivo && document.title === nombreArchivo) document.title = tituloOriginal; };
   const marco = document.createElement("iframe");
   marco.title = titulo;
   marco.setAttribute("aria-hidden", "true");
   // Fuera de la vista pero no oculto con display:none (algunos navegadores no imprimen un iframe oculto).
   marco.className = "fixed bottom-0 right-0 size-0 border-0 opacity-0 pointer-events-none";
-  const quitar = () => marco.remove();
+  const quitar = () => { marco.remove(); restaurarTitulo(); };
   marco.onload = () => {
     const ventana = marco.contentWindow;
     if (!ventana) { quitar(); showToast.error("No se pudo abrir la impresión"); return; }

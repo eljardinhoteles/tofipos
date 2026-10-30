@@ -139,7 +139,7 @@ export function documentoReservaA4(d: DocReservaA4): string {
     `<tr><td style="white-space:nowrap;width:28mm">${esc(p.fecha)}</td><td>${esc(p.texto)}</td><td class="num">${p.reembolso ? "−" : ""}${dinero(p.monto)}</td></tr>`).join("");
   const pagada = !!d.cobros && d.cobros.saldo <= 0.005 && d.total > 0.005;
 
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reserva ${esc(d.huesped.nombre)}</title><style>${FUENTES()}${ESTILOS}</style></head><body>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reserva - ${esc(d.huesped.nombre)}</title><style>${FUENTES()}${ESTILOS}</style></head><body>
     <div class="encabezado">
       <div class="org"><h1>${esc(d.org.nombre || "Reserva")}</h1>${org}</div>
       <div class="doc">
@@ -184,5 +184,5 @@ export function documentoReservaA4(d: DocReservaA4): string {
 
 /** Abre el diálogo de impresión del navegador con el documento de la reserva en A4. */
 export function imprimirReservaA4(d: DocReservaA4) {
-  imprimirHtmlA4(documentoReservaA4(d), `Reserva ${d.huesped.nombre}`);
+  imprimirHtmlA4(documentoReservaA4(d), `Reserva - ${d.huesped.nombre}`, `Reserva - ${d.huesped.nombre}`);
 }
