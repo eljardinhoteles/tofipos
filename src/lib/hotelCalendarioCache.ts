@@ -109,7 +109,8 @@ export function tarjetasDeMeses(meses: string[]): TarjetaCalendario[] {
   const unicas = new Map<string, TarjetaCalendario>();
   for (const m of meses) {
     for (const t of bloques.get(m)?.tarjetas ?? []) {
-      const key = `${t.tipo}:${t.id}:${t.roomTypeID}`;
+      // Con la unidad: una reserva de varias habitaciones del mismo tipo (Matrimonial #2, #4, #5) es UNA tarjeta por unidad.
+      const key = `${t.tipo}:${t.id}:${t.roomTypeID}:${t.roomID ?? ''}`;
       if (!unicas.has(key)) unicas.set(key, t);
     }
   }
