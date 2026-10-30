@@ -456,7 +456,7 @@ export default function MesasV2() {
                                             e.stopPropagation();
                                             navigate('/v2/metricas');
                                         }}
-                                        className="md:pointer-fine:hidden size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer"
+                                        className="max-md:hidden md:pointer-fine:hidden size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer"
                                     >
                                         <PresentationChart size={18} weight="bold" />
                                     </button>
