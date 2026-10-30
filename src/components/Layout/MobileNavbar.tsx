@@ -21,7 +21,7 @@ import {
  List,
  SquaresFour,
  Receipt,
- CalendarCheck,
+ ForkKnife,
  ShoppingCart,
  Gear,
  Users,
@@ -48,10 +48,20 @@ export interface MobileCartInfo {
  mantenerVacio?: boolean;
 }
 
+// La pista «Toca aquí para cambiar de zona» deja de salir cuando la persona ya abrió las zonas este número de veces.
+const CLAVE_USOS_ZONAS = 'pos_pista_zonas_usos';
+const USOS_PARA_APRENDER = 3;
+const pistaAgotada = () => {
+ try { return Number(localStorage.getItem(CLAVE_USOS_ZONAS) || 0) >= USOS_PARA_APRENDER; } catch { return false; }
+};
+const anotarUsoZonas = () => {
+ try { localStorage.setItem(CLAVE_USOS_ZONAS, String(Number(localStorage.getItem(CLAVE_USOS_ZONAS) || 0) + 1)); } catch { /* sin almacenamiento: la pista seguirá saliendo */ }
+};
+
 const navItemsMobile = [
  { label:'Mesas', to:'/v2/mesas', icon: SquaresFour },
  { label:'Órdenes', to:'/v2/ordenes', icon: Receipt },
- { label:'Reservas', to:'/v2/reservas', icon: CalendarCheck },
+ { label:'Reservas', to:'/v2/reservas', icon: ForkKnife },
  { label:'Hotel', to:'/v2/hotel', icon: Bed },
  // Centro de Ventas se usa en PC: en el celular queda visible pero inactivo.
  { label:'Ventas', to:'/v2/centro-ventas', icon: CurrencyCircleDollar, soloPc: true },
@@ -142,9 +152,21 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  const zonaActual = useZonaEtiqueta();
  const abreZonas = isMesasActive && !!zonaActual;
 
+ // Pista sutil sobre el botón de zonas: los meseros nuevos no saben que ahí se tocan las zonas. Sale unos segundos al entrar a Mesas y
+ // deja de salir cuando ya abrieron las zonas varias veces (o al tocarlo). Los temporizadores evitan cambiar estado en el propio efecto.
+ const [pistaZonas, setPistaZonas] = useState(false);
+ useEffect(() => {
+ if (!abreZonas || pistaAgotada()) return;
+ const mostrar = setTimeout(() => setPistaZonas(true), 900);
+ const ocultar = setTimeout(() => setPistaZonas(false), 7000);
+ return () => { clearTimeout(mostrar); clearTimeout(ocultar); setPistaZonas(false); };
+ }, [abreZonas]);
+
  return (
  <>
  <div id="mobile-navbar-root"className={cn("fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center px-4 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-2 pointer-events-none transition-transform duration-300 ease-out", oculto && !carritoActivo && "translate-y-full")}>
+ {/* Degradado oscuro suave desde el borde inferior: da contraste a la barra. Va dentro del contenedor, así se oculta con él al bajar el scroll. */}
+ <div aria-hidden className={cn("absolute inset-x-0 bottom-0 -z-10 h-32 pointer-events-none bg-linear-to-t from-black/25 via-black/10 to-transparent transition-opacity duration-300", menuCapasAbierto && "opacity-0")} />
  <nav className={cn("flex items-center w-full max-w-md", menuCapasAbierto ? "pointer-events-none" : "pointer-events-auto")}>
  {cart && (cart.itemCount > 0 || cart.mantenerVacio) ? (
  /* Estado carrito: Layout de 3 piezas idéntico al normal */
@@ -170,7 +192,17 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  </div>
  ) : (
  /* Estado normal: Sync (izquierda), Mesas y Menú (derecha) como 3 botones independientes */
- <div className="flex items-center justify-between w-full gap-3">
+ <div className="relative flex items-center justify-between w-full gap-3">
+ {abreZonas && (
+ <div
+ aria-hidden role="presentation"
+ className={cn("absolute bottom-full left-1/2 -translate-x-1/2 mb-3 pointer-events-none transition-all duration-300", pistaZonas && !menuCapasAbierto ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1")}>
+ <div className="relative px-3 py-1.5 rounded-xl bg-foreground text-background t-meta whitespace-nowrap shadow-lg">
+ Toca aquí para cambiar de zona
+ <span className="absolute left-1/2 top-full -translate-x-1/2 -mt-1 size-2.5 rotate-45 bg-foreground" />
+ </div>
+ </div>
+ )}
  {/* Punto verde = todo sincronizado. Rojo (y el botón late) = algo pendiente (sin
  conexión, error o cola de envío), para que el usuario se detenga a revisarlo. */}
  <Button
@@ -183,7 +215,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  </Button>
 
  <Button
- type="button" onClick={() => (abreZonas ? setZonasAbiertas(true) : navigate('/v2/mesas'))} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
+ type="button" onClick={() => { if (abreZonas) { anotarUsoZonas(); setPistaZonas(false); setZonasAbiertas(true); } else navigate('/v2/mesas'); }} tabIndex={menuCapasAbierto ? -1 : 0} aria-hidden={menuCapasAbierto}
  title={abreZonas ? 'Zonas' : 'Mesas'} aria-haspopup={abreZonas ? 'dialog' : undefined}
  className={cn("flex-1 h-[52px] min-w-0 rounded-full gap-2 t-cuerpo-fuerte drop-shadow-lg active:scale-[0.98] transition-transform duration-300 ease-out", menuCapasAbierto && "translate-y-28 pointer-events-none")}
  style={{ transitionDelay: menuCapasAbierto ? '90ms' : '0ms' }}
@@ -243,7 +275,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  aria-disabled="true"
  className="flex items-center gap-4 px-5 h-14 border-l-[3px] border-transparent text-nav-foreground/40 select-none"
  >
- <Icon size={24} weight="regular" className="shrink-0" />
+ <Icon size={22} weight="regular" className="shrink-0" />
  <span className="flex flex-col leading-tight t-cuerpo-fuerte">
  {item.label}
  <span className="t-dato">Solo disponible en PC</span>
@@ -264,7 +296,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  >
  {({ isActive }) => (
  <>
- <Icon size={24} weight={isActive ? 'fill' : 'regular'} className="shrink-0" />
+ <Icon size={22} weight={isActive ? 'fill' : 'regular'} className="shrink-0" />
  <span>{item.label}</span>
  </>
  )}
@@ -356,7 +388,7 @@ export function MenuCapaMovil() {
             return (
               <div key={item.to} aria-disabled="true"
                 className="rounded-2xl bg-nav-foreground/5 px-4 flex items-center gap-3 text-nav-foreground/40 select-none">
-                <Icon size={24} className="shrink-0" />
+                <Icon size={22} className="shrink-0" />
                 <span className="flex flex-col leading-tight t-cuerpo-fuerte">{item.label}<span className="t-dato">Solo en PC</span></span>
               </div>
             );
@@ -368,7 +400,7 @@ export function MenuCapaMovil() {
               className={cn('rounded-2xl px-4 flex items-center gap-3 t-cuerpo-fuerte transition-all active:scale-[0.97]',
                 activo ? 'bg-nav-foreground/20 text-nav-foreground ring-1 ring-nav-foreground/50' : 'bg-nav-foreground/10 text-nav-foreground')}
             >
-              <span className="shrink-0"><Icon size={26} weight={activo ? 'fill' : 'regular'} /></span>
+              <span className="shrink-0"><Icon size={22} weight={activo ? 'fill' : 'regular'} /></span>
               <span className="truncate">{item.label}</span>
             </NavLink>
           );
