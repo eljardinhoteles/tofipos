@@ -9,7 +9,7 @@ import { HabitacionesHotel } from '../components/Hotel/HabitacionesHotel';
 import { PlanesAlimentacion } from '../components/Hotel/PlanesAlimentacion';
 import { listarPlanes, type PlanAlimentacion } from '../lib/hotelPlanesApi';
 import { ReservasHotelLista, type FiltroInicialReservas } from '../components/Hotel/ReservasHotelLista';
-import { NuevoBloqueoDialog } from '../components/Hotel/NuevoBloqueoDialog';
+import { NuevoBloqueoDrawer } from '../components/Hotel/NuevoBloqueoDrawer';
 import { ConciliarAdopcionDialog } from '../components/Hotel/ConciliarAdopcionDialog';
 import { AdoptarGrupoDialog } from '../components/Hotel/AdoptarGrupoDialog';
 import { ReservaDrawer, type PresetReserva } from '../components/Hotel/ReservaDrawer';
@@ -301,7 +301,7 @@ export default function HotelV2() {
           onHecha={(rs) => { setAdoptarGrupo(null); recargarTodo(true); setDetalle(rs[0]); }}
         />
       )}
-      <NuevoBloqueoDialog open={bloqueo} preset={presetBloqueo} habitaciones={habitaciones} onClose={() => setBloqueo(false)} onCreado={() => recargarTodo(true)} />
+      <NuevoBloqueoDrawer open={bloqueo} preset={presetBloqueo} habitaciones={habitaciones} onClose={() => setBloqueo(false)} onCreado={() => recargarTodo(true)} />
       <ReservaDrawer
         open={!!detalle}
         reserva={detalle}
