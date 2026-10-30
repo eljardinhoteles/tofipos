@@ -315,6 +315,17 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `datos` y `version` marcan que la caché del módulo cambió
   }, [meses, reservas, habitaciones, hoy, primera, ultimaExcl, datos, version]);
 
+  // Solo en desarrollo: `diagnosticoCalendario('<código>')` en la consola dice a qué fila del POS va cada tarjeta de esa reserva.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { diagnosticoCalendario: (id: string) => void }).diagnosticoCalendario = (id) => {
+      console.table(tarjetasDeMeses(meses).filter((t) => t.id === id).map((t) => ({
+        roomTypeID: t.roomTypeID, roomID: t.roomID ?? null, desde: t.desde, hasta: t.hasta, estado: t.estado,
+        fila: habitacionDeUnidad(filas, t.roomTypeID, t.roomID)?.nombre ?? '(sin fila)',
+      })));
+    };
+  }, [meses, filas]);
+
   // Arrastre: los manejadores son estables (leen la vista actual de estos refs) para no romper el `memo` de las barras.
   const vistaRef = useRef({ filasVista, porFila });
   const reservasRef = useRef(reservas);

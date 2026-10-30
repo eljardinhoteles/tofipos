@@ -165,6 +165,13 @@ export function checkoutReservaCloudbeds(reservationId: string) {
   return llamar<{ ok: true }>(`/api/reservations/${encodeURIComponent(reservationId)}/checkout`, { method: 'POST' });
 }
 
+/** Diagnóstico de solo lectura: las habitaciones de UNA reserva según el listado y según el detalle de Cloudbeds. Sin datos personales. */
+export function diagnosticoReservaCloudbeds(reservationId: string) {
+  return llamar<Record<string, unknown>>(`/api/reservations/${encodeURIComponent(reservationId)}/diagnostico`);
+}
+// Solo en desarrollo: se llama desde la consola del navegador, `await diagnosticoCloudbeds('63H41GQXEN')`.
+if (import.meta.env.DEV) (window as unknown as { diagnosticoCloudbeds: typeof diagnosticoReservaCloudbeds }).diagnosticoCloudbeds = diagnosticoReservaCloudbeds;
+
 export function modificarReservaCloudbeds(reservationId: string, input: ModificarReservaInput) {
   return llamar<{ ok: true; total?: number | null }>(`/api/reservations/${encodeURIComponent(reservationId)}`, {
     method: 'PATCH',

@@ -666,6 +666,45 @@ async function cancelarReserva(req: Request, x: Ctx, id: string): Promise<Respon
   return json(x.env, { ok: true })
 }
 
+// Diagnóstico (solo lectura): qué habitaciones trae Cloudbeds para UNA reserva según el listado (lo que pinta el calendario) y
+// según el detalle. Sin datos personales: solo ids, tipos, fechas y estado.
+async function diagnosticoReserva(x: Ctx, id: string): Promise<Response> {
+  const det = await cloudbeds<{ data?: Dict }>(x, 'GET', 'getReservation', { reservationID: id })
+  const d: Dict = det.data ?? {}
+  const resumen = (q: Dict) => ({ roomTypeID: q.roomTypeID, roomID: q.roomID ?? null, roomTypeName: q.roomTypeName, roomName: q.roomName, desde: q.roomCheckIn ?? q.startDate, hasta: q.roomCheckOut ?? q.endDate, subReservationID: q.subReservationID ?? null })
+  const asignadas: Dict[] = Array.isArray(d.assigned) ? d.assigned : []
+  const sinAsignar: Dict[] = Array.isArray(d.unassigned) ? d.unassigned : []
+  const start = String(d.startDate ?? '')
+  const end = String(d.endDate ?? '')
+  // El mismo listado y filtros que usa el calendario (PARAMS_LISTA), buscando esta reserva en sus páginas.
+  let enListado: Dict | null = null
+  let paginas = 0
+  let total = 0
+  if (start && end) {
+    for (let pagina = 1; pagina <= MAX_PAGINAS_CALENDARIO && !enListado; pagina++) {
+      const l = await cloudbeds<{ data?: Dict[]; total?: number }>(x, 'GET', 'getReservations', { ...PARAMS_LISTA(start, end), pageNumber: pagina })
+      paginas = pagina
+      total = Number(l.total) || 0
+      enListado = (l.data ?? []).find((r) => String(r.reservationID) === id) ?? null
+      if (pagina * 100 >= total) break
+    }
+  }
+  const cuartosListado: Dict[] = Array.isArray(enListado?.rooms) ? (enListado!.rooms as Dict[]) : []
+  const tarjetas = enListado ? tarjetasDeReserva(enListado, sumarDias(start, -1), sumarDias(end, 1)) : null
+  const claves = (tarjetas ?? []).map((t) => `${t.roomTypeID}:${t.roomID ?? ''}`)
+  return json(x.env, {
+    reservationID: id, estado: d.status, inicio: start, fin: end, saldo: d.balance,
+    detalle: { asignadas: asignadas.map(resumen), sinAsignar: sinAsignar.map(resumen) },
+    listado: {
+      encontrada: !!enListado, paginasRecorridas: paginas, totalReservasEnListado: total,
+      habitaciones: cuartosListado.map(resumen),
+      tarjetasQueSeDibujan: (tarjetas ?? []).length,
+      clavesDistintas: new Set(claves).size,
+      clavesRepetidas: claves.filter((c, i) => claves.indexOf(c) !== i),
+    },
+  })
+}
+
 // VERIFICAR con una reserva de prueba: se asume que putReservation acepta status 'checked_in' / 'checked_out'.
 async function cambiarEstadia(x: Ctx, id: string, status: 'checked_in' | 'checked_out'): Promise<Response> {
   await marcarPropio(x, id)
@@ -1891,6 +1930,9 @@ export default {
       }
       if (/^\/api\/reservations\/[^/]+\/reactivate$/.test(pathname) && req.method === 'POST') {
         return fin(await reactivarReserva(x, reservationId(pathname)))
+      }
+      if (/^\/api\/reservations\/[^/]+\/diagnostico$/.test(pathname) && req.method === 'GET') {
+        return fin(await diagnosticoReserva(x, reservationId(pathname)))
       }
       if (/^\/api\/reservations\/[^/]+\/checkout$/.test(pathname) && req.method === 'POST') {
         return fin(await cambiarEstadia(x, reservationId(pathname), 'checked_out'))
