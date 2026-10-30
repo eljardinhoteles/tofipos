@@ -161,7 +161,7 @@ export function MobileNavbar({ syncStatus, syncing, onOpenSync, cart, onOpenCart
  {cart.mesaNombre}
  </span>
  <span className="t-meta text-primary-foreground/90 truncate w-full text-center mt-0.5">
- {cart.itemCount} {cart.itemCount === 1 ?'item':'items'} · ${cart.total.toFixed(2)}
+ {cart.itemCount === 0 ? 'Agrega productos' : `${cart.itemCount} ${cart.itemCount === 1 ?'item':'items'} · $${cart.total.toFixed(2)}`}
  </span>
  </Button>
 

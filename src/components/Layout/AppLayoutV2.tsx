@@ -260,18 +260,19 @@ export function AppLayoutV2() {
   }, [cartComanda?.id]);
 
   const cartInfo = useMemo(() => {
-    if (!cartComanda || !selectedMesa) return null;
-    const esSub = !!cartComanda.subcomanda_nombre;
-    if (cartItems.length === 0 && !esSub) return null;
+    // Con una mesa abierta eligiendo productos la barra pasa SIEMPRE al modo carrito (naranja), aunque la mesa sea nueva y aún no
+    // tenga comanda ni ítems: ahí quedan los botones de Volver/Categorías/Buscar del selector, listos para recibir productos.
+    if (!isMobile || mesaView !== 'productos' || !selectedMesa) return null;
+    const esSub = !!cartComanda?.subcomanda_nombre;
     const totales = calcularTotalesComanda(cartItems, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva);
     const itemCount = cartItems.reduce((acc, it) => acc + (it.cantidad || 0), 0);
     return {
       mesaNombre: esSub ? `${selectedMesa.nombre} · ${cartComanda.subcomanda_nombre}` : selectedMesa.nombre,
       itemCount,
       total: totales.total,
-      mantenerVacio: esSub,
+      mantenerVacio: true,
     };
-  }, [cartComanda, cartItems, selectedMesa, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva]);
+  }, [isMobile, mesaView, cartComanda, cartItems, selectedMesa, cartMenuItems, cartIvaPorcentaje, cartPreciosConIva]);
 
   // Módulos sin permiso para el rol (Métricas, Ajustes): si se llega por URL, vuelve a Mesas.
   useEffect(() => {
