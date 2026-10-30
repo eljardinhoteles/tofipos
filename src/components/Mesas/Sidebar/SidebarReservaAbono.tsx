@@ -48,15 +48,15 @@ export function SidebarReservaAbono({ nombre, saldoPendiente, pagos, onBack, onC
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // El abono nunca puede superar lo que falta por cobrar de la reserva.
+  // El abono NO se limita al saldo: a veces dejan un anticipo y deciden qué comer al llegar (la reserva aún no tiene productos), o dejan más
+  // de lo que luego consumen. Al cerrar la cuenta la venta se concilia y lo que sobre queda a favor del cliente.
   const montoNum = parseFloat(monto);
-  const excedeSaldo = Number.isFinite(montoNum) && montoNum > saldoPendiente + 0.005;
-  const sinSaldo = saldoPendiente <= 0.005;
+  const hayPorCobrar = saldoPendiente > 0.005;
   const falta = metodo === 'tarjeta' && !redTarjeta;
   const totalAbonado = pagos.reduce((acc, m) => acc + (m.tipo === 'reembolso' ? -(m.monto ?? 0) : (m.monto ?? 0)), 0);
 
   const handleSubmit = async () => {
-    if (!montoNum || montoNum <= 0 || excedeSaldo || falta) return;
+    if (!montoNum || montoNum <= 0 || falta) return;
     setSaving(true);
     try {
       await onConfirm({
@@ -88,22 +88,21 @@ export function SidebarReservaAbono({ nombre, saldoPendiente, pagos, onBack, onC
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 t-fila text-muted-foreground pointer-events-none">$</span>
-              <Input id="abono-monto" type="number" inputMode="decimal" step="0.01" min={0} max={saldoPendiente} placeholder="0.00"
-                value={monto} autoFocus disabled={sinSaldo} onChange={(e) => setMonto(e.target.value)}
-                className={`h-12 pl-8 text-lg font-extrabold ${excedeSaldo ? 'border-destructive text-destructive' : ''}`} />
+              <Input id="abono-monto" type="number" inputMode="decimal" step="0.01" min={0} placeholder="0.00"
+                value={monto} autoFocus onChange={(e) => setMonto(e.target.value)}
+                className="h-12 pl-8 text-lg font-extrabold" />
             </div>
-            {!sinSaldo && (
+            {hayPorCobrar && (
               <Button type="button" variant="outline" className="h-12 px-4 font-bold shrink-0" onClick={() => setMonto(saldoPendiente.toFixed(2))}>
                 Saldo
               </Button>
             )}
           </div>
-          {excedeSaldo && (
-            <span className="t-dato text-destructive">El abono no puede superar el saldo pendiente (${saldoPendiente.toFixed(2)}).</span>
-          )}
-          {sinSaldo && (
-            <span className="t-meta text-muted-foreground">No hay saldo pendiente: la reserva ya está cubierta o aún no tiene productos.</span>
-          )}
+          <span className="t-meta text-muted-foreground">
+            {hayPorCobrar
+              ? 'Puedes dejar más que el saldo: lo que sobre queda a favor del cliente.'
+              : 'Puedes registrar un anticipo aunque la reserva aún no tenga productos: lo que no se consuma queda a favor del cliente.'}
+          </span>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -182,7 +181,7 @@ export function SidebarReservaAbono({ nombre, saldoPendiente, pagos, onBack, onC
       </main>
 
       <footer className="p-4 border-t border-border shrink-0">
-        <Button className="w-full h-12 font-bold gap-2" disabled={saving || !monto || excedeSaldo || sinSaldo || falta} onClick={handleSubmit}>
+        <Button className="w-full h-12 font-bold gap-2" disabled={saving || !monto || falta} onClick={handleSubmit}>
           {saving ? (<><CircleNotch size={18} className="animate-spin" /> Registrando…</>) : (<><Check size={18} weight="bold" /> Registrar abono</>)}
         </Button>
       </footer>

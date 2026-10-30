@@ -14,6 +14,7 @@ import { ProductSelector } from'../components/Mesas/ProductSelector';
 import { updateRxReserva, initVerticalRxDb } from'../db/rxdb';
 import { useRxReservas } from'../hooks/useRxReservas';
 import { useRxComandas } from'../hooks/useRxComandas';
+import { useTotalesReservas } from'../hooks/useTotalesReservas';
 import { toISO } from'../components/Reservas/reservaUtils';
 
 export default function ReservasV2() {
@@ -42,6 +43,8 @@ export default function ReservasV2() {
  const [reservaToAssign, setReservaToAssign] = useState<Reserva | null>(null);
 
  const { reservas } = useRxReservas();
+ // Total del pedido de cada reserva, para mostrarlo en las tarjetas.
+ const totalPorReserva = useTotalesReservas(reservas);
  const [zonas, setZonas] = useState<any[]>([]);
  const [mesas, setMesas] = useState<any[]>([]);
  // Excluye mesas sintéticas (id 'reserva_*'/'delivery_*'/'local_*', piso
@@ -167,6 +170,7 @@ export default function ReservasV2() {
  reservas={reservas}
  zonas={zonasRows}
  mesas={mesas}
+ totalPorReserva={totalPorReserva}
  activaId={selectedReservaId}
  onCardClick={openDetail}
  onAssign={handleOpenAssign}
@@ -181,6 +185,7 @@ export default function ReservasV2() {
  reservas={reservas}
  zonasRows={zonasRows}
  mesas={mesas}
+ totalPorReserva={totalPorReserva}
  search=""
  highlightedId={selectedReservaId}
  onCellClick={(date, zonaId) => {

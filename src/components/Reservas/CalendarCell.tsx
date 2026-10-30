@@ -19,6 +19,8 @@ interface CalendarCellProps {
  isFirst?: boolean;
  codigoMap?: Record<string, string>;
  mesaPorId?: Map<string, string>;
+ /** Total del pedido de cada reserva (id → total). */
+ totalPorReserva?: Map<string, number>;
 }
 
 export function CalendarCell({
@@ -32,7 +34,8 @@ export function CalendarCell({
  isMonthStart = false,
  isFirst = false,
  codigoMap = {},
- mesaPorId
+ mesaPorId,
+ totalPorReserva
 }: CalendarCellProps) {
  const [hovered, setHovered] = useState(false);
 
@@ -58,6 +61,7 @@ export function CalendarCell({
  onAssign={() => onAssign(r)}
  codigo={codigoMap[r.id]}
  mesaNombre={r.mesa_id ? mesaPorId?.get(r.mesa_id) : undefined}
+ total={totalPorReserva?.get(r.id)}
  />
  ))}
 

@@ -13,6 +13,8 @@ interface ReservaCardProps {
   codigo?: string;
   /** Mesa asignada (vacío/undefined = "Sin mesa"). */
   mesaNombre?: string;
+  /** Total del pedido de la reserva (productos agregados). Sin pedido todavía es 0 y no se muestra. */
+  total?: number;
   /** Siempre la tarjeta completa, también para atendidas/canceladas (vista de lista: sobra espacio). */
   completa?: boolean;
   className?: string;
@@ -35,7 +37,9 @@ const ESTADO: Record<string, { punto: string; texto: string; tarjeta: string }> 
  *   ▦ Mesa asignada (solo si ya tiene)
  *   ● Estado                         [asignar]
  */
-export function ReservaCard({ reserva, onClick, onAssign, isHighlighted = false, codigo, mesaNombre, completa = false, className }: ReservaCardProps) {
+const dinero = (n: number) => `$${n.toFixed(2)}`;
+
+export function ReservaCard({ reserva, onClick, onAssign, isHighlighted = false, codigo, mesaNombre, total = 0, completa = false, className }: ReservaCardProps) {
   const done = reserva.estado === 'completada';
   const canceled = reserva.estado === 'cancelada';
   // Asignar mesa solo tiene sentido el día del servicio: una reserva futura
@@ -97,9 +101,12 @@ export function ReservaCard({ reserva, onClick, onAssign, isHighlighted = false,
 
       <span className={cn('t-cuerpo-fuerte truncate', canceled ? 'text-muted-foreground line-through' : 'text-foreground')}>{reserva.nombre}</span>
 
-      <span className="flex items-center gap-1.5 t-meta text-muted-foreground">
-        <Users size={13} className="shrink-0" /> {reserva.personas} pers.
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 t-meta text-muted-foreground">
+          <Users size={13} className="shrink-0" /> {reserva.personas} pers.
+        </span>
+        {total > 0.005 && <span className={cn('t-cuerpo-fuerte tabular-nums shrink-0', canceled ? 'text-muted-foreground line-through' : 'text-foreground')}>{dinero(total)}</span>}
+      </div>
 
       <div className="flex items-end justify-between gap-2 min-h-8">
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -108,6 +115,7 @@ export function ReservaCard({ reserva, onClick, onAssign, isHighlighted = false,
               <SquaresFour size={13} className="shrink-0" /> {mesaNombre}
             </span>
           )}
+          {(reserva.abono ?? 0) > 0.005 && !canceled && <span className="t-meta text-success-foreground tabular-nums">Abonado {dinero(reserva.abono ?? 0)}</span>}
           {codigo && <span className="t-meta text-muted-foreground tabular-nums">{codigo}</span>}
         </div>
 

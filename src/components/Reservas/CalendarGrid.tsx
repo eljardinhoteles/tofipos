@@ -21,6 +21,8 @@ interface CalendarGridProps {
   reservas: Reserva[] | undefined;
   zonasRows: Piso[] | undefined;
   mesas: Mesa[] | undefined;
+  /** Total del pedido de cada reserva (id → total). */
+  totalPorReserva?: Map<string, number>;
   search: string;
   highlightedId: string | null;
   onCellClick: (date: Date, zonaId: string | undefined) => void;
@@ -38,6 +40,7 @@ export function CalendarGrid({
   reservas,
   zonasRows,
   mesas,
+  totalPorReserva,
   search,
   highlightedId,
   onCellClick,
@@ -174,6 +177,7 @@ export function CalendarGrid({
                     isFirst={i === 0}
                     codigoMap={codigoMap}
                     mesaPorId={mesaPorId}
+                    totalPorReserva={totalPorReserva}
                   />
                 );
               })}

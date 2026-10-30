@@ -11,6 +11,8 @@ interface ReservasListaProps {
   /** Zonas del restaurante, en su orden: dentro de cada día las reservas se agrupan por zona. */
   zonas: Array<{ id: string; nombre: string; orden?: number }>;
   mesas: Mesa[];
+  /** Total del pedido de cada reserva (id → total). */
+  totalPorReserva?: Map<string, number>;
   /** Reserva abierta en el sidebar: su tarjeta lleva el aro de activa. */
   activaId?: string | null;
   onCardClick: (id: string) => void;
@@ -29,7 +31,7 @@ const etiquetaDia = (iso: string) => {
 
 // Vista alternativa del calendario (cómoda en celular): de hoy en adelante, las
 // reservas agrupadas por día en tarjetas, ordenadas por hora.
-export function ReservasLista({ reservas, zonas, mesas, activaId, onCardClick, onAssign }: ReservasListaProps) {
+export function ReservasLista({ reservas, zonas, mesas, totalPorReserva, activaId, onCardClick, onAssign }: ReservasListaProps) {
   // El buscador vive aquí (no en el header): busca entre las próximas reservas por nombre.
   const [search, setSearch] = useState('');
   const codigos = useMemo(() => codigosReserva(reservas), [reservas]);
@@ -152,6 +154,7 @@ export function ReservasLista({ reservas, zonas, mesas, activaId, onCardClick, o
                         isHighlighted={r.id === activaId}
                         codigo={codigos[r.id]}
                         mesaNombre={r.mesa_id ? mesaPorId.get(r.mesa_id) : undefined}
+                        total={totalPorReserva?.get(r.id)}
                         onClick={() => onCardClick(r.id)}
                         onAssign={() => onAssign(r)}
                       />

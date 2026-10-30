@@ -358,10 +358,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  redTarjeta?: string;
  comprobanteFile?: File | null;
  }) => {
- if (data.monto > saldoPendiente + 0.005) {
- showToast.warning('Abono mayor al saldo', `El saldo pendiente es $${saldoPendiente.toFixed(2)}.`);
- return;
- }
+ // Sin tope: el abono puede ser un anticipo mayor al pedido (o sin pedido todavía); la venta se concilia al cerrar la cuenta.
  try {
  const orgId = localStorage.getItem('pos_active_org_id') || '';
  let ventaId = venta?.id;
