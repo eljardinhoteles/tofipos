@@ -3,6 +3,8 @@ import { CaretRight, ForkKnife } from '@phosphor-icons/react';
 import dayjs from 'dayjs';
 import { cn } from '@/lib/utils';
 import { useUI } from '../../context/UIContext';
+import { useRxReservas } from '../../hooks/useRxReservas';
+import type { Reserva } from '../../db/database';
 import { showToast } from '@/lib/toast';
 
 const ESTADO: Record<string, { label: string; cls: string }> = {
@@ -25,8 +27,27 @@ interface VentaComandasPanelProps {
 export function VentaComandasPanel({ relacionadas }: VentaComandasPanelProps) {
   const { setCheckoutView, setConfigView, setReservaView, setSelectedReservaId, setSelectedMesaId, setViewingComandaId } = useUI();
 
-  // Abre la comanda en el sidebar de solo lectura (el mismo de Órdenes).
+  const { reservas } = useRxReservas();
+
+  // Una reserva de restaurante lleva su pedido en una comanda propia que solo pasa a una mesa real al iniciar el servicio. Mientras
+  // la reserva no esté completada, esa comanda se ve dentro de la reserva (su sidebar); completada, se abre la comanda como cualquier otra.
+  const reservaDe = (c: { id: string }): Reserva | undefined => {
+    const r = (reservas as Reserva[]).find((x) => x.comanda_id === c.id);
+    return r && r.estado !== 'completada' ? r : undefined;
+  };
+
+  // Abre la reserva (si la comanda aún es de una reserva sin completar) o la comanda en el sidebar de solo lectura (el mismo de Órdenes).
   const abrirComanda = (c: any) => {
+    const reserva = reservaDe(c);
+    if (reserva) {
+      setCheckoutView(false);
+      setConfigView('none');
+      setSelectedMesaId(null);
+      setViewingComandaId(null);
+      setSelectedReservaId(reserva.id);
+      setReservaView('detalle');
+      return;
+    }
     if (!c.mesa_id) {
       showToast.warning('No se puede abrir la comanda', `La comanda #${folioLabel(c)} no tiene mesa asociada.`);
       return;
@@ -52,7 +73,7 @@ export function VentaComandasPanel({ relacionadas }: VentaComandasPanelProps) {
             key={c.id}
             type="button"
             onClick={() => abrirComanda(c)}
-            title="Abrir la comanda"
+            title={reservaDe(c) ? 'Abrir la reserva' : 'Abrir la comanda'}
             className="w-full flex items-center justify-between gap-3 px-3 py-3 rounded-2xl bg-card shadow-2xs cursor-pointer text-left hover:bg-muted/40 transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
