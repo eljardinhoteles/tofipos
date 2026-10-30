@@ -6,7 +6,9 @@ import { CaretRight, Receipt, CreditCard, Printer, Percent } from'@phosphor-icon
 import { type Mesa, type HabitacionCuenta } from'../../../../db/database';
 import { ReservaHeader } from '../ReservaHeader';
 import { showToast } from'@/lib/toast';
-import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa, createRxVenta } from'../../../../db/rxdb';
+import { initVerticalRxDb, updateRxComanda, updateRxComandaItem, updateRxHabitacionCuenta, updateRxMesa, createRxVenta, agregarVentaMovimiento, type RxVenta } from'../../../../db/rxdb';
+import { calcularVenta } from'../../../../lib/ventaConMovimientos';
+import { ajusteNecesario, cargoVenta, consumoCerrado, textoCuentaCerrada, MARCA_CERRADA } from'../../../../lib/anticipoMesa';
 import { Input } from'@/components/ui/input';
 import { Label } from'@/components/ui/label';
 import { Button } from'@/components/ui/button';
@@ -66,6 +68,25 @@ export function HabitacionCheckoutView({
   const [aplicandoIva, setAplicandoIva] = useState(false);
 
   const [comandas, setComandas] = useState<any[]>([]);
+
+  // Venta de la reserva de hotel de la que viene esta cuenta. Si sigue vigente, el consumo de la habitación (incluida la comanda de
+  // Alojamiento) se cierra CONTRA ESA MISMA venta, en vez de crear una aparte: así hospedaje y consumos se cobran juntos.
+  const [ventaReserva, setVentaReserva] = useState<RxVenta | null>(null);
+  useEffect(() => {
+    if (!cuenta.venta_id) return;
+    let alive = true;
+    let sub: { unsubscribe: () => void } | null = null;
+    (async () => {
+      const rxDb = await initVerticalRxDb();
+      if (!alive) return;
+      sub = rxDb.ventas.findOne(cuenta.venta_id!).$.subscribe((doc) => {
+        if (!alive) return;
+        const v = doc ? (doc.toJSON() as RxVenta) : null;
+        setVentaReserva(v && !v._deleted && v.origen === 'reserva_hotel' && !calcularVenta(v).anulado ? v : null);
+      });
+    })().catch(() => {});
+    return () => { alive = false; sub?.unsubscribe(); };
+  }, [cuenta.venta_id]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [itemsByComanda, setItemsByComanda] = useState<Record<string, any[]>>({});
   // Comanda cuyo detalle (cortesías por ítem) está abierto en su propia pantalla.
@@ -166,6 +187,15 @@ export function HabitacionCheckoutView({
     () => comandasSeleccionadas.reduce((acc, c) => acc + (totalNetoPorComanda.get(c.id) ?? c.total ?? 0), 0),
     [comandasSeleccionadas, totalNetoPorComanda]
   );
+
+  // Qué pasará con la venta de la reserva al cobrar: cuánto vale su cargo, cuánto consumo hay ya cerrado contra ella y cuánto se le
+  // sumará. Si lo que se cierra no llega al cargo, el consumo queda DENTRO del valor de la reserva (por ejemplo, si falta cargar Alojamiento).
+  const resumenReserva = useMemo(() => {
+    if (!ventaReserva) return null;
+    const cargo = cargoVenta(ventaReserva);
+    const cerrado = consumoCerrado(ventaReserva);
+    return { cargo, cerrado, suma: ajusteNecesario(ventaReserva, total), noLlega: total > 0.001 && cerrado + total < cargo - 0.005 };
+  }, [ventaReserva, total]);
 
   // Comandas seleccionadas cuyo total no coincide con el IVA activo hoy (p. ej.
   // consumos de días anteriores a 15% cuando el checkout cae en feriado a 8%).
@@ -299,7 +329,32 @@ export function HabitacionCheckoutView({
       // comandas siguen pendientes y el reintento no pierde el cobro. El id
       // es determinista (cuenta + comandas) para que el reintento no
       // duplique la venta en Centro de Ventas.
-      if (total > 0.001) {
+      if (total > 0.001 && ventaReserva) {
+        // Cada comanda deja su marca «Cuenta cerrada» (neutra) y solo se agrega el ajuste si el consumo acumulado supera el cargo de la
+        // venta; mismo mecanismo de las mesas con reserva. Las marcas ya puestas (un reintento) no se repiten.
+        const yaMarcada = (v: RxVenta, c: Parameters<typeof folioLabel>[0]) => (v.movimientos ?? []).some(m => m.tipo === 'comentario' && !m.anulado && !!m.motivo?.startsWith(MARCA_CERRADA) && !!m.motivo?.endsWith(`Comanda #${folioLabel(c)}`));
+        const rxDb = await initVerticalRxDb();
+        for (const c of comandasSeleccionadas) {
+          const actual = (await rxDb.ventas.findOne(ventaReserva.id).exec(true)).toJSON() as RxVenta;
+          if (yaMarcada(actual, c)) continue;
+          await agregarVentaMovimiento({ venta_id: ventaReserva.id, tipo: 'comentario', motivo: textoCuentaCerrada(totalNetoPorComanda.get(c.id) ?? c.total ?? 0, folioLabel(c)) });
+        }
+        const fresca = (await rxDb.ventas.findOne(ventaReserva.id).exec(true)).toJSON() as RxVenta;
+        const extra = ajusteNecesario(fresca, 0);
+        if (extra > 0.001) {
+          await agregarVentaMovimiento({
+            venta_id: ventaReserva.id,
+            tipo: 'ajuste',
+            monto: extra,
+            motivo: `Consumos de ${selectedMesa.nombre}${etiquetaSubcuenta ? ` · ${etiquetaSubcuenta}` : ''} sobre el valor de la reserva`,
+          });
+        }
+        await agregarVentaMovimiento({
+          venta_id: ventaReserva.id,
+          tipo: 'comentario',
+          motivo: `${selectedMesa.nombre}${etiquetaSubcuenta ? ` · ${etiquetaSubcuenta}` : ''} · Comandas ${comandasSeleccionadas.map(c => `#${folioLabel(c)}`).join(', ')}`,
+        });
+      } else if (total > 0.001) {
         const rxDb = await initVerticalRxDb();
         const ventaId = await idDeterminista(`hab-checkout:${cuenta.id}:${comandasSeleccionadas.map(c => c.id).sort().join(',')}`);
         const yaExiste = await rxDb.ventas.findOne(ventaId).exec();
@@ -390,6 +445,20 @@ export function HabitacionCheckoutView({
             className="h-12 t-fila"
           />
         </div>
+
+        {resumenReserva && (
+          <div className={cn('flex flex-col gap-1 rounded-2xl border p-3', resumenReserva.noLlega ? 'bg-warning-soft border-warning/40' : 'bg-info-soft border-info/30')}>
+            <span className={cn('t-dato font-bold', resumenReserva.noLlega ? 'text-warning-foreground' : 'text-info-foreground')}>Se cobra con la venta de la reserva</span>
+            <div className="flex items-center justify-between t-meta text-muted-foreground"><span>Valor de la reserva (hospedaje)</span><span className="tabular-nums">${resumenReserva.cargo.toFixed(2)}</span></div>
+            <div className="flex items-center justify-between t-meta text-muted-foreground"><span>Consumos de esta cuenta</span><span className="tabular-nums">${(resumenReserva.cerrado + total).toFixed(2)}</span></div>
+            <div className="flex items-center justify-between t-dato text-foreground"><span>Se suma a la venta</span><span className="tabular-nums">${resumenReserva.suma.toFixed(2)}</span></div>
+            {resumenReserva.noLlega && (
+              <p className="t-meta text-warning-foreground">
+                Los consumos no llegan al valor de la reserva: quedan dentro de ese cargo y no se suman. Si falta cargar la comanda de Alojamiento, hazlo antes de cobrar.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="t-etiqueta flex items-center gap-2 text-muted-foreground px-0.5">
