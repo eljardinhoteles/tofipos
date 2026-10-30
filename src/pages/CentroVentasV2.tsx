@@ -207,6 +207,8 @@ export default function CentroVentasV2() {
       if (tipoFilter && item.venta.tipo !== tipoFilter) return false;
       if (soloComentarios && !item.textoComentarios) return false;
       if (origenFilters.size > 0 && !origenFilters.has(item.venta.origen)) return false;
+      // Las ventas anuladas no salen en la lista por defecto: se ven eligiendo «Anulado» en el filtro de estado.
+      if (item.anulado && !estadoFilters.has('anulado')) return false;
       if (estadoFilters.size > 0 && ![...estadoFilters].every(f => cumpleEstado(item, f))) return false;
 
       if (start) {
@@ -386,7 +388,7 @@ export default function CentroVentasV2() {
             {filteredItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center px-4">
                 <span className="t-meta text-muted-foreground">No hay ventas</span>
-                <span className="t-meta text-muted-foreground">Ajusta los filtros o la búsqueda.</span>
+                <span className="t-meta text-muted-foreground">Ajusta los filtros o la búsqueda. Las anuladas están ocultas: se ven con Estado → Anulado.</span>
               </div>
             ) : (
               groupedByDay.map(group => {
