@@ -165,6 +165,7 @@ export default function ReservasV2() {
  ) : vista === 'lista' ? (
  <ReservasLista
  reservas={reservas}
+ zonas={zonasRows}
  mesas={mesas}
  activaId={selectedReservaId}
  onCardClick={openDetail}

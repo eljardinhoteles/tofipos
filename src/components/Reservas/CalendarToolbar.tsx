@@ -1,12 +1,12 @@
 import { useState } from'react';
-import { CaretLeft, CaretRight, Plus, CalendarDot, Rows, CalendarBlank } from'@phosphor-icons/react';
-import { Button, ButtonGroup } from'@/components/ui/button';
+import { CaretLeft, CaretRight, Plus, Rows, CalendarBlank } from'@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from'@/components/ui/popover';
 import { Calendar } from'@/components/ui/calendar';
 
 import { useUI } from'../../context/UIContext';
 import { cn } from'@/lib/utils';
 import { SeccionesMesas } from'../Common/SeccionesMesas';
+import { useIsMobile } from'../../hooks/useIsMobile';
 import { PageHeader, headerPrimaryButtonClass, headerIconButtonClass } from'../Common/PageHeader';
 
 interface CalendarHeaderProps {
@@ -22,10 +22,12 @@ export function CalendarHeader({ visibleDates, onNewReserva, vista, onCambiarVis
  // Con el formulario de nueva reserva abierto en el sidebar, el botón sobra.
  const { reservaView, selectedReservaId } = useUI();
  const creandoReserva = reservaView === 'nueva' && !selectedReservaId;
+ // Las secciones de Mesas (Mesas, Reservas, Planificador, Métricas) son de PC: en celular se navega con la barra inferior.
+ const isMobile = useIsMobile();
  return (
  <PageHeader
  title="Reservas"
- tabs={<SeccionesMesas />}
+ tabs={isMobile ? undefined : <SeccionesMesas />}
  subtitle={<span className="inline-block first-letter:uppercase">{vista === 'lista' ? 'Próximas reservas' : mes}</span>}
  actions={(
  // Siempre montado: al cerrar el sidebar el contenido tarda 0.5 s en volver a su
@@ -55,22 +57,20 @@ interface CalendarNavProps {
  visibleDates: Date[];
 }
 
-// Navegación de fechas compacta: va en la primera celda del calendario (la
-// esquina sobre la columna de zonas), en una sola fila.
-export function CalendarNav({ startDate, setStartDate, shiftDays, goToday, visibleDates }: CalendarNavProps) {
- const [monthPickerOpen, setMonthPickerOpen] = useState(false);
- const mes = visibleDates[0]?.toLocaleDateString('es-ES', { month:'long' }) ?? '';
+const corto = (d: Date) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '');
+
+// Celda de la esquina, a la altura de la fila de meses: el rango visible; al tocarla abre el calendario para saltar a una fecha.
+export function CalendarEsquinaFecha({ startDate, setStartDate, visibleDates }: Omit<CalendarNavProps, 'shiftDays' | 'goToday'>) {
+ const [abierto, setAbierto] = useState(false);
+ const ultima = visibleDates[visibleDates.length - 1];
  return (
- <div className="flex items-center gap-1.5 w-full">
- <ButtonGroup className="flex-1 min-w-0">
- <Button type="button" variant="ghost" size="icon" title="Días anteriores" onClick={() => shiftDays(-1)} className="h-8 w-7 shrink-0 text-muted-foreground">
- <CaretLeft size={14} weight="bold"/>
- </Button>
- <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+ <Popover open={abierto} onOpenChange={setAbierto}>
  <PopoverTrigger asChild>
- <Button type="button" variant="ghost" title="Elegir fecha" className="h-8 px-2 min-w-0 flex-1 t-dato">
- <span className="inline-block first-letter:uppercase truncate">{mes}</span>
- </Button>
+ <button type="button" title="Ir a una fecha" aria-label="Ir a una fecha"
+ className="h-full w-full min-w-0 px-2 flex items-center justify-center gap-1.5 t-dato whitespace-nowrap cursor-pointer transition-colors bg-muted/60 hover:bg-muted focus-visible:outline-none focus-visible:bg-muted">
+ <CalendarBlank size={14} weight="bold" className="shrink-0" />
+ <span className="truncate">{visibleDates[0] ? corto(visibleDates[0]) : ''} – {ultima ? corto(ultima) : ''}</span>
+ </button>
  </PopoverTrigger>
  <PopoverContent className="w-auto p-0" align="start">
  <Calendar
@@ -81,18 +81,22 @@ export function CalendarNav({ startDate, setStartDate, shiftDays, goToday, visib
  if (!date) return;
  date.setHours(0, 0, 0, 0);
  setStartDate(date);
- setMonthPickerOpen(false);
+ setAbierto(false);
  }}
  />
  </PopoverContent>
  </Popover>
- <Button type="button" variant="ghost" size="icon" title="Días siguientes" onClick={() => shiftDays(1)} className="h-8 w-7 shrink-0 text-muted-foreground">
- <CaretRight size={14} weight="bold"/>
- </Button>
- </ButtonGroup>
- <Button type="button" variant="outline" size="icon" title="Ir a hoy" aria-label="Ir a hoy" onClick={goToday} className="h-8 w-8 shrink-0">
- <CalendarDot size={16} weight="bold"/>
- </Button>
+ );
+}
+
+// Celdas de la esquina, a la altura de la fila de días: ‹ Hoy ›. Cada control es una celda entera.
+export function CalendarEsquinaNav({ shiftDays, goToday }: Pick<CalendarNavProps, 'shiftDays' | 'goToday'>) {
+ const celda = 'flex items-center justify-center cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-muted';
+ return (
+ <div className="h-full w-full flex divide-x divide-border/70">
+ <button type="button" aria-label="Día anterior" title="Día anterior" onClick={() => shiftDays(-1)} className={cn(celda, 'w-11 shrink-0 hover:bg-muted')}><CaretLeft size={16} weight="bold" /></button>
+ <button type="button" title="Ir a hoy" onClick={goToday} className={cn(celda, 'flex-1 min-w-0 bg-primary/15 hover:bg-primary/25 t-dato')}>Hoy</button>
+ <button type="button" aria-label="Día siguiente" title="Día siguiente" onClick={() => shiftDays(1)} className={cn(celda, 'w-11 shrink-0 hover:bg-muted')}><CaretRight size={16} weight="bold" /></button>
  </div>
  );
 }

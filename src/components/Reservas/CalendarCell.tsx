@@ -13,7 +13,10 @@ interface CalendarCellProps {
  onCardClick: (id: string) => void;
  onAssign: (r: Reserva) => void;
  onCancel?: (id: string) => void;
- isMonthEnd?: boolean;
+ /** Primer día de un mes (no el primero visible): lleva la línea gruesa a su izquierda, alineada con la de la cabecera. */
+ isMonthStart?: boolean;
+ /** Primer día visible: sin línea a la izquierda (le sigue la columna fija de zonas). */
+ isFirst?: boolean;
  codigoMap?: Record<string, string>;
  mesaPorId?: Map<string, string>;
 }
@@ -26,7 +29,8 @@ export function CalendarCell({
  onCellClick,
  onCardClick,
  onAssign,
- isMonthEnd = false,
+ isMonthStart = false,
+ isFirst = false,
  codigoMap = {},
  mesaPorId
 }: CalendarCellProps) {
@@ -40,9 +44,9 @@ export function CalendarCell({
  if ((e.target as HTMLElement).closest('[data-card]')) return;
  onCellClick();
  }}
- className={cn("p-2 min-h-[100px] border-b border-r border-border transition-colors flex flex-col gap-1 cursor-pointer select-none",
+ className={cn("p-2 min-h-[100px] border-b border-border transition-colors flex flex-col gap-1 cursor-pointer select-none",
  isToday ?"bg-primary/5": isWeekend ?"bg-muted/40":"bg-background",
- isMonthEnd &&"border-r-2 border-r-foreground/20",
+ !isFirst && (isMonthStart ?"border-l-2 border-l-border":"border-l border-l-border"),
  hovered &&"bg-muted/60")}
  >
  {dayReservas.map(r => (
