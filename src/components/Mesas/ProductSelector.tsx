@@ -264,7 +264,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  // Sin búsqueda activa, en PC se ven siempre las categorías a la izquierda y los
  // productos de la elegida a la derecha, para pedir sin ir y volver al home.
  const pcSplit = !isMobile && !searchQueryDebounced;
- const categoriaPC = selectedCategory ?? categories[0] ?? 'Favoritos';
+ // Sin categoría elegida abre en «Recientes» (si hay); si no, en la primera categoría.
+ const categoriaPC = selectedCategory ?? (recentItems.length > 0 ? 'Recientes' : categories[0] ?? 'Favoritos');
  const conteoPorCategoria = useMemo(() => {
  const map = new Map<string, number>();
  for (const it of safeMenuItems) {
@@ -801,9 +802,9 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, onRemove, curre
     <div
       onClick={() => onAdd(item)}
       className={cn(
-        "flex-1 min-w-0 border cursor-pointer select-none active:scale-98 transform-gpu",
+"flex-1 min-w-0 border cursor-pointer select-none active:scale-98 transform-gpu",
         "flex items-center gap-3 px-3 py-3 rounded-2xl",
-        "@md:flex-col @md:items-stretch @md:gap-3 @md:p-4 @md:rounded-2xl @md:min-h-36",
+        "@md:flex-col @md:items-stretch @md:gap-3 @md:px-4 @md:py-3 @md:rounded-2xl @md:min-h-28",
         isSelected
           ? "bg-primary text-primary-foreground border-primary shadow-md"
           : isPlanItem
@@ -856,20 +857,34 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, onRemove, curre
 
       <span className={cn("font-redonda shrink-0 t-cuerpo-fuerte tabular-nums @md:hidden", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
 
-      <div className="hidden @md:flex items-end justify-between gap-2">
-        <span className={cn("font-redonda t-valor leading-none tabular-nums", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
+      <div className="hidden @md:flex items-center justify-between gap-2 @md:min-h-10 pointer-coarse:min-h-11">
+        <span className={cn("font-redonda t-valor leading-none tabular-nums truncate min-w-0", isSelected ? "text-primary-foreground" : "text-foreground")}>{precio}</span>
         {isSelected && (
-          <span className="min-w-7 h-7 px-2 rounded-full bg-primary-foreground text-primary t-cuerpo-fuerte flex items-center justify-center tabular-nums">
-            {currentQty}
+          // Un solo control: − (rojo suave), cantidad (solo número) y + (la acción principal, en claro), dentro de una cápsula.
+          <span className="flex items-center gap-1 shrink-0 rounded-full bg-primary-foreground/15 p-1">
+            <button
+              type="button" onClick={quitar} aria-label={`Quitar una unidad de ${item.nombre}`} title="Quitar una unidad"
+              className="shrink-0 size-8 pointer-coarse:size-9 rounded-full border border-destructive/40 bg-destructive-soft text-destructive flex items-center justify-center cursor-pointer active:scale-90 transition-transform hover:brightness-95">
+              <Minus size={14} weight="bold" />
+            </button>
+            <span className="min-w-8 px-1 text-center t-cuerpo-fuerte text-primary-foreground tabular-nums" aria-label={`${currentQty} en la comanda`}>
+              {currentQty}
+            </span>
+            <button
+              type="button" onClick={(e) => { e.stopPropagation(); onAdd(item); }} aria-label={`Añadir una unidad de ${item.nombre}`} title="Añadir una unidad"
+              className="shrink-0 size-8 pointer-coarse:size-9 rounded-full bg-primary-foreground text-primary flex items-center justify-center cursor-pointer active:scale-90 transition-transform hover:brightness-95">
+              <Plus size={14} weight="bold" />
+            </button>
           </span>
         )}
       </div>
     </div>
-    {/* El «−» va FUERA de la tarjeta (a la derecha): dentro de ella se tocaría por error al querer sumar. */}
+    {/* Lista (angosta): el «−» va FUERA de la tarjeta, a la derecha, para no tocarlo por error al querer sumar. En la cuadrícula va dentro,
+        junto a la cantidad (ver arriba). */}
     {puedeQuitar && (
       <button
         type="button" onClick={quitar} aria-label={`Quitar una unidad de ${item.nombre}`} title="Quitar una unidad"
-        className="shrink-0 size-11 rounded-full bg-destructive/10 text-destructive flex items-center justify-center cursor-pointer active:scale-90 transition-transform hover:bg-destructive/20">
+        className="shrink-0 size-11 rounded-full bg-destructive/10 text-destructive flex items-center justify-center cursor-pointer active:scale-90 transition-transform hover:bg-destructive/20 @md:hidden">
         <Minus size={20} weight="bold" />
       </button>
     )}
