@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle } from '@phosphor-icons/react';
+import { Check, CheckCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { FondoHoja } from '@/components/Common/FondoHoja';
@@ -144,16 +144,26 @@ export function ProductModifiersSheet({ opened, onClose, product: productoProp, 
               })}
             </div>
 
+            {/* El botón principal va SIEMPRE abajo del todo y los secundarios encima, sin cambiar de sitio al elegir opciones. */}
             <div className="shrink-0 border-t border-border px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+16px)] flex flex-col gap-2">
-              <Button type="button" onClick={confirmar} disabled={!puede} className="h-12 w-full gap-2 rounded-2xl">
-                {editando ? 'Guardar cambios' : esOtroIgual ? 'Agregar otro igual' : 'Agregar'}
-                {!puede && faltan.length > 0 && <span className="t-meta opacity-80">· falta {faltan[0].nombre}</span>}
-              </Button>
               {!editando && agregadas > 0 && (
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={reiniciar} disabled={elegidas.length === 0} className="flex-1 h-11 rounded-2xl">Otro distinto</Button>
-                  <Button type="button" variant="suave" onClick={onClose} className="flex-1 h-11 rounded-2xl">Listo</Button>
+                  <Button type="button" variant="suave" onClick={reiniciar} disabled={elegidas.length === 0} className="flex-1 h-11 rounded-2xl">Otro distinto</Button>
+                  {esOtroIgual ? (
+                    <Button type="button" variant="suave" onClick={confirmar} disabled={!puede} className="flex-1 h-11 rounded-2xl">Agregar otro igual</Button>
+                  ) : (
+                    <Button type="button" variant="suave" onClick={onClose} className="flex-1 h-11 gap-1.5 rounded-2xl"><Check size={18} weight="bold" /> Listo</Button>
+                  )}
                 </div>
+              )}
+              {esOtroIgual ? (
+                // Ya se agregó y lo elegido sigue igual: lo principal es terminar.
+                <Button type="button" onClick={onClose} className="h-12 w-full gap-2 rounded-2xl"><Check size={20} weight="bold" /> Listo</Button>
+              ) : (
+                <Button type="button" onClick={confirmar} disabled={!puede} className="h-12 w-full gap-2 rounded-2xl">
+                  {editando ? 'Guardar cambios' : 'Agregar'}
+                  {!puede && faltan.length > 0 && <span className="t-meta opacity-80">· falta {faltan[0].nombre}</span>}
+                </Button>
               )}
             </div>
           </DrawerContent>
