@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useState, startTransition } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, startTransition } from 'react';
 import { cn } from '@/lib/utils';
 import { ComandaItemRow } from './ComandaItemRow';
 import { esParteRepartida } from '@/lib/reparto';
 import { cantidadEnviada, parseSnapshot } from '@/lib/itemPendiente';
+import { ordenarItemsComanda } from '@/lib/ordenComanda';
 
 type Item = any;
 
@@ -50,7 +51,8 @@ const tienePendiente = (item: Item, confirmadaAt?: string | null, snapshot: Reco
 // segundo paso de baja prioridad, para que el sidebar abra sin esperar a todas.
 const FILAS_INICIALES = 30;
 
-export const ComandaItemsList = memo(function ComandaItemsList({ items, selectedId, confirmada, confirmadaAt, snapshot, padBottom, onSelect }: ComandaItemsListProps) {
+export const ComandaItemsList = memo(function ComandaItemsList({ items: itemsSinOrdenar, selectedId, confirmada, confirmadaAt, snapshot, padBottom, onSelect }: ComandaItemsListProps) {
+  const items = useMemo(() => ordenarItemsComanda(itemsSinOrdenar), [itemsSinOrdenar]);
   const [completa, setCompleta] = useState(items.length <= FILAS_INICIALES);
   useEffect(() => {
     if (completa) return;
@@ -111,7 +113,7 @@ export const TodasList = memo(function TodasList({ grupos, onSelectSubcomanda }:
           </button>
           {g.items.length === 0 ? (
             <div className="px-4 py-3 t-meta text-muted-foreground">Sin productos</div>
-          ) : g.items.map((item, index) => (
+          ) : ordenarItemsComanda(g.items).map((item, index) => (
             <TodasFila key={item.id} item={item} index={index} comanda={g.comanda} onSelectSubcomanda={onSelectSubcomanda} />
           ))}
         </div>

@@ -22,6 +22,7 @@ import { initVerticalRxDb } from'../../../db/rxdb';
 import { useRxMenuCatalog } from'../../../hooks/useRxMenuCatalog';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
+import { ordenarItemsComanda } from '@/lib/ordenComanda';
 
 interface SidebarReceiptViewerProps {
  selectedMesa: Mesa;
@@ -267,7 +268,7 @@ export function SidebarReceiptViewer({
     )}
 
  <main className="flex-1 overflow-y-auto">
- {comandaItems.map((item, index) => (
+ {ordenarItemsComanda(comandaItems).map((item, index) => (
  <ComandaItemRow key={item.id} item={item} index={index} />
  ))}
  </main>

@@ -38,6 +38,7 @@ import { queueReprintTicket, queueKitchenPrint } from'../../../lib/printServerCl
 import { downloadTicketReservaAsImage } from'../../../lib/ticketImage';
 import { getOrgCache } from'../../../lib/orgCache';
 import { subirComprobante } from'@/lib/comprobantes';
+import { ordenarItemsComanda } from '@/lib/ordenComanda';
 
 /** Mismo criterio que ClientesV2: limpia el número y arma el deep link de WhatsApp. */
 function getWhatsAppLink(telefono: string): string | null {
@@ -581,7 +582,7 @@ export function SidebarReservaDetail({ reservaId, onClose: onCloseSidebar }: Sid
  </div>
  ) : (
  <div className="flex flex-col pb-6">
- {comandaItems.map((item, index) => (
+ {ordenarItemsComanda(comandaItems).map((item, index) => (
  <ComandaItemRow
  key={item.id}
  item={item}

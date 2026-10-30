@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { type Reserva } from '../../../db/database';
+import { ordenarItemsComanda } from '@/lib/ordenComanda';
 
 interface ReservaWhatsAppCardProps {
   reserva: Reserva;
@@ -193,7 +194,7 @@ export const ReservaWhatsAppCard = forwardRef<HTMLDivElement, ReservaWhatsAppCar
                   {/* Items */}
                   <table style={{ marginBottom: '10px' }}>
                     <tbody>
-                      {comandaItems.map((item, idx) => (
+                      {ordenarItemsComanda(comandaItems).map((item, idx) => (
                         <tr key={idx}>
                           <td style={{ padding: '2px 0', fontSize: '11px', verticalAlign: 'top', textAlign: 'left' }}>
                             <span style={{ fontWeight: 800, color: '#adb5bd', marginRight: '5px' }}>{item.cantidad}×</span>
