@@ -500,7 +500,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
           ) : (
             <div className="flex flex-col gap-3">
               <span className="t-etiqueta text-muted-foreground px-1">{grupoPlanDe(categoriaPC)?.etiqueta.nombre ?? categoriaPC}</span>
-              <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] @md:gap-3">
+              <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] @md:gap-3">
                 {itemsPC.map(item => (
                   <ProductCardV2
                     key={item.id}
@@ -620,7 +620,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     cuando el panel es ancho — según el ancho real del contenedor
                     (@container), no del viewport, porque este selector puede vivir
                     embebido en layouts más anchos que el propio panel. */}
-                <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] @md:gap-3">
+                <div className="flex flex-col gap-2 @md:grid @md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] @md:gap-3">
                   {group.items.map(item => (
                     <ProductCardV2
                       key={item.id}
@@ -798,7 +798,7 @@ const ProductCardV2 = memo(function ProductCardV2({ item, onAdd, onRemove, curre
   const puedeQuitar = currentQty > 0;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 @md:items-stretch">
     <div
       onClick={() => onAdd(item)}
       className={cn(
