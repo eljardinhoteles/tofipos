@@ -2,12 +2,14 @@ import { imprimirConAviso } from '../../../../lib/imprimir';
 import { queueRawReceiptPrint } from '../../../../lib/printServerClient';
 import { useState, useMemo, useEffect } from 'react';
 import { folioLabel } from '../../../../lib/folio';
-import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets, WarningCircle } from '@phosphor-icons/react';
+import { X, Receipt, CreditCard, Plus, Check, PencilSimple, Trash, ListBullets, WarningCircle, DotsThreeVertical, ArrowsLeftRight, ArrowUUpLeft } from '@phosphor-icons/react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { useHorizontalWheel } from '../../../../hooks/useHorizontalWheel';
 import { type Mesa, type HabitacionCuenta } from '../../../../db/database';
 import { ReservaHeader } from '../ReservaHeader';
-import { initVerticalRxDb, updateRxHabitacionCuenta, updateRxMesa } from '../../../../db/rxdb';
+import { initVerticalRxDb, updateRxHabitacionCuenta, updateRxMesa, updateRxComanda, type RxComanda } from '../../../../db/rxdb';
+import { isOperativeComanda } from '../../../../db/comandaState';
 import { TicketPreviewModal } from '../../../Common/TicketPreviewModal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -30,7 +32,7 @@ export function CuentaView({
   onCheckout: (data: any) => void;
   onOpenComanda?: (comandaId: string) => void;
 }) {
-  const { openPrompt } = useUI();
+  const { openPrompt, openConfirm } = useUI();
   const wheelRef = useHorizontalWheel();
   const roomType = selectedMesa.nombre.match(/\(([^)]+)\)/)?.[1] || selectedMesa.piso || 'Sin tipo';
   const roomNum = selectedMesa.nombre.match(/Hab\.\s*(\d+)/)?.[1] || selectedMesa.nombre.replace(/\D/g, '') || selectedMesa.nombre;
@@ -52,20 +54,58 @@ export function CuentaView({
   // para que no queden huérfanas (hay que cargarlas a una habitación o cobrarlas antes).
   const sinCargarCount = useMemo(() => comandasTodas.filter(c => c.sincronizado === false).length, [comandasTodas]);
   const nombrePrincipal = cuenta.principal_nombre?.trim() || 'Principal';
+  // Destinos al mover una comanda: la subcuenta principal y las demás, menos en la que ya está.
+  const opcionesMover = (c: RxComanda): Array<{ id: string | null; nombre: string }> =>
+    [{ id: null, nombre: nombrePrincipal }, ...subcuentas.map(x => ({ id: x.id as string | null, nombre: x.nombre }))]
+      .filter(o => subcuentas.length > 0 && o.id !== (c.habitacion_subcuenta_id ?? null));
   const nombreSub = (id?: string | null) => subcuentas.find(s => s.id === id)?.nombre ?? (id ? undefined : nombrePrincipal);
 
   useEffect(() => {
     let alive = true;
+    let sub: { unsubscribe: () => void } | null = null;
     (async () => {
       const rxDb = await initVerticalRxDb();
-      const docs = await rxDb.comandas.find({ selector: { habitacion_cuenta_id: cuenta.id, _deleted: { $ne: true } } }).exec();
       if (!alive) return;
-      // Una mesa abierta desde la habitación y cobrada directo por el cliente ya no es de la cuenta.
-      setComandasTodas(docs.map((d: any) => d.toJSON()).filter((c: any) =>
-        c.estado !== 'anulada' && !(c.sincronizado === false && ['cerrado', 'facturado'].includes(c.estado))));
+      // Suscripción (no una lectura única): al mover una comanda de subcuenta o quitarla de la habitación, la lista se actualiza sola.
+      sub = rxDb.comandas.find({ selector: { habitacion_cuenta_id: cuenta.id, _deleted: { $ne: true } } }).$.subscribe((docs) => {
+        if (!alive) return;
+        // Una mesa abierta desde la habitación y cobrada directo por el cliente ya no es de la cuenta.
+        setComandasTodas(docs.map((d) => d.toJSON() as RxComanda).filter((c) =>
+          c.estado !== 'anulada' && !(c.sincronizado === false && ['cerrado', 'facturado'].includes(c.estado))));
+      });
     })();
-    return () => { alive = false; };
+    return () => { alive = false; sub?.unsubscribe(); };
   }, [cuenta.id]);
+
+  // Solo se puede mover o quitar una comanda ya cargada y aún sin cobrar en un checkout.
+  const sePuedeEditar = (c: RxComanda) => c.sincronizado !== false && !['cerrado', 'facturado', 'anulada'].includes(c.estado);
+
+  const moverASubcuenta = async (c: RxComanda, destino: string | null) => {
+    try {
+      await updateRxComanda(c.id, { habitacion_subcuenta_id: destino });
+      showToast.success('Comanda movida', `Comanda #${folioLabel(c)} → ${nombreSub(destino) ?? nombrePrincipal}`);
+    } catch (e) {
+      showToast.fallo('mover la comanda', e);
+    }
+  };
+
+  // Un cargo a la habitación equivocada se deshace sacando la comanda de la cuenta: vuelve a quedar abierta en su mesa, lista para cargarla
+  // a la habitación correcta o cobrarla. No se anula el consumo.
+  const quitarDeHabitacion = async (c: RxComanda) => {
+    try {
+      const rxDb = await initVerticalRxDb();
+      const enMesa = await rxDb.comandas.find({ selector: { mesa_id: c.mesa_id, _deleted: { $ne: true } } }).exec();
+      if (enMesa.some((d) => d.id !== c.id && isOperativeComanda(d.toJSON()))) {
+        showToast.warning('La mesa ya tiene otra cuenta abierta', `${c.mesa_nombre || 'La mesa'} está en uso: cierra esa cuenta antes de devolver esta comanda.`);
+        return;
+      }
+      await updateRxComanda(c.id, { habitacion_cuenta_id: null, habitacion_subcuenta_id: null } as unknown as Partial<RxComanda>);
+      try { await updateRxMesa(c.mesa_id, { estado: c.estado === 'cuenta' ? 'cuenta' : 'ocupada' }); } catch { /* la mesa ya no existe: la comanda queda igualmente fuera de la habitación */ }
+      showToast.success('Comanda quitada de la habitación', `La comanda #${folioLabel(c)} volvió a ${c.mesa_nombre || 'su mesa'}.`);
+    } catch (e) {
+      showToast.fallo('quitar la comanda de la habitación', e);
+    }
+  };
 
   const opcionesSub = useMemo(() => [
     { id: 'todas' as string | null, nombre: 'Todas', cantidad: comandas.length },
@@ -269,16 +309,18 @@ export function CuentaView({
               const isOdd = index % 2 === 1;
               const sinCargar = c.sincronizado === false;
               return (
-                <button
+                <div
                   key={c.id}
+                  className={cn("flex items-stretch border-l-4 border-l-transparent",
+                    // Sin transition-colors: con el sombreado intercalado, al cambiar el filtro el índice de la fila cambia y el fondo se animaba (flash).
+                    isOdd && "bg-muted/40", sinCargar && "opacity-50 grayscale", onOpenComanda && !sinCargar && "hover:border-l-primary")}
+                >
+                <button
                   type="button"
                   onClick={() => onOpenComanda?.(c.id)}
                   disabled={!onOpenComanda || sinCargar}
                   title={sinCargar ? 'Mesa abierta desde esta habitación; aparecerá cuando se cargue' : undefined}
-                  className={cn("w-full text-left flex items-center gap-3 px-4 py-3 focus:outline-none focus-visible:bg-primary/10 border-l-4 border-l-transparent",
-                    // Sin transition-colors: con el sombreado intercalado, al cambiar
-                    // el filtro el índice de la fila cambia y el fondo se animaba (flash).
-                    isOdd && "bg-muted/40", sinCargar && "opacity-50 grayscale cursor-default", onOpenComanda && !sinCargar && "enabled:cursor-pointer enabled:hover:border-l-primary")}
+                  className="flex-1 min-w-0 text-left flex items-center gap-3 pl-4 pr-2 py-3 focus:outline-none focus-visible:bg-primary/10 enabled:cursor-pointer disabled:cursor-default"
                 >
                   <div className="w-7 h-7 rounded-lg t-dato flex items-center justify-center border shrink-0 bg-muted border-border text-foreground">
                     <Receipt size={14} weight="bold" />
@@ -302,6 +344,28 @@ export function CuentaView({
                     </span>
                   </div>
                 </button>
+                {sePuedeEditar(c) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" aria-label={`Acciones de la comanda ${folioLabel(c)}`} title="Mover o quitar"
+                        className="shrink-0 w-11 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 cursor-pointer focus:outline-none focus-visible:bg-primary/10">
+                        <DotsThreeVertical size={20} weight="bold" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {opcionesMover(c).map(o => (
+                        <DropdownMenuItem key={o.id ?? 'principal'} onSelect={() => void moverASubcuenta(c, o.id)}>
+                          <ArrowsLeftRight size={18} aria-hidden /> Mover a {o.nombre}
+                        </DropdownMenuItem>
+                      ))}
+                      {opcionesMover(c).length > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuItem variant="destructive" onSelect={() => openConfirm('QUITAR DE ESTA HABITACIÓN', `La comanda #${folioLabel(c)} sale de esta cuenta y vuelve a quedar abierta en ${c.mesa_nombre || 'su mesa'}, para cargarla a la habitación correcta o cobrarla. El consumo no se anula.`, () => { void quitarDeHabitacion(c); })}>
+                        <ArrowUUpLeft size={18} aria-hidden /> Quitar de esta habitación
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                </div>
               );
             })}
           </div>
