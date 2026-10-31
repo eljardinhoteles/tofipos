@@ -30,6 +30,7 @@ import { VentaComandasPanel } from './VentaComandasPanel';
 import { VentaReservasHotelPanel } from './VentaReservasHotelPanel';
 import { useComandasDeVenta } from '../../hooks/useComandasDeVenta';
 import { ORIGEN_BORDE, ORIGEN_FONDO, ORIGEN_ICON, ORIGEN_LABEL, ORIGEN_TEXTO } from '../Common/OrigenBadge';
+import { tieneConsumosHabitacion } from '../../lib/consumosHabitacion';
 import type { VentaConMovimientos } from '../../hooks/useVentasConMovimientos';
 import type { VentaMovimientoTipo } from '../../db/rxdb';
 
@@ -177,9 +178,18 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         <div className={cn("@container flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-2xl border px-5 py-4 shadow-2xs", item.anulado ? "bg-muted border-border" : cn(ORIGEN_FONDO[venta.origen], ORIGEN_BORDE[venta.origen]))}>
           <div className="flex flex-col items-start gap-2 min-w-0 flex-1 basis-36">
             <h3 title={limpiarReferencia(venta.referencia) || undefined} className="t-titulo text-foreground line-clamp-3 select-text">{limpiarReferencia(venta.referencia) || '—'}</h3>
-            <span className={cn("flex items-center gap-1.5 t-cuerpo-fuerte", item.anulado ? "text-muted-foreground" : ORIGEN_TEXTO[venta.origen])}>
-              {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
-              {ORIGEN_LABEL[venta.origen]}
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className={cn("flex items-center gap-1.5 t-cuerpo-fuerte", item.anulado ? "text-muted-foreground" : ORIGEN_TEXTO[venta.origen])}>
+                {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
+                {ORIGEN_LABEL[venta.origen]}
+              </span>
+              {/* Reserva de hotel que además cobra consumos de la habitación (checkout): se ve también como consumo de habitación. */}
+              {tieneConsumosHabitacion(venta) && (
+                <span className={cn("flex items-center gap-1.5 t-cuerpo-fuerte", item.anulado ? "text-muted-foreground" : ORIGEN_TEXTO.habitacion)}>
+                  {(() => { const IconoHab = ORIGEN_ICON.habitacion; return <IconoHab size={18} weight="bold" className="shrink-0" />; })()}
+                  {ORIGEN_LABEL.habitacion}
+                </span>
+              )}
             </span>
             {/* Reserva de hotel: la estadía va aquí, en la misma tarjeta, solo para consultar (se cambia en el módulo Hotel). */}
             {venta.origen === 'reserva_hotel' && !item.anulado && <VentaEstadia key={venta.id} venta={venta} />}

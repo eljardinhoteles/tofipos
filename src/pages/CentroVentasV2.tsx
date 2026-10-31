@@ -15,6 +15,7 @@ import { RegistrarVentaPanel } from '../components/CentroVentas/RegistrarVentaPa
 import { Paginacion } from '../components/Common/Paginacion';
 import { limpiarReferencia } from '../lib/nombreMesa';
 import { OrigenBadge, ORIGEN_BARRA_ACTIVA, ORIGEN_LABEL, ORIGEN_ICON } from '../components/Common/OrigenBadge';
+import { origenesDeVenta, tieneConsumosHabitacion } from '../lib/consumosHabitacion';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FiltroChip, FiltroLimpiarTodo, FiltroMultiple } from '../components/Common/FiltroChip';
 import { FilaDeslizable } from '../components/Common/FilaDeslizable';
@@ -206,7 +207,7 @@ export default function CentroVentasV2() {
     return items.filter(item => {
       if (tipoFilter && item.venta.tipo !== tipoFilter) return false;
       if (soloComentarios && !item.textoComentarios) return false;
-      if (origenFilters.size > 0 && !origenFilters.has(item.venta.origen)) return false;
+      if (origenFilters.size > 0 && !origenesDeVenta(item.venta).some(o => origenFilters.has(o as VentaOrigen))) return false;
       // Las ventas anuladas no salen en la lista por defecto: se ven eligiendo «Anulado» en el filtro de estado.
       if (item.anulado && !estadoFilters.has('anulado')) return false;
       if (estadoFilters.size > 0 && ![...estadoFilters].every(f => cumpleEstado(item, f))) return false;
@@ -470,6 +471,7 @@ export default function CentroVentasV2() {
                           )}
                           <div className="justify-self-start flex items-center gap-2 min-w-0">
                             <OrigenBadge origen={item.venta.origen} apagado={isAnulada} activo={active} />
+                            {tieneConsumosHabitacion(item.venta) && <OrigenBadge origen="habitacion" apagado={isAnulada} activo={active} />}
                             {item.textoComentarios && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
