@@ -10,7 +10,7 @@ import { showToast } from'@/lib/toast';
 import { SidebarEnviarHabitacion } from'./SidebarEnviarHabitacion';
 import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
-import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
+import { generarPrecuenta, generarTicketPago, totalesParaTicket } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { initVerticalRxDb, createRxVenta, agregarVentaMovimiento, updateRxComanda, liberarMesaSiSinOperativas } from'../../../db/rxdb';
@@ -256,7 +256,9 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  selectedMesa.nombre,
  ivaPorcentaje,
  undefined,
- habitacionNombre
+ habitacionNombre,
+ false,
+ totalesParaTicket(totales)
  );
  setPreviewContent(content);
  setPreviewTitle(`Recibo de Pago - ${selectedMesa.nombre}`);
@@ -286,7 +288,9 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  selectedMesa.nombre,
  ivaPorcentaje,
  todosPagos,
- habitacionNombre
+ habitacionNombre,
+ false,
+ totalesParaTicket(totales)
  );
  setPreviewContent(content);
  setPreviewTitle(`Precuenta - ${selectedMesa.nombre}`);
@@ -298,6 +302,7 @@ export function SidebarCheckout({ selectedMesa, activeComanda, comandaItems, onB
  ivaPorcentaje,
  pagos: todosPagos,
  habitacionNombre,
+ totales: totalesParaTicket(totales),
  }), 'Pre-cuenta');
  });
  setOnCloseCallback(null);

@@ -35,7 +35,7 @@ import { queueKitchenPrint, queueReceiptPrint, queueReprintTicket } from'../../.
 import { esParteRepartida } from'../../../lib/reparto';
 import { cantidadEnviada } from'../../../lib/itemPendiente';
 import { repartirItemEntreSubcomandas, deshacerRepartoItem } from'../../../db/rxdb';
-import { generarPrecuenta, generarTicketPago } from'../../../services/printTemplateEngine';
+import { generarPrecuenta, generarTicketPago, totalesParaTicket } from'../../../services/printTemplateEngine';
 import { useIsMobile } from'../../../hooks/useIsMobile';
 import { cn } from'@/lib/utils';
 import { Button } from'@/components/ui/button';
@@ -986,7 +986,7 @@ export function SidebarDetails({
  if (aplica > 0.001) pagosRecibo.push({ id: crypto.randomUUID(), comanda_id: activeComanda.id, monto: aplica, fecha, organization_id: orgId, tipo_division: 'Anticipo aplicado' });
  const cobradoAhora = Math.max(0, saldoPendiente - aplica);
  if (cobradoAhora > 0.001) pagosRecibo.push({ id: crypto.randomUUID(), comanda_id: activeComanda.id, monto: cobradoAhora, fecha, organization_id: orgId });
- const rawText = generarTicketPago(activeComanda, comandaItems as any, pagosRecibo, selectedMesa.nombre, ivaPorcentaje, undefined, linkedMesa?.nombre);
+ const rawText = generarTicketPago(activeComanda, comandaItems as any, pagosRecibo, selectedMesa.nombre, ivaPorcentaje, undefined, linkedMesa?.nombre, false, totalesParaTicket(totales));
  await queueReprintTicket({ rawText, mesaNombre: selectedMesa.nombre, comanda: activeComanda });
  showToast.success('Cuenta cobrada', `Recibo enviado a imprimir · ${selectedMesa.nombre}`);
  } catch (err) {

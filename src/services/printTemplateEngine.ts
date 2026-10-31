@@ -2,6 +2,8 @@
 import type { Comanda, ComandaItem, Pago, Reserva } from '../db/database';
 import { getOrgCache } from '../lib/orgCache';
 import { folioLabel } from '../lib/folio';
+import { redondear2 } from '../lib/taxUtils';
+import { ordenarItemsComanda } from '../lib/ordenComanda';
 
 /**
  * Servicio de Formateo y Generación de Documentos de Impresión Térmica
@@ -143,6 +145,24 @@ export function formatProductRow(cant: number, desc: string, total: number, widt
 
 // --- PLANTILLAS DE DOCUMENTOS ---
 
+/** Subtotal, IVA y total tal como salen impresos (los mismos que muestra la pantalla). */
+export interface TotalesTicket { subtotal: number; iva: number; total: number }
+
+/** Pasa los totales de la pantalla (calcularTotalesComanda) al formato del ticket. */
+export const totalesParaTicket = (t: { subtotalNeto: number; ivaTotal: number; total: number }): TotalesTicket => ({ subtotal: t.subtotalNeto, iva: t.ivaTotal, total: t.total });
+
+/**
+ * Cierra los totales de un ticket. Si quien imprime ya los calculó (con el IVA de cada producto, cortesías, etc.) se usan tal cual, para que
+ * papel y pantalla digan lo mismo. Si no, se calculan aquí con la misma regla: el IVA se redondea una vez a centavos (mitad hacia arriba)
+ * y el total es subtotal + IVA, de modo que las líneas del ticket siempre suman.
+ */
+function cerrarTotales(subtotalCrudo: number, ivaPercent: number, totales?: TotalesTicket): TotalesTicket {
+  if (totales) return totales;
+  const subtotal = redondear2(subtotalCrudo);
+  const iva = redondear2(subtotalCrudo * (ivaPercent / 100));
+  return { subtotal, iva, total: redondear2(subtotal + iva) };
+}
+
 interface PrintableItem extends Partial<ComandaItem> {
   nombre: string;
   precio: number;
@@ -213,10 +233,10 @@ export function generarComandaCocina(
   // Entradas (o cualquier categoría marcada "imprimir primero") van antes
   // que el resto, sin importar el orden en que se agregaron al pedido —
   // sort() estable: dentro de cada grupo se conserva el orden original.
-  const itemsCocina = itemsActivos
-    .filter(i => !i.es_bebida)
-    .sort((a, b) => (b.imprimir_primero ? 1 : 0) - (a.imprimir_primero ? 1 : 0));
-  const itemsBebida = itemsActivos.filter(i => i.es_bebida);
+  // Mismo orden que la pantalla (entradas, el resto y al final las bebidas, cada grupo por hora de pedido): `ordenarItemsComanda` es la
+  // fuente única. Aquí las bebidas van en su propio bloque, y los productos repetidos se juntan en una sola línea (la primera vez que salen).
+  const itemsCocina = ordenarItemsComanda(itemsActivos.filter(i => !i.es_bebida));
+  const itemsBebida = ordenarItemsComanda(itemsActivos.filter(i => i.es_bebida));
 
   function imprimirGrupo(groupItems: PrintableItem[]): string {
     let s = '';
@@ -355,17 +375,19 @@ export function generarComandaCocina(
  * 2. PRECUENTA (SUBTOTAL DE MESA)
  * Documento entregado al comensal para revisar consumos antes del pago.
  */
-export function generarPrecuenta(
+function armarTicketCliente(
   comanda: Comanda,
   items: PrintableItem[],
   mesaNombre: string,
-  ivaPercent: number = 15,
-  pagos: Pago[] = [],
-  habitacionNombre?: string,
-  forPrinter = false,
+  ivaPercent: number,
+  pagos: Pago[],
+  habitacionNombre: string | undefined,
+  forPrinter: boolean,
+  totales: TotalesTicket | undefined,
+  opciones: { titulo: string; facturacion: boolean; ancho?: number },
 ): string {
   const p = (cmd: string) => forPrinter ? cmd : '';
-  const W = 48;
+  const W = opciones.ancho ?? 48;
   let t = '';
 
   if (forPrinter) t += POS.INIT;
@@ -379,7 +401,7 @@ export function generarPrecuenta(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`PRECUENTA #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`${opciones.titulo} #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
@@ -402,7 +424,8 @@ export function generarPrecuenta(
   // Los ítems anulados no se cobran ni se muestran: esta precuenta es para
   // que el cliente revise lo que va a pagar, no un registro interno.
   let subtotal = 0;
-  items.filter(item => !item.anulado).forEach(item => {
+  // Mismo orden que la pantalla: entradas, el resto y al final las bebidas.
+  ordenarItemsComanda(items.filter(item => !item.anulado)).forEach(item => {
     const cortesiaQty = item.cortesia_cantidad || 0;
     const cantidadCobrable = Math.max(0, item.cantidad - cortesiaQty);
     const itemTotal = item.precio * cantidadCobrable;
@@ -424,11 +447,9 @@ export function generarPrecuenta(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Totales ─────────────────────────────────────────────────────
-  const ivaFactor = ivaPercent / 100;
-  const iva = subtotal * ivaFactor;
-  const total = subtotal + iva;
+  const { subtotal: subtotalT, iva, total } = cerrarTotales(subtotal, ivaPercent, totales);
 
-  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween('Subtotal:', `$${subtotalT.toFixed(2)}`, W) + '\n';
   t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
   t += `${'-'.repeat(W)}\n`;
   t += p(POS.BOLD_ON);
@@ -447,8 +468,11 @@ export function generarPrecuenta(
   }
 
   // ── Datos de facturación ────────────────────────────────────────
-  t += `\n${'-'.repeat(W)}\n`;
-  t += datosFacturacionBlock(W);
+  // Solo en la precuenta: el ticket que se entrega al cobrar es el mismo documento sin este bloque.
+  if (opciones.facturacion) {
+    t += `\n${'-'.repeat(W)}\n`;
+    t += datosFacturacionBlock(W);
+  }
 
   // ── Pie ─────────────────────────────────────────────────────────
   t += `\n`;
@@ -461,6 +485,41 @@ export function generarPrecuenta(
   t += '\n\n\n';
 
   return t;
+}
+
+/**
+ * 2. PRECUENTA (SUBTOTAL DE MESA): documento que se entrega al comensal para revisar consumos antes del pago. Incluye los datos de
+ * facturación a llenar a mano.
+ */
+export function generarPrecuenta(
+  comanda: Comanda,
+  items: PrintableItem[],
+  mesaNombre: string,
+  ivaPercent: number = 15,
+  pagos: Pago[] = [],
+  habitacionNombre?: string,
+  forPrinter = false,
+  totales?: TotalesTicket,
+): string {
+  return armarTicketCliente(comanda, items, mesaNombre, ivaPercent, pagos, habitacionNombre, forPrinter, totales, { titulo: 'PRECUENTA', facturacion: true });
+}
+
+/**
+ * 3. TICKET DE PAGO (RECIBO FINAL): lo que se entrega al cliente al cobrar. Es EXACTAMENTE la precuenta (mismo encabezado, orden de
+ * ítems, cortesías, notas, totales y pie) pero sin el bloque de datos de facturación.
+ */
+export function generarTicketPago(
+  comanda: Comanda,
+  items: PrintableItem[],
+  pagos: Pago[],
+  mesaNombre: string,
+  ivaPercent: number = 15,
+  width: number = DEFAULT_CONFIG.columns,
+  habitacionNombre?: string,
+  forPrinter = false,
+  totales?: TotalesTicket,
+): string {
+  return armarTicketCliente(comanda, items, mesaNombre, ivaPercent, pagos, habitacionNombre, forPrinter, totales, { titulo: 'TICKET', facturacion: false, ancho: width });
 }
 
 /**
@@ -524,9 +583,9 @@ export function generarPrecuentaConsolidadaHabitacion(
   // Imprime una comanda y devuelve lo que sumó al subtotal (0 si no tenía nada que mostrar).
   const imprimirComanda = ({ comanda, items }: { comanda: Comanda; items: PrintableItem[] }): number => {
     let subtotalComanda = 0;
-    const itemsVisibles = items
+    const itemsVisibles = ordenarItemsComanda(items
       .filter(item => !item.anulado)
-      .filter(item => !soloConsumo || item.precio > 0);
+      .filter(item => !soloConsumo || item.precio > 0));
     if (itemsVisibles.length === 0) return 0;
     const tasaComanda = comanda.iva_porcentaje ?? ivaPercent;
 
@@ -579,16 +638,16 @@ export function generarPrecuentaConsolidadaHabitacion(
   // ── Totales ─────────────────────────────────────────────────────
   // Una línea de IVA por cada tasa presente (un checkout puede mezclar 15% y 8%).
   const tasas = [...subtotalPorTasa.entries()].sort((x, y) => y[0] - x[0]);
-  const ivaTotal = tasas.reduce((acc, [tasa, sub]) => acc + sub * (tasa / 100), 0);
-  const totalGeneral = granSubtotal + ivaTotal;
+  const ivaTotal = redondear2(tasas.reduce((acc, [tasa, sub]) => acc + sub * (tasa / 100), 0));
+  const totalGeneral = redondear2(redondear2(granSubtotal) + ivaTotal);
 
   t += `${'-'.repeat(W)}\n`;
-  t += justifyBetween('Subtotal:', `$${granSubtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween('Subtotal:', `$${redondear2(granSubtotal).toFixed(2)}`, W) + '\n';
   if (tasas.length <= 1) {
     t += justifyBetween(`IVA (${tasas[0]?.[0] ?? ivaPercent}%):`, `$${ivaTotal.toFixed(2)}`, W) + '\n';
   } else {
     tasas.forEach(([tasa, sub]) => {
-      t += justifyBetween(`IVA (${tasa}%) s/ $${sub.toFixed(2)}:`, `$${(sub * (tasa / 100)).toFixed(2)}`, W) + '\n';
+      t += justifyBetween(`IVA (${tasa}%) s/ $${sub.toFixed(2)}:`, `$${redondear2(sub * (tasa / 100)).toFixed(2)}`, W) + '\n';
     });
   }
   t += `${'-'.repeat(W)}\n`;
@@ -679,9 +738,8 @@ export function generarTicketReserva(
     t += linea;
 
     // ── Totales ───────────────────────────────────────────────────
-    const iva = subtotal * (ivaPercent / 100);
-    const total = subtotal + iva;
-    t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+    const { subtotal: subtotalT, iva, total } = cerrarTotales(subtotal, ivaPercent);
+    t += justifyBetween('Subtotal:', `$${subtotalT.toFixed(2)}`, W) + '\n';
     t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
     t += linea;
     t += p(POS.BOLD_ON);
@@ -705,100 +763,6 @@ export function generarTicketReserva(
   t += p(POS.ALIGN_CENTER);
   t += `Documento interno sin validez tributaria.\n`;
   t += p(POS.ALIGN_LEFT);
-  t += '\n\n\n';
-
-  return t;
-}
-
-/**
- * 3. TICKET DE PAGO (RECIBO FINAL)
- * Documento final emitido tras la conciliación y el pago.
- */
-export function generarTicketPago(
-  comanda: Comanda,
-  items: PrintableItem[],
-  pagos: Pago[],
-  mesaNombre: string,
-  ivaPercent: number = 15,
-  width: number = DEFAULT_CONFIG.columns,
-  habitacionNombre?: string,
-  forPrinter = false,
-): string {
-  const p = (cmd: string) => forPrinter ? cmd : '';
-  const W = width;
-  let t = '';
-
-  if (forPrinter) t += POS.INIT;
-
-  // ── Encabezado ──────────────────────────────────────────────────
-  const org = getOrgCache();
-  t += p(POS.ALIGN_CENTER) + p(POS.BOLD_ON) + p(POS.SIZE_2X);
-  t += `${(org.nombre || 'EL JARDIN').toUpperCase()}\n`;
-  t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF);
-  t += p(POS.ALIGN_LEFT);
-  if (org.direccion) t += `${org.direccion}\n`;
-  if (org.telefono) t += `Teléfono: ${org.telefono}\n`;
-  if (org.ruc) t += `RUC: ${org.ruc}\n`;
-  t += `${'-'.repeat(W)}\n`;
-
-  // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`TICKET #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
-  t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
-  if (habitacionNombre) {
-    t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
-  }
-  t += `Usuario: ${comanda.mesero || 'Genérico'}\n`;
-  t += `Cliente: ${comanda.cliente || 'Consumidor Final'}\n`;
-
-  const activeComandaClient = comanda.cliente_id;
-  if (activeComandaClient && activeComandaClient !== '99999999999') {
-    // Si es un cliente registrado, mostrar más info si estuviera disponible, o DNI
-    t += `C.I. / RUC: ${activeComandaClient}\n`;
-  }
-  t += `${'-'.repeat(W)}\n`;
-
-  // ── Cabecera de columnas ────────────────────────────────────────
-  t += p(POS.BOLD_ON);
-  t += justifyBetween('CANT  DESCRIPCION', 'VALOR', W) + '\n';
-  t += p(POS.BOLD_OFF);
-  t += `${'-'.repeat(W)}\n`;
-
-  // ── Items ───────────────────────────────────────────────────────
-  let subtotal = 0;
-  items.filter(item => !item.anulado).forEach(item => {
-    const itemTotal = item.precio * item.cantidad;
-    subtotal += itemTotal;
-    t += formatProductRow(item.cantidad, item.nombre, itemTotal, W) + '\n';
-    if (item.modificadores && item.modificadores.length > 0) {
-      item.modificadores.forEach((mod: string) => {
-        t += `     * ${mod.toUpperCase()}\n`;
-      });
-    }
-  });
-
-  t += `${'-'.repeat(W)}\n`;
-
-  // ── Totales ─────────────────────────────────────────────────────
-  const ivaFactor = ivaPercent / 100;
-  const iva = subtotal * ivaFactor;
-  const total = subtotal + iva;
-
-  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
-  t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
-  t += `${'-'.repeat(W)}\n`;
-  t += p(POS.BOLD_ON);
-  t += justifyBetween('TOTAL:', `$${total.toFixed(2)}`, W) + '\n';
-  t += p(POS.BOLD_OFF);
-
-  // ── Pie ─────────────────────────────────────────────────────────
-  t += `\n${'-'.repeat(W)}\n`;
-  t += p(POS.ALIGN_CENTER);
-  t += `¡Muchas gracias por su visita!\n`;
-  t += `Documento interno sin validez tributaria.\n`;
-  t += p(POS.ALIGN_LEFT);
-  t += `\n${'-'.repeat(W)}\n`;
-  t += `${formaPagoLine(W)}\n`;
-  t += `${'-'.repeat(W)}\n`;
   t += '\n\n\n';
 
   return t;
@@ -873,11 +837,9 @@ export function generarPrecuentaDividida(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Totales ─────────────────────────────────────────────────────
-  const ivaFactor = ivaPercent / 100;
-  const iva = subtotal * ivaFactor;
-  const total = subtotal + iva;
+  const { subtotal: subtotalT, iva, total } = cerrarTotales(subtotal, ivaPercent);
 
-  t += justifyBetween('Subtotal:', `$${subtotal.toFixed(2)}`, W) + '\n';
+  t += justifyBetween('Subtotal:', `$${subtotalT.toFixed(2)}`, W) + '\n';
   t += justifyBetween(`IVA (${ivaPercent}%):`, `$${iva.toFixed(2)}`, W) + '\n';
   t += `${'-'.repeat(W)}\n`;
   t += p(POS.BOLD_ON);

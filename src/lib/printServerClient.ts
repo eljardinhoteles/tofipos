@@ -438,10 +438,12 @@ export async function queueReceiptPrint(params: {
   ivaPorcentaje: number;
   pagos?: any[];
   habitacionNombre?: string;
+  /** Totales ya calculados por la pantalla: así el papel dice lo mismo que ella. */
+  totales?: { subtotal: number; iva: number; total: number };
 }) {
-  const { comanda, items, mesaNombre, ivaPorcentaje, pagos = [], habitacionNombre } = params;
+  const { comanda, items, mesaNombre, ivaPorcentaje, pagos = [], habitacionNombre, totales } = params;
   const { generarPrecuenta } = await import('../services/printTemplateEngine');
-  const rawText = generarPrecuenta(comanda, items as any, mesaNombre, ivaPorcentaje, pagos, habitacionNombre, true);
+  const rawText = generarPrecuenta(comanda, items as any, mesaNombre, ivaPorcentaje, pagos, habitacionNombre, true, totales);
   return enqueueJob({
       kind: 'receipt',
       title: `Precuenta - ${mesaNombre}`,

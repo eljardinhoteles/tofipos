@@ -60,6 +60,12 @@ export function calcularPreciosItem(
   };
 }
 
+/**
+ * Redondea a centavos con la mitad hacia arriba (13,635 → 13,64). Primero limpia el ruido de los decimales de la computadora
+ * (13,634999999999991 es en realidad 13,635): sin eso, el mismo importe se redondea distinto según el orden de las sumas.
+ */
+export const redondear2 = (n: number) => Math.round(Number((n * 100).toPrecision(12))) / 100;
+
 export interface TotalesCalculados {
   subtotalNeto: number;     // Suma de los precios antes de impuestos (netos)
   ivaTotal: number;         // Suma de todos los impuestos (IVA)
@@ -118,10 +124,26 @@ export function calcularTotalesComanda(
     }
   });
   
+  // Cierre a centavos, igual para la pantalla y los tickets, de modo que las líneas siempre sumen: el IVA se redondea una sola vez (mitad
+  // hacia arriba) sobre el total de la comanda y el total es subtotal + IVA ya redondeados. Con precios que incluyen IVA manda el total
+  // (lo que cuesta) y el subtotal es lo que sobra.
+  const ivaR = redondear2(ivaTotal);
+  let subtotalR: number;
+  let totalR: number;
+  if (preciosConIvaGlobal) {
+    totalR = redondear2(total);
+    subtotalR = redondear2(totalR - ivaR);
+  } else {
+    subtotalR = redondear2(subtotalNeto);
+    totalR = redondear2(subtotalR + ivaR);
+  }
+  const desgloseR: { [porcentaje: number]: number } = {};
+  for (const [tasa, monto] of Object.entries(desgloseIva)) desgloseR[Number(tasa)] = redondear2(monto);
+
   return {
-    subtotalNeto,
-    ivaTotal,
-    total,
-    desgloseIva
+    subtotalNeto: subtotalR,
+    ivaTotal: ivaR,
+    total: totalR,
+    desgloseIva: desgloseR
   };
 }

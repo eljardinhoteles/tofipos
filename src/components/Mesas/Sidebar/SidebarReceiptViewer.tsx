@@ -15,7 +15,7 @@ import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyDollar } from'@phosphor-icons/react';
-import { generarTicketPago, generarPrecuenta } from'../../../services/printTemplateEngine';
+import { generarTicketPago, generarPrecuenta, totalesParaTicket } from'../../../services/printTemplateEngine';
 import { queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { initVerticalRxDb } from'../../../db/rxdb';
@@ -291,7 +291,7 @@ export function SidebarReceiptViewer({
  variant={esComandaEnHabitacionActiva ?"warningSoft":"primarySoft"}className="w-full h-10 font-bold"
  onClick={() => {
  const content = esComandaEnHabitacionActiva
- ? generarPrecuenta(activeComanda, comandaItems, selectedMesa.nombre, ivaPorcentaje, todosPagos, habitacionMesa?.nombre)
+ ? generarPrecuenta(activeComanda, comandaItems, selectedMesa.nombre, ivaPorcentaje, todosPagos, habitacionMesa?.nombre, false, totalesParaTicket(totales))
  : generarTicketPago(
  activeComanda,
  comandaItems,
@@ -299,7 +299,9 @@ export function SidebarReceiptViewer({
  selectedMesa.nombre,
  ivaPorcentaje,
  undefined,
- habitacionMesa?.nombre
+ habitacionMesa?.nombre,
+ false,
+ totalesParaTicket(totales)
  );
  setPreviewContent(content);
  setPreviewTitle(esComandaEnHabitacionActiva ?`Imprimir Precuenta - ${selectedMesa.nombre}`:`Reimprimir Recibo - ${selectedMesa.nombre}`);
@@ -311,6 +313,7 @@ export function SidebarReceiptViewer({
  mesaNombre: selectedMesa.nombre,
  ivaPorcentaje,
  habitacionNombre: habitacionMesa?.nombre,
+ totales: totalesParaTicket(totales),
  }), 'Pre-cuenta');
  } else {
  imprimirConAviso(() => queueReprintTicket({
