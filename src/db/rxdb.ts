@@ -2121,9 +2121,18 @@ export async function updateRxComanda(id: string, patch: Partial<RxComanda>) {
   const db = await initVerticalRxDb()
   getActiveOrgIdStrict()
   const doc = await db.comandas.findOne(id).exec(true)
+  // Al cerrarla (o facturarla) la comanda queda con el IVA que tenía: una comanda sin IVA propio (creada antes de que se guardara) lo
+  // seguiría del IVA activo, y su historia cambiaría si el IVA del sistema cambia.
+  let congelarIva: { iva_porcentaje: number; iva_precios_con_iva: boolean } | null = null
+  const actual = doc.toJSON() as RxComanda
+  if ((patch.estado === 'cerrado' || patch.estado === 'facturado') && actual.iva_porcentaje == null && patch.iva_porcentaje === undefined) {
+    const snap = await getIvaActivoSnapshot(db, actual.organization_id)
+    congelarIva = { iva_porcentaje: snap.porcentaje, iva_precios_con_iva: snap.precios_con_iva }
+  }
   const result = await doc.update({
     $set: {
       ...patch,
+      ...(congelarIva ?? {}),
       updated_at: new Date().toISOString(),
       _modified: new Date().toISOString()
     }

@@ -312,7 +312,9 @@ export default function OrdenesV2() {
     const map = new Map<string, { items: typeof safeComandaItems; total: number }>();
     for (const comanda of paginatedComandas) {
       const items = safeComandaItems.filter(i => i.comanda_id === comanda.id);
-      const total = calcularTotalesComanda(items, menuItems, ivaPorcentaje, preciosConIva).total;
+      // Cada comanda con SU IVA (el fijado al crearla); solo las que no lo tienen siguen el IVA activo.
+      const propio = comanda.iva_porcentaje != null;
+      const total = calcularTotalesComanda(items, menuItems, propio ? comanda.iva_porcentaje : ivaPorcentaje, propio ? !!comanda.iva_precios_con_iva : preciosConIva).total;
       map.set(comanda.id, { items, total });
     }
     return map;

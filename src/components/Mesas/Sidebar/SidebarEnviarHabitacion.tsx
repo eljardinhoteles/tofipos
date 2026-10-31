@@ -3,7 +3,7 @@ import { folioLabel } from '../../../lib/folio';
 import { Door, Check } from'@phosphor-icons/react';
 import type { Comanda } from'../../../db/database';
 import { showToast } from'@/lib/toast';
-import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { SubcuentaChips } from'./habitacion/SubcuentaChips';
 import { filtrarCuentasHabitacionVigentes } from'../../../lib/habitacionCuentas';
@@ -24,7 +24,8 @@ export function SidebarEnviarHabitacion({ activeComanda, onBack, onSuccess }: Si
  const [cuentasActivas, setCuentasActivas] = useState<any[]>([]);
  const [comandaItems, setComandaItems] = useState<any[]>([]);
 
- const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ // IVA de la propia comanda (el de cuando se creó): una comanda histórica no debe cambiar si luego cambia el IVA del sistema.
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
 
  useEffect(() => {
  let alive = true;

@@ -7,7 +7,7 @@ import {
 } from'@phosphor-icons/react';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
-import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { TicketPreviewModal } from'../../Common/TicketPreviewModal';
 import { generarPrecuentaDividida } from'../../../services/printTemplateEngine';
@@ -111,7 +111,8 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
  };
  }, [activeComanda?.id]);
 
- const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ // IVA de la propia comanda (el de cuando se creó): una comanda histórica no debe cambiar si luego cambia el IVA del sistema.
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
  const { menuItems } = useRxMenuCatalog();
 
  const totalesOriginales = useMemo(() => {

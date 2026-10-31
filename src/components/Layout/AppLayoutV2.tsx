@@ -25,7 +25,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { usePermisos, rutaPermitida } from '../../hooks/usePermisos';
 import { useAvisosHotelEnVivo } from '../../hooks/useHotelEnVivo';
 import { useKeyboardCloseReset, useOtherDialogOpen } from '../../hooks/useKeyboardCloseReset';
-import { useIvaActivo } from '../../hooks/useIvaActivo';
+import { useComandaIva } from '../../hooks/useComandaIva';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { calcularTotalesComanda } from '../../lib/taxUtils';
 import { isOperativeComanda, pickComandaActiva } from '../../db/comandaState';
@@ -210,7 +210,7 @@ export function AppLayoutV2() {
   const [cartComanda, setCartComanda] = useState<any | null>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const { menuItems: cartMenuItems } = useRxMenuCatalog();
-  const { porcentaje: cartIvaPorcentaje, preciosConIva: cartPreciosConIva } = useIvaActivo();
+  const { porcentaje: cartIvaPorcentaje, preciosConIva: cartPreciosConIva } = useComandaIva(cartComanda);
 
   useEffect(() => {
     let alive = true;

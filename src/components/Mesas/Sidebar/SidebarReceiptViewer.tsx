@@ -11,7 +11,7 @@ import { useEffect, useState, useMemo } from'react';
 import { Printer, User, Bed, ForkKnife, Storefront } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { ComandaItemRow } from'./ComandaItemRow';
-import { useIvaActivo } from'../../../hooks/useIvaActivo';
+import { useComandaIva } from'../../../hooks/useComandaIva';
 import { calcularTotalesComanda } from'../../../lib/taxUtils';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyDollar } from'@phosphor-icons/react';
@@ -164,7 +164,8 @@ export function SidebarReceiptViewer({
  }))
  .filter((p: ParteDividida) => p.monto > 0.004), [ventasMesa, activeComanda?.id]);
 
- const { porcentaje: ivaPorcentaje, preciosConIva } = useIvaActivo();
+ // IVA de la propia comanda (el de cuando se creó): una comanda histórica no debe cambiar si luego cambia el IVA del sistema.
+ const { porcentaje: ivaPorcentaje, preciosConIva } = useComandaIva(activeComanda);
  const { menuItems } = useRxMenuCatalog();
 
  const totales = useMemo(
