@@ -1757,6 +1757,14 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
       replica?.received$?.subscribe((d: any) => {
         huellasRecibidas.set(huella(d), Date.now()); limpiarHuellas(huellasRecibidas)
         const id = comandaDe(d)
+        // Si el servidor ya tiene esa versión (o una más nueva), el cambio local pendiente de ese documento deja de estar pendiente.
+        const localesDoc = cambiosLocales.get(id)
+        const pendienteDoc = localesDoc?.get(String(d?.id))
+        if (localesDoc && pendienteDoc && String(d?.updated_at) >= pendienteDoc.updated_at) {
+          localesDoc.delete(String(d.id))
+          if (localesDoc.size === 0) cambiosLocales.delete(id)
+          if (id) avisarSyncComanda(id)
+        }
         if (!pushEnabled || !id || huellasEnviadas.has(huella(d))) return // sincronización inicial o eco de lo que subió este equipo
         recibidoHasta.set(id, Date.now() + SYNC_RECIBIDO_MS)
         avisarSyncComanda(id)
@@ -1774,7 +1782,8 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
           locales.set(String(d.id), { updated_at: String(d.updated_at), desde: locales.get(String(d.id))?.desde ?? Date.now() })
           avisarSyncComanda(id)
           setTimeout(() => avisarSyncComanda(id), SYNC_PENDIENTE_MS + 100)
-        }, 300)
+          setTimeout(() => avisarSyncComanda(id), SYNC_AUTOCURA_MS + 100) // reevalúa por si era un falso aviso
+        }, 800)
       })
     }
   } catch (e) {
@@ -2018,6 +2027,7 @@ let lastSyncStatus: SyncStatus = {
 export type EstadoSyncComanda = 'normal' | 'enviando' | 'pendiente' | 'recibido'
 const SYNC_PENDIENTE_MS = 15_000
 const SYNC_RECIBIDO_MS = 3_000
+const SYNC_AUTOCURA_MS = 20_000
 const huellasEnviadas = new Map<string, number>()                  // `${col}:${id}:${updated_at}` → cuándo se envió (para reconocer el eco)
 const huellasRecibidas = new Map<string, number>()                 // lo mismo para lo que llegó por la descarga
 const cambiosLocales = new Map<string, Map<string, { updated_at: string; desde: number }>>() // comandaId → docId → cambio sin enviar
@@ -2031,12 +2041,26 @@ function limpiarHuellas(mapa: Map<string, number>) {
   for (const [k, t] of mapa) if (t < limite) mapa.delete(k)
 }
 
+/** ¿Alguna réplica de comandas/ítems está enviando o recibiendo en este momento? */
+function replicacionOcupada(): boolean {
+  try {
+    const r = verticalReplicationState as any
+    return !!(r?.comandas?.subjects?.active?.getValue?.() || r?.items?.subjects?.active?.getValue?.())
+  } catch { return false }
+}
+
 export function estadoSyncComanda(comandaId: string | undefined | null): EstadoSyncComanda {
   if (!comandaId) return 'normal'
   const locales = cambiosLocales.get(comandaId)
   if (locales && locales.size > 0) {
     const masViejo = Math.min(...[...locales.values()].map(c => c.desde))
-    return !navigator.onLine || Date.now() - masViejo > SYNC_PENDIENTE_MS ? 'pendiente' : 'enviando'
+    // Autocuración: con conexión, la réplica ociosa y el aviso viejo, no queda nada por enviar (el aviso era un falso positivo: p. ej. un
+    // cambio llegado por la descarga que se tomó por local). Sin conexión se deja, porque ahí sí hay cambios que no han salido.
+    if (navigator.onLine && Date.now() - masViejo > SYNC_AUTOCURA_MS && !replicacionOcupada()) {
+      cambiosLocales.delete(comandaId)
+    } else {
+      return !navigator.onLine || Date.now() - masViejo > SYNC_PENDIENTE_MS ? 'pendiente' : 'enviando'
+    }
   }
   return (recibidoHasta.get(comandaId) ?? 0) > Date.now() ? 'recibido' : 'normal'
 }
