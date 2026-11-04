@@ -265,6 +265,12 @@ export function SidebarReceiptViewer({
         <p className="t-meta text-destructive dark:text-white leading-relaxed">
           {activeComanda.motivo_anulacion}
         </p>
+        {activeComanda.anulada_por && (
+          <p className="t-meta text-destructive/80 dark:text-white/80 mt-0.5">
+            {activeComanda.anulada_por}
+            {activeComanda.anulada_at && ` · ${new Date(activeComanda.anulada_at).toLocaleDateString('es', { day: '2-digit', month: 'short' })} ${new Date(activeComanda.anulada_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`}
+          </p>
+        )}
       </div>
     )}
 

@@ -113,8 +113,8 @@ export function construirActividad(d: Datos): ActividadEvento[] {
     if (!esHoy(c.updated_at)) continue;
 
     if (c.estado === 'anulada') {
-      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `an-${c.id}`, ts: c.updated_at, tipo: 'anulacion', tono: 'danger', titulo: 'Comanda anulada', alerta: true,
-        detalle: [etiqueta, folio, c.motivo_anulacion].filter(Boolean).join(' · '), actor: c.mesero });
+      push({ destino: { tipo: 'comanda', comandaId: c.id }, id: `an-${c.id}`, ts: c.anulada_at ?? c.updated_at, tipo: 'anulacion', tono: 'danger', titulo: 'Comanda anulada', alerta: true,
+        detalle: [etiqueta, folio, c.motivo_anulacion].filter(Boolean).join(' · '), actor: c.anulada_por ?? c.mesero });
     } else if (CERRADAS.includes(c.estado)) {
       cerradasHoy.add(c.id);
       const hab = c.habitacion_cuenta_id ? habPorId.get(c.habitacion_cuenta_id) : null;

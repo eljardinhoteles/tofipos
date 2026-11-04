@@ -10,6 +10,8 @@ export function useTableActions() {
   const { openConfirm, openPrompt, activeSubcomandaId, setActiveSubcomandaId } = useUI();
   const { currentMesero, adminUser } = useAuth();
 
+  const quienAnula = currentMesero?.nombre || (adminUser ? (adminUser.email?.split('@')[0] || 'Administrador') : 'Sistema');
+
   const getOrgId = () => localStorage.getItem('pos_active_org_id') || '';
 
   const findMesaComandas = async (mesaId: string, estadoFilter?: string) => {
@@ -243,6 +245,8 @@ export function useTableActions() {
                 estado: 'anulada',
                 mesa_nombre: (comanda as any).mesa_nombre || mesa.nombre,
                 motivo_anulacion: motivo.trim(),
+                anulada_por: quienAnula,
+                anulada_at: new Date().toISOString(),
               });
             }
             await updateRxMesa(mesa.id, { estado: 'libre' });
@@ -252,13 +256,30 @@ export function useTableActions() {
         });
         return;
       }
-      const now = new Date().toISOString();
-      for (const comanda of comandas) {
-        await (comanda as any).update({ $set: { _deleted: true, updated_at: now, _modified: now } });
-      }
-      await updateRxMesa(mesa.id, { estado: 'libre' });
-      onComplete?.('mapa');
-      showToast.success('Mesa cerrada', `${mesa.nombre} quedó libre.`);
+      // Confirmación: cerrar una mesa vacía la libera para todos los dispositivos y no deja la comanda en el historial. Se vuelve a
+      // comprobar que siga vacía al confirmar: otro dispositivo pudo añadir productos mientras el diálogo estaba abierto.
+      openConfirm(
+        `Cerrar ${mesa.nombre} vacía`,
+        `${mesa.nombre} no tiene productos. Se cerrará y quedará libre en todos los dispositivos.`,
+        async () => {
+          const vigentes = await findMesaComandas(mesa.id);
+          const idsVigentes = vigentes.map((c: any) => c.id);
+          const itemsAhora = idsVigentes.length > 0
+            ? await rxDb.comanda_items.find({ selector: { comanda_id: { $in: idsVigentes }, _deleted: { $ne: true } } }).exec()
+            : [];
+          if (itemsAhora.some((i: any) => !i.anulado && (i.cantidad || 0) > 0)) {
+            showToast.warning('No se cerró la mesa', 'Alguien añadió productos mientras tanto.');
+            return;
+          }
+          const now = new Date().toISOString();
+          for (const comanda of vigentes) {
+            await (comanda as any).update({ $set: { _deleted: true, anulada_por: quienAnula, anulada_at: now, updated_at: now, _modified: now } });
+          }
+          await updateRxMesa(mesa.id, { estado: 'libre' });
+          onComplete?.('mapa');
+          showToast.success('Mesa cerrada', `${mesa.nombre} quedó libre.`);
+        }
+      );
     } else if (action === 'cancelar') {
       const activeComandas = await findMesaComandas(mesa.id);
 
@@ -277,6 +298,8 @@ export function useTableActions() {
             estado: 'anulada',
             mesa_nombre: sub.mesa_nombre || mesa.nombre,
             motivo_anulacion: motivo.trim(),
+                anulada_por: quienAnula,
+                anulada_at: new Date().toISOString(),
           });
           await liberarMesaSiSinOperativas(mesa.id);
           const quedan = await findMesaComandas(mesa.id);
@@ -306,6 +329,8 @@ export function useTableActions() {
               estado: 'anulada',
               mesa_nombre: (comanda as any).mesa_nombre || mesa.nombre,
               motivo_anulacion: motivo.trim(),
+                anulada_por: quienAnula,
+                anulada_at: new Date().toISOString(),
             });
           }
           await updateRxMesa(mesa.id, { estado: 'libre' });

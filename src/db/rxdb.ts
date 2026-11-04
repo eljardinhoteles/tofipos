@@ -69,6 +69,8 @@ export interface RxComanda {
   created_at: string
   updated_at: string
   motivo_anulacion?: string
+  anulada_por?: string | null
+  anulada_at?: string | null
   organization_id: string
   _deleted: boolean
   _modified: string
@@ -556,7 +558,7 @@ const mesaSchema = {
 } as const
 
 const comandaSchema = {
-  version: 6,
+  version: 7,
   primaryKey: 'id',
   type: 'object',
   properties: {
@@ -581,6 +583,8 @@ const comandaSchema = {
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     motivo_anulacion: { type: ['string', 'null'] },
+    anulada_por: { type: ['string', 'null'] },
+    anulada_at: { type: ['string', 'null'] },
     organization_id: { type: 'string' },
     _deleted: { type: 'boolean' },
     _modified: { type: 'string' },
@@ -1120,7 +1124,9 @@ export async function createVerticalRxDb(name = 'pos_food_vertical_8') {
         // v4 → v5: Mesa Múltiple — nombre de subcomanda (null = comanda normal).
         5: (oldDoc: any) => ({ ...oldDoc, subcomanda_nombre: null }),
         // v5 → v6: subcuenta de habitación (null = cuenta principal).
-        6: (oldDoc: any) => ({ ...oldDoc, habitacion_subcuenta_id: null })
+        6: (oldDoc: any) => ({ ...oldDoc, habitacion_subcuenta_id: null }),
+        // v6 → v7: auditoría de anulación (quién y cuándo).
+        7: (oldDoc: any) => ({ ...oldDoc, anulada_por: null, anulada_at: null })
       }
     },
     comanda_items: {
