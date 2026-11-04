@@ -374,9 +374,19 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
           )}
 
           {/* Botón rápido para adjuntar cuando no hay comprobante */}
-          {admiteComprobante && !m.comprobante_url && (
+          {admiteComprobante && !m.comprobante_url && !(m.tipo === 'pago' && m.metodo_pago === 'efectivo') && !m.sin_comprobante && (
+            <div className="flex items-center gap-2">
+            <button type="button" disabled={uploading} title="Pegar la imagen copiada"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try { handleAdjuntarComprobante(await archivoDePortapapeles()); }
+                catch (err) { showToast.warning('No se pudo pegar', err instanceof Error ? err.message : undefined); }
+              }}
+              className={cn("min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-transparent t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation", uploading && "opacity-50 pointer-events-none")}>
+              <ClipboardText size={14} weight="bold" /> Pegar
+            </button>
             <label onClick={(e) => e.stopPropagation()} className={cn(
-              "min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation",
+              "min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-secondary t-dato text-secondary-foreground cursor-pointer hover:bg-secondary/80 transition-colors touch-manipulation",
               uploading && "opacity-50 pointer-events-none"
             )}>
               <UploadSimple size={14} weight="bold" />
@@ -389,17 +399,7 @@ export function MovimientoHistorialCard({ ventaId, movimiento: m, allMovimientos
                 }}
               />
             </label>
-          )}
-          {admiteComprobante && !m.comprobante_url && (
-            <button type="button" disabled={uploading} title="Pegar la imagen copiada"
-              onClick={async (e) => {
-                e.stopPropagation();
-                try { handleAdjuntarComprobante(await archivoDePortapapeles()); }
-                catch (err) { showToast.warning('No se pudo pegar', err instanceof Error ? err.message : undefined); }
-              }}
-              className={cn("min-h-8 pointer-coarse:min-h-11 flex items-center gap-1.5 px-3 rounded-2xl bg-muted/60 t-dato text-muted-foreground cursor-pointer hover:bg-muted transition-colors touch-manipulation", uploading && "opacity-50 pointer-events-none")}>
-              <ClipboardText size={14} weight="bold" /> Pegar
-            </button>
+            </div>
           )}
           </div>
 

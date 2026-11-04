@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { limpiarReferencia } from '../../lib/nombreMesa';
 import {
-  Receipt, Prohibit, Paperclip, Trash,
+  Receipt, Prohibit, Trash,
   CurrencyDollar, ArrowUp, ArrowDown, Percent, FileText, XCircle, CreditCard, ChatText,
   CloudCheck, CloudWarning, ArrowsClockwise,
 } from '@phosphor-icons/react';
@@ -21,9 +21,10 @@ import { useRxClientes } from '../../hooks/useRxClientes';
 import { documentoCliente } from '../../lib/documentoCliente';
 import { EstadoBadge } from '../Common/EstadoBadge';
 import { updateRxVenta, adjuntarComprobanteMovimiento, verificarSyncVenta } from '../../db/rxdb';
-import { eliminarComprobante, resolverComprobanteUrl } from '@/lib/comprobantes';
+import { eliminarComprobante } from '@/lib/comprobantes';
 import { VentaClienteCard } from './VentaClienteCard';
 import { VentaEstadia } from './VentaEstadia';
+import { ArchivoVentaCard } from './ArchivoVentaCard';
 import { VentaAccionesBar } from './VentaAccionesBar';
 import { MovimientoHistorialCard } from './MovimientoHistorialCard';
 import { VentaComandasPanel } from './VentaComandasPanel';
@@ -105,6 +106,17 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   const esHotel = venta.origen === 'reserva_hotel';
   const comandasDeVenta = useComandasDeVenta(venta, movimientos);
   const cantidadComandas = comandasDeVenta.length;
+  // Barra fija con lo esencial: aparece cuando la tarjeta de resumen sale de la vista al hacer scroll.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const resumenRef = useRef<HTMLDivElement>(null);
+  const [resumenVisible, setResumenVisible] = useState(true);
+  useEffect(() => {
+    const el = resumenRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setResumenVisible(e.isIntersecting), { root: scrollRef.current, threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [venta.id]);
   const [checkingSync, setCheckingSync] = useState(false);
   const [syncResult, setSyncResult] = useState<'ok' | 'reintentado' | 'error' | null>(null);
 
@@ -153,7 +165,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-background-sunken">
+    <div className="relative flex flex-col h-full min-h-0 bg-background-sunken">
       {/* Header fijo, del mismo alto que la fila de filtros: el cliente de la venta, con un botón para ver sus datos. */}
       <div className="h-16 px-6 border-b border-border bg-card flex items-center gap-3 shrink-0">
         <div className="min-w-0 mr-auto flex flex-col">
@@ -172,10 +184,30 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
           <VentaClienteCard venta={venta} />
         </div>
       )}
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      {!resumenVisible && (
+        <div className={cn("absolute top-0 inset-x-0 z-10 px-6 py-2 flex items-center gap-4 border-b shadow-2xs animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none",
+          item.anulado ? "bg-muted border-border" : cn(ORIGEN_FONDO[venta.origen], ORIGEN_BORDE[venta.origen]))}>
+          <span className={cn("min-w-0 mr-auto flex items-center gap-1.5 t-cuerpo-fuerte", item.anulado ? "text-muted-foreground" : ORIGEN_TEXTO[venta.origen])}>
+            {(() => { const IconoOrigen = ORIGEN_ICON[venta.origen]; return <IconoOrigen size={18} weight="bold" className="shrink-0" />; })()}
+            <span className="truncate">{limpiarReferencia(venta.referencia) || ORIGEN_LABEL[venta.origen]}</span>
+          </span>
+          <span className="flex items-baseline gap-1.5 shrink-0">
+            <span className="t-etiqueta text-muted-foreground">Monto</span>
+            <span className="font-redonda t-valor text-foreground tabular-nums">${item.montoTotal.toFixed(2)}</span>
+          </span>
+          <span className="flex items-baseline gap-1.5 shrink-0">
+            <span className="t-etiqueta text-muted-foreground">Saldo</span>
+            <span className={cn("font-redonda t-valor tabular-nums", item.saldo > 0.01 ? "text-warning-foreground" : item.saldo < -0.01 ? "text-info-foreground" : "text-muted-foreground")}>
+              {item.saldo < -0.01 ? `+$${Math.abs(item.saldo).toFixed(2)}` : `$${Math.max(item.saldo, 0).toFixed(2)}`}
+            </span>
+          </span>
+        </div>
+      )}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 pb-32 flex flex-col gap-3">
         {/* Resumen de la venta en una tarjeta (mismo estilo que las del historial): junta la información inicial para
             leerla de una vez. A la izquierda título + origen; a la derecha monto y saldo. Las cifras solo se tiñen cuando hay algo que atender (saldo pendiente o excedente); en cero se apagan. */}
-        <div className={cn("@container flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-2xl border px-5 py-4 shadow-2xs", item.anulado ? "bg-muted border-border" : cn(ORIGEN_FONDO[venta.origen], ORIGEN_BORDE[venta.origen]))}>
+        <div ref={resumenRef} className={cn("@container flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-2xl border px-5 py-4 shadow-2xs", item.anulado ? "bg-muted border-border" : cn(ORIGEN_FONDO[venta.origen], ORIGEN_BORDE[venta.origen]))}>
           <div className="flex flex-col items-start gap-2 min-w-0 flex-1 basis-36">
             <h3 title={limpiarReferencia(venta.referencia) || undefined} className="t-titulo text-foreground line-clamp-3 select-text">{limpiarReferencia(venta.referencia) || '—'}</h3>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -329,30 +361,15 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
               <p className="t-meta text-muted-foreground py-2">Esta venta no tiene archivos. Adjunta uno desde «Comentar / Adjuntar».</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {item.documentosAdjuntos.map((doc) => (
-                  <div key={doc.id} className="group flex items-center gap-3 rounded-2xl bg-card shadow-2xs px-4 py-3">
-                    <a
-                      href={resolverComprobanteUrl(doc.url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Abrir archivo"
-                      className="flex items-center gap-3 min-w-0 flex-1 text-foreground hover:text-primary transition-colors"
-                    >
-                      <Paperclip size={18} className="shrink-0 text-muted-foreground" />
-                      <span className="flex flex-col min-w-0">
-                        <span className="t-cuerpo-fuerte truncate" title={doc.nombre}>{doc.nombre}</span>
-                        <span className="t-meta text-muted-foreground">{doc.origen === 'Venta' ? 'Documento de la venta' : MOVIMIENTO_LABEL[doc.origen as VentaMovimientoTipo] ?? doc.origen}</span>
-                      </span>
-                    </a>
-                    {!item.anulado && (
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setDocToDelete(doc)} disabled={uploadingDocumento}
-                        title="Eliminar archivo" aria-label={`Eliminar ${doc.nombre}`}
-                        className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                        <Trash size={16} weight="bold" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                {item.documentosAdjuntos.map((doc) => {
+                  const tipo = doc.origen === 'Venta' ? 'anclar' : doc.origen as VentaMovimientoTipo;
+                  return (
+                    <ArchivoVentaCard key={doc.id} doc={doc}
+                      etiqueta={doc.origen === 'Venta' ? 'Documento de la venta' : MOVIMIENTO_LABEL[tipo] ?? doc.origen}
+                      icono={MOVIMIENTO_ICON[tipo]} colorClasses={MOVIMIENTO_COLOR[tipo]}
+                      onEliminar={item.anulado ? undefined : () => setDocToDelete(doc)} eliminando={uploadingDocumento} />
+                  );
+                })}
               </div>
             )
           )}
@@ -372,6 +389,7 @@ export function VentaDetalleAcciones({ item }: VentaDetalleAccionesProps) {
         </div>
       </div>
 
+      </div>
       <VentaAccionesBar item={item} />
     </div>
   );

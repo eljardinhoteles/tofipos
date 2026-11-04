@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toBlob } from 'html-to-image';
-import { ArrowLeft, DownloadSimple, Printer, Receipt } from '@phosphor-icons/react';
+import { ArrowLeft, DownloadSimple, Printer, Receipt, Note } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { imprimirConAviso } from '@/lib/imprimir';
 import { showToast } from '@/lib/toast';
@@ -27,6 +27,11 @@ function ReporteDocumento({ datos }: { datos: DatosTicketCierre }) {
         Orígenes incluidos: <strong>{datos.origenes.join(', ')}</strong>
         {datos.omitidos.length > 0 && <> · Omitidos: {datos.omitidos.join(', ')}</>}
       </p>
+
+      <div className="cierre-nota">
+        <strong>Novedades de caja</strong>
+        <p>{datos.novedades.trim() || 'Sin novedades.'}</p>
+      </div>
 
       <div className="cierre-totales">
         <div><span>Total cobrado</span><strong>{dinero(datos.totalCobrado)}</strong></div>
@@ -102,9 +107,6 @@ function ReporteDocumento({ datos }: { datos: DatosTicketCierre }) {
       {!d && (
         <p className="cierre-origenes">Cobros sin comprobante: {datos.sinComprobante} · Ventas sin factura: {datos.sinFactura}</p>
       )}
-
-      <h2>Novedades de caja</h2>
-      <p className="cierre-novedades">{datos.novedades.trim() || 'Sin novedades.'}</p>
     </div>
   );
 }
@@ -224,7 +226,7 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
             <div className="flex flex-col gap-0.5">
               <h3 className="t-titulo text-foreground">Cierre de caja · {datos.fecha}</h3>
               <span className="t-meta text-muted-foreground">
-                Cerrado por {cierre.usuario_nombre} · {new Date(cierre.fecha_cierre).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' })}
+                Cerrado por {cierre.usuario_nombre} · {new Date(cierre.fecha_cierre).toLocaleTimeString('es-EC', { timeStyle: 'short' })}
               </span>
             </div>
           )}
@@ -232,9 +234,14 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
             <p className="t-meta text-muted-foreground text-center py-12">Este cierre no guardó el detalle para el reporte.</p>
           ) : (
             <>
+              {/* Nota: lo primero que debe leer quien revisa el cierre. Tono cálido tipo papel adhesivo. */}
+              <section className="flex flex-col gap-1.5 rounded-2xl border border-border bg-warning-soft p-5 shadow-xs">
+                <h4 className="flex items-center gap-2 t-etiqueta text-warning-foreground"><Note size={16} weight="bold" aria-hidden="true" /> Novedades de caja</h4>
+                <p className="t-cuerpo text-foreground whitespace-pre-wrap select-text">{datos.novedades.trim() || 'Sin novedades.'}</p>
+              </section>
+
               <section className={seccion}>
                 <h4 className={tituloSeccion}>Resumen del turno</h4>
-                <span className="t-meta text-muted-foreground capitalize -mt-2">{datos.fecha}</span>
                 <div className="flex flex-col gap-1">
                   {datos.cobrosDe && <Fila label="Cobros de" value={datos.cobrosDe} />}
                   <Fila label="Orígenes incluidos" value={datos.origenes.join(', ')} />
@@ -310,10 +317,6 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
                 </section>
               )}
 
-              <section className={seccion}>
-                <h4 className={tituloSeccion}>Novedades de caja</h4>
-                <p className="t-cuerpo text-secondary-foreground whitespace-pre-wrap">{datos.novedades.trim() || 'Sin novedades.'}</p>
-              </section>
             </>
           )}
         </div>
@@ -345,7 +348,9 @@ export function CierreReporteVista({ cierre, onVolver }: { cierre: CierreTurno; 
         .cierre-page tr.sub td { padding-left: 12px; font-size: 10px; color: #444; }
         .cierre-origen { break-inside: avoid; margin-bottom: 3mm; }
         .cierre-origen-titulo { display: flex; justify-content: space-between; font-size: 11px; font-weight: 900; padding: 2px 0; }
-        .cierre-novedades { font-size: 11px; white-space: pre-wrap; margin: 0; min-height: 20mm; border: 1px solid #ccc; padding: 6px 8px; }
+        .cierre-nota { break-inside: avoid; margin: 0 0 6mm; padding: 6px 10px; background: #fff8d6; border: 1px solid #e6d27a; border-left: 4px solid #d9b800; }
+        .cierre-nota strong { font-size: 10px; text-transform: uppercase; }
+        .cierre-nota p { font-size: 11px; white-space: pre-wrap; margin: 3px 0 0; }
 
         @media print {
           html, body { overflow: visible !important; height: auto !important; width: auto !important; }

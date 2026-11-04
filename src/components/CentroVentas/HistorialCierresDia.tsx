@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { useState } from 'react';
-import { FileText, LockSimple } from '@phosphor-icons/react';
+import { FileText, LockSimple, Note } from '@phosphor-icons/react';
 import { CierreReporteVista } from './CierreReporteVista';
 import { Button } from '@/components/ui/button';
 import { useCierresDelDia } from '../../hooks/useCierresDelDia';
@@ -49,12 +49,15 @@ export function ListaCierres({ cierres, cargando = false, error = null, vacio, o
                     </div>
                   )}
                 </div>
+                {c.novedades?.trim() && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-border bg-warning-soft p-3">
+                    <Note size={16} weight="bold" aria-hidden="true" className="shrink-0 mt-0.5 text-warning-foreground" />
+                    <p className="t-meta text-foreground whitespace-pre-wrap select-text">{c.novedades}</p>
+                  </div>
+                )}
                 <Button type="button" variant="outline" className="self-end gap-1.5" onClick={() => onVerReporte(c)}>
                   <FileText size={16} weight="bold" /> Ver reporte
                 </Button>
-                {c.novedades?.trim() && (
-                  <p className="t-meta text-muted-foreground whitespace-pre-wrap rounded-2xl bg-muted/40 p-3">{c.novedades}</p>
-                )}
               </section>
       ))}
     </>

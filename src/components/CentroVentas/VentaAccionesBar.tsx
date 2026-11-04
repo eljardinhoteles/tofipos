@@ -6,9 +6,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RedCobroRadios } from '../Common/RedCobroRadios';
+import { SeguimientoPasos } from './SeguimientoPasos';
+import { accionesPendientes } from './seguimientoAcciones';
 import { ComprobanteAdjunto } from '../Common/ComprobanteAdjunto';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Casilla } from '../Common/Casilla';
 import {
   Select,
@@ -54,6 +57,18 @@ const ACCION_LABEL: Record<AccionId, string> = {
   marcar_credito: 'Crédito',
   comentario: 'Comentar / Adjuntar',
   anular: 'Anular',
+};
+
+// Qué hace cada acción: se muestra al pasar el cursor, sobre todo cuando la píldora queda solo con ícono.
+const ACCION_AYUDA: Record<AccionId, string> = {
+  pago: 'Registrar un cobro (efectivo, tarjeta, transferencia u otros).',
+  ajuste: 'Corregir el monto de la venta hacia arriba o abajo.',
+  anclar: 'Registrar el número de factura emitida.',
+  reembolsar: 'Devolver dinero al cliente.',
+  retencion: 'Registrar una retención o comisión descontada del cobro.',
+  marcar_credito: 'Pasar la venta a crédito para cobrarla después.',
+  comentario: 'Agregar una nota o adjuntar un documento.',
+  anular: 'Anular la venta completa.',
 };
 
 const ACCION_ICON: Record<AccionId, typeof Receipt> = {
@@ -165,6 +180,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   }, [item, venta.tipo]);
 
   // Sin acción elegida se muestra el menú de tarjetas; al elegir una se abre su formulario.
+  const pendientes = accionesPendientes(item);
   const accionActiva = accion && accionesDisponibles.includes(accion) ? accion : null;
 
   // Fecha de la última factura de la venta: los pagos posteriores a ella son los que aún no están cubiertos.
@@ -392,28 +408,43 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   if (accionesDisponibles.length === 0) return null;
 
   return (
-        <div className={cn("shrink-0 p-4 flex flex-col gap-3", accionActiva && "bg-card shadow-[0_-4px_12px_-6px_oklch(0_0_0/0.12)]")}>
+        <div className={cn("shrink-0 p-4 flex flex-col gap-3", accionActiva ? "bg-card shadow-[0_-4px_12px_-6px_oklch(0_0_0/0.12)]" : "absolute bottom-0 inset-x-0 z-10 pt-10 bg-linear-to-t from-background-sunken from-60% to-transparent pointer-events-none [&>*]:pointer-events-auto")}>
           {!accionActiva ? (
+            <>
+            <SeguimientoPasos item={item} />
             <div className="flex flex-wrap justify-center gap-2 animate-in fade-in-0 duration-200 motion-reduce:animate-none">
               {/* Píldoras flotantes en un orden fijo; solo se muestran las que aplican a esta venta (sin pagos no hay
                   Reembolsar; una venta a crédito no ofrece Crédito), para no ocupar espacio con botones apagados. */}
               {ACCIONES_MENU.filter(a => accionesDisponibles.includes(a)).map(a => {
                 const Icon = ACCION_ICON[a];
+                // Si algo falta, solo esa acción lleva texto; las demás se reducen a ícono para guiar la vista.
+                const conTexto = pendientes.includes(a);
                 return (
-                  <Button key={a} type="button" variant="outline"
+                  <Tooltip key={a}>
+                  <TooltipTrigger asChild>
+                  <Button type="button" variant="outline"
                     onClick={() => setAccion(a)}
-                    className={cn("rounded-full h-11 gap-2.5 px-5 shadow-md transition-colors", ACCION_HOVER[a].boton)}>
+                    aria-label={ACCION_LABEL[a]}
+                    className={cn("rounded-full h-11 shadow-md transition-colors", conTexto ? "gap-2.5 px-5" : "w-11 px-0", ACCION_HOVER[a].boton)}>
                     <Icon size={20} className={cn("shrink-0", ACCION_HOVER[a].icono)} />
-                    <span>{ACCION_LABEL[a]}</span>
-                    {a === 'pago' && (
+                    {conTexto && <span>{ACCION_LABEL[a]}</span>}
+                    {conTexto && a === 'pago' && (
                       <span className="t-meta text-muted-foreground">
                         {item.saldo > 0.01 ? `Saldo $${item.saldo.toFixed(2)}` : 'Sin saldo'}
                       </span>
                     )}
                   </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-60 text-center">
+                    {/* Con texto en la píldora el nombre ya se ve: el tooltip solo aclara qué hace. */}
+                    {!conTexto && <span className="block font-semibold">{ACCION_LABEL[a]}</span>}
+                    <span className={cn('block', !conTexto && 'opacity-80')}>{ACCION_AYUDA[a]}</span>
+                  </TooltipContent>
+                  </Tooltip>
                 );
               })}
             </div>
+            </>
           ) : (
             <div className="flex flex-col gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
           <div className="flex items-center justify-between gap-3">
@@ -664,9 +695,9 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
               </div>
             )}
 
-            {/* Comprobante opcional (si aplica) — deshabilitado para pagos en
+            {/* Comprobante opcional (si aplica) — oculto para pagos en
                 efectivo, que no tienen comprobante que subir. */}
-            {ACCIONES_CON_COMPROBANTE.includes(accionActiva) && (
+            {ACCIONES_CON_COMPROBANTE.includes(accionActiva) && !(accionActiva === 'pago' && metodoPago === 'efectivo') && (
               <ComprobanteAdjunto
                 file={comprobanteFile}
                 onChange={setComprobanteFile}
