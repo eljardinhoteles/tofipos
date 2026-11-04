@@ -3,7 +3,7 @@ import { imprimirConAviso } from '../../../lib/imprimir';
 import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
 import { folioLabel } from '../../../lib/folio';
-import { X, Plus, Printer, Check, CaretDown } from'@phosphor-icons/react';
+import { X, Plus, Printer, Check, CaretDown, ArrowsClockwise, CloudSlash } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useComandaIva } from'../../../hooks/useComandaIva';
@@ -27,6 +27,7 @@ import { ComandaItemsList, TodasList } from'./ComandaItemsList';
 import { ComandaTotales } from'./ComandaTotales';
 import { calcularAnticipoMesa, esVentaDividida, repartirAnticipo, textoAplicado, tieneAnticipoAplicado, ajusteNecesario, textoCuentaCerrada } from'../../../lib/anticipoMesa';
 import { useComandaLive } from'../../../hooks/useComandaLive';
+import { useEstadoSyncComanda } from'../../../hooks/useEstadoSyncComanda';
 import { ComandaHeader } from'./ComandaHeader';
 import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
 import { ComandaAcciones } from'./ComandaAcciones';
@@ -188,6 +189,8 @@ export function SidebarDetails({
  }, [closeCuentaModalOpen, activeComandaProp]);
 
  const activeComanda = liveComanda || activeComandaProp;
+ // Solo informativo: el botón «Añadir» avisa si esta comanda está subiendo cambios o recibió los de otro equipo; no bloquea nada.
+ const estadoSync = useEstadoSyncComanda(activeComanda?.id);
 
  // El cliente de la comanda se guarda solo como texto (nombre); si coincide
  // con un cliente registrado, mostramos su ficha completa en la subsección.
@@ -1143,10 +1146,22 @@ export function SidebarDetails({
  <Button
  // Pill flotante: sale del flujo del footer y queda centrada sobre su borde
  // superior, así no ocupa una fila propia ni va a todo el ancho.
- className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap bg-warning-foreground hover:bg-warning-foreground text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-transform"onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
+ title={estadoSync === 'recibido' ? 'Otro equipo acaba de cambiar esta comanda: revisa antes de añadir' : estadoSync === 'enviando' ? 'Subiendo los cambios de esta comanda…' : estadoSync === 'pendiente' ? 'Hay cambios de esta comanda sin subir (sin conexión o lentitud)' : undefined}
+ className={cn("absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all",
+ estadoSync === 'recibido' ? "bg-info hover:bg-info animate-pulse motion-reduce:animate-none"
+ : estadoSync === 'pendiente' ? "bg-muted-foreground hover:bg-muted-foreground"
+ : estadoSync === 'enviando' ? "bg-warning-foreground/80 hover:bg-warning-foreground/80"
+ : "bg-warning-foreground hover:bg-warning-foreground")}
+ onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
- <Plus size={15} weight="bold"className="mr-1.5"/>
- Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}
+ {estadoSync === 'recibido' ? <ArrowsClockwise size={15} weight="bold" className="mr-1.5"/>
+ : estadoSync === 'enviando' ? <ArrowsClockwise size={15} weight="bold" className="mr-1.5 animate-spin motion-reduce:animate-none"/>
+ : estadoSync === 'pendiente' ? <CloudSlash size={15} weight="bold" className="mr-1.5"/>
+ : <Plus size={15} weight="bold"className="mr-1.5"/>}
+ {estadoSync === 'recibido' ? 'Actualizada por otro equipo'
+ : estadoSync === 'enviando' ? 'Sincronizando…'
+ : estadoSync === 'pendiente' ? 'Sin subir · Añadir'
+ : <>Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}</>}
  </Button>
  )}
  <ComandaTotales

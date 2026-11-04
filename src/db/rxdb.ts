@@ -1737,6 +1737,50 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
       markInitialSyncDone()
     })
 
+  // Indicador visual por comanda (ver estadoSyncComanda): se alimenta de lo que sube, lo que llega y los cambios locales.
+  try {
+    const pares: Array<[string, any, any]> = [['comandas', comandas, db.comandas], ['comanda_items', items, db.comanda_items]]
+    for (const [col, replica, coleccion] of pares) {
+      const comandaDe = (d: any): string => (col === 'comandas' ? d?.id : d?.comanda_id) || ''
+      const huella = (d: any) => `${col}:${d?.id}:${d?.updated_at}`
+      replica?.sent$?.subscribe((d: any) => {
+        const id = comandaDe(d)
+        huellasEnviadas.set(huella(d), Date.now()); limpiarHuellas(huellasEnviadas)
+        const locales = cambiosLocales.get(id)
+        const pendiente = locales?.get(String(d?.id))
+        if (locales && pendiente && String(d?.updated_at) >= pendiente.updated_at) {
+          locales.delete(String(d.id))
+          if (locales.size === 0) cambiosLocales.delete(id)
+        }
+        if (id) avisarSyncComanda(id)
+      })
+      replica?.received$?.subscribe((d: any) => {
+        huellasRecibidas.set(huella(d), Date.now()); limpiarHuellas(huellasRecibidas)
+        const id = comandaDe(d)
+        if (!pushEnabled || !id || huellasEnviadas.has(huella(d))) return // sincronización inicial o eco de lo que subió este equipo
+        recibidoHasta.set(id, Date.now() + SYNC_RECIBIDO_MS)
+        avisarSyncComanda(id)
+        setTimeout(() => avisarSyncComanda(id), SYNC_RECIBIDO_MS + 100)
+      })
+      coleccion?.$?.subscribe((ev: any) => {
+        const d = ev?.documentData
+        const id = comandaDe(d)
+        if (!id || !pushEnabled) return
+        // Un cambio que llegó por la descarga también dispara este evento: se espera un instante a que received$ lo marque.
+        setTimeout(() => {
+          if (huellasRecibidas.has(huella(d)) || huellasEnviadas.has(huella(d))) return
+          let locales = cambiosLocales.get(id)
+          if (!locales) { locales = new Map(); cambiosLocales.set(id, locales) }
+          locales.set(String(d.id), { updated_at: String(d.updated_at), desde: locales.get(String(d.id))?.desde ?? Date.now() })
+          avisarSyncComanda(id)
+          setTimeout(() => avisarSyncComanda(id), SYNC_PENDIENTE_MS + 100)
+        }, 300)
+      })
+    }
+  } catch (e) {
+    console.warn('[RxDB] indicador de sincronización por comanda no disponible:', e)
+  }
+
   return { clientes, categorias, mesas, comandas, items, pisos, habitacionCuentas, reservas, pagos, ventas, ajustesIva, usuarios, menuItems }
 }
 
@@ -1966,6 +2010,42 @@ let lastSyncStatus: SyncStatus = {
   errorCollections: [],
   activePushQueue: 0,
   collections: {},
+}
+
+// ── Indicador visual de sincronización por comanda (solo informativo, no bloquea nada) ─────────────────────────────────────────
+// Qué sabe este equipo de una comanda abierta: 'enviando' = tiene cambios locales que aún no subieron; 'pendiente' = llevan más de
+// 15 s o no hay conexión; 'recibido' = llegó un cambio hecho por OTRO equipo (los ecos de lo que este mismo equipo subió se ignoran).
+export type EstadoSyncComanda = 'normal' | 'enviando' | 'pendiente' | 'recibido'
+const SYNC_PENDIENTE_MS = 15_000
+const SYNC_RECIBIDO_MS = 3_000
+const huellasEnviadas = new Map<string, number>()                  // `${col}:${id}:${updated_at}` → cuándo se envió (para reconocer el eco)
+const huellasRecibidas = new Map<string, number>()                 // lo mismo para lo que llegó por la descarga
+const cambiosLocales = new Map<string, Map<string, { updated_at: string; desde: number }>>() // comandaId → docId → cambio sin enviar
+const recibidoHasta = new Map<string, number>()
+const oyentesSyncComanda = new Map<string, Set<() => void>>()
+
+function avisarSyncComanda(comandaId: string) { oyentesSyncComanda.get(comandaId)?.forEach(fn => fn()) }
+function limpiarHuellas(mapa: Map<string, number>) {
+  if (mapa.size < 500) return
+  const limite = Date.now() - 120_000
+  for (const [k, t] of mapa) if (t < limite) mapa.delete(k)
+}
+
+export function estadoSyncComanda(comandaId: string | undefined | null): EstadoSyncComanda {
+  if (!comandaId) return 'normal'
+  const locales = cambiosLocales.get(comandaId)
+  if (locales && locales.size > 0) {
+    const masViejo = Math.min(...[...locales.values()].map(c => c.desde))
+    return !navigator.onLine || Date.now() - masViejo > SYNC_PENDIENTE_MS ? 'pendiente' : 'enviando'
+  }
+  return (recibidoHasta.get(comandaId) ?? 0) > Date.now() ? 'recibido' : 'normal'
+}
+
+export function suscribirSyncComanda(comandaId: string, fn: () => void): () => void {
+  let set = oyentesSyncComanda.get(comandaId)
+  if (!set) { set = new Set(); oyentesSyncComanda.set(comandaId, set) }
+  set.add(fn)
+  return () => { set!.delete(fn); if (set!.size === 0) oyentesSyncComanda.delete(comandaId) }
 }
 
 export function subscribeSyncStatus(fn: (s: SyncStatus) => void): () => void {
