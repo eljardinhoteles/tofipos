@@ -1,14 +1,13 @@
 import { crearEstabilizador } from '../../lib/estabilizarDocs';
 import { useState, useMemo, useEffect, useCallback, memo } from'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, MagnifyingGlass, X, Star, Plus, Minus, ForkKnife, ClockCounterClockwise, Tag, CalendarStar } from'@phosphor-icons/react';
+import { ArrowLeft, MagnifyingGlass, X, Star, Plus, Minus, ForkKnife, Tag, CalendarStar } from'@phosphor-icons/react';
 import { type Comanda, type ComandaItem, type MenuItem } from'../../db/database';
 import { showToast } from'@/lib/toast';
 import { ProductModifiersSheet } from'../Products/ProductModifiersSheet';
 import { initVerticalRxDb } from '../../db/rxdb';
 import { useRxMenuCatalog } from '../../hooks/useRxMenuCatalog';
 import { useComandaIva } from '../../hooks/useComandaIva';
-import { getRecentProductIds, registerRecentProduct } from '@/lib/recentProducts';
 import { cantidadEnviada } from '@/lib/itemPendiente';
 import { esParteRepartida } from '@/lib/reparto';
 import { getCategoryIcon } from '@/lib/categoryIcons';
@@ -93,7 +92,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
  const [modifyingItem, setModifyingItem] = useState<MenuItem | null>(null);
  const [rxComandaItems, setRxComandaItems] = useState<ComandaItem[]>([]);
- const [recentProductIds, setRecentProductIds] = useState<string[]>(() => getRecentProductIds());
 
  const { menuItems, categorias: safeDbCategorias } = useRxMenuCatalog();
  const isMobile = useIsMobile();
@@ -174,17 +172,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  [safeDbCategorias]
  );
 
- // "Usados recientemente" en ESTE dispositivo — clientes suelen repetir lo
- // mismo, así que esto ahorra navegar categorías en pedidos largos. Solo
- // productos que siguen existiendo y activos (uno inactivo, ej. plato del
- // menú de huésped de ayer, no debe seguir apareciendo acá).
- const recentItems = useMemo(() => {
- const byId = new Map(safeMenuItems.map(i => [i.id, i]));
- return recentProductIds
- .map(id => byId.get(id))
- .filter((i): i is MenuItem => !!i && disponible(i));
- }, [recentProductIds, safeMenuItems, disponible]);
-
  const categories = useMemo(() => {
  // Igual que filteredItems: si ningún producto de una categoría está
  // activo hoy (ej. menú de huésped sin platos habilitados), el chip no
@@ -264,8 +251,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  // Sin búsqueda activa, en PC se ven siempre las categorías a la izquierda y los
  // productos de la elegida a la derecha, para pedir sin ir y volver al home.
  const pcSplit = !isMobile && !searchQueryDebounced;
- // Sin categoría elegida abre en «Recientes» (si hay); si no, en la primera categoría.
- const categoriaPC = selectedCategory ?? (recentItems.length > 0 ? 'Recientes' : categories[0] ?? 'Favoritos');
+ // Sin categoría elegida abre en la primera categoría.
+ const categoriaPC = selectedCategory ?? categories[0] ?? 'Favoritos';
  const conteoPorCategoria = useMemo(() => {
  const map = new Map<string, number>();
  for (const it of safeMenuItems) {
@@ -276,7 +263,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  return map;
  }, [safeMenuItems, disponible]);
  const itemsPC = useMemo(() => {
- if (categoriaPC === 'Recientes') return recentItems;
  const grupoPlan = grupoPlanDe(categoriaPC);
  if (grupoPlan) return safeMenuItems.filter(it => disponible(it) && grupoPlan.productoIds.has(it.id)).sort((a, b) => a.nombre.localeCompare(b.nombre));
  return safeMenuItems
@@ -284,7 +270,7 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  ? it.favorito
  : (it.categoria_nombre || 'Sin Categoría') === categoriaPC))
  .sort((a, b) => a.nombre.localeCompare(b.nombre));
- }, [safeMenuItems, categoriaPC, recentItems, gruposPlan, disponible]);
+ }, [safeMenuItems, categoriaPC, gruposPlan, disponible]);
  const favoritosCount = useMemo(() => safeMenuItems.filter(it => disponible(it) && it.favorito).length, [safeMenuItems, disponible]);
 
  const performAddToCart = useCallback(async (item: MenuItem, selectedModifiers: string[] = []) => {
@@ -345,8 +331,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  });
  }
 
- registerRecentProduct(item.id);
- setRecentProductIds(getRecentProductIds());
  }, [activeComanda]);
 
  // Quita UNA unidad del producto (si era la única de su línea, la línea se elimina): la de la línea añadida más recientemente que aún no se haya enviado a cocina ni tenga pagos. Lo ya
@@ -452,7 +436,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
         >
           {[
             { id: 'Favoritos', icon: Star, count: favoritosCount, plan: false, fav: true, etiqueta: undefined as EtiquetaPlan | undefined },
-            ...(recentItems.length > 0 ? [{ id: 'Recientes', icon: ClockCounterClockwise, count: recentItems.length, plan: false, fav: false, etiqueta: undefined as EtiquetaPlan | undefined }] : []),
             ...gruposPlan.map(g => ({ id: `plan:${g.etiqueta.id}`, icon: Tag, count: g.productoIds.size, plan: false, fav: false, etiqueta: g.etiqueta as EtiquetaPlan | undefined })),
             ...(hayPlanSinConfirmar ? [{ id: ID_PLAN_VACIO, icon: Tag, count: 0, plan: true, fav: false, etiqueta: undefined as EtiquetaPlan | undefined }] : []),
             ...categories.map(cat => ({ id: cat, icon: getCategoryIcon(categoryIconByName.get(cat)) ?? ForkKnife, count: conteoPorCategoria.get(cat) ?? 0, plan: planCategoryNames.has(cat), fav: false, etiqueta: undefined as EtiquetaPlan | undefined })),
@@ -470,8 +453,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
                     ? (activa ? "bg-warning-foreground text-white font-extrabold shadow-xs" : "bg-warning-soft text-warning-foreground font-bold hover:bg-warning/20")
                     : c.etiqueta
                     ? cn('border', activa ? `${TONOS_ETIQUETA[c.etiqueta.tono].punto} border-transparent text-white font-extrabold shadow-xs` : `${TONOS_ETIQUETA[c.etiqueta.tono].chip} font-bold`)
-                    : c.id === 'Recientes'
-                    ? (activa ? "bg-foreground text-background font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted")
                     : c.plan
                     ? (activa ? "bg-info text-white font-extrabold shadow-xs" : "bg-info/10 text-info-foreground font-bold hover:bg-info/15")
                     : (activa ? "bg-primary text-primary-foreground font-extrabold shadow-xs" : "bg-card text-foreground font-bold shadow-xs hover:bg-muted"))}
@@ -527,25 +508,6 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
       {(!selectedCategory && !searchQueryDebounced) ? (
         /* HOME DE CATEGORÍAS */
         <div className="flex flex-col gap-5">
-          {recentItems.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <span className="t-etiqueta text-muted-foreground px-1">
-                Usados recientemente
-              </span>
-              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 py-1 @md:flex-wrap @md:overflow-visible @md:mx-0 @md:px-0 @md:py-0">
-                {recentItems.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleAddProduct(item)}
-                    className="flex items-center shrink-0 px-4 py-2.5 rounded-full bg-card shadow-xs hover:bg-muted transition-colors cursor-pointer"
-                  >
-                    <span className="t-cuerpo-fuerte text-foreground whitespace-nowrap">{item.nombre}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {/* Mismo lenguaje que PC: categorías como pills (icono + nombre), aquí en grid. */}
           <div className="grid grid-cols-2 gap-2 @md:gap-3 @lg:grid-cols-3 @xl:grid-cols-4">
             <button
