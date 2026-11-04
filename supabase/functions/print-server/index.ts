@@ -16,7 +16,7 @@ const corsHeaders = {
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin 0/O/1/I
 const PAIRING_TTL_MS = 15 * 60 * 1000;
 const MAX_WAIT_SECONDS = 20;
-const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_MS = 5000; // antes 1500: cada vuelta del ciclo es una petición que Supabase registra en los logs
 const REPORT_MAX_PRINTERS = 100;
 
 function json(body: unknown, status = 200) {
