@@ -101,9 +101,9 @@ export default defineConfig({
       },
       // Manifest de la PWA
       manifest: {
-        name: 'POS Restaurante',
-        short_name: 'POS Food',
-        description: 'Sistema de comandas y gestión de mesas para restaurante',
+        name: 'Aguacate — Sistema de Gestión Centralizada',
+        short_name: 'Aguacate',
+        description: 'Gestión centralizada de mesas, ventas, hotel y caja',
         theme_color: '#1c2a22',
         background_color: '#1c2a22',
         display: 'standalone',
