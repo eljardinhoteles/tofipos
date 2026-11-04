@@ -1158,9 +1158,9 @@ export function SidebarDetails({
  : estadoSync === 'enviando' ? <ArrowsClockwise size={15} weight="bold" className="mr-1.5 animate-spin motion-reduce:animate-none"/>
  : estadoSync === 'pendiente' ? <CloudSlash size={15} weight="bold" className="mr-1.5"/>
  : <Plus size={15} weight="bold"className="mr-1.5"/>}
- {estadoSync === 'recibido' ? 'Actualizada por otro equipo'
+ {estadoSync === 'recibido' ? 'Actualizada'
  : estadoSync === 'enviando' ? 'Sincronizando…'
- : estadoSync === 'pendiente' ? 'Sin subir · Añadir'
+ : estadoSync === 'pendiente' ? 'Sin subir'
  : <>Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}</>}
  </Button>
  )}
