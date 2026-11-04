@@ -1148,9 +1148,10 @@ export function SidebarDetails({
  // superior, así no ocupa una fila propia ni va a todo el ancho.
  title={estadoSync === 'recibido' ? 'Otro equipo acaba de cambiar esta comanda: revisa antes de añadir' : estadoSync === 'enviando' ? 'Subiendo los cambios de esta comanda…' : estadoSync === 'pendiente' ? 'Hay cambios de esta comanda sin subir (sin conexión o lentitud)' : undefined}
  className={cn("absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all",
- estadoSync === 'recibido' ? "bg-info hover:bg-info animate-pulse motion-reduce:animate-none"
+ // Colores sólidos en todos los estados (sin opacidad ni animación de opacidad): el aviso se distingue por color, ícono y texto.
+ estadoSync === 'recibido' ? "bg-info hover:bg-info"
  : estadoSync === 'pendiente' ? "bg-muted-foreground hover:bg-muted-foreground"
- : estadoSync === 'enviando' ? "bg-warning-foreground/80 hover:bg-warning-foreground/80"
+ : estadoSync === 'enviando' ? "bg-secondary-foreground hover:bg-secondary-foreground"
  : "bg-warning-foreground hover:bg-warning-foreground")}
  onClick={mesaView ==='productos'? () => setMesaView('mapa') : onAddProduct}
  >
