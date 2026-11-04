@@ -6,6 +6,7 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update'
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
 import { replicateSupabase } from 'rxdb/plugins/replication-supabase'
+import { camposCambiados } from '../lib/camposCambiados'
 import { supabase } from '../lib/supabase'
 import { isOperativeComanda } from './comandaState'
 
@@ -1371,18 +1372,39 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
     }
   }, 8000)
 
+  // Tablas donde varios equipos editan el mismo documento a la vez (ver makePushHandler).
+  const CAMPOS_POR_TABLA = new Set(['comandas', 'comanda_items', 'mesas', 'habitacion_cuentas'])
+
   const makePushHandler = (tableName: string, transformRow?: (doc: Record<string, unknown>) => Record<string, unknown>) =>
     async (rows: Array<{ newDocumentState: any; assumedMasterState: any }>) => {
       if (!pushEnabled) throw new Error('push suspendido: esperando sincronización inicial')
       // Offline: no intentar push, lanzar para que RxDB reintente después
       if (!navigator.onLine) throw new Error('offline')
 
-      const toUpsert = rows
+      // Push por campos (solo estas tablas, donde varios equipos pueden editar a la vez): un documento que el dispositivo ya conocía se
+      // sube como un PARCHE con únicamente lo que cambió, para no pisar con la copia entera lo que otro equipo cambió en otros campos
+      // (total, estado, cantidades_snapshot…). Un documento sin versión conocida (alta, o réplica reiniciada) se sube solo si no existe:
+      // sin saber qué cambió no se puede sobrescribir lo que ya hay en el servidor. `pos_push_completo=1` en localStorage vuelve al
+      // comportamiento anterior en ese equipo (upsert del documento completo).
+      const porCampos = CAMPOS_POR_TABLA.has(tableName) && localStorage.getItem('pos_push_completo') !== '1'
+      const limpiar = (doc: Record<string, unknown>) => stripUndefined(transformRow ? transformRow({ ...doc }) : { ...doc })
+      const altas = porCampos ? rows.filter(r => !r.assumedMasterState) : rows
+      const parches: Array<{ id: string; cambios: Record<string, unknown>; completo: Record<string, unknown> }> = []
+      if (porCampos) {
+        for (const r of rows) {
+          if (!r.assumedMasterState) continue
+          const completo = limpiar(r.newDocumentState)
+          const cambios = camposCambiados(completo, limpiar(r.assumedMasterState))
+          if (cambios) parches.push({ id: String(completo.id), cambios, completo })
+        }
+      }
+
+      const toUpsert = altas
         .map(r => ({ ...r.newDocumentState }))
         .map(doc => transformRow ? transformRow(doc) : doc)
         .map(doc => stripUndefined(doc))
 
-      if (toUpsert.length === 0) return []
+      if (toUpsert.length === 0 && parches.length === 0) return []
 
       let maxRetries = 3;
       let retryDelay = 1000;
@@ -1471,9 +1493,29 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
           }
         }
 
-        const { error } = await supabase
-          .from(tableName)
-          .upsert(toUpsert, { onConflict: 'id' })
+        // Altas: con push por campos no se sobrescribe un documento que ya existe en el servidor (ignoreDuplicates).
+        let error: { code?: string; message?: string } | null = null
+        if (toUpsert.length > 0) {
+          ({ error } = await supabase
+            .from(tableName)
+            .upsert(toUpsert, porCampos ? { onConflict: 'id', ignoreDuplicates: true } : { onConflict: 'id' }))
+        }
+
+        // Parches: un UPDATE por documento con solo los campos cambiados. Si la fila no existe todavía (el alta no llegó), se sube completa.
+        if (!error) {
+          for (const parche of parches) {
+            const { data, error: errorParche } = await supabase
+              .from(tableName)
+              .update(parche.cambios)
+              .eq('id', parche.id)
+              .select('id')
+            if (errorParche) { error = errorParche; break }
+            if (!data || data.length === 0) {
+              const { error: errorAlta } = await supabase.from(tableName).upsert(parche.completo, { onConflict: 'id', ignoreDuplicates: true })
+              if (errorAlta) { error = errorAlta; break }
+            }
+          }
+        }
 
         if (error) {
           if (error.code === '23503' && maxRetries > 0) {
