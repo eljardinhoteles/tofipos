@@ -251,8 +251,8 @@ export function ProductSelector({ activeComanda, onBack, hideBackButton = false 
  // Sin búsqueda activa, en PC se ven siempre las categorías a la izquierda y los
  // productos de la elegida a la derecha, para pedir sin ir y volver al home.
  const pcSplit = !isMobile && !searchQueryDebounced;
- // Sin categoría elegida abre en la primera categoría.
- const categoriaPC = selectedCategory ?? categories[0] ?? 'Favoritos';
+ // Sin categoría elegida abre en Favoritos.
+ const categoriaPC = selectedCategory ?? 'Favoritos';
  const conteoPorCategoria = useMemo(() => {
  const map = new Map<string, number>();
  for (const it of safeMenuItems) {
