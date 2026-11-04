@@ -2,7 +2,7 @@ import { fechaLocal } from '../lib/fechaLocal';
 import { esParteRepartida, nombreBaseReparto } from '../lib/reparto';
 import { useCallback, useEffect, useMemo, useState } from'react';
 import { AreaChart, Area, BarChart, Bar, Cell, XAxis, CartesianGrid } from'recharts';
-import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, X, ListBullets } from'@phosphor-icons/react';
+import { Coin, Receipt, Warning, Tag, CalendarBlank, ArrowsClockwise, Plus, X, ListBullets, ForkKnife, Bed } from'@phosphor-icons/react';
 import dayjs from'dayjs';
 import { initVerticalRxDb, forceSyncAll, pingSyncStatus } from'../db/rxdb';
 import { useDbEpoch } from'../hooks/useDbEpoch';
@@ -17,8 +17,9 @@ import { Calendar as CalendarPicker } from'@/components/ui/calendar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from'@/components/ui/chart';
 import { cn } from'@/lib/utils';
 import { PageFrame, PageHeader, PageContent, PageToolbar, headerIconButtonClass, toolbarChipClass } from'../components/Common/PageHeader';
-import { SeccionesMesas } from '../components/Common/SeccionesMesas';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { OrdenTopToggle, type OrdenTop } from '../components/Common/OrdenTop';
+import { MetricasHotel } from '../components/Hotel/MetricasHotel';
+import { HeaderTabs, HeaderTab } from '../components/Common/PageHeader';
 
 type DatesRange = [Date | null, Date | null];
 
@@ -105,7 +106,8 @@ const weekdayChartConfig = {
 
 export default function MetricasV2() {
   // Las secciones de Mesas son de PC: en celular se navega con la barra inferior.
-  const isMobile = useIsMobile();
+  // Métricas de todo el sistema: Restaurante (comandas, RxDB) y Hotel (reservas, extras y ventas, desde Supabase).
+  const [vista, setVista] = useState<'restaurante' | 'hotel'>('restaurante');
  // Categorías elegidas para filtrar las métricas (vacío = todas).
  const [catFiltro, setCatFiltro] = useState<string[]>([]);
  const [catOpen, setCatOpen] = useState(false);
@@ -432,8 +434,11 @@ comandaItems.forEach((item) => {
  }));
  }, [pagos, datesLimit, previousLimit]);
 
+ const [ordenTop, setOrdenTop] = useState<OrdenTop>('monto');
+ const ordenarTop = useCallback((a: TopItemPoint, b: TopItemPoint) => ordenTop === 'monto' ? b.total - a.total || b.cantidad - a.cantidad : b.cantidad - a.cantidad || b.total - a.total, [ordenTop]);
+ const topOrdenado = useMemo(() => [...topProductos].sort(ordenarTop), [topProductos, ordenarTop]);
  const topProductsByQty = useMemo<TopItemPoint[]>(() => {
- const sorted = [...topProductos].sort((a, b) => b.cantidad - a.cantidad);
+ const sorted = topOrdenado;
  const leading = sorted.slice(0, 9);
  const leadingSum = leading.reduce((sum, item) => sum + item.total, 0);
  const remainder = Math.max(0, ventasActuales - leadingSum);
@@ -444,7 +449,7 @@ comandaItems.forEach((item) => {
  }
 
  return leading.length > 0 ? leading : sorted;
- }, [topProductos, ventasActuales]);
+ }, [topOrdenado, ventasActuales]);
 
  const [topCompletoOpen, setTopCompletoOpen] = useState(false);
  const sinProductos = ventasActuales - topProductos.reduce((sum, item) => sum + item.total, 0);
@@ -480,20 +485,27 @@ comandaItems.forEach((item) => {
  return ventasPorDiaSemana.reduce((best, current) => (current.promedio > best.promedio ? current : best), ventasPorDiaSemana[0] || { dia:'N/D', promedio: 0, total: 0 });
  }, [ventasPorDiaSemana]);
 
+ // Clientes por lo cobrado en el periodo, desde las ventas (cada venta guarda su cliente). Antes se cruzaban comandas por nombre y
+ // las visitas eran de todo el tiempo mientras el gasto era solo del periodo: salían clientes con visitas y $0.
  const clientesFidelizacion = useMemo(() => {
- const frecuentes = clientes
- .map((c: any) => {
- const visitas = comandas.filter((x) => x.cliente_id === c.id || x.cliente === c.nombre).length;
- const gasto = comandas
- .filter((x) => x.cliente_id === c.id || x.cliente === c.nombre)
- .reduce((sum, x) => sum + (currentPaidMap.get(x.id) || 0), 0);
- return { nombre: c.nombre, visitas, gasto };
- })
- .filter((c) => c.visitas > 0)
- .sort((a, b) => b.gasto - a.gasto)
- .slice(0, 5);
- return frecuentes;
- }, [clientes, comandas, currentPaidMap]);
+ const porCliente = new Map<string, { nombre: string; visitas: number; gasto: number }>();
+ ventas.forEach((v) => {
+ if (!v.comanda_id || !(v.cliente_id || v.cliente_nombre)) return;
+ let cobrado = 0;
+ (v.movimientos || []).forEach((m: any) => {
+ if (m.tipo !== 'pago' || m.anulado) return;
+ const t = new Date(m.fecha);
+ if (t >= datesLimit.inicio && t <= datesLimit.fin) cobrado += Number(m.monto || 0);
+ });
+ if (cobrado <= 0) return;
+ const clave = v.cliente_id || v.cliente_nombre;
+ const actual = porCliente.get(clave) ?? { nombre: v.cliente_nombre || clientes.find((c: any) => c.id === v.cliente_id)?.nombre || 'Cliente', visitas: 0, gasto: 0 };
+ actual.visitas += 1;
+ actual.gasto += cobrado;
+ porCliente.set(clave, actual);
+ });
+ return [...porCliente.values()].sort((x, y) => y.gasto - x.gasto);
+ }, [ventas, clientes, datesLimit]);
 
  const baseMetricCards: CardMetric[] = [
  { label:'Ventas totales', description:'Facturación acumulada en el periodo.', value: money(ventasActuales), delta: statDelta(ventasActuales, ventasAnteriores), positive: ventasActuales >= ventasAnteriores, icon: <Coin size={20} weight="fill"/> },
@@ -508,23 +520,8 @@ comandaItems.forEach((item) => {
  const peakOrders = topHoras[0]?.ordenes || 0;
  const peakSales = topHoras[0]?.ventas || 0;
 
- return (
- <PageFrame>
- <PageHeader
- title="Métricas"
- tabs={isMobile ? undefined : <SeccionesMesas />}
- subtitle={`${etiquetaPeriodo}${filtrando ? ` · ${catFiltro.length} ${catFiltro.length === 1 ? 'categoría' : 'categorías'}` : ''}`}
- actions={
- <button type="button" title="Recargar datos" aria-label="Recargar datos" onClick={handleForceSync} disabled={syncing}
- className={cn(headerIconButtonClass, 'disabled:opacity-60')}>
- <ArrowsClockwise size={18} weight="bold" className={syncing ? 'animate-spin' : ''}/>
- </button>
- }
- />
-
- <PageContent>
- {/* Periodo y categorías en una sola fila */}
- <PageToolbar>
+ const chipsPeriodo = (
+ <>
  {([
  { value:'hoy', label:'Hoy'},
  { value:'7d', label:'7d'},
@@ -562,6 +559,47 @@ comandaItems.forEach((item) => {
  </PopoverContent>
  </Popover>
  )}
+
+ </>
+ );
+
+ const tabsVista = (
+ <HeaderTabs label="Origen de las métricas">
+ <HeaderTab activa={vista === 'restaurante'} icono={ForkKnife} onClick={() => setVista('restaurante')}>Restaurante</HeaderTab>
+ <HeaderTab activa={vista === 'hotel'} icono={Bed} onClick={() => setVista('hotel')}>Hotel</HeaderTab>
+ </HeaderTabs>
+ );
+
+ if (vista === 'hotel') {
+ return (
+ <PageFrame>
+ <PageHeader title="Métricas" tabs={tabsVista} subtitle={`Hotel · ${etiquetaPeriodo}`} />
+ <PageContent>
+ <PageToolbar>{chipsPeriodo}</PageToolbar>
+ <MetricasHotel inicio={datesLimit.inicio} fin={datesLimit.fin} inicioAnterior={previousLimit.inicio} finAnterior={previousLimit.fin} menuItems={menuItems} categorias={categorias} ventas={ventas} />
+ </PageContent>
+ </PageFrame>
+ );
+ }
+
+ return (
+ <PageFrame>
+ <PageHeader
+ title="Métricas"
+ tabs={tabsVista}
+ subtitle={`${etiquetaPeriodo}${filtrando ? ` · ${catFiltro.length} ${catFiltro.length === 1 ? 'categoría' : 'categorías'}` : ''}`}
+ actions={
+ <button type="button" title="Recargar datos" aria-label="Recargar datos" onClick={handleForceSync} disabled={syncing}
+ className={cn(headerIconButtonClass, 'disabled:opacity-60')}>
+ <ArrowsClockwise size={18} weight="bold" className={syncing ? 'animate-spin' : ''}/>
+ </button>
+ }
+ />
+
+ <PageContent>
+ {/* Periodo y categorías en una sola fila */}
+ <PageToolbar>
+ {chipsPeriodo}
 
  {categorias.length > 0 && (
  <>
@@ -742,11 +780,15 @@ comandaItems.forEach((item) => {
  Ver todo ({topProductos.length})
  </Button>
  <h3 className="font-redonda t-titulo text-foreground pr-28">Top productos vendidos</h3>
- <p className="t-meta text-muted-foreground">Productos con mayor volumen de venta por unidades.</p>
+ <p className="t-meta text-muted-foreground">{ordenTop === 'monto' ? 'Productos que más dinero dejan.' : 'Productos con mayor volumen de venta por unidades.'}</p>
+ <OrdenTopToggle valor={ordenTop} onChange={setOrdenTop} className="mt-2 w-fit" />
  </CardHeader>
  <CardContent className="flex flex-col gap-4">
  {topProductsByQty.map((item, index) => {
  const pct = ventasActuales > 0 ? (item.total / ventasActuales) * 100 : 0;
+ const unidadesTotal = topProductos.reduce((a, x) => a + x.cantidad, 0);
+ const pctUnidades = unidadesTotal > 0 ? (item.cantidad / unidadesTotal) * 100 : 0;
+ const porMonto = ordenTop === 'monto';
  return (
  <div key={item.nombre}>
  <div className="flex items-start justify-between gap-3 mb-1.5">
@@ -754,16 +796,16 @@ comandaItems.forEach((item) => {
  <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
  <p className="t-cuerpo-fuerte text-foreground truncate">{item.nombre}</p>
- <p className="t-meta text-muted-foreground">{item.cantidad} unidades</p>
+ <p className="t-meta text-muted-foreground">{porMonto ? `${item.cantidad} unidades` : money(item.total)}</p>
  </div>
  </div>
  <div className="flex flex-col items-end shrink-0">
- <span className="t-cuerpo-fuerte text-foreground">{money(item.total)}</span>
- <span className="t-meta text-muted-foreground">{pct.toFixed(0)}% de ventas</span>
+ <span className="t-cuerpo-fuerte text-foreground">{porMonto ? money(item.total) : `${item.cantidad} u.`}</span>
+ <span className="t-meta text-muted-foreground">{(porMonto ? pct : pctUnidades).toFixed(0)}% {porMonto ? 'de ventas' : 'de unidades'}</span>
  </div>
  </div>
  <div className="h-2 rounded-full bg-muted overflow-hidden">
- <div className={cn("h-full rounded-full", index === 0 ?"bg-info":"bg-info/50")} style={{ width:`${Math.min(100, pct)}%`}} />
+ <div className={cn("h-full rounded-full", index === 0 ?"bg-info":"bg-info/50")} style={{ width:`${Math.min(100, porMonto ? pct : pctUnidades)}%`}} />
  </div>
  </div>
  );
@@ -775,10 +817,10 @@ comandaItems.forEach((item) => {
  <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
  <DialogHeader>
  <DialogTitle>Todos los productos vendidos</DialogTitle>
- <DialogDescription>Ordenados por unidades en el periodo seleccionado.</DialogDescription>
+ <DialogDescription>Ordenados por {ordenTop === 'monto' ? 'monto' : 'unidades'} en el periodo seleccionado.</DialogDescription>
  </DialogHeader>
  <div className="flex flex-col gap-3">
- {topProductos.map((item, index) => {
+ {topOrdenado.map((item, index) => {
  const pct = ventasActuales > 0 ? (item.total / ventasActuales) * 100 : 0;
  return (
  <div key={item.nombre} className="flex items-center justify-between gap-3">
@@ -848,16 +890,17 @@ comandaItems.forEach((item) => {
  <Card>
  <CardHeader>
  <h3 className="font-redonda t-titulo text-foreground">Clientes más valiosos</h3>
- <p className="t-meta text-muted-foreground">Basado en visitas y gasto acumulado.</p>
+ <p className="t-meta text-muted-foreground">Lo que más cobró cada cliente en el periodo.</p>
  </CardHeader>
  <CardContent className="flex flex-col gap-2.5">
- {clientesFidelizacion.map((client, index) => (
+ {clientesFidelizacion.length === 0 && <p className="t-meta text-muted-foreground py-6 text-center">Sin ventas con cliente en el periodo.</p>}
+ {clientesFidelizacion.slice(0, 5).map((client, index) => (
  <div key={client.nombre} className="p-3 rounded-2xl border border-border bg-card flex items-center justify-between gap-3">
  <div className="flex items-center gap-2.5 min-w-0 flex-1">
  <RankBadge n={index + 1} />
  <div className="min-w-0 flex-1">
  <p className="t-cuerpo-fuerte text-foreground truncate">{client.nombre}</p>
- <p className="t-meta text-muted-foreground">{client.visitas} visitas</p>
+ <p className="t-meta text-muted-foreground">{client.visitas} {client.visitas === 1 ? 'venta' : 'ventas'}</p>
  </div>
  </div>
  <span className="t-cuerpo-fuerte text-foreground shrink-0">{money(client.gasto)}</span>

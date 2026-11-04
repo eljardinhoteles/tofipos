@@ -17,10 +17,9 @@ import { leerEstadoUI, guardarEstadoUI } from '../lib/estadoUI';
 import { setZonaEtiqueta, setZonasAbiertas, useZonasAbiertas } from '../lib/zonasMovil';
 import { useRxPisos } from '../hooks/useRxPisos';
 import { useRxComandas } from '../hooks/useRxComandas';
-import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront, PresentationChart } from '@phosphor-icons/react';
+import { Plus, ShoppingCart, Bed, ListChecks, Receipt, Storefront } from '@phosphor-icons/react';
 import { useUI } from '../context/UIContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { usePermisos } from '../hooks/usePermisos';
+import { useSearchParams } from 'react-router-dom';
 import { SeccionesMesas } from '../components/Common/SeccionesMesas';
 import { SidebarKitchenReport } from '../components/Mesas/Sidebar/SidebarKitchenReport';
 import { cn } from '@/lib/utils';
@@ -37,8 +36,6 @@ import { esMesaBarra, obtenerOCrearMesaBarra, NOMBRE_MESA_BARRA, PISO_BARRA } fr
 const PISO_ACTIVAS = '__activas__';
 
 export default function MesasV2() {
-    const navigate = useNavigate();
-    const permisos = usePermisos();
     const [searchParams, setSearchParams] = useSearchParams();
     // Si Android mató la app en segundo plano, se vuelve a la zona en que se estaba (ver estadoUI).
     const [pisoInicial] = useState(() => leerEstadoUI().piso ?? '');
@@ -521,20 +518,6 @@ export default function MesasV2() {
                             </div>
                             <div className="hidden md:flex flex-1 justify-center min-w-0"><SeccionesMesas /></div>
                             <div className="flex items-center gap-3 shrink-0">
-                                {permisos.verMetricas && (
-                                    <button
-                                        type="button"
-                                        title="Métricas y Reportes"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate('/v2/metricas');
-                                        }}
-                                        className="max-md:hidden md:pointer-fine:hidden size-9 pointer-coarse:size-11 rounded-2xl hover:bg-nav-foreground/10 active:scale-95 text-nav-foreground flex items-center justify-center transition-all shrink-0 cursor-pointer"
-                                    >
-                                        <PresentationChart size={18} weight="bold" />
-                                    </button>
-                                )}
-
                                 <button
                                     type="button" title="Solicitud de Datos de Facturación" onClick={(e) => {
                                         e.stopPropagation();

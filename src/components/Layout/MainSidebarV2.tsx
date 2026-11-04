@@ -18,6 +18,7 @@ import {
   Buildings,
   CalendarStar,
   Bed,
+  PresentationChart,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ const navItemsV2 = [
   { label: 'Planificador', to: '/v2/planificacion', icon: CalendarStar, accent: NAV_ACCENT['/v2/planificacion'] },
   { label: 'Clientes', to: '/v2/clientes', icon: Users, accent: NAV_ACCENT['/v2/clientes'] },
   { label: 'Ventas', to: '/v2/centro-ventas', icon: CurrencyCircleDollar, accent: NAV_ACCENT['/v2/centro-ventas'] },
+  { label: 'Métricas', to: '/v2/metricas', icon: PresentationChart, accent: NAV_ACCENT['/v2/metricas'] },
 ];
 
 const settingsItem = { label: 'Ajustes', to: '/v2/ajustes', icon: Gear, accent: NAV_ACCENT['/v2/ajustes'] };

@@ -250,6 +250,50 @@ export async function listarReservasHotelActividad(inicio: string): Promise<Rese
 }
 
 /** Anota en el historial de cada reserva que se hizo el check-in o el check-out en Cloudbeds desde el POS. */
+/** Valor de la tarifa de las reservas creadas entre `desde` y `hasta` (ISO), sin las canceladas: para la evolución por fecha de reserva. */
+export async function listarReservasCreadasHotel(desde: string, hasta: string): Promise<Array<{ creada: string; monto: number }>> {
+  const { data, error } = await supabase
+    .from('hotel_reservas')
+    .select('created_at, total_estadia')
+    .eq('organization_id', orgActiva())
+    .neq('estado', 'cancelada')
+    .gte('created_at', desde)
+    .lte('created_at', hasta)
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((f) => ({ creada: f.created_at as string, monto: Number(f.total_estadia) || 0 }));
+}
+
+/** Un extra con la reserva a la que pertenece (para las métricas). */
+export interface ExtraConReserva { reserva_id: string; cabana: string; extra: ExtraHotel }
+
+/**
+ * Extras (productos, plan, cargos de Cloudbeds) añadidos entre `desde` y `hasta` (ISO), de reservas no canceladas.
+ * Los extras viven dentro de un JSON de la reserva, así que se trae un margen de 90 días de estadías anteriores al rango
+ * (un extra se anota durante o antes de la estancia) y se filtra por la fecha del extra aquí.
+ */
+export async function listarExtrasHotel(desde: string, hasta: string): Promise<ExtraConReserva[]> {
+  const margen = new Date(new Date(desde).getTime() - 90 * 86400000).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('hotel_reservas')
+    .select('id, cabana, extras')
+    .eq('organization_id', orgActiva())
+    .neq('estado', 'cancelada')
+    .gte('salida', margen)
+    .lte('created_at', hasta);
+  if (error) throw new Error(error.message);
+  const ini = new Date(desde).getTime(), fin = new Date(hasta).getTime();
+  const r: ExtraConReserva[] = [];
+  for (const f of data ?? []) {
+    if (!Array.isArray(f.extras)) continue;
+    for (const e of f.extras as ExtraHotel[]) {
+      const t = new Date(e.fecha).getTime();
+      if (t >= ini && t <= fin) r.push({ reserva_id: f.id as string, cabana: (f.cabana as string) ?? '', extra: e });
+    }
+  }
+  return r;
+}
+
 export function registrarCheckHotel(ids: string[], tipo: 'checkin' | 'checkout', usuario?: string): void {
   const texto = tipo === 'checkin' ? 'Check-in hecho en Cloudbeds desde el POS' : 'Check-out hecho en Cloudbeds desde el POS';
   for (const id of ids) void registrarEventoHotel(id, tipo, texto, usuario);
