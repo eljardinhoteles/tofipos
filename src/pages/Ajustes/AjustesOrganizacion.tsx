@@ -10,6 +10,7 @@ import { EstadoBadge } from '../../components/Common/EstadoBadge';
 import { Campo, Fila, Grupo, Seccion, Vacio } from '../../components/Ajustes/AjustesUI';
 import { Button } from '@/components/ui/button';
 import AjustesUsuarios from './AjustesUsuarios';
+import { leerNombreDispositivo, guardarNombreDispositivo } from '../../lib/nombreDispositivo';
 
 type OrgForm = {
   nombre: string;
@@ -39,6 +40,7 @@ export default function AjustesOrganizacion() {
   } : null);
   const [form, setForm] = useState<OrgForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [nombreDispositivo, setNombreDispositivo] = useState(() => leerNombreDispositivo());
   const [loading, setLoading] = useState(false);
   const [subiendoLogo, setSubiendoLogo] = useState(false);
   const logoInput = useRef<HTMLInputElement>(null);
@@ -181,6 +183,19 @@ export default function AjustesOrganizacion() {
         ) : (
           <Grupo><Vacio>No hay una sesión activa todavía.</Vacio></Grupo>
         )}
+      </Seccion>
+
+      <Seccion titulo="Este dispositivo" descripcion="Un nombre para reconocer este equipo (Barra, Caja, Tablet joely…). Queda registrado con los cambios que sube a la nube.">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <Campo etiqueta="Nombre del dispositivo" htmlFor="nombre-dispositivo" className="flex-1">
+            <Input id="nombre-dispositivo" value={nombreDispositivo} maxLength={40} placeholder="Ej. Barra"
+              onChange={(e) => setNombreDispositivo(e.target.value)} className="h-12" />
+          </Campo>
+          <Button className="h-12 gap-2 px-6" disabled={nombreDispositivo === leerNombreDispositivo()}
+            onClick={() => { guardarNombreDispositivo(nombreDispositivo); showToast.success('Nombre guardado', 'Se aplicará al recargar la página.'); window.setTimeout(() => window.location.reload(), 900); }}>
+            <FloppyDisk size={18} weight="bold" /> Guardar
+          </Button>
+        </div>
       </Seccion>
 
       <AjustesUsuarios />
