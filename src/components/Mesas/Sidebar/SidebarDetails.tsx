@@ -33,7 +33,7 @@ import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
 import { ComandaAcciones } from'./ComandaAcciones';
 import { DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
 import { queueKitchenPrint, queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
-import { esParteRepartida } from'../../../lib/reparto';
+import { esParteRepartida, itemMovible } from'../../../lib/reparto';
 import { cantidadEnviada } from'../../../lib/itemPendiente';
 import { repartirItemEntreSubcomandas, deshacerRepartoItem } from'../../../db/rxdb';
 import { generarPrecuenta, generarTicketPago, totalesParaTicket } from'../../../services/printTemplateEngine';
@@ -131,6 +131,45 @@ export function SidebarDetails({
  } catch (e) {
  showToast.fallo('mover el producto', e);
  }
+ };
+ // Mover en grupo: mientras el panel está en «Mover», tocar otros productos de la lista los suma o quita del grupo. El producto
+ // abierto en el panel es siempre parte del grupo; los que no se pueden mover (pagados, anulados, cortesía, repartidos) no se añaden.
+ const [moviendoGrupo, setMoviendoGrupo] = useState(false);
+ const [grupoExtra, setGrupoExtra] = useState<string[]>([]);
+ useEffect(() => { setGrupoExtra([]); }, [editingItem?.id, moviendoGrupo]);
+ const seleccionGrupo = useMemo(
+ () => (moviendoGrupo && editingItem ? new Set<string>([editingItem.id, ...grupoExtra]) : undefined),
+ [moviendoGrupo, editingItem, grupoExtra]
+ );
+ const grupoTotal = useMemo(() => {
+ if (!seleccionGrupo) return undefined;
+ return comandaItems.filter((i: any) => seleccionGrupo.has(i.id)).reduce((acc: number, i: any) => acc + (i.precio || 0) * (i.cantidad || 0), 0);
+ }, [seleccionGrupo, comandaItems]);
+ // El callback es estable (lee el estado por refs): si cambiara en cada selección, la lista memoizada repintaría todas sus filas.
+ const estadoGrupoRef = useRef({ moviendoGrupo, editingItem });
+ estadoGrupoRef.current = { moviendoGrupo, editingItem };
+ const handleSelectItem = useCallback((item: any) => {
+ const { moviendoGrupo: agrupando, editingItem: abierto } = estadoGrupoRef.current;
+ if (agrupando && abierto) {
+ if (item.id === abierto.id) return;
+ if (!itemMovible(item)) { showToast.warning('No se puede mover', 'Está pagado, anulado, en cortesía o repartido.'); return; }
+ setGrupoExtra(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
+ return;
+ }
+ setEditingItem(item);
+ }, []);
+ const handleMoverGrupo = async (destId: string) => {
+ if (!editingItem) return;
+ const ids = [editingItem.id, ...grupoExtra];
+ let movidos = 0;
+ let primerFallo = '';
+ for (const id of ids) { // de uno en uno: cada movimiento actualiza las cantidades enviadas a cocina de las dos cuentas
+ try { await moverItemASubcomanda(id, destId); movidos++; }
+ catch (e) { if (!primerFallo) primerFallo = `${comandaItems.find((i: any) => i.id === id)?.nombre ?? 'Un producto'}: ${e instanceof Error ? e.message : 'no se pudo mover'}`; }
+ }
+ setEditingItem(null);
+ if (movidos === ids.length) showToast.success(`${movidos} productos movidos`);
+ else showToast.warning(`Se movieron ${movidos} de ${ids.length}`, primerFallo);
  };
  const handleRepartirItem = async (destIds: string[], cantidad: number) => {
  if (!editingItem) return;
@@ -1103,7 +1142,9 @@ export function SidebarDetails({
  confirmadaAt={activeComanda?.confirmada_at}
  snapshot={cantidadesSnapshot}
  padBottom={!editingItem && activeComanda?.estado !=='cuenta'}
- onSelect={setEditingItem}
+ multiSeleccion={seleccionGrupo}
+ esMovible={itemMovible}
+ onSelect={handleSelectItem}
  />
  )}
  </main>
@@ -1254,6 +1295,10 @@ export function SidebarDetails({
  onEliminar={handleDeleteItem}
  onEditarOpciones={() => setEditingModifiers(true)}
  onMover={handleMoverItem}
+ onModoGrupo={setMoviendoGrupo}
+ grupoCount={1 + grupoExtra.length}
+ grupoTotal={grupoTotal}
+ onMoverGrupo={handleMoverGrupo}
  onAnular={handleAnularItem}
  onCortesia={handleMarcarCortesia}
  onRepartir={handleRepartirItem}

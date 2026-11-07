@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Minus, Trash, ArrowsLeftRight, GiftIcon, CheckCircle, Clock, SlidersHorizontal, Check, UsersThree, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,12 @@ interface ItemActionsPanelProps {
   onEliminar: () => void | Promise<void>;
   onEditarOpciones: () => void;
   onMover: (destinoId: string, cantidad: number) => void | Promise<void>;
+  /** Mover en grupo: el panel avisa si está en la pantalla «Mover» (para que la lista deje elegir más productos). */
+  onModoGrupo?: (activo: boolean) => void;
+  /** Productos elegidos para moverse juntos (incluye este) y su valor. Con más de uno se mueven completos. */
+  grupoCount?: number;
+  grupoTotal?: number;
+  onMoverGrupo?: (destinoId: string) => void | Promise<void>;
   onAnular: (motivo: string, cantidad: number) => void | Promise<void>;
   onCortesia: (motivo: string, porcentaje: number, cantidad: number) => void | Promise<void>;
   onRepartir?: (destinoIds: string[], cantidad: number) => void | Promise<void>;
@@ -74,7 +80,7 @@ function Stepper({ value, max, onChange, label, min = 1 }: { value: number; max:
 // pidió la cuenta: sin confirmar (cantidad, mover, eliminar) y confirmado
 // (cortesía, anular). Cada acción con parámetros abre su propia pantalla; la
 // X de la cabecera cierra el panel.
-export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onAnular, onCortesia, onRepartir, onDeshacerReparto }: ItemActionsPanelProps) {
+export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onModoGrupo, grupoCount = 1, grupoTotal, onMoverGrupo, onAnular, onCortesia, onRepartir, onDeshacerReparto }: ItemActionsPanelProps) {
   const [vista, setVista] = useState<Vista>('menu');
   const [cantidad, setCantidad] = useState(item.cantidad);
   const [precio, setPrecio] = useState(item.precio);
@@ -83,6 +89,14 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
   const [motivo, setMotivo] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [seleccion, setSeleccion] = useState<string[]>([]);
+
+  // La lista solo deja elegir más productos mientras esta pantalla es «Mover»; al salir (o al cerrar el panel) se apaga.
+  const modoGrupoRef = useRef(onModoGrupo);
+  modoGrupoRef.current = onModoGrupo;
+  useEffect(() => {
+    modoGrupoRef.current?.(vista === 'mover');
+    return () => modoGrupoRef.current?.(false);
+  }, [vista]);
 
   const enviada = confirmado ? Math.min(cantidadEnviada ?? item.cantidad, item.cantidad) : 0;
   // Confirmado, pero con unidades sumadas después que cocina aún no recibió.
@@ -228,11 +242,21 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
 
       {vista === 'mover' && (
         <>
-          {item.cantidad > 1 && <Stepper value={cantAccion} max={item.cantidad} onChange={setCantAccion} label="Unidades a mover" />}
+          {grupoCount > 1 && onMoverGrupo ? (
+            // Varios productos elegidos: se mueven completos (para dividir unidades se mueve de uno en uno).
+            <div className="flex items-baseline justify-between gap-3 rounded-2xl bg-muted px-4 py-3">
+              <span className="t-cuerpo-fuerte text-foreground">{grupoCount} productos elegidos</span>
+              {grupoTotal !== undefined && <span className="t-fila text-muted-foreground tabular-nums">{money(grupoTotal)}</span>}
+            </div>
+          ) : (
+            item.cantidad > 1 && <Stepper value={cantAccion} max={item.cantidad} onChange={setCantAccion} label="Unidades a mover" />
+          )}
+          {onMoverGrupo && <span className="t-meta text-muted-foreground text-center">Toca otros productos de la lista para moverlos juntos.</span>}
           <div className="flex flex-col gap-2">
             {destinos.map(d => (
-              <Button key={d.id} className="w-full h-12 font-bold justify-between px-4 bg-primary hover:bg-primary/90 text-white" disabled={ocupado} onClick={() => ejecutar(() => onMover(d.id, cantAccion))}>
-                {d.nombre} <ArrowsLeftRight size={16} className="opacity-80" />
+              <Button key={d.id} className="w-full h-12 font-bold justify-between px-4 bg-primary hover:bg-primary/90 text-white" disabled={ocupado}
+                onClick={() => ejecutar(() => (grupoCount > 1 && onMoverGrupo ? onMoverGrupo(d.id) : onMover(d.id, cantAccion)))}>
+                {grupoCount > 1 && onMoverGrupo ? `Mover ${grupoCount} a ${d.nombre}` : d.nombre} <ArrowsLeftRight size={16} className="opacity-80" />
               </Button>
             ))}
           </div>

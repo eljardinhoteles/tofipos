@@ -55,3 +55,11 @@ export function calcularPartes(valor: number, n: number): number[] {
 export function nombreBaseReparto(nombre: string): string {
   return nombre.replace(/ · parte \d+\/\d+$/, '').replace(/ \(1\/\d+\)$/, '');
 }
+
+/** ¿Se puede mover este ítem a otra cuenta? No: anulado, con unidades pagadas, con cortesía ni con reparto de valor. */
+export function itemMovible(item: { anulado?: boolean | null; pagado_cantidad?: number | null; cortesia_cantidad?: number | null; cortesia_motivo?: string | null; reparto?: string | null } | null | undefined): boolean {
+  if (!item || item.anulado) return false
+  if ((item.pagado_cantidad || 0) > 0) return false
+  if ((item.cortesia_cantidad || 0) > 0 || !!item.cortesia_motivo) return false
+  return !parseReparto(item)
+}

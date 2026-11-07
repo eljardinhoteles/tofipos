@@ -39,6 +39,9 @@ interface ComandaItemsListProps {
   snapshot?: Record<string, number>;
   /** Espacio al final para que el pill "Añadir" flotante no tape el último ítem. */
   padBottom?: boolean;
+  /** Mover en grupo: ítems elegidos (todos resaltados) y cuáles no se pueden mover (esos se atenúan). */
+  multiSeleccion?: Set<string>;
+  esMovible?: (item: Item) => boolean;
   onSelect: (item: Item) => void;
 }
 
@@ -57,7 +60,7 @@ const tienePendiente = (item: Item, confirmadaAt?: string | null, snapshot: Reco
 // segundo paso de baja prioridad, para que el sidebar abra sin esperar a todas.
 const FILAS_INICIALES = 30;
 
-export const ComandaItemsList = memo(function ComandaItemsList({ items: itemsSinOrdenar, selectedId, confirmada, confirmadaAt, snapshot, padBottom, onSelect }: ComandaItemsListProps) {
+export const ComandaItemsList = memo(function ComandaItemsList({ items: itemsSinOrdenar, selectedId, confirmada, confirmadaAt, snapshot, padBottom, multiSeleccion, esMovible, onSelect }: ComandaItemsListProps) {
   const items = useMemo(() => ordenarItemsComanda(itemsSinOrdenar), [itemsSinOrdenar]);
   const [completa, setCompleta] = useState(items.length <= FILAS_INICIALES);
   useEffect(() => {
@@ -82,8 +85,8 @@ export const ComandaItemsList = memo(function ComandaItemsList({ items: itemsSin
           key={item.id}
           item={item}
           index={index}
-          selected={selectedId === item.id}
-          atenuada={!!selectedId && selectedId !== item.id}
+          selected={multiSeleccion ? multiSeleccion.has(item.id) : selectedId === item.id}
+          atenuada={multiSeleccion ? !multiSeleccion.has(item.id) && !!esMovible && !esMovible(item) : !!selectedId && selectedId !== item.id}
           locked={estaBloqueado(item, confirmada, confirmadaAt)}
           pendiente={tienePendiente(item, confirmada ? confirmadaAt : null, snapshot)}
           onSelect={onSelect}
