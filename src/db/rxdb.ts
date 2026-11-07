@@ -1375,6 +1375,11 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
   // Tablas donde varios equipos editan el mismo documento a la vez (ver makePushHandler).
   const CAMPOS_POR_TABLA = new Set(['comandas', 'comanda_items', 'mesas', 'habitacion_cuentas'])
 
+  // Freno contra bucles: si el MISMO parche (mismos campos y valores) del mismo documento vuelve a salir en menos de 60 s, ya está
+  // aplicado en el servidor y repetirlo solo genera un evento de Realtime para todos los equipos. El 6-nov-2026 un bucle así escribió
+  // ~90.000 veces las mismas comandas desde un navegador (~545 MB de egress de Realtime en un día).
+  const ultimosParches = new Map<string, { firma: string; t: number; repeticiones: number }>()
+
   const makePushHandler = (tableName: string, transformRow?: (doc: Record<string, unknown>) => Record<string, unknown>) =>
     async (rows: Array<{ newDocumentState: any; assumedMasterState: any }>) => {
       if (!pushEnabled) throw new Error('push suspendido: esperando sincronización inicial')
@@ -1504,6 +1509,15 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
         // Parches: un UPDATE por documento con solo los campos cambiados. Si la fila no existe todavía (el alta no llegó), se sube completa.
         if (!error) {
           for (const parche of parches) {
+            const { updated_at: _fecha, ...cambiosSinFecha } = parche.cambios
+            const firma = JSON.stringify(cambiosSinFecha)
+            const claveParche = `${tableName}:${parche.id}`
+            const previo = ultimosParches.get(claveParche)
+            if (previo && previo.firma === firma && Date.now() - previo.t < 60_000) {
+              previo.repeticiones++
+              if (previo.repeticiones === 3) console.warn(`[Push ${tableName}] parche repetido omitido (posible bucle):`, parche.id, Object.keys(cambiosSinFecha))
+              continue
+            }
             const { data, error: errorParche } = await supabase
               .from(tableName)
               .update(parche.cambios)
@@ -1514,6 +1528,8 @@ export function startVerticalReplication(db: RxDatabase<VerticalCollections>) {
               const { error: errorAlta } = await supabase.from(tableName).upsert(parche.completo, { onConflict: 'id', ignoreDuplicates: true })
               if (errorAlta) { error = errorAlta; break }
             }
+            ultimosParches.set(claveParche, { firma, t: Date.now(), repeticiones: 0 })
+            if (ultimosParches.size > 2000) ultimosParches.delete(ultimosParches.keys().next().value as string)
           }
         }
 
