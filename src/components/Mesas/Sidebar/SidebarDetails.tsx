@@ -145,6 +145,10 @@ export function SidebarDetails({
  if (!seleccionGrupo) return undefined;
  return comandaItems.filter((i: any) => seleccionGrupo.has(i.id)).reduce((acc: number, i: any) => acc + (i.precio || 0) * (i.cantidad || 0), 0);
  }, [seleccionGrupo, comandaItems]);
+ // Un producto entra al grupo solo si el panel individual también le ofrecería «Mover»: ya enviado a cocina y sin pagos, cortesía ni reparto.
+ // La función real se asigna más abajo (usa esItemBloqueado); aquí queda estable para no repintar la lista memoizada.
+ const esMovibleGrupoRef = useRef<(item: any) => boolean>(() => false);
+ const esMovibleGrupo = useCallback((item: any) => esMovibleGrupoRef.current(item), []);
  // El callback es estable (lee el estado por refs): si cambiara en cada selección, la lista memoizada repintaría todas sus filas.
  const estadoGrupoRef = useRef({ moviendoGrupo, editingItem });
  estadoGrupoRef.current = { moviendoGrupo, editingItem };
@@ -152,7 +156,7 @@ export function SidebarDetails({
  const { moviendoGrupo: agrupando, editingItem: abierto } = estadoGrupoRef.current;
  if (agrupando && abierto) {
  if (item.id === abierto.id) return;
- if (!itemMovible(item)) { showToast.warning('No se puede mover', 'Está pagado, anulado, en cortesía o repartido.'); return; }
+ if (!esMovibleGrupoRef.current(item)) { showToast.warning('No se puede mover', 'Está sin enviar a cocina, pagado, anulado, en cortesía o repartido.'); return; }
  setGrupoExtra(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
  return;
  }
@@ -164,6 +168,8 @@ export function SidebarDetails({
  let movidos = 0;
  let primerFallo = '';
  for (const id of ids) { // de uno en uno: cada movimiento actualiza las cantidades enviadas a cocina de las dos cuentas
+ const producto = comandaItems.find((i: any) => i.id === id);
+ if (!producto || !esMovibleGrupoRef.current(producto)) { if (!primerFallo) primerFallo = `${producto?.nombre ?? 'Un producto'}: sin enviar a cocina o no movible`; continue; }
  try { await moverItemASubcomanda(id, destId); movidos++; }
  catch (e) { if (!primerFallo) primerFallo = `${comandaItems.find((i: any) => i.id === id)?.nombre ?? 'Un producto'}: ${e instanceof Error ? e.message : 'no se pudo mover'}`; }
  }
@@ -252,6 +258,8 @@ export function SidebarDetails({
  !!item?.created_at &&
  item.created_at <= activeComanda.confirmada_at &&
  !item?.anulado;
+
+ esMovibleGrupoRef.current = (item: any) => itemMovible(item) && esItemBloqueado(item);
 
  // Unidades de un ítem que cocina ya recibió.
  const enviadaDe = (item: any) =>
@@ -1143,7 +1151,7 @@ export function SidebarDetails({
  snapshot={cantidadesSnapshot}
  padBottom={!editingItem && activeComanda?.estado !=='cuenta'}
  multiSeleccion={seleccionGrupo}
- esMovible={itemMovible}
+ esMovible={esMovibleGrupo}
  onSelect={handleSelectItem}
  />
  )}
