@@ -26,7 +26,8 @@ interface ItemActionsPanelProps {
   /** Otras subcomandas de la mesa (vacío = mesa normal, sin "Mover"). */
   destinos: Array<{ id: string; nombre: string }>;
   /** Subcomandas entre las que se puede repartir el valor del plato (vacío = sin "Repartir"). */
-  destinosRepartir?: Array<{ id: string; nombre: string }>;
+  /** `propio`: la cuenta actual (puede quedarse con una parte del valor). */
+  destinosRepartir?: Array<{ id: string; nombre: string; propio?: boolean }>;
   tieneOpciones: boolean;
   /** Producto de precio variable: antes de confirmar se puede cambiar el valor unitario. */
   precioVariable?: boolean;
@@ -292,13 +293,19 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
             return (
               <div className="text-center t-cuerpo-fuerte text-muted-foreground">
                 Cada cuenta paga <span className="text-foreground">{min === max ? money(min) : `${money(min)} – ${money(max)}`}</span>
-                <span className="block t-dato">Este plato queda en $0 en esta cuenta.</span>
+                <span className="block t-dato">{seleccion.some(id => destinosRepartir.find(d => d.id === id)?.propio) ? 'En esta cuenta queda su parte y el plato en $0.' : 'Este plato queda en $0 en esta cuenta.'}</span>
               </div>
             );
           })()}
-          <Button className="w-full h-11 font-bold" disabled={ocupado || seleccion.length === 0 || !onRepartir} onClick={() => ejecutar(() => onRepartir!(seleccion, cantAccion))}>
-            <UsersThree size={15} className="mr-1.5" /> {seleccion.length === 0 ? 'Elige las cuentas' : `Repartir entre ${seleccion.length} cuenta${seleccion.length === 1 ? '' : 's'}`}
-          </Button>
+          {(() => {
+            // Repartir con solo la propia cuenta no divide nada: hace falta al menos otra.
+            const otras = seleccion.filter(id => !destinosRepartir.find(d => d.id === id)?.propio).length;
+            return (
+              <Button className="w-full h-11 font-bold" disabled={ocupado || otras === 0 || !onRepartir} onClick={() => ejecutar(() => onRepartir!(seleccion, cantAccion))}>
+                <UsersThree size={15} className="mr-1.5" /> {otras === 0 ? 'Elige otra cuenta' : `Repartir entre ${seleccion.length} cuenta${seleccion.length === 1 ? '' : 's'}`}
+              </Button>
+            );
+          })()}
           <Button variant="ghost" className="w-full" onClick={() => setVista('menu')}>Cancelar</Button>
         </>
       )}

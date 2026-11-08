@@ -2502,8 +2502,10 @@ export async function repartirItemEntreSubcomandas(itemId: string, destComandaId
 
   const srcDoc = await db.comandas.findOne(item.comanda_id).exec(true)
   const src = srcDoc.toJSON() as any
-  const destinos = [...new Set(destComandaIds)].filter(id => id !== item.comanda_id)
-  if (destinos.length === 0) throw new Error('Elige al menos una cuenta destino')
+  // La cuenta de origen también puede quedarse con una parte (entonces recibe su línea «parte» como las demás); pero tiene que haber al
+  // menos otra cuenta: repartir solo con la propia no divide nada.
+  const destinos = [...new Set(destComandaIds)]
+  if (!destinos.some(id => id !== item.comanda_id)) throw new Error('Elige al menos otra cuenta')
 
   const destDocs = await Promise.all(destinos.map(id => db.comandas.findOne(id).exec(true)))
   for (const d of destDocs) {

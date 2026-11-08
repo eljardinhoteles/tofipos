@@ -1294,7 +1294,11 @@ export function SidebarDetails({
  cantidadEnviada={esItemBloqueado(editingItem) ? enviadaDe(editingItem) : 0}
  // Mover: una cuenta que ya pidió la cuenta también puede recibir productos (se avisa en el nombre); repartir sigue sin ofrecerla.
  destinos={destinosMover.map((c: any) => ({ id: c.id, nombre: c.estado === 'cuenta' ? `${c.subcomanda_nombre} · cuenta pedida` : c.subcomanda_nombre }))}
- destinosRepartir={destinosMover.filter((c: any) => c.estado !== 'cuenta').map((c: any) => ({ id: c.id, nombre: c.subcomanda_nombre }))}
+ // Repartir: cualquier otra cuenta (también la que ya pidió la cuenta) y la propia, que puede quedarse con una parte.
+ destinosRepartir={destinosMover.length === 0 ? [] : [
+ { id: activeComanda?.id, nombre: `${activeComanda?.subcomanda_nombre || 'Esta cuenta'} · esta cuenta`, propio: true },
+ ...destinosMover.map((c: any) => ({ id: c.id, nombre: c.estado === 'cuenta' ? `${c.subcomanda_nombre} · cuenta pedida` : c.subcomanda_nombre })),
+ ]}
  ocultarEstado={activeComanda?.estado ==='cuenta'}
  cuentaPedida={activeComanda?.estado ==='cuenta'}
  tieneOpciones={!!editingMenuItem?.modificadores && editingMenuItem.modificadores.length > 0}
