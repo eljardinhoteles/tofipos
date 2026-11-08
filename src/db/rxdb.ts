@@ -2387,6 +2387,9 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
   const dest = destDoc.toJSON() as any
   if (src.mesa_id !== dest.mesa_id) throw new Error('La subcomanda destino es de otra mesa')
 
+  // Las fechas se comparan como instante: el equipo las escribe «…Z» y el servidor las devuelve «…+00:00».
+  const ms = (v: unknown): number => { const t = Date.parse(String(v ?? '')); return Number.isNaN(t) ? 0 : t }
+
   const cant = Math.max(1, Math.min(cantidad ?? item.cantidad, item.cantidad))
   const parse = (c: any): Record<string, number> => {
     try { return c.cantidades_snapshot ? JSON.parse(c.cantidades_snapshot) : {} } catch { return {} }
@@ -2395,7 +2398,7 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
   const destSnap = parse(dest)
 
   // Unidades del ítem que cocina ya recibió en la comanda origen.
-  const enviadoOrigen = src.confirmada_at && item.created_at && item.created_at <= src.confirmada_at
+  const enviadoOrigen = src.confirmada_at && item.created_at && ms(item.created_at) <= ms(src.confirmada_at)
     ? item.cantidad
     : Math.min(item.cantidad, srcSnap[item.id] ?? 0)
   // Se mueven primero las unidades aún no enviadas.
@@ -2419,21 +2422,35 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
   const destPatch: Record<string, unknown> = {}
   if (enviadoMovido > 0) {
     if (dest.confirmada_at) {
-      if (createdAt > dest.confirmada_at) createdAt = dest.confirmada_at
+      if (ms(createdAt) > ms(dest.confirmada_at)) createdAt = dest.confirmada_at
+      // La cuenta con envío previo debe figurar confirmada: sin la marca sus productos enviados se verían pendientes.
+      if (!dest.confirmada) destPatch.confirmada = true
     } else if (!destTieneOtros) {
       destPatch.confirmada = true
       destPatch.confirmada_at = src.confirmada_at
-      if (createdAt > src.confirmada_at) createdAt = src.confirmada_at
+      if (ms(createdAt) > ms(src.confirmada_at)) createdAt = src.confirmada_at
     }
-  } else if (dest.confirmada_at && createdAt <= dest.confirmada_at) {
+  } else if (dest.confirmada_at && ms(createdAt) <= ms(dest.confirmada_at)) {
     createdAt = now
   }
 
-  let movidoId = item.id
-  if (cant === item.cantidad) {
-    await itemDoc.update({ $set: { comanda_id: destComandaId, created_at: createdAt, updated_at: now, _modified: now } } as any)
+  const movidoId = cant === item.cantidad ? item.id : crypto.randomUUID()
+  // Destino: si solo parte de lo movido ya estaba enviado, el resto sale como nuevo.
+  if (enviadoMovido > 0 && enviadoMovido < cant && (dest.confirmada_at || destPatch.confirmada_at)) {
+    destSnap[movidoId] = enviadoMovido
+    destPatch.cantidades_snapshot = JSON.stringify(destSnap)
+  }
+
+  // ORDEN: primero el destino (queda confirmado), después el ítem y al final el origen. Así, si algo falla a medias, nunca queda un
+  // ítem enviado dentro de una cuenta sin confirmar (se vería pendiente y cocina lo recibiría repetido). incrementalPatch reintenta si
+  // la réplica reescribe el documento justo en ese instante (con update() eso daba un conflicto y dejaba el movimiento a medias).
+  if (Object.keys(destPatch).length > 0) {
+    await destDoc.incrementalPatch({ ...destPatch, updated_at: now, _modified: now } as any)
+  }
+
+  if (movidoId === item.id) {
+    await itemDoc.incrementalPatch({ comanda_id: destComandaId, created_at: createdAt, updated_at: now, _modified: now } as any)
   } else {
-    movidoId = crypto.randomUUID()
     const { _rev, _attachments, _meta, ...base } = item as any
     await db.comanda_items.insert({
       ...base,
@@ -2446,24 +2463,15 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
       _deleted: false,
       _modified: now,
     } as RxComandaItem)
-    await itemDoc.update({ $set: { cantidad: item.cantidad - cant, updated_at: now, _modified: now } } as any)
+    await itemDoc.incrementalPatch({ cantidad: item.cantidad - cant, updated_at: now, _modified: now } as any)
   }
 
   // Snapshots: el origen ya no debe esperar más unidades de las que tiene.
   const restante = item.cantidad - cant
   if (srcSnap[item.id] !== undefined && srcSnap[item.id] > restante) {
     srcSnap[item.id] = restante
-    await srcDoc.update({ $set: { cantidades_snapshot: JSON.stringify(srcSnap), updated_at: now, _modified: now } } as any)
+    await srcDoc.incrementalPatch({ cantidades_snapshot: JSON.stringify(srcSnap), updated_at: now, _modified: now } as any)
   }
-  // Destino: si solo parte de lo movido ya estaba enviado, el resto sale como nuevo.
-  if (enviadoMovido > 0 && enviadoMovido < cant && (dest.confirmada_at || destPatch.confirmada_at)) {
-    destSnap[movidoId] = enviadoMovido
-    destPatch.cantidades_snapshot = JSON.stringify(destSnap)
-  }
-  if (Object.keys(destPatch).length > 0) {
-    await destDoc.update({ $set: { ...destPatch, updated_at: now, _modified: now } } as any)
-  }
-
 }
 
 // ── Reparto del valor de un plato entre subcomandas ─────────────────────────
