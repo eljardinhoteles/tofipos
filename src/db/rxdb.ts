@@ -2435,10 +2435,17 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
   }
 
   const movidoId = cant === item.cantidad ? item.id : crypto.randomUUID()
-  // Destino: si solo parte de lo movido ya estaba enviado, el resto sale como nuevo.
-  if (enviadoMovido > 0 && enviadoMovido < cant && (dest.confirmada_at || destPatch.confirmada_at)) {
-    destSnap[movidoId] = enviadoMovido
-    destPatch.cantidades_snapshot = JSON.stringify(destSnap)
+  // Destino: si solo parte de lo movido ya estaba enviado, el resto sale como nuevo. Si estaba enviado completo (o nada), la cuenta no debe
+  // conservar una entrada vieja del mismo producto en su snapshot: una entrada en 0 (de cuando el producto salió de esa cuenta) lo haría
+  // aparecer como pendiente al volver y cocina lo recibiría repetido.
+  if (dest.confirmada_at || destPatch.confirmada_at) {
+    if (enviadoMovido > 0 && enviadoMovido < cant) {
+      destSnap[movidoId] = enviadoMovido
+      destPatch.cantidades_snapshot = JSON.stringify(destSnap)
+    } else if (destSnap[movidoId] !== undefined) {
+      delete destSnap[movidoId]
+      destPatch.cantidades_snapshot = JSON.stringify(destSnap)
+    }
   }
 
   // ORDEN: primero el destino (queda confirmado), después el ítem y al final el origen. Así, si algo falla a medias, nunca queda un
@@ -2466,10 +2473,12 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
     await itemDoc.incrementalPatch({ cantidad: item.cantidad - cant, updated_at: now, _modified: now } as any)
   }
 
-  // Snapshots: el origen ya no debe esperar más unidades de las que tiene.
+  // Snapshots: el origen ya no debe esperar más unidades de las que tiene. Si el producto salió completo se borra su entrada (dejarla en 0
+  // hacía que, al volver a esa cuenta, se tomara por un producto sin enviar).
   const restante = item.cantidad - cant
   if (srcSnap[item.id] !== undefined && srcSnap[item.id] > restante) {
-    srcSnap[item.id] = restante
+    if (restante === 0) delete srcSnap[item.id]
+    else srcSnap[item.id] = restante
     await srcDoc.incrementalPatch({ cantidades_snapshot: JSON.stringify(srcSnap), updated_at: now, _modified: now } as any)
   }
 }
