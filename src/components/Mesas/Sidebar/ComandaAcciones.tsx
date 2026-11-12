@@ -44,7 +44,7 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
         </Button>
         <Button
           variant="primarySoft" className="w-full h-10 font-bold" onClick={p.onPedirCuenta}
-          disabled={p.total === 0 || !p.confirmada}
+          disabled={p.sinProductos || !p.confirmada}
         >
           <Check size={18} weight="bold" className="mr-1.5" />
           Pedir Cuenta
@@ -77,7 +77,6 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
       </Button>
       <Button
         variant="warning" className="w-full h-10 font-bold" onClick={p.onCobrar}
-        disabled={p.total === 0}
       >
         <Check size={18} weight="bold" className="mr-1.5" /> Cobrar Cuenta
       </Button>
