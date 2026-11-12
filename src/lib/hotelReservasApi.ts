@@ -164,6 +164,8 @@ export interface NuevaReservaHotel {
   usuarioNombre?: string;
   /** Ficha del cliente del POS (Clientes). */
   clienteId?: string | null;
+  /** Grupo al que se une la reserva (al añadir una habitación a otra existente). */
+  grupo?: { id: string; etiqueta: string };
 }
 
 const COLUMNAS_BASE =
@@ -487,6 +489,7 @@ export async function crearReservaHotel(n: NuevaReservaHotel, alProgreso?: (p: P
     tarifa_manual: manual,
     tarifa_motivo: manual ? n.motivoTarifa?.trim() || null : null,
     notas: n.notas?.trim() || null,
+    ...(n.grupo ? { grupo_id: n.grupo.id, grupo_etiqueta: n.grupo.etiqueta } : {}),
     estado: 'confirmada' as const,
     sync_estado: 'pendiente' as const,
     usuario_id: n.usuarioId ?? null,
@@ -503,6 +506,32 @@ export async function crearReservaHotel(n: NuevaReservaHotel, alProgreso?: (p: P
   const r = await subirACloudbeds(reserva, n.rateID);
   alProgreso?.({ fase: 'cabana', roomTypeID: claveEnlace(reserva.room_type_id, reserva.room_id), sync: r.sync });
   return { reserva: { ...reserva, sync_estado: r.sync }, ...r };
+}
+
+/**
+ * Añade una habitación a una reserva ya creada: nace una reserva nueva con el mismo huésped, cliente y fechas, y ambas
+ * quedan en el mismo grupo (si la original era suelta, pasa a ser un grupo de dos). Cada una es independiente en Cloudbeds.
+ */
+export async function agregarHabitacionAReservaHotel(
+  r: ReservaHotel,
+  n: Pick<NuevaReservaHotel, 'roomTypeID' | 'roomID' | 'cabana' | 'rateID' | 'adultos' | 'ninos' | 'totalEstadia' | 'totalManual' | 'motivoTarifa'> & { codigo?: string | null; codigoActual?: string | null },
+  usuario?: string,
+): Promise<{ reserva: ReservaHotel } & ResultadoSync> {
+  if (r.cloudbeds_grupo_ref) throw new Error('Esta reserva viene de un grupo de Cloudbeds: añade la habitación allá');
+  const grupoId = r.grupo_id ?? crypto.randomUUID();
+  const etiqueta = r.grupo_etiqueta ?? `Grupo - ${n.codigoActual || r.cabana},${n.codigo || n.cabana}`;
+  const nueva = await crearReservaHotel({
+    ...n,
+    llegada: r.llegada,
+    salida: r.salida,
+    huesped: { nombre: r.huesped_nombre, apellido: r.huesped_apellido, email: r.huesped_email, telefono: r.huesped_telefono ?? undefined, pais: r.huesped_pais },
+    clienteId: r.cliente_id,
+    usuarioNombre: usuario,
+    grupo: { id: grupoId, etiqueta },
+  });
+  if (!r.grupo_id) await actualizar(r.id, { grupo_id: grupoId, grupo_etiqueta: etiqueta });
+  void registrarEventoHotel(r.id, 'cabana', `Se añadió la habitación ${n.cabana} a la reserva`, usuario);
+  return nueva;
 }
 
 export interface LineaGrupo {

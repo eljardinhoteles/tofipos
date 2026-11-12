@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { cambiarCamaReservaHotel, type ReservaHotel } from '../../../lib/hotelReservasApi';
 import { etiquetaCampo } from './formatos';
@@ -12,14 +13,19 @@ interface Props {
   puedeEditar: boolean;
   usuario?: string;
   onCambio: (r: ReservaHotel) => void;
+  /** Si se pasa, aparece «Descartar» y se llama al cerrar sin guardar. */
+  onDescartar?: () => void;
 }
 
 /** Tipo de cama de la reserva. Se cambia al instante y es solo del POS: no va a Cloudbeds ni afecta la disponibilidad. */
-export function SelectorCama({ r, camas, puedeEditar, usuario, onCambio }: Props) {
+export function SelectorCama({ r, camas, puedeEditar, usuario, onCambio, onDescartar }: Props) {
   const [guardando, setGuardando] = useState(false);
+  // La cama se elige y solo se guarda con «Guardar»: un toque de más no la cambia.
+  const [borrador, setBorrador] = useState<string | null>(r.cama);
   if (camas.length === 0 && !r.cama) return null;
 
-  const cambiar = async (cama: string | null) => {
+  const guardar = async () => {
+    const cama = borrador;
     setGuardando(true);
     try {
       onCambio(await cambiarCamaReservaHotel(r, cama, usuario));
@@ -35,7 +41,13 @@ export function SelectorCama({ r, camas, puedeEditar, usuario, onCambio }: Props
     <div className="flex flex-col gap-1.5 min-w-0">
       <span className={etiquetaCampo}>Cama</span>
       {puedeEditar ? (
-        <CamasSelect camas={camas} valor={r.cama} onChange={(v) => void cambiar(v)} disabled={guardando} etiqueta="Tipo de cama" />
+        <>
+          <CamasSelect camas={camas} valor={borrador} onChange={setBorrador} disabled={guardando} etiqueta="Tipo de cama" />
+          <div className="flex justify-end gap-2">
+            {onDescartar && <Button type="button" variant="ghost" className="h-11" onClick={onDescartar} disabled={guardando}>Descartar</Button>}
+            <Button type="button" className="h-11" onClick={() => void guardar()} disabled={guardando || borrador === r.cama}>{guardando ? 'Guardando…' : 'Guardar'}</Button>
+          </div>
+        </>
       ) : (
         <span className="t-cuerpo-fuerte">{r.cama ?? '—'}</span>
       )}

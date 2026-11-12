@@ -57,6 +57,7 @@ import { GrupoResumen } from './detalle/GrupoResumen';
 import { SelectorCama } from './detalle/SelectorCama';
 import { FilaInfo } from './detalle/comunes';
 import { VistaGrupo } from './detalle/VistaGrupo';
+import { EditorAgregarHabitacion } from './detalle/EditorAgregarHabitacion';
 import { SeparadorGrupo } from './detalle/SeparadorGrupo';
 import { SeccionHistorial } from './detalle/SeccionHistorial';
 import { Seccion } from './detalle/comunes';
@@ -86,7 +87,7 @@ interface ReservaDrawerProps {
 }
 
 type Pestana = 'reserva' | 'grupo' | 'cliente' | 'cuenta' | 'historial';
-type Editor = null | 'estadia' | 'cabana' | 'huespedes' | 'cliente' | 'abono' | EditorCuenta;
+type Editor = null | 'estadia' | 'cabana' | 'agregar' | 'cama' | 'huespedes' | 'cliente' | 'abono' | EditorCuenta;
 
 function FilaHeader({ icono: Icono, children }: { icono: typeof Bed; children: ReactNode }) {
   return (
@@ -305,9 +306,10 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
   const cancelar = () => {
     if (!r) return;
     const cobros = venta && !venta.anulado && venta.totalPagado > EPS ? ` Tiene cobros por ${dinero(venta.totalPagado)} en el Centro de Ventas: no se reembolsan solos; se deja un comentario en la venta para que revises si corresponde.` : '';
-    openConfirm('Cancelar reserva',
-      `Se cancelará la reserva de ${nombreHuesped(r)}${r.cloudbeds_reservation_id ? ' también en Cloudbeds' : r.cloudbeds_grupo_ref ? ' solo en el POS (esta habitación viene de una reserva de Cloudbeds con varias habitaciones: quítala o cancélala allá a mano)' : ''} y se liberan sus fechas.${cobros} Esta acción no se puede deshacer.`,
-      () => { void correr('Cancelando la reserva…', async () => { await cancelarReservaHotel(r); showToast.success('Reserva cancelada'); onCambio?.(true); onClose(); }); });
+    const enGrupoVigente = vigentesDelGrupo.length > 1;
+    openConfirm(enGrupoVigente ? `Cancelar solo ${r.cabana}` : `Cancelar ${r.cabana}`,
+      `Se cancelará ${enGrupoVigente ? `únicamente la habitación ${r.cabana}` : `la reserva de ${r.cabana}`} de ${nombreHuesped(r)}${enGrupoVigente ? `. Las otras ${vigentesDelGrupo.length - 1} habitaciones del grupo (${vigentesDelGrupo.filter((x) => x.id !== r.id).map((x) => x.cabana).join(', ')}) siguen vigentes` : ''}${r.cloudbeds_reservation_id ? ' también en Cloudbeds' : r.cloudbeds_grupo_ref ? ' solo en el POS (esta habitación viene de una reserva de Cloudbeds con varias habitaciones: quítala o cancélala allá a mano)' : ''} y se libera ${r.cabana} en esas fechas.${cobros} Esta acción no se puede deshacer.`,
+      () => { void correr('Cancelando la reserva…', async () => { await cancelarReservaHotel(r); showToast.success(`${r.cabana} cancelada`); onCambio?.(true); onClose(); }); });
   };
 
   const tipoCorreo = r?.estado === 'cancelada' ? 'cancelacion' : 'confirmacion';
@@ -328,8 +330,8 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
   const cancelarGrupo = () => {
     if (!r) return;
-    openConfirm('Cancelar todo el grupo',
-      `Se cancelarán las ${vigentesDelGrupo.length} reservas vigentes del grupo de ${nombreHuesped(r)}${r.cloudbeds_grupo_ref ? `, solo en el POS: cancela también la reserva ${r.cloudbeds_grupo_ref} en Cloudbeds` : ', también en Cloudbeds'}, y se liberan sus fechas. Esta acción no se puede deshacer.`,
+    openConfirm(`Cancelar las ${vigentesDelGrupo.length} habitaciones`,
+      `Se cancelarán todas las habitaciones del grupo de ${nombreHuesped(r)}: ${vigentesDelGrupo.map((x) => x.cabana).join(', ')}${r.cloudbeds_grupo_ref ? `, solo en el POS: cancela también la reserva ${r.cloudbeds_grupo_ref} en Cloudbeds` : ', también en Cloudbeds'}, y se liberan sus fechas. Esta acción no se puede deshacer.`,
       () => { void correr('Cancelando el grupo…', async () => {
         const fallos = await cancelarGrupoReservasHotel(vigentesDelGrupo);
         if (fallos > 0) showToast.warning('Algunas reservas no se pudieron cancelar', `${fallos} sigue${fallos === 1 ? '' : 'n'} vigente${fallos === 1 ? '' : 's'}. Revisa e inténtalo de nuevo.`);
@@ -637,7 +639,7 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
 
               {pestana === 'reserva' && (<>
               <Seccion icono={Bed} color="info" titulo={`Estadía · ${plural(noches, 'noche', 'noches')}`}
-                accion={puedeEditar && !r.fuente_externa && editor !== 'estadia' && editor !== 'cabana' ? (
+                accion={puedeEditar && !r.fuente_externa && editor !== 'estadia' && editor !== 'cabana' && editor !== 'agregar' ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button type="button" variant="suave" className="h-9 pointer-coarse:h-11 gap-1.5" aria-label="Opciones de la estadía">Opciones <CaretDown size={14} weight="bold" /></Button>
@@ -645,21 +647,27 @@ export function ReservaDrawer({ open, reserva, divergencia, reservas = [], onAbr
                     <DropdownMenuContent>
                       <DropdownMenuItem onSelect={() => abrirEditor('estadia')}><PencilSimple size={18} aria-hidden /> Editar fechas</DropdownMenuItem>
                       {!r.cloudbeds_grupo_ref && <DropdownMenuItem onSelect={() => abrirEditor('cabana')}><ArrowsLeftRight size={18} aria-hidden /> Cambiar habitación</DropdownMenuItem>}
+                      {(habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas?.length ?? 0) > 0 && <DropdownMenuItem onSelect={() => abrirEditor('cama')}><Bed size={18} aria-hidden /> Cambiar cama</DropdownMenuItem>}
+                      {!r.cloudbeds_grupo_ref && <DropdownMenuItem onSelect={() => abrirEditor('agregar')}><Plus size={18} aria-hidden /> Añadir habitación</DropdownMenuItem>}
                       <DropdownMenuSeparator />
-                      {vigentesDelGrupo.length > 1 && <DropdownMenuItem variant="destructive" onSelect={cancelarGrupo}><Prohibit size={18} aria-hidden /> Cancelar todo el grupo</DropdownMenuItem>}
-                      <DropdownMenuItem variant="destructive" onSelect={cancelar}><Prohibit size={18} aria-hidden /> {r.grupo_id ? 'Cancelar solo esta habitación' : 'Cancelar reserva'}</DropdownMenuItem>
+                      {vigentesDelGrupo.length > 1 && <DropdownMenuItem variant="destructive" onSelect={cancelarGrupo}><Prohibit size={18} aria-hidden /> Cancelar las {vigentesDelGrupo.length} habitaciones</DropdownMenuItem>}
+                      <DropdownMenuItem variant="destructive" onSelect={cancelar}><Prohibit size={18} aria-hidden /> {vigentesDelGrupo.length > 1 ? `Cancelar solo ${r.cabana}` : `Cancelar ${r.cabana}`}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : undefined}>
                 <div className="flex flex-col gap-3">
-                  <FilaInfo icono={Bed} sub={!(puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)) ? r.cama : undefined}>{cabana}{vistaHab ? <span className="text-muted-foreground font-normal"> · {vistaHab}</span> : null}</FilaInfo>
-                  {(puedeGestionar && vigente && (editor === 'estadia' || !!r.fuente_externa)) && (
-                    <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar usuario={usuarioNombre} onCambio={(n) => void refrescar(false, n)} />
+                  <FilaInfo icono={Bed} sub={!(puedeGestionar && vigente && (editor === 'cama' || !!r.fuente_externa)) ? r.cama : undefined}>{cabana}{vistaHab ? <span className="text-muted-foreground font-normal"> · {vistaHab}</span> : null}</FilaInfo>
+                  {(puedeGestionar && vigente && (editor === 'cama' || !!r.fuente_externa)) && (
+                    <SelectorCama r={r} camas={habitacionDeUnidad(habitaciones, r.room_type_id, r.room_id)?.camas ?? []} puedeEditar usuario={usuarioNombre} onDescartar={() => setEditor(null)} onCambio={(n) => { setEditor(null); void refrescar(false, n); }} />
                   )}
                   <FilaInfo icono={CalendarBlank}><span className="capitalize">{fechaLarga(r.llegada)}</span> → <span className="capitalize">{fechaLarga(r.salida)}</span></FilaInfo>
                 </div>
                 {editor === 'cabana' && (
                   <EditorCabana r={r} habitaciones={habitaciones} usuario={usuarioNombre} onCancelar={cerrarEditor} onSucio={setSucio}
+                    onGuardado={() => { setEditor(null); void refrescar(true); }} />
+                )}
+                {editor === 'agregar' && (
+                  <EditorAgregarHabitacion r={r} habitaciones={habitaciones} usuario={usuarioNombre} onCancelar={cerrarEditor} onSucio={setSucio}
                     onGuardado={() => { setEditor(null); void refrescar(true); }} />
                 )}
                 {editor === 'estadia' && (
