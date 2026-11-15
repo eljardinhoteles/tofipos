@@ -3,9 +3,8 @@ import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useEffect, useState, useMemo } from'react';
 import { folioLabel } from '../../../lib/folio';
 import {
- Users, CurrencyCircleDollar, Check, Printer, Scissors, Minus, Plus, CaretRight, ArrowsLeftRight
+ Users, CurrencyCircleDollar, Check, Printer, Scissors, Minus, Plus, CaretRight
 } from'@phosphor-icons/react';
-import { DividirMesaDialog } from './SidebarDetailsDialogs';
 import type { Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useComandaIva } from'../../../hooks/useComandaIva';
@@ -32,26 +31,9 @@ interface SidebarSplitProps {
  comandaItems: any[];
  onBack: () => void;
  onSuccess: () => void;
- /** Mesa de una sola cuenta: crea la segunda cuenta (igual que el botón de la cabecera). Sin esto no se ofrece. */
- onCrearCuenta?: () => Promise<unknown> | unknown;
 }
 
-export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack, onSuccess, onCrearCuenta }: SidebarSplitProps) {
- const [confirmCrearCuenta, setConfirmCrearCuenta] = useState(false);
- const [creandoCuenta, setCreandoCuenta] = useState(false);
- const handleCrearCuenta = async () => {
- if (!onCrearCuenta) return;
- setCreandoCuenta(true);
- try {
- await onCrearCuenta();
- setConfirmCrearCuenta(false);
- onBack(); // vuelve a la mesa, que ya muestra las dos cuentas
- } catch (e) {
- showToast.fallo('crear la segunda cuenta', e);
- } finally {
- setCreandoCuenta(false);
- }
- };
+export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack, onSuccess }: SidebarSplitProps) {
  const [splitMethod, setSplitMethod] = useState<'iguales'|'monto'| null>(null);
  const [saldoInicialSplit, setSaldoInicialSplit] = useState<number>(0);
  const [personas, setPersonas] = useState(2);
@@ -335,19 +317,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
                   </div>
                   <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
                 </button>
-                {onCrearCuenta && (
-                  <button type="button" onClick={() => setConfirmCrearCuenta(true)}
-                    className="p-4 rounded-2xl border border-border flex items-center gap-3 text-left cursor-pointer hover:bg-muted/60 active:bg-muted transition-colors">
-                    <div className="w-10 h-10 rounded-xl bg-muted text-foreground flex items-center justify-center shrink-0">
-                      <ArrowsLeftRight size={20} weight="bold" />
-                    </div>
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="t-cuerpo-fuerte text-foreground">Crear segunda cuenta</span>
-                      <span className="t-meta text-muted-foreground">Divide la mesa en cuentas separadas para repartir los productos.</span>
-                    </div>
-                    <CaretRight size={16} weight="bold" className="text-muted-foreground/60 shrink-0" />
-                  </button>
-                )}
               </section>
             </>
           )
@@ -496,12 +465,6 @@ export function SidebarSplit({ selectedMesa, activeComanda, comandaItems, onBack
         title="Precuenta Dividida"
         content={previewTicketText || ''}
         onPrint={previewOnPrint ?? undefined}
-      />
-      <DividirMesaDialog
-        opened={confirmCrearCuenta}
-        onOpenChange={setConfirmCrearCuenta}
-        procesando={creandoCuenta}
-        onConfirm={handleCrearCuenta}
       />
     </div>
   );

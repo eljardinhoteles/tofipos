@@ -3,7 +3,7 @@ import { imprimirConAviso } from '../../../lib/imprimir';
 import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
 import { folioLabel } from '../../../lib/folio';
-import { X, Plus, Printer, Check, CaretDown, ArrowsClockwise, CloudSlash, UsersThree, ArrowsLeftRight } from'@phosphor-icons/react';
+import { X, Plus, Printer, Check, CaretDown, ArrowsClockwise, CloudSlash, ArrowsOutLineHorizontal, ArrowsLeftRight } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useComandaIva } from'../../../hooks/useComandaIva';
@@ -1258,10 +1258,14 @@ export function SidebarDetails({
  <Button
  // Pedir cuenta no tiene «Añadir»: en su lugar vive aquí el reparto de la mesa, el único punto de entrada.
  disabled={creandoCuenta}
- className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap text-white bg-special hover:bg-special/90 shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all"
+ className={cn("absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full t-dato whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all",
+ // Dividir Mesa (crea la cuenta): morado suave. Dividir cuenta (abre el reparto): morado sólido. Así no se confunden.
+ onActivarMultiple
+ ? "border border-special/40 bg-special-soft text-special-foreground hover:bg-special-soft"
+ : "border-0 bg-special text-white hover:bg-special/90")}
  onClick={handleDividirMesa}
  >
- {onActivarMultiple ? <ArrowsLeftRight size={15} weight="bold" className="mr-1.5"/> : <UsersThree size={15} weight="bold" className="mr-1.5"/>}
+ {onActivarMultiple ? <ArrowsOutLineHorizontal size={15} weight="bold" className="mr-1.5"/> : <ArrowsLeftRight size={15} weight="bold" className="mr-1.5"/>}
  {creandoCuenta ? 'Creando cuenta…' : onActivarMultiple ? 'Dividir Mesa' : 'Dividir cuenta'}
  </Button>
  )}

@@ -556,9 +556,6 @@ export function TableSidebar({
                   setCheckoutView(false);
                   if (!quedanOtrasConProductos) onClose();
                 }}
-                onCrearCuenta={!esMultiple && !viewingComandaId && !activeComanda.habitacion_cuenta_id
-                  ? () => activarMesaMultiple(selectedMesaEffective, activeComanda)
-                  : undefined}
               />
             );
           }

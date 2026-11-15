@@ -566,16 +566,16 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
         showCloseButton={false}
         className="w-[calc(100vw-2rem)] h-[calc(100dvh-2rem)] md:w-[calc(100vw-3rem)] md:h-[calc(100dvh-3rem)] max-w-none sm:max-w-none p-0 gap-0 flex flex-col overflow-hidden"
       >
-        <DialogHeader className="shrink-0 px-5 py-4 border-b border-border flex-row items-center justify-between gap-3 text-left">
+        <DialogHeader className="shrink-0 px-4 py-3 md:px-5 md:py-4 border-b border-border flex-row items-center justify-between gap-3 text-left">
           <div className="min-w-0 flex flex-col gap-0.5">
             <DialogTitle className="t-titulo truncate">Dividir cuenta{mesa ? ` · ${mesa.nombre}` : ''}</DialogTitle>
-            <DialogDescription className="t-meta text-muted-foreground">
+            <DialogDescription className="hidden md:block t-meta text-muted-foreground">
               Toca los productos y pásalos a otra cuenta, o arrástralos. Cada cuenta se imprime por separado.
             </DialogDescription>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" className="h-11 font-bold" onClick={imprimirTodas} disabled={comandas.length === 0}>
-              <Printer size={16} weight="bold" className="mr-2" /> Imprimir todas
+            <Button variant="outline" className="h-11 font-bold px-3 md:px-4" onClick={imprimirTodas} disabled={comandas.length === 0} title="Imprimir todas las precuentas" aria-label="Imprimir todas las precuentas">
+              <Printer size={16} weight="bold" className="md:mr-2" /> <span className="hidden md:inline">Imprimir todas</span>
             </Button>
             <Button variant="ghost" size="icon-lg" aria-label="Cerrar" disabled={ocupado} onClick={pedirCierre} className="rounded-2xl">
               <X size={20} weight="bold" />

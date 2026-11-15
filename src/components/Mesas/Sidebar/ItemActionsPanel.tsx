@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Minus, Trash, ArrowsLeftRight, GiftIcon, CheckCircle, Clock, SlidersHorizontal, Check, UsersThree, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { Plus, Minus, Trash, ArrowsLeftRight, GiftIcon, CheckCircle, Clock, SlidersHorizontal, Check, UsersThree, ArrowCounterClockwise, ArrowsOutLineHorizontal } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -231,7 +231,7 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
           )}
           {puedeDividir && (
             <Button variant="outline" title="Dividir Mesa" className="w-full h-12 font-bold justify-center px-3 border-border bg-card hover:bg-card/80" onClick={() => abrir('dividir')}>
-              <ArrowsLeftRight size={18} className="mr-2" /> Dividir Mesa
+              <ArrowsOutLineHorizontal size={18} className="mr-2" /> Dividir Mesa
             </Button>
           )}
           {cuentaPedida && !conCortesia && !pagado && !meta && (

@@ -1,4 +1,3 @@
-import { CircleNotch } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,35 +7,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-
-interface DividirMesaDialogProps {
-  opened: boolean;
-  onOpenChange: (open: boolean) => void;
-  procesando: boolean;
-  onConfirm: () => void | Promise<void>;
-}
-
-// Confirmación antes de convertir una mesa en Mesa Múltiple (evita toques accidentales).
-export function DividirMesaDialog({ opened, onOpenChange, procesando, onConfirm }: DividirMesaDialogProps) {
-  return (
-    <Dialog open={opened} onOpenChange={(open) => { if (!procesando) onOpenChange(open); }}>
-      <DialogContent className="max-w-sm p-6 gap-4">
-        <DialogHeader className="text-left">
-          <DialogTitle className="t-titulo">¿Dividir la mesa en varias cuentas?</DialogTitle>
-          <DialogDescription className="t-cuerpo">
-            La orden actual pasará a ser la primera cuenta y se creará una segunda vacía, para repartir los productos entre ellas.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" className="h-11 font-bold" disabled={procesando} onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button className="h-11 font-bold" disabled={procesando} onClick={onConfirm}>
-            {procesando ? <CircleNotch size={16} className="animate-spin" /> : 'Dividir'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 interface CambiarMesaDialogProps {
   opened: boolean;
