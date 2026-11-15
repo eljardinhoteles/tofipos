@@ -17,6 +17,7 @@ import { SidebarReservaDetail } from './Sidebar/SidebarReservaDetail';
 import { SidebarMenuProduct } from '../Menu/SidebarMenuProduct';
 import { SidebarHabitacionCuenta } from './Sidebar/SidebarHabitacionCuenta';
 import { SubcomandasPanel } from './Sidebar/SubcomandasPanel';
+import { RepartoCuentasModal } from './RepartoCuentasModal';
 import { useTableActions } from '../../hooks/useTableActions';
 import { getMesaEstadoEfectivo, isOperativeComanda, pickComandaActiva, esMesaMultiple } from '../../db/comandaState';
 import { initVerticalRxDb, updateRxMesa, createRxPiso, updateRxPiso } from '../../db/rxdb';
@@ -56,6 +57,12 @@ export function TableSidebar({
   const [checkoutMode, setCheckoutMode] = useState<'cobro' | 'enviar_habitacion'>('cobro');
   const [openLinkMode, setOpenLinkMode] = useState<'manual' | 'habitacion'>('manual');
   const [vistaTodas, setVistaTodas] = useState(false);
+  // Pantalla de reparto de cuentas (modal). Vive aquí, no en SidebarDetails, porque al activar la mesa múltiple ese componente se remonta.
+  const [repartoAbierto, setRepartoAbierto] = useState(false);
+  // Cobro pedido desde la pantalla de reparto: la cuenta se activa y su SidebarDetails abre el cobro (se remonta al cambiar de cuenta).
+  const [cobroPendienteId, setCobroPendienteId] = useState<string | null>(null);
+  // El cobro se pidió desde la pantalla de reparto: al terminar (o cancelar) se vuelve a ella para seguir con las demás cuentas.
+  const [volverAlReparto, setVolverAlReparto] = useState(false);
   // Mientras se escribe el nombre de una subcomanda nueva se oculta el detalle
   // de la comanda: en móvil el teclado encoge el sheet y el footer quedaba
   // encajado entre el input y el teclado.
@@ -547,6 +554,9 @@ export function TableSidebar({
                   setCheckoutView(false);
                   if (!quedanOtrasConProductos) onClose();
                 }}
+                onCrearCuenta={!esMultiple && !viewingComandaId && !activeComanda.habitacion_cuenta_id
+                  ? () => activarMesaMultiple(selectedMesaEffective, activeComanda)
+                  : undefined}
               />
             );
           }
@@ -606,7 +616,12 @@ export function TableSidebar({
               activeComanda={activeComanda}
               comandaItems={comandaItems}
               onClose={onClose}
-              onResuelta={() => { if (!quedanOtrasConProductos) onClose(); }}
+              onResuelta={() => {
+                // Cobrada una cuenta desde el reparto: si quedan otras con productos se regresa a la pantalla de reparto.
+                if (volverAlReparto && quedanOtrasConProductos) { setVolverAlReparto(false); setRepartoAbierto(true); return; }
+                setVolverAlReparto(false);
+                if (!quedanOtrasConProductos) onClose();
+              }}
               onAddProduct={() => onAction(selectedMesaEffective, 'add_product')}
               onAction={handleActionOverride}
               grupo={viewingComandaId ? undefined : grupoCocina}
@@ -615,6 +630,12 @@ export function TableSidebar({
               onActivarMultiple={!esMultiple && !viewingComandaId && !activeComanda.habitacion_cuenta_id
                 ? () => activarMesaMultiple(selectedMesaEffective, activeComanda)
                 : undefined}
+              onAbrirReparto={!viewingComandaId && !activeComanda.habitacion_cuenta_id
+                ? () => setRepartoAbierto(true)
+                : undefined}
+              cobroSolicitado={cobroPendienteId === activeComanda.id}
+              onCobroAtendido={() => setCobroPendienteId(null)}
+              onCobroCancelado={() => { if (volverAlReparto) { setVolverAlReparto(false); setRepartoAbierto(true); } }}
             />
           );
           if (!esMultiple || viewingComandaId) return details;
@@ -666,6 +687,12 @@ export function TableSidebar({
           />
         );
       })()}
+      <RepartoCuentasModal
+        opened={repartoAbierto}
+        onClose={() => setRepartoAbierto(false)}
+        mesa={selectedMesaEffective}
+        onCobrar={(id) => { setActiveSubcomandaId(id); setCobroPendienteId(id); setVolverAlReparto(true); setRepartoAbierto(false); }}
+      />
     </div>
   );
 }

@@ -149,7 +149,7 @@ export function SidebarReceiptViewer({
  return () => { alive = false; sub?.unsubscribe(); };
  }, [activeComanda?.mesa_id, activeComanda?.id]);
 
- // Partes cobradas con "Dividir cuenta": ventas "Dividido - Nombre" de esta comanda.
+ // Partes cobradas con "Partir cuenta": ventas "Dividido - Nombre" de esta comanda.
  const partesDivididas = useMemo<ParteDividida[]>(() => ventasMesa
  .filter((v: any) => v.comanda_id === activeComanda?.id && typeof v.referencia === 'string' && v.referencia.includes('Dividido - '))
  .map((v: any) => ({

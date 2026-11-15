@@ -3,7 +3,7 @@ import { imprimirConAviso } from '../../../lib/imprimir';
 import { nombreMesaCompleto } from '../../../lib/nombreMesa';
 import { useState, useEffect, useMemo, useRef, useCallback } from'react';
 import { folioLabel } from '../../../lib/folio';
-import { X, Plus, Printer, Check, CaretDown, ArrowsClockwise, CloudSlash } from'@phosphor-icons/react';
+import { X, Plus, Printer, Check, CaretDown, ArrowsClockwise, CloudSlash, UsersThree, ArrowsLeftRight } from'@phosphor-icons/react';
 import { type Mesa } from'../../../db/database';
 import { showToast } from'@/lib/toast';
 import { useComandaIva } from'../../../hooks/useComandaIva';
@@ -31,7 +31,7 @@ import { useEstadoSyncComanda } from'../../../hooks/useEstadoSyncComanda';
 import { ComandaHeader } from'./ComandaHeader';
 import { ClienteInfoCollapsible } from'./ClienteInfoCollapsible';
 import { ComandaAcciones } from'./ComandaAcciones';
-import { DividirMesaDialog, CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
+import { CambiarMesaDialog, CuentaConPendientesDialog, AnticipoDetalleDialog } from'./SidebarDetailsDialogs';
 import { queueKitchenPrint, queueReceiptPrint, queueReprintTicket } from'../../../lib/printServerClient';
 import { esParteRepartida, itemMovible } from'../../../lib/reparto';
 import { cantidadEnviada } from'../../../lib/itemPendiente';
@@ -64,7 +64,15 @@ interface SidebarDetailsProps {
  vistaTodas?: boolean;
  onSelectSubcomanda?: (id: string) => void;
  // Mesa normal: convierte la mesa en Mesa Múltiple (undefined = no disponible).
- onActivarMultiple?: () => Promise<void> | void;
+ /** Convierte la mesa en Mesa Múltiple; devuelve el id de la cuenta nueva (vacía). */
+ onActivarMultiple?: () => Promise<string | void> | string | void;
+ /** Abre la pantalla de reparto de cuentas (modal con todas las cuentas de la mesa). */
+ onAbrirReparto?: () => void;
+ /** La pantalla de reparto pidió cobrar esta cuenta: se abre su cobro al montar (o al cambiar a true). */
+ cobroSolicitado?: boolean;
+ onCobroAtendido?: () => void;
+ /** El cobro abierto desde la pantalla de reparto se canceló (Atrás): permite volver a ella. */
+ onCobroCancelado?: () => void;
 }
 
 const EMPTY_ARRAY: any[] = [];
@@ -81,6 +89,10 @@ export function SidebarDetails({
  vistaTodas = false,
  onSelectSubcomanda,
  onActivarMultiple,
+ onAbrirReparto,
+ cobroSolicitado,
+ onCobroAtendido,
+ onCobroCancelado,
 }: SidebarDetailsProps) {
  const isMobile = useIsMobile();
  const onResuelta = onResueltaProp ?? onClose;
@@ -114,8 +126,6 @@ export function SidebarDetails({
  // usuario alcance a revisar/cancelar.
  const [previewOnPrint, setPreviewOnPrint] = useState<(() => void) | null>(null);
  const [editingItem, setEditingItem] = useState<any | null>(null);
- const [activandoMultiple, setActivandoMultiple] = useState(false);
- const [confirmDividir, setConfirmDividir] = useState(false);
  const [confirmCuentaPendientes, setConfirmCuentaPendientes] = useState(false);
  // Mesa Múltiple: otras subcomandas a las que se puede mover el ítem.
  const destinosMover = useMemo(
@@ -187,6 +197,38 @@ export function SidebarDetails({
  showToast.fallo('repartir el valor', e);
  }
  };
+ // Mesa de una sola cuenta: crea la segunda cuenta y pasa el producto (mover o repartir) en un solo paso.
+ // Al activar la mesa múltiple este componente se vuelve a montar, por eso todo se hace aquí con ids ya capturados.
+ const handleDividirItem = async (accion: 'mover' | 'repartir', cantidad: number) => {
+ if (!editingItem || !onActivarMultiple || !activeComanda) return;
+ const itemId = editingItem.id;
+ const propiaId = activeComanda.id;
+ try {
+ const nuevaId = await onActivarMultiple();
+ if (typeof nuevaId !== 'string') throw new Error('No se pudo crear la cuenta nueva');
+ if (accion === 'mover') await moverItemASubcomanda(itemId, nuevaId, cantidad);
+ else await repartirItemEntreSubcomandas(itemId, [propiaId, nuevaId], cantidad);
+ setEditingItem(null);
+ showToast.success(accion === 'mover' ? 'Producto movido' : 'Valor repartido', 'La mesa quedó dividida en dos cuentas.');
+ } catch (e) {
+ showToast.fallo(accion === 'mover' ? 'mover el producto' : 'repartir el valor', e);
+ }
+ };
+ // Pill de pedir cuenta: «Dividir mesa» (flechas) crea la segunda cuenta; con varias cuentas pasa a «Dividir cuenta» (personas) y abre la pantalla de reparto.
+ const [creandoCuenta, setCreandoCuenta] = useState(false);
+ const handleDividirMesa = async () => {
+ if (creandoCuenta) return;
+ if (!onActivarMultiple) { onAbrirReparto?.(); return; }
+ setCreandoCuenta(true);
+ try {
+ await onActivarMultiple();
+ showToast.success('Segunda cuenta creada', 'Toca «Dividir cuenta» para pasar productos.');
+ } catch (e) {
+ showToast.fallo('dividir la mesa', e);
+ } finally {
+ setCreandoCuenta(false);
+ }
+ };
  const handleDeshacerReparto = async () => {
  if (!editingItem) return;
  try {
@@ -203,6 +245,12 @@ export function SidebarDetails({
  // Org activa: se lee una sola vez (localStorage es síncrono y se repetía en cada cobro).
  const orgIdLocal = useMemo(() => localStorage.getItem('pos_active_org_id') || '', []);
  const [closeCuentaModalOpen, setCloseCuentaModalOpen] = useState(false);
+ useEffect(() => {
+ if (!cobroSolicitado) return;
+ setCloseCuentaModalOpen(true);
+ onCobroAtendido?.();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [cobroSolicitado]);
  // Evita dobles clics mientras cierran cuenta / cargan a habitación: el
  // proceso tarda unos segundos (escrituras + liberar mesa) antes de cerrar el
  // modal. El ref bloquea el segundo clic antes de que React re-renderice.
@@ -324,11 +372,6 @@ export function SidebarDetails({
  return;
  }
  setEditingItem(null);
- };
-
- const handleConfirmDividir = async () => {
- setActivandoMultiple(true);
- try { await onActivarMultiple?.(); setConfirmDividir(false); } catch (e) { showToast.fallo('activar mesa múltiple', e); } finally { setActivandoMultiple(false); }
  };
 
  const { porcentaje: ivaPorcentaje, preciosConIva, esOverride: ivaEsOverride } = useComandaIva(activeComanda);
@@ -1093,7 +1136,7 @@ export function SidebarDetails({
  closePayerName={closePayerName}
  setClosePayerName={setClosePayerName}
  procesando={procesandoCierre}
- onBack={() => setCloseCuentaModalOpen(false)}
+ onBack={() => { setCloseCuentaModalOpen(false); onCobroCancelado?.(); }}
  onConfirm={handleConfirmarCobro}
  />
  );
@@ -1111,8 +1154,6 @@ export function SidebarDetails({
  subtitulo={vistaTodas ? `${gruposTodas.length} subcomandas` : `COMANDA #${folioLabel(activeComanda)}`}
  enCuenta={activeComanda?.estado ==='cuenta'}
  linkedMesa={linkedMesa}
- puedeDividir={!!onActivarMultiple && !vistaTodas}
- dividiendo={activandoMultiple}
  puedeVincularHabitacion={!vistaTodas && !!activeComanda && (activeRoomAccounts.length > 0 || !!activeComanda.habitacion_cuenta_id)}
  onVincularHabitacion={() => {
  if (activeRoomAccounts.length === 0 && !activeComanda?.habitacion_cuenta_id) {
@@ -1122,7 +1163,6 @@ export function SidebarDetails({
  setShowVincularHab(true);
  }}
  onCambiarMesa={() => setChangeMesaModal(true)}
- onDividir={() => setConfirmDividir(true)}
  onClose={onClose}
  />
 
@@ -1180,7 +1220,7 @@ export function SidebarDetails({
  editingItem ?"bg-muted/40": "bg-muted/40",
  "border-t border-border",
  // Con el pill "Añadir" flotando sobre el borde, deja espacio para que no tape los totales.
- !editingItem && activeComanda?.estado !=='cuenta'&&"pt-6")}>
+ !editingItem && (activeComanda?.estado !=='cuenta' || !!onAbrirReparto) &&"pt-6")}>
  {isMobile && hasMoreBelow && !editingItem && activeComanda?.estado !=='cuenta'&& (
  <CaretDown
  aria-hidden="true"
@@ -1212,6 +1252,17 @@ export function SidebarDetails({
  : estadoSync === 'enviando' ? 'Sincronizando…'
  : estadoSync === 'pendiente' ? 'Sin subir'
  : <>Añadir {totalItems > 0 &&`· Total Items: ${totalItems}`}</>}
+ </Button>
+ )}
+ {activeComanda?.estado ==='cuenta'&& !!onAbrirReparto && (
+ <Button
+ // Pedir cuenta no tiene «Añadir»: en su lugar vive aquí el reparto de la mesa, el único punto de entrada.
+ disabled={creandoCuenta}
+ className="absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full border-0 t-dato whitespace-nowrap text-white bg-special hover:bg-special/90 shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all"
+ onClick={handleDividirMesa}
+ >
+ {onActivarMultiple ? <ArrowsLeftRight size={15} weight="bold" className="mr-1.5"/> : <UsersThree size={15} weight="bold" className="mr-1.5"/>}
+ {creandoCuenta ? 'Creando cuenta…' : onActivarMultiple ? 'Dividir Mesa' : 'Dividir cuenta'}
  </Button>
  )}
  <ComandaTotales
@@ -1315,6 +1366,7 @@ export function SidebarDetails({
  onAnular={handleAnularItem}
  onCortesia={handleMarcarCortesia}
  onRepartir={handleRepartirItem}
+ onDividir={onActivarMultiple ? handleDividirItem : undefined}
  onDeshacerReparto={handleDeshacerReparto}
  />
  )}
@@ -1342,13 +1394,6 @@ export function SidebarDetails({
  }}
  />
 
-
- <DividirMesaDialog
- opened={confirmDividir}
- onOpenChange={setConfirmDividir}
- procesando={activandoMultiple}
- onConfirm={handleConfirmDividir}
- />
 
  <CuentaConPendientesDialog
  opened={confirmCuentaPendientes}

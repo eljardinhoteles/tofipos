@@ -49,10 +49,12 @@ interface ItemActionsPanelProps {
   onAnular: (motivo: string, cantidad: number) => void | Promise<void>;
   onCortesia: (motivo: string, porcentaje: number, cantidad: number) => void | Promise<void>;
   onRepartir?: (destinoIds: string[], cantidad: number) => void | Promise<void>;
+  /** Mesa de una sola cuenta: crea la segunda y pasa el producto (mover o repartir). Sin esto no se ofrece «Dividir». */
+  onDividir?: (accion: 'mover' | 'repartir', cantidad: number) => void | Promise<void>;
   onDeshacerReparto?: () => void | Promise<void>;
 }
 
-type Vista = 'menu' | 'mover' | 'anular' | 'cortesia' | 'repartir';
+type Vista = 'menu' | 'mover' | 'anular' | 'cortesia' | 'repartir' | 'dividir';
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -81,7 +83,7 @@ function Stepper({ value, max, onChange, label, min = 1 }: { value: number; max:
 // pidió la cuenta: sin confirmar (cantidad, mover, eliminar) y confirmado
 // (cortesía, anular). Cada acción con parámetros abre su propia pantalla; la
 // X de la cabecera cierra el panel.
-export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onModoGrupo, grupoCount = 1, grupoTotal, onMoverGrupo, onAnular, onCortesia, onRepartir, onDeshacerReparto }: ItemActionsPanelProps) {
+export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, destinosRepartir = [], tieneOpciones, precioVariable = false, ocultarEstado, cuentaPedida = false, onClose, onGuardar, onEliminar, onEditarOpciones, onMover, onModoGrupo, grupoCount = 1, grupoTotal, onMoverGrupo, onAnular, onCortesia, onRepartir, onDividir, onDeshacerReparto }: ItemActionsPanelProps) {
   const [vista, setVista] = useState<Vista>('menu');
   const [cantidad, setCantidad] = useState(item.cantidad);
   const [precio, setPrecio] = useState(item.precio);
@@ -107,6 +109,8 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
   const meta = parseReparto(item);
   const puedeMover = cuentaPedida && destinos.length > 0 && !pagado && !conCortesia && !meta;
   const puedeRepartir = cuentaPedida && !!onRepartir && destinosRepartir.length > 0 && !pagado && !conCortesia && !meta;
+  // Mesa aún de una sola cuenta: no hay a dónde mover ni repartir, así que se ofrece «Dividir» (crea la segunda cuenta).
+  const puedeDividir = cuentaPedida && !!onDividir && destinos.length === 0 && !pagado && !conCortesia && !meta;
 
   const ejecutar = async (fn: () => void | Promise<void>) => {
     if (ocupado) return;
@@ -116,7 +120,7 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
   const abrir = (v: Vista) => { setCantAccion(item.cantidad); setMotivo(''); setPct(100); setSeleccion([]); setVista(v); };
   const toggleDestino = (id: string) => setSeleccion(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const titulos: Record<Vista, string> = { menu: 'Editar', mover: 'Mover a otra cuenta', anular: 'Anular ítem', cortesia: 'Marcar como cortesía', repartir: 'Repartir el valor' };
+  const titulos: Record<Vista, string> = { menu: 'Editar', mover: 'Mover a otra cuenta', anular: 'Anular ítem', cortesia: 'Marcar como cortesía', repartir: 'Repartir el valor', dividir: 'Dividir Mesa' };
 
   return (
     <div className="flex flex-col gap-3">
@@ -225,6 +229,11 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
               )}
             </div>
           )}
+          {puedeDividir && (
+            <Button variant="outline" title="Dividir Mesa" className="w-full h-12 font-bold justify-center px-3 border-border bg-card hover:bg-card/80" onClick={() => abrir('dividir')}>
+              <ArrowsLeftRight size={18} className="mr-2" /> Dividir Mesa
+            </Button>
+          )}
           {cuentaPedida && !conCortesia && !pagado && !meta && (
             <Button className="w-full h-12 font-extrabold justify-center px-4 bg-primary hover:bg-primary/90 text-white" onClick={() => abrir('cortesia')}>
               <GiftIcon size={18} className="mr-2" /> Marcar como cortesía
@@ -304,6 +313,34 @@ export function ItemActionsPanel({ item, confirmado, cantidadEnviada, destinos, 
               <Button className="w-full h-11 font-bold" disabled={ocupado || otras === 0 || !onRepartir} onClick={() => ejecutar(() => onRepartir!(seleccion, cantAccion))}>
                 <UsersThree size={15} className="mr-1.5" /> {otras === 0 ? 'Elige otra cuenta' : `Repartir entre ${seleccion.length} cuenta${seleccion.length === 1 ? '' : 's'}`}
               </Button>
+            );
+          })()}
+          <Button variant="ghost" className="w-full" onClick={() => setVista('menu')}>Cancelar</Button>
+        </>
+      )}
+
+      {vista === 'dividir' && onDividir && (
+        <>
+          {item.cantidad > 1 && <Stepper value={cantAccion} max={item.cantidad} onChange={setCantAccion} label="Unidades" />}
+          <span className="t-meta text-muted-foreground text-center">
+            Esta mesa tiene una sola cuenta. Se creará una segunda cuenta vacía y el producto pasará a ella.
+          </span>
+          <div className="flex flex-col gap-2">
+            <Button className="w-full h-12 font-bold justify-between px-4 bg-primary hover:bg-primary/90 text-white" disabled={ocupado}
+              onClick={() => ejecutar(() => onDividir('mover', cantAccion))}>
+              Mover a la cuenta nueva <ArrowsLeftRight size={16} className="opacity-80" />
+            </Button>
+            <Button variant="outline" className="w-full h-12 font-bold justify-between px-4 border-border bg-card hover:bg-card/80" disabled={ocupado}
+              onClick={() => ejecutar(() => onDividir('repartir', cantAccion))}>
+              Repartir el valor entre las dos <UsersThree size={16} className="opacity-80" />
+            </Button>
+          </div>
+          {(() => {
+            const [a, b] = calcularPartes(item.precio * cantAccion, 2);
+            return (
+              <span className="t-meta text-muted-foreground text-center">
+                Repartir: cada cuenta paga {a === b ? money(a) : `${money(Math.min(a, b))} – ${money(Math.max(a, b))}`}.
+              </span>
             );
           })()}
           <Button variant="ghost" className="w-full" onClick={() => setVista('menu')}>Cancelar</Button>

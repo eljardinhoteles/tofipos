@@ -68,13 +68,14 @@ export function useTableActions() {
 
   // Convierte una mesa ya abierta (con ítems) en Mesa Múltiple: la comanda
   // existente pasa a ser la primera subcomanda y se crea una segunda vacía
-  // para poder repartir los productos entre ambas.
-  const activarMesaMultiple = async (mesa: Mesa, comanda: any) => {
+  // para poder repartir los productos entre ambas. Devuelve el id de la cuenta nueva.
+  const activarMesaMultiple = async (mesa: Mesa, comanda: any): Promise<string> => {
     const cliente = (comanda.cliente || '').trim();
     const nombre = cliente && cliente !== 'Consumidor Final' && cliente !== 'Público General' ? cliente : 'Cuenta 1';
     await updateRxComanda(comanda.id, { subcomanda_nombre: nombre });
-    await crearSubcomanda(mesa, nombre === 'Cuenta 2' ? 'Cuenta 3' : 'Cuenta 2');
+    const nuevaId = await crearSubcomanda(mesa, nombre === 'Cuenta 2' ? 'Cuenta 3' : 'Cuenta 2');
     setActiveSubcomandaId(comanda.id);
+    return nuevaId;
   };
 
   const handleTableAction = async (

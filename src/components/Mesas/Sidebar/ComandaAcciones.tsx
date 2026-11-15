@@ -85,7 +85,7 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
         disabled={p.total === 0 || p.saldoPendiente <= 0.001}
         title={p.saldoPendiente <= 0.001 ? 'La cuenta ya está pagada en su totalidad' : undefined}
       >
-        <Scissors size={18} weight="bold" className="mr-1.5" /> Dividir Cuenta
+        <Scissors size={18} weight="bold" className="mr-1.5" /> Partir Cuenta
       </Button>
       <Button
         variant="secondary" className="w-full h-10 font-bold" onClick={p.onReabrir}

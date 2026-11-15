@@ -1,4 +1,4 @@
-import { ArrowsLeftRight, Bed, Storefront, X } from '@phosphor-icons/react';
+import { Bed, Storefront, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -13,13 +13,10 @@ interface ComandaHeaderProps {
   enCuenta: boolean;
   /** Mesa de la habitación vinculada, si hay (se muestra como etiqueta). */
   linkedMesa?: { nombre: string } | null;
-  puedeDividir: boolean;
-  dividiendo: boolean;
   /** Cuenta abierta que puede vincularse (o cambiarse) a una habitación. */
   puedeVincularHabitacion?: boolean;
   onVincularHabitacion?: () => void;
   onCambiarMesa: () => void;
-  onDividir: () => void;
   onClose: () => void;
 }
 
@@ -27,7 +24,7 @@ interface ComandaHeaderProps {
 // de estado (verde / naranja en cuenta pedida); en móvil queda neutro y solo el
 // badge de mesa lleva el color, porque un header sólido se veía mal dentro del
 // bottom-sheet redondeado.
-export function ComandaHeader({ mesaNombre, esBarra, titulo, subtitulo, enCuenta, linkedMesa, puedeDividir, dividiendo, puedeVincularHabitacion, onVincularHabitacion, onCambiarMesa, onDividir, onClose }: ComandaHeaderProps) {
+export function ComandaHeader({ mesaNombre, esBarra, titulo, subtitulo, enCuenta, linkedMesa, puedeVincularHabitacion, onVincularHabitacion, onCambiarMesa, onClose }: ComandaHeaderProps) {
   return (
  <header className={cn("p-4 flex items-center justify-between shrink-0 shadow-xs bg-card text-foreground",
  enCuenta?"md:bg-warning-foreground md:text-white":"md:bg-primary md:text-primary-foreground")}>
@@ -69,17 +66,6 @@ export function ComandaHeader({ mesaNombre, esBarra, titulo, subtitulo, enCuenta
  enCuenta?"md:text-white":"md:text-primary-foreground")}
  >
  <Bed size={18} weight="bold"/>
- </Button>
- )}
- {puedeDividir && (
- <Button
- variant="ghost"size="icon-lg"title="Dividir la mesa en varias cuentas"aria-label="Dividir la mesa en varias cuentas"
- disabled={dividiendo}
- onClick={onDividir}
- className={cn("rounded-2xl text-muted-foreground",
- enCuenta?"md:text-white":"md:text-primary-foreground")}
- >
- <ArrowsLeftRight size={18} weight="bold"/>
  </Button>
  )}
  <Button

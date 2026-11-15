@@ -4,7 +4,7 @@ export interface ParteDividida { id: string; nombre: string; monto: number }
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-// Señal en las comandas históricas que se cobraron con "Dividir cuenta": quién
+// Señal en las comandas históricas que se cobraron con "Partir cuenta": quién
 // pagó cada parte y cuánto. Cada parte es una venta "Dividido - Nombre".
 export function ComandaDividida({ partes }: { partes: ParteDividida[] }) {
   if (partes.length === 0) return null;
