@@ -598,7 +598,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
       >
         <DialogHeader className="shrink-0 px-4 py-3 md:px-5 md:py-4 border-b border-border flex-row items-center justify-between gap-3 text-left">
           <div className="min-w-0 flex flex-col gap-0.5">
-            <DialogTitle className="t-titulo truncate">Dividir cuenta{mesa ? ` · ${mesa.nombre}` : ''}</DialogTitle>
+            <DialogTitle className="t-titulo truncate">Dividir Cuenta{mesa ? ` · ${mesa.nombre}` : ''}</DialogTitle>
             <DialogDescription className="hidden md:block t-meta text-muted-foreground">
               Toca los productos y pásalos a otra cuenta, o arrástralos. Cada cuenta se imprime por separado.
             </DialogDescription>

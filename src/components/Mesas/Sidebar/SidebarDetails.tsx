@@ -214,7 +214,7 @@ export function SidebarDetails({
  showToast.fallo(accion === 'mover' ? 'mover el producto' : 'repartir el valor', e);
  }
  };
- // Pill de pedir cuenta: «Dividir mesa» (flechas) crea la segunda cuenta; con varias cuentas pasa a «Dividir cuenta» (personas) y abre la pantalla de reparto.
+ // Pill de pedir cuenta: «Dividir mesa» (flechas) crea la segunda cuenta; con varias cuentas pasa a «Dividir Cuenta» (personas) y abre la pantalla de reparto.
  const [creandoCuenta, setCreandoCuenta] = useState(false);
  const handleDividirMesa = async () => {
  if (creandoCuenta) return;
@@ -222,7 +222,7 @@ export function SidebarDetails({
  setCreandoCuenta(true);
  try {
  await onActivarMultiple();
- showToast.success('Segunda cuenta creada', 'Toca «Dividir cuenta» para pasar productos.');
+ showToast.success('Segunda cuenta creada', 'Toca «Dividir Cuenta» para pasar productos.');
  } catch (e) {
  showToast.fallo('dividir la mesa', e);
  } finally {
@@ -1259,14 +1259,14 @@ export function SidebarDetails({
  // Pedir cuenta no tiene «Añadir»: en su lugar vive aquí el reparto de la mesa, el único punto de entrada.
  disabled={creandoCuenta}
  className={cn("absolute -top-[18px] left-1/2 -translate-x-1/2 z-20 h-9 w-auto px-4 rounded-full t-dato whitespace-nowrap shadow-[0_2px_8px_rgba(0,0,0,0.18)] focus-visible:ring-0 active:scale-95 transition-all",
- // Dividir Mesa (crea la cuenta): morado suave. Dividir cuenta (abre el reparto): morado sólido. Así no se confunden.
+ // Dividir Mesa (crea la cuenta): morado suave. Dividir Cuenta (abre el reparto): morado sólido. Así no se confunden.
  onActivarMultiple
  ? "border border-special/40 bg-special-soft text-special-foreground hover:bg-special-soft"
  : "border-0 bg-special text-white hover:bg-special/90")}
  onClick={handleDividirMesa}
  >
  {onActivarMultiple ? <ArrowsOutLineHorizontal size={15} weight="bold" className="mr-1.5"/> : <ArrowsLeftRight size={15} weight="bold" className="mr-1.5"/>}
- {creandoCuenta ? 'Creando cuenta…' : onActivarMultiple ? 'Dividir Mesa' : 'Dividir cuenta'}
+ {creandoCuenta ? 'Creando cuenta…' : onActivarMultiple ? 'Dividir Mesa' : 'Dividir Cuenta'}
  </Button>
  )}
  <ComandaTotales

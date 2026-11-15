@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-// Aviso de una función nueva: «Dividir cuenta» en Mesas. Se muestra una sola vez por dispositivo y trae un gráfico que imita la pantalla
+// Aviso de una función nueva: «Dividir Cuenta» en Mesas. Se muestra una sola vez por dispositivo y trae un gráfico que imita la pantalla
 // real para que el equipo la entienda sin una capacitación. Para volver a mostrarlo (o avisar otra novedad) basta cambiar la clave.
 const CLAVE = 'pos_novedad:dividir-cuenta-v1';
 
@@ -78,7 +78,7 @@ export function NovedadDividirCuentaDialog({ abierto, onCerrar }: { abierto: boo
       texto: 'Al pedir la cuenta, toca este botón: crea la segunda cuenta de la mesa.',
     },
     {
-      icono: <span className={cn(pill, 'bg-special text-white')}><ArrowsLeftRight size={15} weight="bold" /> Dividir cuenta</span>,
+      icono: <span className={cn(pill, 'bg-special text-white')}><ArrowsLeftRight size={15} weight="bold" /> Dividir Cuenta</span>,
       texto: 'Abre la pantalla de reparto. Toca los productos y «Pasar aquí», o arrástralos a la otra cuenta. Cada toque suma una unidad.',
     },
     {
