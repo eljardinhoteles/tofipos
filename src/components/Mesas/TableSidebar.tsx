@@ -62,7 +62,9 @@ export function TableSidebar({
   // Cobro pedido desde la pantalla de reparto: la cuenta se activa y su SidebarDetails abre el cobro (se remonta al cambiar de cuenta).
   const [cobroPendienteId, setCobroPendienteId] = useState<string | null>(null);
   // El cobro se pidió desde la pantalla de reparto: al terminar (o cancelar) se vuelve a ella para seguir con las demás cuentas.
-  const [volverAlReparto, setVolverAlReparto] = useState(false);
+  const [volverAlRepartoId, setVolverAlRepartoId] = useState<string | null>(null);
+  // Al cambiar de mesa no debe quedar nada pendiente de la pantalla de reparto.
+  useEffect(() => { setRepartoAbierto(false); setCobroPendienteId(null); setVolverAlRepartoId(null); }, [selectedMesa?.id]);
   // Mientras se escribe el nombre de una subcomanda nueva se oculta el detalle
   // de la comanda: en móvil el teclado encoge el sheet y el footer quedaba
   // encajado entre el input y el teclado.
@@ -618,8 +620,9 @@ export function TableSidebar({
               onClose={onClose}
               onResuelta={() => {
                 // Cobrada una cuenta desde el reparto: si quedan otras con productos se regresa a la pantalla de reparto.
-                if (volverAlReparto && quedanOtrasConProductos) { setVolverAlReparto(false); setRepartoAbierto(true); return; }
-                setVolverAlReparto(false);
+                const volver = volverAlRepartoId !== null && volverAlRepartoId === activeComanda.id;
+                setVolverAlRepartoId(null);
+                if (volver && quedanOtrasConProductos) { setRepartoAbierto(true); return; }
                 if (!quedanOtrasConProductos) onClose();
               }}
               onAddProduct={() => onAction(selectedMesaEffective, 'add_product')}
@@ -635,7 +638,7 @@ export function TableSidebar({
                 : undefined}
               cobroSolicitado={cobroPendienteId === activeComanda.id}
               onCobroAtendido={() => setCobroPendienteId(null)}
-              onCobroCancelado={() => { if (volverAlReparto) { setVolverAlReparto(false); setRepartoAbierto(true); } }}
+              onCobroCancelado={() => { if (volverAlRepartoId === activeComanda.id) { setVolverAlRepartoId(null); setRepartoAbierto(true); } }}
             />
           );
           if (!esMultiple || viewingComandaId) return details;
@@ -691,7 +694,7 @@ export function TableSidebar({
         opened={repartoAbierto}
         onClose={() => setRepartoAbierto(false)}
         mesa={selectedMesaEffective}
-        onCobrar={(id) => { setActiveSubcomandaId(id); setCobroPendienteId(id); setVolverAlReparto(true); setRepartoAbierto(false); }}
+        onCobrar={(id) => { setActiveSubcomandaId(id); setCobroPendienteId(id); setVolverAlRepartoId(id); setRepartoAbierto(false); }}
       />
     </div>
   );

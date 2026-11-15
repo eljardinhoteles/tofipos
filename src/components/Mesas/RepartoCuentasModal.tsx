@@ -20,6 +20,7 @@ import { useComandaLive } from '../../hooks/useComandaLive';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useUI } from '../../context/UIContext';
 import { useHorizontalWheel } from '../../hooks/useHorizontalWheel';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -285,6 +286,8 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
   const [repartiendo, setRepartiendo] = useState(false);
   const [repartirEntre, setRepartirEntre] = useState<string[]>([]);
   const [ocupado, setOcupado] = useState(false);
+  // En pantallas angostas no cabe una columna fija junto a las demás: todas van en la misma fila que se desliza.
+  const isMobile = useIsMobile();
   // Fila de subcuentas: en Windows con mouse no hay scroll lateral, así que la rueda se convierte en horizontal y hay flechas.
   const wheelRef = useHorizontalWheel();
   const filaRef = useRef<HTMLDivElement | null>(null);
@@ -329,8 +332,9 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
   }, []);
 
   // Cuentas operativas de la mesa (las cargadas a una habitación ya sincronizada son de solo lectura y no participan).
+  const mesaId = mesa?.id;
   useEffect(() => {
-    if (!opened || !mesa) return;
+    if (!opened || !mesaId) return;
     let alive = true;
     let sub: { unsubscribe: () => void } | null = null;
     (async () => {
@@ -338,7 +342,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
       if (!alive) return;
       const orgId = localStorage.getItem('pos_active_org_id') || '';
       const query = rxDb.comandas.find({
-        selector: { mesa_id: mesa.id, organization_id: orgId, estado: { $nin: ['cerrado', 'facturado', 'anulada'] } },
+        selector: { mesa_id: mesaId, organization_id: orgId, estado: { $nin: ['cerrado', 'facturado', 'anulada'] } },
       });
       const aplicar = (docs: any[]) => {
         if (!alive) return;
@@ -351,7 +355,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
       sub = query.$.subscribe(aplicar);
     })().catch(e => console.warn('Reparto de cuentas: no se pudieron cargar las cuentas', e));
     return () => { alive = false; sub?.unsubscribe(); };
-  }, [opened, mesa?.id]);
+  }, [opened, mesaId]);
 
   const idsKey = comandas.map(c => c.id).join(',');
   useEffect(() => {
@@ -370,7 +374,8 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
 
   // Al cerrar o cambiar de mesa se limpia lo elegido.
   useEffect(() => {
-    if (!opened) { setSeleccion(SIN_SELECCION); setRepartiendo(false); setRepartirEntre([]); setConfirmarCierre(false); }
+    // También se vacían las listas: al reabrir (p. ej. tras cobrar una cuenta) no debe verse un instante la cuenta que ya se cerró.
+    if (!opened) { setSeleccion(SIN_SELECCION); setRepartiendo(false); setRepartirEntre([]); setConfirmarCierre(false); setComandas([]); setItems([]); }
   }, [opened]);
 
   const multiple = esMesaMultiple(comandas);
@@ -541,7 +546,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
       seleccion={seleccion}
       hayDestino={hayDestino}
       ocupado={ocupado}
-      principal={idx === 0}
+      principal={idx === 0 && !isMobile}
       firmaImpresa={impresas[c.id]}
       onImpresa={marcarImpresa}
       onCobrar={cobrarCuenta}
@@ -579,7 +584,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
         </DialogHeader>
 
         <div className="flex-1 min-h-0 flex bg-muted/30">
-          {mesa && comandas[0] && renderColumna(comandas[0], 0)}
+          {!isMobile && mesa && comandas[0] && renderColumna(comandas[0], 0)}
           <div className="relative flex-1 min-w-0 min-h-0 flex">
             {borde.izq && (
               <button type="button" aria-label="Ver cuentas anteriores" onClick={() => desplazarFila(-1)}
@@ -594,7 +599,7 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
               </button>
             )}
             <div ref={setFilaRef} className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain p-4 flex gap-3 items-stretch [scrollbar-width:thin]">
-              {mesa && comandas.slice(1).map((c, i) => renderColumna(c, i + 1))}
+              {mesa && (isMobile ? comandas : comandas.slice(1)).map(c => renderColumna(c, comandas.indexOf(c)))}
               {comandas.length > 0 && (
                 <button
                   type="button"
