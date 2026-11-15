@@ -4,7 +4,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
-import { ArrowCounterClockwise, ArrowDown, CaretLeft, CaretRight, CircleNotch, Lock, Minus, Money, Plus, Printer, UsersThree, X } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, ArrowDown, CaretLeft, CaretRight, CircleNotch, Info, Minus, Money, Plus, Printer, UsersThree, X } from '@phosphor-icons/react';
 import type { Mesa } from '../../db/database';
 import { initVerticalRxDb, moverItemASubcomanda, repartirItemEntreSubcomandas, deshacerRepartoItem, updateRxComanda } from '../../db/rxdb';
 import { esMesaMultiple, isOperativeComanda } from '../../db/comandaState';
@@ -20,6 +20,7 @@ import { useComandaLive } from '../../hooks/useComandaLive';
 import { useTableActions } from '../../hooks/useTableActions';
 import { useUI } from '../../context/UIContext';
 import { useHorizontalWheel } from '../../hooks/useHorizontalWheel';
+import { NovedadDividirCuentaDialog } from '../Common/NovedadDividirCuenta';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -81,6 +82,8 @@ function ColumnaCuenta({ comanda, items, mesa, nombre, seleccion, hayDestino, oc
   const firmaActual = useRef('');
 
   const activos = useMemo(() => items.filter(i => !i.anulado && (i.cantidad || 0) > 0), [items]);
+  // La lista muestra también los anulados (tachados, como en el sidebar); no cuentan para totales ni impresión y no se pueden mover.
+  const visibles = useMemo(() => items.filter(i => (i.cantidad || 0) > 0), [items]);
   const totales = useMemo(
     () => calcularTotalesComanda(activos, menuItems, ivaPorcentaje, preciosConIva),
     [activos, menuItems, ivaPorcentaje, preciosConIva]
@@ -155,20 +158,21 @@ function ColumnaCuenta({ comanda, items, mesa, nombre, seleccion, hayDestino, oc
       )}
 
       <ul className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-1.5">
-        {activos.length === 0 && (
+        {visibles.length === 0 && (
           <li className="py-8 text-center t-meta text-muted-foreground">
             {hayDestino ? 'Cuenta vacía' : 'Sin productos'}
           </li>
         )}
-        {activos.map(it => {
+        {visibles.map(it => {
           const meta = parseReparto(it);
           const movible = itemMovible(it);
           const elegido = seleccion.comandaId === comanda.id && seleccion.cant[it.id] !== undefined;
-          const motivoBloqueo = (it.pagado_cantidad || 0) > 0 ? 'Pagado'
-            : ((it.cortesia_cantidad || 0) > 0 || it.cortesia_motivo) ? 'Cortesía'
-            : meta?.tipo === 'origen' ? 'Valor repartido'
-            : meta?.tipo === 'parte' ? 'Parte de reparto'
-            : null;
+          // Mismos estados, textos y colores que la lista del sidebar (ComandaItemRow).
+          const pagadoQty = it.pagado_cantidad || 0;
+          const pagadoTodo = it.cantidad > 0 && pagadoQty >= it.cantidad;
+          const esAnulado = !!it.anulado;
+          const esCortesia = (it.cortesia_cantidad || 0) > 0 || !!it.cortesia_motivo;
+          const tachado = esAnulado || pagadoTodo;
           const cantElegida = elegido ? seleccion.cant[it.id] : it.cantidad;
           return (
             <li key={it.id}>
@@ -180,52 +184,67 @@ function ColumnaCuenta({ comanda, items, mesa, nombre, seleccion, hayDestino, oc
                 onDragStart={(e) => { e.dataTransfer.setData('text/item-id', it.id); e.dataTransfer.effectAllowed = 'move'; }}
                 onClick={() => movible && onToggle(comanda, it)}
                 onKeyDown={(e) => { if (movible && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onToggle(comanda, it); } }}
-                className={cn('w-full rounded-xl border px-3 py-2.5 flex flex-col gap-2 text-left transition-colors',
+                className={cn('w-full rounded-xl border px-4 py-3 flex flex-col gap-2 text-left transition-colors',
                   movible ? 'cursor-pointer active:scale-[0.99]' : 'cursor-default opacity-80',
                   elegido ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted/50')}
               >
                 <div className="flex items-center gap-3">
-                <span className={cn('shrink-0 min-w-8 h-8 px-1.5 rounded-lg flex items-center justify-center t-dato tabular-nums',
-                  elegido ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>
+                <span className={cn('shrink-0 min-w-8 self-center text-center t-valor leading-6 tracking-[-0.04em]',
+                  esAnulado ? 'text-destructive' : elegido ? 'text-primary' : 'text-foreground')}>
                   {elegido && cantElegida !== it.cantidad ? `${cantElegida}/${it.cantidad}` : it.cantidad}
                 </span>
                 <span className="flex-1 min-w-0 flex flex-col">
-                  <span className="t-cuerpo text-foreground break-words">{it.nombre}</span>
+                  <span className={cn('t-fila leading-6 break-words', esAnulado ? 'line-through text-muted-foreground' : 'text-foreground')}>{it.nombre}</span>
                   {Array.isArray(it.modificadores) && it.modificadores.length > 0 && (
-                    <span className="flex items-baseline gap-1.5 t-meta text-warning-foreground leading-snug">
+                    <span className="flex items-baseline gap-2 t-cuerpo text-warning-foreground leading-snug">
                       <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-warning-foreground shrink-0 translate-y-[-1px]" />
                       <span className="break-words">{it.modificadores.join(' · ')}</span>
                     </span>
                   )}
-                  {motivoBloqueo && (
-                    <span className="t-meta text-muted-foreground flex items-center gap-1">
-                      <Lock size={11} weight="bold" /> {motivoBloqueo}
+                  {(esAnulado || esCortesia || pagadoQty > 0 || meta) && (
+                    <span className="flex items-center gap-2 flex-wrap t-cuerpo-fuerte">
+                      {esAnulado && <span className="text-destructive">ANULADO</span>}
+                      {esCortesia && <span className="text-foreground">CORTESÍA</span>}
+                      {meta && (
+                        <span className="text-special-foreground">
+                          {meta.tipo === 'parte' ? 'REPARTIDO' : `REPARTIDO ENTRE ${meta.partes.length}`}
+                        </span>
+                      )}
+                      {pagadoQty > 0 && (
+                        <span className={pagadoTodo ? 'text-foreground' : 'text-warning-foreground'}>
+                          {pagadoTodo ? 'Pagado' : `${pagadoQty} pagados`}
+                        </span>
+                      )}
                     </span>
                   )}
+                  {esAnulado && it.anulado_motivo && <span className="t-cuerpo text-muted-foreground">Motivo: {it.anulado_motivo}</span>}
+                  {esCortesia && it.cortesia_motivo && <span className="t-cuerpo text-muted-foreground">Motivo: {it.cortesia_motivo}</span>}
                 </span>
-                {meta && (
-                  <button
-                    type="button"
-                    title="Deshacer reparto"
-                    aria-label="Deshacer reparto"
-                    disabled={ocupado}
-                    onClick={(e) => { e.stopPropagation(); onDeshacer(it); }}
-                    className="shrink-0 size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted cursor-pointer"
-                  >
-                    <ArrowCounterClockwise size={16} weight="bold" />
-                  </button>
-                )}
-                <span className="shrink-0 t-fila text-muted-foreground tabular-nums">{money(it.precio * it.cantidad)}</span>
+                <span className="shrink-0 flex flex-col items-end gap-1">
+                  <span className={cn('t-fila leading-6 tabular-nums', tachado ? 'line-through text-muted-foreground' : 'text-foreground')}>{money(it.precio * it.cantidad)}</span>
+                  {meta && (
+                    <button
+                      type="button"
+                      title="Deshacer reparto"
+                      aria-label="Deshacer reparto"
+                      disabled={ocupado}
+                      onClick={(e) => { e.stopPropagation(); onDeshacer(it); }}
+                      className="shrink-0 size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted cursor-pointer"
+                    >
+                      <ArrowCounterClockwise size={16} weight="bold" />
+                    </button>
+                  )}
+                </span>
                 </div>
                 {elegido && it.cantidad > 1 && (
                   // Dentro de la tarjeta del producto: se ve que las unidades son de ESE producto y no hay que ir al pie.
                   <div className="flex items-center h-10 rounded-full border border-primary/40 bg-card overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" aria-label="Menos unidades" disabled={cantElegida <= 1 || ocupado}
-                      onClick={() => onCantidad(it.id, Math.max(1, cantElegida - 1))}
+                    <button type="button" aria-label="Menos unidades" disabled={ocupado}
+                      onClick={() => onCantidad(it.id, cantElegida - 1)}
                       className="h-full w-12 flex items-center justify-center cursor-pointer active:bg-muted disabled:opacity-30">
                       <Minus size={16} weight="bold" />
                     </button>
-                    <span className="flex-1 text-center t-dato tabular-nums">{cantElegida} de {it.cantidad} unidades</span>
+                    <span className="flex-1 text-center t-cuerpo-fuerte tabular-nums">{cantElegida} de {it.cantidad} unidades</span>
                     <button type="button" aria-label="Más unidades" disabled={cantElegida >= it.cantidad || ocupado}
                       onClick={() => onCantidad(it.id, Math.min(it.cantidad, cantElegida + 1))}
                       className="h-full w-12 flex items-center justify-center cursor-pointer active:bg-muted disabled:opacity-30">
@@ -325,6 +344,8 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
   useEffect(() => { setImpresas({}); }, [mesa?.id]);
   // Cerrar (X, Escape o tocar fuera) pide confirmación: un toque accidental no debe sacar al cajero del reparto.
   const [confirmarCierre, setConfirmarCierre] = useState(false);
+  // Ayuda: vuelve a mostrar el aviso de la función con su gráfico.
+  const [verAyuda, setVerAyuda] = useState(false);
   const pedirCierre = () => { if (!ocupado) setConfirmarCierre(true); };
   const impresiones = useRef<Record<string, () => void>>({});
   const registrarImpresion = useCallback((id: string, fn: (() => void) | null) => {
@@ -388,7 +409,11 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
     setRepartiendo(false);
     setSeleccion(prev => {
       const base = prev.comandaId === c.id ? { ...prev.cant } : {};
-      if (base[it.id] !== undefined) delete base[it.id]; else base[it.id] = it.cantidad;
+      // Cada toque suma una unidad (se empieza en 1, nunca en todas, para no mover de más por error); al pasar del máximo se quita de lo elegido.
+      const actual = base[it.id];
+      if (actual === undefined) base[it.id] = 1;
+      else if (actual < it.cantidad) base[it.id] = actual + 1;
+      else delete base[it.id];
       return Object.keys(base).length > 0 ? { comandaId: c.id, cant: base } : SIN_SELECCION;
     });
   };
@@ -412,7 +437,12 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
     else showToast.warning(`Se movieron ${movidos} de ${pares.length}`, primerFallo);
   });
 
-  const cambiarCantidad = (itemId: string, cantidad: number) => setSeleccion(s => ({ ...s, cant: { ...s.cant, [itemId]: cantidad } }));
+  // Con 0 el producto sale de lo elegido (el «−» en 1 lo quita).
+  const cambiarCantidad = (itemId: string, cantidad: number) => setSeleccion(s => {
+    const cant = { ...s.cant };
+    if (cantidad < 1) delete cant[itemId]; else cant[itemId] = cantidad;
+    return Object.keys(cant).length > 0 ? { ...s, cant } : SIN_SELECCION;
+  });
   const pasarAqui = (destId: string) => moverVarios(Object.entries(seleccion.cant), destId);
 
   // Arrastrar y soltar (PC): si el producto está entre los elegidos se mueve todo lo elegido; si no, solo ese.
@@ -577,6 +607,9 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
             <Button variant="outline" className="h-11 font-bold px-3 md:px-4" onClick={imprimirTodas} disabled={comandas.length === 0} title="Imprimir todas las precuentas" aria-label="Imprimir todas las precuentas">
               <Printer size={16} weight="bold" className="md:mr-2" /> <span className="hidden md:inline">Imprimir todas</span>
             </Button>
+            <Button variant="ghost" size="icon-lg" aria-label="Cómo funciona" title="Cómo funciona" onClick={() => setVerAyuda(true)} className="rounded-2xl text-muted-foreground">
+              <Info size={20} weight="bold" />
+            </Button>
             <Button variant="ghost" size="icon-lg" aria-label="Cerrar" disabled={ocupado} onClick={pedirCierre} className="rounded-2xl">
               <X size={20} weight="bold" />
             </Button>
@@ -616,6 +649,8 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
         </div>
 
       </DialogContent>
+
+      <NovedadDividirCuentaDialog abierto={verAyuda} onCerrar={() => setVerAyuda(false)} />
 
       <AlertDialog open={confirmarCierre} onOpenChange={setConfirmarCierre}>
         <AlertDialogContent>

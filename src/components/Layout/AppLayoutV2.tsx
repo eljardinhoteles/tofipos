@@ -33,6 +33,7 @@ import { initVerticalRxDb, subscribeSyncStatus, pingSyncStatus, forceSyncAll, ty
 import { SyncStatusModal } from '../Common/SyncStatusModal';
 import { GlobalModals } from '../Common/GlobalModals';
 import { AvisoCambioIvaModal } from '../Common/AvisoCambioIvaModal';
+import { NovedadDividirCuenta } from '../Common/NovedadDividirCuenta';
 import { ActividadDrawer } from '../Common/ActividadDrawer';
 import { AvisoServidorImpresion } from '../Common/AvisoServidorImpresion';
 import { SidebarPlanificacion } from '../Planificacion/SidebarSeleccionProductos';
@@ -573,6 +574,7 @@ export function AppLayoutV2() {
 
       <GlobalModals />
       <AvisoCambioIvaModal />
+      <NovedadDividirCuenta />
       <ActividadDrawer />
     </div>
   );
