@@ -9,6 +9,7 @@ import type { Mesa } from '../../db/database';
 import { initVerticalRxDb, moverItemASubcomanda, repartirItemEntreSubcomandas, deshacerRepartoItem, updateRxComanda } from '../../db/rxdb';
 import { esMesaMultiple, isOperativeComanda } from '../../db/comandaState';
 import { crearEstabilizador } from '../../lib/estabilizarDocs';
+import { deltaComanda } from '../../lib/kitchenDelta';
 import { calcularPartes, itemMovible, parseReparto } from '../../lib/reparto';
 import { calcularTotalesComanda } from '../../lib/taxUtils';
 import { imprimirConAviso } from '../../lib/imprimir';
@@ -548,7 +549,8 @@ export function RepartoCuentasModal({ opened, onClose, mesa, onCobrar }: Props) 
   const cobrarCuenta = (c: any) => ejecutar(async () => {
     try {
       if (c.estado !== 'cuenta') {
-        if (!c.confirmada) {
+        // Pendiente = hay algo que cocina aún no recibió. Una cuenta solo con partes de un reparto de valor no tiene nada que enviar.
+        if (!c.confirmada && deltaComanda(c, itemsDe(c.id)).nuevos.length > 0) {
           showToast.warning('Faltan productos por enviar a cocina', `Envía a cocina lo pendiente de ${c.subcomanda_nombre || 'esta cuenta'} antes de cobrar.`);
           return;
         }

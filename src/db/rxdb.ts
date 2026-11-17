@@ -1,5 +1,5 @@
 import { fechaLocal } from '../lib/fechaLocal'
-import { calcularPartes, parseReparto, type RepartoOrigen, type RepartoParte } from '../lib/reparto'
+import { calcularPartes, parseReparto, esParteRepartida, type RepartoOrigen, type RepartoParte } from '../lib/reparto'
 import { addRxPlugin, createRxDatabase, type RxCollection, type RxDatabase } from 'rxdb/plugins/core'
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update'
@@ -2408,7 +2408,8 @@ export async function moverItemASubcomanda(itemId: string, destComandaId: string
   const destItems = await db.comanda_items.find({
     selector: { comanda_id: destComandaId, _deleted: { $ne: true } }
   }).exec()
-  const destTieneOtros = destItems.some((d: any) => !d.toJSON().anulado)
+  // Las líneas «parte» de un reparto de valor no van a cocina: no cuentan como productos pendientes.
+  const destTieneOtros = destItems.some((d: any) => { const j = d.toJSON(); return !j.anulado && !esParteRepartida(j) })
 
   // Un ítem ya enviado no puede caer en una subcomanda con productos sin
   // enviar y sin ningún envío previo: cocina lo recibiría repetido en el
