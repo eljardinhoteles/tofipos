@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHorizontalWheel } from '../../../hooks/useHorizontalWheel';
-import { Plus, Check, X, ListBullets, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { Plus, Check, X, ListBullets, LockSimple, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,14 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
     return () => onAddingChange?.(false);
   }, [adding, onAddingChange]);
   const [text, setText] = useState('');
+  // La cuenta principal (la primera creada) se cobra al final: se marca con un candado
+  // mientras otra cuenta con productos siga abierta (misma regla que SidebarDetails).
+  const idPrincipalBloqueada = useMemo(() => {
+    if (subcomandas.length < 2) return null;
+    const principal = [...subcomandas].sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))[0];
+    const hayOtras = subcomandas.some(c => c.id !== principal.id && items.some(i => i.comanda_id === c.id && !i.anulado));
+    return hayOtras ? principal.id : null;
+  }, [subcomandas, items]);
   const activeRef = useRef<HTMLButtonElement>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   // Rueda del mouse (PC) → scroll horizontal de la fila de pills.
@@ -209,6 +217,7 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
         </button>
 
         {subcomandas.map(c => {
+          const bloqueada = c.id === idPrincipalBloqueada;
           const isActive = !vistaTodas && c.id === activeId;
           const cantidad = resumen.get(c.id) ?? 0;
           // Cuenta pedida: la pill pasa a naranja (rellena si es la activa).
@@ -224,7 +233,10 @@ export function SubcomandasPanel({ subcomandas, items, activeId, vistaTodas, onS
                   ? (isActive ? 'border-warning bg-warning-foreground text-white' : 'border-warning bg-warning-soft text-warning-foreground')
                   : (isActive ? 'border-primary bg-primary text-white' : 'border-border bg-card'))}
             >
-              <span className="w-full t-dato leading-tight truncate">{c.subcomanda_nombre}</span>
+              <span className="w-full t-dato leading-tight truncate flex items-center justify-center gap-1">
+                {bloqueada && <LockSimple size={12} weight="fill" className="shrink-0" aria-label="Se cobra al final: faltan otras cuentas" />}
+                <span className="truncate">{c.subcomanda_nombre}</span>
+              </span>
               <span className={cn('t-meta leading-tight',
                 isActive ? 'text-white/70' : enCuenta ? 'text-warning-foreground' : 'text-muted-foreground')}>
                 {cantidad} {cantidad === 1 ? 'item' : 'items'}

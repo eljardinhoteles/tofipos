@@ -23,6 +23,8 @@ interface ComandaAccionesProps {
   hayCortesia: boolean;
   onPrecuenta: () => void;
   onCobrar: () => void;
+  /** Mesa Múltiple: la cuenta principal espera a que se cierren las demás. */
+  cobroBloqueado?: boolean;
   onDividirCuenta: () => void;
   onReabrir: () => void;
 }
@@ -76,7 +78,8 @@ export function ComandaAcciones(p: ComandaAccionesProps) {
         <Printer size={18} weight="bold" className="mr-1.5" /> Pre-cuenta
       </Button>
       <Button
-        variant="warning" className="w-full h-10 font-bold" onClick={p.onCobrar}
+        variant="warning" className={`w-full h-10 font-bold ${p.cobroBloqueado ? 'opacity-50' : ''}`} onClick={p.onCobrar}
+        title={p.cobroBloqueado ? 'Cobra primero las otras cuentas de la mesa' : undefined}
       >
         <Check size={18} weight="bold" className="mr-1.5" /> Cobrar Cuenta
       </Button>

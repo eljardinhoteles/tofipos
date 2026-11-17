@@ -245,8 +245,24 @@ export function SidebarDetails({
  // Org activa: se lee una sola vez (localStorage es síncrono y se repetía en cada cobro).
  const orgIdLocal = useMemo(() => localStorage.getItem('pos_active_org_id') || '', []);
  const [closeCuentaModalOpen, setCloseCuentaModalOpen] = useState(false);
+ // Mesa Múltiple: la cuenta principal (la primera creada) se cobra al final, cuando
+ // las demás cuentas con productos ya se cerraron. Las vacías no bloquean.
+ const cuentasPorCerrar = useMemo(() => {
+ const todas = grupo?.comandas ?? [];
+ if (todas.length < 2 || !activeComandaProp) return [] as any[];
+ const principal = [...todas].sort((a: any, b: any) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))[0];
+ if (principal?.id !== activeComandaProp.id) return [] as any[];
+ return todas.filter((c: any) => c.id !== principal.id
+ && (grupo?.items ?? []).some((i: any) => i.comanda_id === c.id && !i.anulado));
+ }, [grupo, activeComandaProp]);
+ const cobroBloqueado = cuentasPorCerrar.length > 0;
+ const avisoCobroBloqueado = () => showToast.warning(
+ 'Cobra primero las otras cuentas',
+ `La cuenta principal se cobra al final. Faltan: ${cuentasPorCerrar.map((c: any) => c.subcomanda_nombre || `#${folioLabel(c)}`).join(', ')}.`
+ );
  useEffect(() => {
  if (!cobroSolicitado) return;
+ if (cobroBloqueado) { avisoCobroBloqueado(); onCobroAtendido?.(); return; }
  setCloseCuentaModalOpen(true);
  onCobroAtendido?.();
  // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1311,7 +1327,8 @@ export function SidebarDetails({
  onAnular={() => onAction(selectedMesa,'cancelar')}
  hayCortesia={hayCortesia}
  onPrecuenta={handlePrintPrecuenta}
- onCobrar={() => setCloseCuentaModalOpen(true)}
+ onCobrar={() => (cobroBloqueado ? avisoCobroBloqueado() : setCloseCuentaModalOpen(true))}
+ cobroBloqueado={cobroBloqueado}
  onDividirCuenta={() => onAction(selectedMesa,'dividido')}
  onReabrir={() => onAction(selectedMesa,'reabrir')}
  />
