@@ -149,7 +149,11 @@ export function ReservasHotelLista({ reservas, habitaciones, onAbrir, divergenci
       const habs = afectadas.map((x) => habitacionDeUnidad(habitaciones, x.room_type_id, x.room_id)).filter((h): h is HabitacionHotel => !!h?.mesa_id);
       if (habs.length > 0) {
         const db = await initVerticalRxDb();
-        const abiertas = await db.habitacion_cuentas.find({ selector: { mesa_id: { $in: habs.map((h) => h.mesa_id) }, estado: 'activa', _deleted: { $ne: true } } }).exec();
+        const todas = await db.habitacion_cuentas.find({ selector: { mesa_id: { $in: habs.map((h) => h.mesa_id) }, estado: 'activa', _deleted: { $ne: true } } }).exec();
+        // Solo cuentan las del huésped que sale: la cuenta de otra reserva (el siguiente huésped de la misma habitación) no bloquea.
+        const ids = new Set(afectadas.map((x) => x.id));
+        const salidaMin = afectadas.reduce((min, x) => (x.salida < min ? x.salida : min), afectadas[0]?.salida ?? f.salida);
+        const abiertas = todas.filter((c) => (c.reserva_hotel_id ? ids.has(c.reserva_hotel_id) : !c.check_in || c.check_in < salidaMin));
         if (abiertas.length > 0) {
           const nombres = habs.filter((h) => abiertas.some((c) => c.mesa_id === h.mesa_id)).map((h) => h.nombre).join(', ');
           showToast.error(`Cuenta abierta en Mesas: ${nombres}`, 'Cóbrala y ciérrala en Mesas antes de hacer el check-out.');

@@ -534,6 +534,33 @@ async function availability(req: Request, x: Ctx): Promise<Response> {
   return new Response(body, { headers: { ...cors(x.env), 'Content-Type': 'application/json', 'X-Cache': 'MISS' } })
 }
 
+// ---------- tarifas del calendario ----------
+
+const CACHE_TTL_TARIFAS = 1800 // las tarifas casi no cambian en el día: no hace falta renovarlas con cada cambio de reservas
+
+/**
+ * Tarifa de lista por noche de cada habitación (plan básico, 2 adultos) para pintarla en el calendario. Una sola
+ * consulta a Cloudbeds para todo el rango y todas las habitaciones; se guarda 30 minutos, sin versión (no depende de las reservas).
+ */
+async function tarifasCalendario(req: Request, x: Ctx): Promise<Response> {
+  const q = new URL(req.url).searchParams
+  const { start, end } = parseRange(q.get('start'), q.get('end'), MAX_NIGHTS_CALENDARIO)
+  const key = `rates:${start}:${end}`
+  const cached = await leer(x, key)
+  if (cached) return new Response(cached, { headers: { ...cors(x.env), 'Content-Type': 'application/json', 'X-Cache': 'HIT' } })
+
+  const ofertas = agruparPorCabana(await fetchOfertas(x, start, end, 2, 0))
+  const tarifas: Record<string, Record<string, number>> = {}
+  for (const o of ofertas) {
+    const noches: Record<string, number> = {}
+    for (const n of o.noches) if (n.rate > 0) noches[n.date] = n.rate
+    tarifas[o.roomTypeID] = noches
+  }
+  const body = JSON.stringify({ start, end, adults: 2, tarifas })
+  await enFondo(x, guardar(x, key, body, { expirationTtl: CACHE_TTL_TARIFAS }))
+  return new Response(body, { headers: { ...cors(x.env), 'Content-Type': 'application/json', 'X-Cache': 'MISS' } })
+}
+
 // ---------- reservas ----------
 
 interface CrearReservaBody {
@@ -1924,6 +1951,7 @@ export default {
       if (pathname === '/api/health' && req.method === 'GET') return fin(await salud(req, x))
       if (pathname === '/api/calendar' && req.method === 'GET') return fin(await calendario(req, x, ctx))
       if (pathname === '/api/availability' && req.method === 'GET') return fin(await availability(req, x))
+      if (pathname === '/api/calendar-rates' && req.method === 'GET') return fin(await tarifasCalendario(req, x))
       if (pathname === '/api/reservations' && req.method === 'POST') return fin(await crearReserva(req, x))
       if (/^\/api\/reservations\/[^/]+\/cancel$/.test(pathname) && req.method === 'POST') {
         return fin(await cancelarReserva(req, x, reservationId(pathname)))

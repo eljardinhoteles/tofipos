@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState
 import { MarcaFeriado } from '../Common/MarcaFeriado';
 import { useFeriados } from '../../lib/feriados';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useTarifasCalendario } from '../../hooks/useTarifasCalendario';
+import { Switch } from '@/components/ui/switch';
 import dayjs from 'dayjs';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { Bed, CalendarBlank, CaretLeft, CaretRight, CalendarPlus, Moon, Plus, Prohibit } from '@phosphor-icons/react';
@@ -119,6 +121,9 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
   const dias = useMemo(() => Array.from({ length: DIAS }, (_, i) => dayjs(desde).add(i, 'day')), [desde, DIAS]);
   const fechas = useMemo(() => dias.map((d) => d.format('YYYY-MM-DD')), [dias]);
   const meses = useMemo(() => [...new Set(fechas.map(mesDe))], [fechas]);
+  // Tarifas de lista por noche en las casillas libres. Apagado por defecto: no se pide nada a Cloudbeds hasta encenderlo.
+  const [verTarifas, setVerTarifas] = useState(false);
+  const tarifas = useTarifasCalendario(meses, verTarifas);
 
   const asegurar = useCallback(async (forzar = false) => {
     const mio = ++ronda.current;
@@ -524,8 +529,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
                           setMenu({ hid: h.id, ini: sel.ini, fin: dayjs(sal).subtract(1, 'day').format('YYYY-MM-DD'), ancla: f }); setSel(null); setSobre(null);
                         };
                         return (
-                          <div key={f} className={cn(lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.14]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
+                          <div key={f} className={cn('relative group/celda', lineaDia(f, idx), nombreDe(f) && 'bg-destructive/[0.04]', f === hoy && 'bg-primary/[0.14]', f < hoy && 'bg-muted/40', !h.cloudbeds_room_type_id && 'bg-muted/60', enRango && 'bg-primary/20')}
                             title={h.cloudbeds_room_type_id ? undefined : 'Habitación sin enlazar con Cloudbeds'}>
+                            {verTarifas && !sinAsignar && h.cloudbeds_room_type_id && f >= hoy && tarifas[h.cloudbeds_room_type_id]?.[f] != null && !tarjetas.some((t) => t.desde <= f && f < t.hasta) && (
+                              <span className={cn('absolute inset-0 flex items-center justify-center t-meta tabular-nums', nombreDe(f) ? 'text-destructive' : 'text-muted-foreground', 'pointer-events-none select-none opacity-50 transition-opacity group-hover/celda:opacity-0', enRango && 'opacity-0')}>${tarifas[h.cloudbeds_room_type_id][f]}</span>
+                            )}
                             {reservable && (
                               <Popover open={menu?.hid === h.id && menu.ancla === f} onOpenChange={(o) => { if (!o) setMenu(null); }}>
                                 <PopoverAnchor asChild>
@@ -599,6 +607,11 @@ export function CalendarioCabanas({ habitaciones, reservas, puedeGestionar, vers
         ))}
         </div>
       )}
+
+      <label className="flex items-center gap-2 px-6 shrink-0 t-meta text-muted-foreground cursor-pointer w-fit">
+        <Switch checked={verTarifas} onCheckedChange={setVerTarifas} aria-label="Mostrar tarifas en las casillas libres" />
+        Mostrar tarifas <span className="hidden sm:inline">(de lista, 2 adultos, solo casillas libres)</span>
+      </label>
 
       {/* Leyenda de lo que se ve en pantalla. */}
       <div className="hidden md:flex flex-wrap items-center gap-x-4 gap-y-1 px-6 shrink-0">

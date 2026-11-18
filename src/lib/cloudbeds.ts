@@ -135,6 +135,20 @@ export function getDisponibilidad(start: string, end: string, adults: number, ch
   return llamar<DisponibilidadResp>(`/api/availability?${q}`);
 }
 
+export interface TarifasCalendarioResp {
+  start: string;
+  end: string;
+  adults: number;
+  /** roomTypeID → fecha (YYYY-MM-DD) → tarifa de lista de esa noche (plan básico). */
+  tarifas: Record<string, Record<string, number>>;
+}
+
+/** Tarifas por noche de todas las habitaciones entre `start` y `end` (hasta 62 noches), en una sola consulta. */
+export function getTarifasCalendario(start: string, end: string) {
+  const q = new URLSearchParams({ start, end });
+  return llamar<TarifasCalendarioResp>(`/api/calendar-rates?${q}`);
+}
+
 /** `idempotencyKey` debe ser estable por reserva (p. ej. el id de la venta): un reintento no crea un duplicado. */
 export function crearReservaCloudbeds(input: CrearReservaInput, idempotencyKey: string, reintento = false) {
   // `reintento` hace que el Worker compruebe antes si Cloudbeds ya tiene esta reserva (un intento anterior pudo
