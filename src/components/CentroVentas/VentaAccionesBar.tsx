@@ -1,7 +1,7 @@
 import { useId, useState, useEffect, useMemo } from 'react';
 import {
   Receipt, Prohibit, ArrowCounterClockwise,
-  CurrencyDollar, ArrowUp, CreditCard, ChatText, Percent,
+  CurrencyDollar, ArrowUp, CreditCard, ChatText, Percent, Check,
 } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -408,7 +408,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
   if (accionesDisponibles.length === 0) return null;
 
   return (
-        <div className={cn("shrink-0 p-4 flex flex-col gap-3", accionActiva ? "bg-card shadow-[0_-4px_12px_-6px_oklch(0_0_0/0.12)]" : "absolute bottom-0 inset-x-0 z-10 pt-10 bg-linear-to-t from-background-sunken from-60% to-transparent pointer-events-none [&>*]:pointer-events-auto")}>
+        <div className={cn("shrink-0 p-4 flex flex-col gap-3", accionActiva ? "bg-card shadow-[0_-4px_12px_-6px_oklch(0_0_0/0.12)] max-h-[75dvh] min-h-0" : "absolute bottom-0 inset-x-0 z-10 pt-10 bg-linear-to-t from-background-sunken from-60% to-transparent pointer-events-none [&>*]:pointer-events-auto")}>
           {!accionActiva ? (
             <>
             <SeguimientoPasos item={item} />
@@ -446,8 +446,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             </div>
             </>
           ) : (
-            <div className="flex flex-col gap-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
-          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 min-h-0 animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
+          <div className="flex items-center justify-between gap-3 shrink-0">
             <span className="flex items-center gap-2.5 min-w-0">
               <span className={cn("size-9 rounded-xl flex items-center justify-center shrink-0", ACCION_COLOR[accionActiva], accionActiva === 'anular' ? "text-background" : "text-white")}>
                 {(() => { const Icon = ACCION_ICON[accionActiva]; return <Icon size={18} weight="bold" />; })()}
@@ -469,8 +469,8 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
             </div>
           </div>
 
-          {/* Formulario minimalista de la acción seleccionada */}
-          <div className="flex flex-col gap-3">
+          {/* Formulario minimalista de la acción seleccionada: con scroll propio para que Confirmar siempre quede a la vista. */}
+          <div className="flex flex-col gap-3 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1">
             {accionActiva === 'pago' && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
@@ -570,32 +570,58 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
                   <Label htmlFor={`${uid}-7`} className="t-etiqueta! text-muted-foreground">Número de factura</Label>
-                  <Input id={`${uid}-7`}
-                    type="text" placeholder="Ej. F-001-00023" value={numeroFactura}
-                    onChange={(e) => setNumeroFactura(e.target.value)}
-                    className="h-12 text-base"
-                  />
+                  <div className="flex flex-wrap items-stretch gap-2">
+                    <Input id={`${uid}-7`}
+                      type="text" placeholder="Ej. F-001-00023" value={numeroFactura}
+                      onChange={(e) => setNumeroFactura(e.target.value)}
+                      className="h-12 text-base flex-1 min-w-48"
+                    />
+                    <div className="flex-1 min-w-64">
+                      <ComprobanteAdjunto file={comprobanteFile} onChange={setComprobanteFile} placeholder="Adjuntar comprobante" />
+                    </div>
+                  </div>
                 </div>
                 
                 {(() => {
                   const pagosDisponibles = movimientos.filter(m => m.tipo === 'pago' && !m.anulado && m.monto);
                   if (pagosDisponibles.length === 0) return null;
                   
+                  const todos = pagosDisponibles.length > 0 && pagosDisponibles.every(p => pagosSeleccionados.has(p.id));
+                  const totalSel = pagosDisponibles.filter(p => pagosSeleccionados.has(p.id)).reduce((t, p) => t + (p.monto ?? 0), 0);
                   return (
                     <div className="flex flex-col gap-2 p-3 bg-muted/40 border border-border/50 rounded-2xl mt-1">
-                      <Label className="t-etiqueta! text-muted-foreground">Pagos asociados a esta factura (opcional)</Label>
-                      <div className="flex flex-col gap-2">
-                        {pagosDisponibles.map(pago => (
-                          <Casilla key={pago.id} checked={pagosSeleccionados.has(pago.id)}
-                            onChange={(v) => {
-                              const next = new Set(pagosSeleccionados);
-                              if (v) next.add(pago.id); else next.delete(pago.id);
-                              setPagosSeleccionados(next);
-                            }}>
-                            ${pago.monto?.toFixed(2)} - {pago.metodo_pago} {dayjs(pago.fecha).format('(DD/MM HH:mm)')}
-                          </Casilla>
-                        ))}
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="t-etiqueta! text-muted-foreground">Pagos asociados (opcional)</Label>
+                        <button type="button" className="t-meta text-primary font-semibold cursor-pointer touch-manipulation min-h-9 px-2"
+                          onClick={() => setPagosSeleccionados(todos ? new Set() : new Set(pagosDisponibles.map(p => p.id)))}>
+                          {todos ? 'Quitar todos' : 'Seleccionar todos'}
+                        </button>
                       </div>
+                      <div className="flex flex-col gap-1 max-h-64 overflow-y-auto overscroll-contain">
+                        {pagosDisponibles.map(pago => {
+                          const sel = pagosSeleccionados.has(pago.id);
+                          return (
+                            <button key={pago.id} type="button" role="checkbox" aria-checked={sel}
+                              onClick={() => {
+                                const next = new Set(pagosSeleccionados);
+                                if (sel) next.delete(pago.id); else next.add(pago.id);
+                                setPagosSeleccionados(next);
+                              }}
+                              className={cn("w-full min-h-11 flex items-center gap-3 px-3 rounded-xl border text-left cursor-pointer touch-manipulation transition-colors",
+                                sel ? "bg-primary/10 border-primary/40" : "bg-card border-border/60")}>
+                              <span className={cn('size-5 rounded-md border flex items-center justify-center shrink-0', sel ? 'bg-primary border-primary text-primary-foreground' : 'bg-card border-border')}>
+                                {sel && <Check size={14} weight="bold" />}
+                              </span>
+                              <span className="t-cuerpo font-semibold tabular-nums">${pago.monto?.toFixed(2)}</span>
+                              <span className="t-meta text-muted-foreground capitalize truncate">{pago.metodo_pago}</span>
+                              <span className="t-meta text-muted-foreground ml-auto shrink-0">{dayjs(pago.fecha).format('DD/MM HH:mm')}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="t-meta text-muted-foreground">
+                        {pagosSeleccionados.size} de {pagosDisponibles.length} seleccionados · ${totalSel.toFixed(2)}
+                      </p>
                     </div>
                   );
                 })()}
@@ -697,7 +723,7 @@ export function VentaAccionesBar({ item }: VentaAccionesBarProps) {
 
             {/* Comprobante opcional (si aplica) — oculto para pagos en
                 efectivo, que no tienen comprobante que subir. */}
-            {ACCIONES_CON_COMPROBANTE.includes(accionActiva) && !(accionActiva === 'pago' && metodoPago === 'efectivo') && (
+            {ACCIONES_CON_COMPROBANTE.includes(accionActiva) && accionActiva !== 'anclar' && !(accionActiva === 'pago' && metodoPago === 'efectivo') && (
               <ComprobanteAdjunto
                 file={comprobanteFile}
                 onChange={setComprobanteFile}

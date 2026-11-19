@@ -124,11 +124,12 @@ export function ReservaCard({ reserva, onClick, onAssign, isHighlighted = false,
             type="button"
             disabled={!esHoy}
             onClick={(e) => { e.stopPropagation(); if (esHoy) onAssign(); }}
-            className={cn('size-8 pointer-coarse:size-11 rounded-2xl flex items-center justify-center shrink-0 transition-colors',
+            className={cn('h-8 pointer-coarse:h-11 pl-3 pr-2.5 gap-1.5 rounded-2xl t-meta font-semibold flex items-center justify-center shrink-0 transition-colors',
               esHoy ? 'bg-success-soft text-success-foreground hover:bg-success hover:text-white group-hover/reserva:bg-success group-hover/reserva:text-white cursor-pointer' : 'bg-muted text-muted-foreground/50 cursor-not-allowed')}
             title={esHoy ? 'Asignar Mesa' : 'Solo se puede asignar mesa el día de la reserva'}
             aria-label="Asignar mesa"
           >
+            Asignar
             <ArrowUpRight size={17} weight="bold" />
           </button>
         )}

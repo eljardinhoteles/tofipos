@@ -456,6 +456,9 @@ export default function CentroVentasV2() {
                               <span className={cn("font-redonda t-titulo tabular-nums", isAnulada ? "text-muted-foreground line-through" : excedente ? "text-info-foreground" : estado === 'completa' ? "text-success-foreground" : item.venta.tipo === 'credito' ? "text-destructive" : "text-secondary-foreground")}>
                                 ${item.montoTotal.toFixed(2)}
                               </span>
+                              {excedente && !isAnulada && (
+                                <span title="Excedente (saldo a favor)" className="t-meta tabular-nums text-info-foreground">+${Math.abs(item.saldo).toFixed(2)}</span>
+                              )}
                             </span></span>
                           {detalleVenta ? <span className="t-meta leading-relaxed text-muted-foreground truncate">{detalleVenta}</span> : <span />}
                           {estado === 'completa' ? (
