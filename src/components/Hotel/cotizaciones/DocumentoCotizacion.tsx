@@ -137,6 +137,7 @@ export const DocumentoCotizacion = forwardRef<HTMLDivElement, { cotizacion: Coti
       <footer className="pt-3 border-t border-[#e2e7e3] flex flex-col leading-snug text-[11px] text-[#5b6660]">
         <span className="font-bold text-[#1b1f1d]">{t.vigencia(hasta)}</span>
         <span>{c.referencial ? t.notaReferencial : t.sujetaDisponibilidad}</span>
+        <span>{t.horarios}</span>
         <span className="pt-1">{t.emitida} {dayjs(c.created_at).locale(t.locale).format('D [de] MMMM YYYY')}</span>
       </footer>
     </div>

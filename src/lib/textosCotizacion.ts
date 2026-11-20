@@ -32,6 +32,7 @@ export interface TextosCotizacion {
   impuestosIncluidos: string;
   sujetaDisponibilidad: string;
   fechasPorDefinir: string;
+  horarios: string;
   notaReferencial: string;
   vigencia: (hasta: string) => string;
   locale: string;
@@ -66,6 +67,7 @@ const ES: TextosCotizacion = {
   precioFinal: 'Precio final',
   impuestosIncluidos: 'Impuestos incluidos',
   sujetaDisponibilidad: 'Cotización sujeta a disponibilidad hasta confirmar la reserva.',
+  horarios: 'Check in: 14:00 · Check out: 12:00 (mediodía)',
   fechasPorDefinir: 'Fechas por definir',
   notaReferencial: 'Precio de referencia: puede variar según las fechas, la temporada y la disponibilidad.',
   vigencia: (hasta) => `Vigente hasta el ${hasta}.`,

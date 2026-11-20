@@ -178,6 +178,7 @@ export function documentoReservaA4(d: DocReservaA4): string {
     </div>
 
     <div class="firmas"><div class="firma">Firma para constancia de Check in</div></div>
+    <p style="margin:6mm 0 0;text-align:center;font-size:11px;color:#333"><b>Check in:</b> 14:00 &nbsp;·&nbsp; <b>Check out:</b> 12:00 (mediodía)</p>
     <p class="emitido">Emitido ${esc(emitido)}</p>
   </body></html>`;
 }
