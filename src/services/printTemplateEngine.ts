@@ -18,6 +18,16 @@ const DEFAULT_CONFIG: PrinterConfig = {
   columns: 48,
 };
 
+/** Fecha y hora de creación de la comanda (no la de impresión): reimprimir una orden histórica conserva su día real. Sin `created_at`, la actual. */
+function fechaComanda(comanda: { created_at?: string }): string {
+  const d = comanda.created_at ? new Date(comanda.created_at) : new Date();
+  return `${d.toLocaleDateString('es-ES')} ${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+}
+function fechaHoraComanda(comanda: { created_at?: string }): string {
+  const d = comanda.created_at ? new Date(comanda.created_at) : new Date();
+  return `${d.toLocaleDateString('es-ES')} ${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+}
+
 export function cleanHabitacionName(name: string): string {
   return name.replace(/^(HAB(ITACI[OÓ]N)?\.?\s*:?\s*)/i, '').trim();
 }
@@ -216,7 +226,7 @@ export function generarComandaCocina(
 
   t += p(POS.ALIGN_LEFT);
   t += `COMANDA: #${folioLabel(comanda)}\n`;
-  t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
+  t += `Fecha: ${fechaHoraComanda(comanda)}\n`;
   if (infoExtra) t += infoExtra;
 
   if (esAdicional) {
@@ -326,7 +336,7 @@ export function generarComandaCocina(
     t += `------------------------\n`;
     t += p(POS.SIZE_NORMAL) + p(POS.BOLD_OFF) + p(POS.ALIGN_LEFT);
     t += `COMANDA: #${folioLabel(comanda)}\n`;
-    t += `Fecha: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}\n`;
+    t += `Fecha: ${fechaHoraComanda(comanda)}\n`;
     if (esAdicional) {
       t += p(POS.BOLD_ON) + `\n*** PEDIDO ADICIONAL ***\n` + p(POS.BOLD_OFF);
       t += `${'='.repeat(48)}\n\n`;
@@ -401,7 +411,7 @@ function armarTicketCliente(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`${opciones.titulo} #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`${opciones.titulo} #${folioLabel(comanda)}`, fechaComanda(comanda), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
@@ -793,7 +803,7 @@ export function generarPrecuentaDividida(
   t += `${'-'.repeat(W)}\n`;
 
   // ── Info de la orden ────────────────────────────────────────────
-  t += justifyBetween(`PRECUENTA #${folioLabel(comanda)}`, new Date().toLocaleDateString('es-ES'), W) + '\n';
+  t += justifyBetween(`PRECUENTA #${folioLabel(comanda)}`, fechaComanda(comanda), W) + '\n';
   t += p(POS.BOLD_ON) + mesaNombre.toUpperCase() + p(POS.BOLD_OFF) + '\n';
   if (habitacionNombre) {
     t += `Habitacion: ${cleanHabitacionName(habitacionNombre)}\n`;
